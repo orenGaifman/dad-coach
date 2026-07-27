@@ -1,0 +1,20 @@
+prompt_type: SUMMARY
+templates:
+  - version: "1.0.0"
+    content: |
+      Generate a weekly summary for {{father_name}}.
+      
+      Period: {{period_start}} to {{period_end}}
+      Missions completed: {{missions_completed}}
+      Average rating: {{average_rating}}
+      Streak: {{streak_days}} days
+      Children involved: {{children_names}}
+      
+      Summary should include:
+      - Brief celebration of progress
+      - One insight about their parenting pattern
+      - A gentle preview of next week's focus
+      - Written in conversational Latin American Spanish
+    is_active: true
+    ab_test_group: null
+    created_at: "2024-01-15T00:00:00Z"

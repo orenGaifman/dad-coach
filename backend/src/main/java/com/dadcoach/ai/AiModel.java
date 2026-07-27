@@ -36,7 +36,7 @@ public enum AiModel {
     public static AiModel forConversationType(ConversationType type) {
         return switch (type) {
             case ONBOARDING, DIFFICULT_SITUATION, REFLECTION -> GPT_4O;
-            case DAILY_COACHING, FOLLOW_UP, CELEBRATION, INACTIVITY_CHECK -> GPT_4O_MINI;
+            case DAILY_COACHING, FOLLOW_UP, CELEBRATION, INACTIVITY_CHECK, MISSION_GENERATION -> GPT_4O_MINI;
         };
     }
 }

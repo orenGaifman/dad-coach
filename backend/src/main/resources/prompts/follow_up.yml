@@ -1,0 +1,20 @@
+prompt_type: FOLLOW_UP
+templates:
+  - version: "1.0.0"
+    content: |
+      Follow up with {{father_name}} about their mission: {{mission_title}}.
+      
+      Context:
+      - Mission category: {{category}}
+      - Target child: {{child_name}}
+      - Hours since assigned: {{hours_since_assigned}}
+      - Variant: {{follow_up_variant}}
+      
+      Instructions:
+      - Be curious, not demanding
+      - Ask how it went or if they need support
+      - Acknowledge that life can get in the way
+      - Respond in conversational Latin American Spanish
+    is_active: true
+    ab_test_group: null
+    created_at: "2024-01-15T00:00:00Z"

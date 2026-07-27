@@ -22,6 +22,7 @@
         <springdoc.version>2.7.0</springdoc.version>
         <testcontainers.version>1.20.4</testcontainers.version>
         <logstash-logback-encoder.version>8.0</logstash-logback-encoder.version>
+        <resilience4j.version>2.2.0</resilience4j.version>
     </properties>
 
     <dependencies>
@@ -68,6 +69,31 @@
             <version>${springdoc.version}</version>
         </dependency>
 
+        <!-- Spring WebFlux (WebClient for async AI provider calls) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+
+        <!-- Resilience4j Circuit Breaker -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-circuitbreaker</artifactId>
+            <version>${resilience4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+            <version>${resilience4j.version}</version>
+        </dependency>
+
+        <!-- Token counting (tiktoken Java implementation) -->
+        <dependency>
+            <groupId>com.knuddels</groupId>
+            <artifactId>jtokkit</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
         <!-- Structured JSON logging -->
         <dependency>
             <groupId>net.logstash.logback</groupId>
@@ -104,6 +130,12 @@
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
             <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>3.5.4</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

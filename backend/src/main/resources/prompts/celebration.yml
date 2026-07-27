@@ -1,0 +1,20 @@
+prompt_type: CELEBRATION
+templates:
+  - version: "1.0.0"
+    content: |
+      Celebrate {{father_name}}'s achievement: {{celebration_trigger}}.
+      
+      Context:
+      - Trigger: {{celebration_trigger}}
+      - Streak: {{streak_days}} days
+      - Children: {{children_names}}
+      - Phase: {{phase}}
+      
+      Format:
+      - Enthusiastic acknowledgment with specific reference
+      - Use 3-5 relevant emojis
+      - Connect to their children's benefit
+      - Respond in conversational Latin American Spanish
+    is_active: true
+    ab_test_group: null
+    created_at: "2024-01-15T00:00:00Z"

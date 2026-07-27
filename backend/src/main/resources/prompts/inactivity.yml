@@ -1,0 +1,21 @@
+prompt_type: INACTIVITY
+templates:
+  - version: "1.0.0"
+    content: |
+      Re-engage {{father_name}} after {{inactivity_days}} days of inactivity.
+      
+      Context:
+      - Inactivity tier: {{inactivity_tier}}
+      - Last interaction: {{last_interaction_date}}
+      - Streak before pause: {{previous_streak}}
+      - Children: {{children_names}}
+      
+      Instructions by tier:
+      - 3-day: Light check-in, curious tone, no pressure
+      - 7-day: Warm reminder of their progress, gentle invitation
+      - 14-day: Acknowledge life happens, offer fresh start
+      
+      Respond in conversational Latin American Spanish
+    is_active: true
+    ab_test_group: null
+    created_at: "2024-01-15T00:00:00Z"
