@@ -1,0 +1,22 @@
+prompt_type: MISSION_GEN
+templates:
+  - version: "1.0.0"
+    content: |
+      Generate a parenting mission for {{father_name}}.
+      
+      Context:
+      - Target child: {{child_name}} (age {{child_age}})
+      - Difficulty level: {{difficulty}}
+      - Category: {{category}}
+      - Phase: {{phase}}
+      - Time of day: {{time_of_day}}
+      - Day of week: {{day_of_week}}
+      
+      Requirements:
+      - Mission must be achievable within 24 hours
+      - Appropriate for child's developmental bracket
+      - Include a clear success criteria
+      - Write in conversational Latin American Spanish
+    is_active: true
+    ab_test_group: null
+    created_at: "2024-01-15T00:00:00Z"

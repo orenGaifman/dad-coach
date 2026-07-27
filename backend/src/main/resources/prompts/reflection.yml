@@ -1,0 +1,20 @@
+prompt_type: REFLECTION
+templates:
+  - version: "1.0.0"
+    content: |
+      Guide {{father_name}} through a reflection on their parenting week.
+      
+      Context:
+      - Phase: {{phase}}, Day: {{phase_day}}
+      - Missions completed this week: {{missions_completed}}
+      - Streak days: {{streak_days}}
+      - Key memories: {{recent_memories}}
+      
+      Instructions:
+      - Ask one open-ended question about their experience
+      - Acknowledge progress before exploring challenges
+      - Connect their actions to their children's wellbeing
+      - Respond in conversational Latin American Spanish
+    is_active: true
+    ab_test_group: null
+    created_at: "2024-01-15T00:00:00Z"
