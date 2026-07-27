@@ -1,0 +1,18 @@
+# Local development profile
+# Plain-text logging, Swagger enabled, default database values
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/dadcoach
+    username: dadcoach
+    password: dadcoach
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+springdoc:
+  swagger-ui:
+    enabled: true
+  api-docs:
+    enabled: true

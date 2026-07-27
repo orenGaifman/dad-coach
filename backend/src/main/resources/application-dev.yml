@@ -1,0 +1,17 @@
+# Dev environment profile
+# JSON logging, env-var DB resolution, Swagger enabled
+
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+logging:
+  config: classpath:logback-spring.xml
+
+springdoc:
+  swagger-ui:
+    enabled: true
+  api-docs:
+    enabled: true

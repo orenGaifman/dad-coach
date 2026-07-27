@@ -1,0 +1,50 @@
+package com.dadcoach.common;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+/**
+ * Logs every HTTP request with method, path, status, and duration in milliseconds.
+ * When combined with JSON logging (dev/prod profiles), produces structured log entries like:
+ * {"method":"POST","path":"/webhooks/whatsapp","status":200,"durationMs":45}
+ */
+@Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
+public class RequestLoggingFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(RequestLoggingFilter.class);
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+        long startTime = System.nanoTime();
+
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            long durationMs = (System.nanoTime() - startTime) / 1_000_000;
+            String method = request.getMethod();
+            String path = request.getRequestURI();
+            int status = response.getStatus();
+
+            log.info("HTTP request completed: method={}, path={}, status={}, durationMs={}",
+                    method, path, status, durationMs);
+        }
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        // Skip actuator health check endpoints to reduce log noise
+        String path = request.getRequestURI();
+        return path.startsWith("/actuator/health");
+    }
+}
