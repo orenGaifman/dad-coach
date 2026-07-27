@@ -7,6 +7,11 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
 
+management:
+  endpoint:
+    health:
+      show-details: never
+
 logging:
   config: classpath:logback-spring.xml
 
