@@ -26,12 +26,14 @@ public class ChildrenOverviewService {
     private final GoalDataService goalDataService;
     private final Clock clock;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ChildrenOverviewService(ChildDataService childDataService,
                                     MissionDataService missionDataService,
                                     GoalDataService goalDataService) {
         this(childDataService, missionDataService, goalDataService, Clock.systemUTC());
     }
 
+    @SuppressWarnings("unused") // used for testing with custom Clock
     public ChildrenOverviewService(ChildDataService childDataService,
                                     MissionDataService missionDataService,
                                     GoalDataService goalDataService,

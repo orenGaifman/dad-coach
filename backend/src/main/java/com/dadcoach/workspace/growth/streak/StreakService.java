@@ -25,6 +25,7 @@ public class StreakService {
     private final FatherStreakRepository fatherStreakRepository;
     private final Clock clock;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public StreakService(FatherStreakRepository fatherStreakRepository) {
         this(fatherStreakRepository, Clock.systemUTC());
     }

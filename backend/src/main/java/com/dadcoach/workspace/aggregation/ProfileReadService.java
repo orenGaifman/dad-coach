@@ -21,6 +21,7 @@ public class ProfileReadService {
     private final FatherDataService fatherDataService;
     private final Clock clock;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ProfileReadService(FatherDataService fatherDataService) {
         this(fatherDataService, Clock.systemUTC());
     }
