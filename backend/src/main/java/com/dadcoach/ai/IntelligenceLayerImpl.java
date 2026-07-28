@@ -23,6 +23,7 @@ import com.dadcoach.ai.safety.SafetyClassifier;
 import com.dadcoach.conversation.ConversationType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +44,7 @@ import java.util.Map;
  *   <li>Validation — validates AI output before returning</li>
  * </ol>
  */
+@Service
 public class IntelligenceLayerImpl implements IntelligenceLayer {
 
     private static final Logger log = LoggerFactory.getLogger(IntelligenceLayerImpl.class);

@@ -24,7 +24,7 @@ public class ActivationRecord {
     private UUID activationId;
 
     @Column(name = "father_id", nullable = false, unique = true)
-    private Long fatherId;
+    private UUID fatherId;
 
     @Column(name = "session_id", nullable = false)
     private UUID sessionId;
@@ -55,7 +55,7 @@ public class ActivationRecord {
         // JPA requires a no-arg constructor
     }
 
-    public ActivationRecord(Long fatherId, UUID sessionId) {
+    public ActivationRecord(UUID fatherId, UUID sessionId) {
         this.fatherId = fatherId;
         this.sessionId = sessionId;
         this.status = ActivationStatus.PENDING;
@@ -67,8 +67,8 @@ public class ActivationRecord {
     public UUID getActivationId() { return activationId; }
     public void setActivationId(UUID activationId) { this.activationId = activationId; }
 
-    public Long getFatherId() { return fatherId; }
-    public void setFatherId(Long fatherId) { this.fatherId = fatherId; }
+    public UUID getFatherId() { return fatherId; }
+    public void setFatherId(UUID fatherId) { this.fatherId = fatherId; }
 
     public UUID getSessionId() { return sessionId; }
     public void setSessionId(UUID sessionId) { this.sessionId = sessionId; }

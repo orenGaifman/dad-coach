@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,11 +29,11 @@ class AiProfileFactoryTest {
         data.setLanguage("he");
         data.getPreferences().put("coaching_style", "GENTLE");
 
-        AiProfile profile = factory.buildProfile(1L, data);
+        AiProfile profile = factory.buildProfile(new UUID(0L, 1L), data);
 
         assertThat(profile.getCoachingStyle()).isEqualTo("GENTLE");
         assertThat(profile.getLanguage()).isEqualTo("he");
-        assertThat(profile.getFatherId()).isEqualTo(1L);
+        assertThat(profile.getFatherId()).isEqualTo(new UUID(0L, 1L));
     }
 
     @Test
@@ -42,7 +43,7 @@ class AiProfileFactoryTest {
         data.setDisplayName("David");
         data.setLanguage("en");
 
-        AiProfile profile = factory.buildProfile(1L, data);
+        AiProfile profile = factory.buildProfile(new UUID(0L, 1L), data);
 
         assertThat(profile.getCoachingStyle()).isEqualTo("BALANCED");
     }
@@ -58,7 +59,7 @@ class AiProfileFactoryTest {
                 new WizardData.ChildData("Noa", "2020-11-03", "female")
         ));
 
-        AiProfile profile = factory.buildProfile(1L, data);
+        AiProfile profile = factory.buildProfile(new UUID(0L, 1L), data);
 
         assertThat(profile.getChildrenContext()).contains("Yoav");
         assertThat(profile.getChildrenContext()).contains("Noa");
@@ -75,7 +76,7 @@ class AiProfileFactoryTest {
         data.setLanguage("he");
         data.setChildren(List.of());
 
-        AiProfile profile = factory.buildProfile(1L, data);
+        AiProfile profile = factory.buildProfile(new UUID(0L, 1L), data);
 
         assertThat(profile.getChildrenContext()).isEqualTo("No children registered yet.");
     }
@@ -88,7 +89,7 @@ class AiProfileFactoryTest {
         data.setLanguage("he");
         data.setGoals(List.of("Better communication", "More quality time", "Set healthy boundaries"));
 
-        AiProfile profile = factory.buildProfile(1L, data);
+        AiProfile profile = factory.buildProfile(new UUID(0L, 1L), data);
 
         assertThat(profile.getGoalsContext()).contains("Better communication");
         assertThat(profile.getGoalsContext()).contains("More quality time");
@@ -107,7 +108,7 @@ class AiProfileFactoryTest {
         data.setGoals(List.of("Connection", "Fun"));
         data.getPreferences().put("coaching_style", "MOTIVATIONAL");
 
-        AiProfile profile = factory.buildProfile(1L, data);
+        AiProfile profile = factory.buildProfile(new UUID(0L, 1L), data);
 
         assertThat(profile.getPersonalityBrief()).contains("David");
         assertThat(profile.getPersonalityBrief()).contains("he");
@@ -123,7 +124,7 @@ class AiProfileFactoryTest {
         data.setDisplayName("David");
         data.setLanguage(null);
 
-        AiProfile profile = factory.buildProfile(1L, data);
+        AiProfile profile = factory.buildProfile(new UUID(0L, 1L), data);
 
         assertThat(profile.getLanguage()).isEqualTo("he");
     }

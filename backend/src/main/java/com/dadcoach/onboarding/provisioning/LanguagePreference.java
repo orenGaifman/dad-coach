@@ -23,7 +23,7 @@ public class LanguagePreference {
     private UUID preferenceId;
 
     @Column(name = "father_id", nullable = false, unique = true)
-    private Long fatherId;
+    private UUID fatherId;
 
     @Column(name = "language_code", length = 5, nullable = false)
     private String languageCode = "he";
@@ -44,7 +44,7 @@ public class LanguagePreference {
         // JPA requires a no-arg constructor
     }
 
-    public LanguagePreference(Long fatherId, String languageCode) {
+    public LanguagePreference(UUID fatherId, String languageCode) {
         this.fatherId = fatherId;
         this.languageCode = languageCode;
         this.textDirection = "he".equals(languageCode) ? "RTL" : "LTR";
@@ -56,8 +56,8 @@ public class LanguagePreference {
     public UUID getPreferenceId() { return preferenceId; }
     public void setPreferenceId(UUID preferenceId) { this.preferenceId = preferenceId; }
 
-    public Long getFatherId() { return fatherId; }
-    public void setFatherId(Long fatherId) { this.fatherId = fatherId; }
+    public UUID getFatherId() { return fatherId; }
+    public void setFatherId(UUID fatherId) { this.fatherId = fatherId; }
 
     public String getLanguageCode() { return languageCode; }
     public void setLanguageCode(String languageCode) { this.languageCode = languageCode; }

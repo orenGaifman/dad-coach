@@ -12,5 +12,5 @@ import java.util.UUID;
 @Repository
 public interface CommunicationPreferenceRepository extends JpaRepository<CommunicationPreference, UUID> {
 
-    Optional<CommunicationPreference> findByFatherId(Long fatherId);
+    Optional<CommunicationPreference> findByFatherId(UUID fatherId);
 }

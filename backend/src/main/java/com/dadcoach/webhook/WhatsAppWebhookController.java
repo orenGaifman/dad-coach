@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-@RestController
+@RestController("legacyWhatsAppWebhookController")
 @RequestMapping("/webhooks/whatsapp")
 public class WhatsAppWebhookController {
   private static final Logger log = LoggerFactory.getLogger(WhatsAppWebhookController.class);

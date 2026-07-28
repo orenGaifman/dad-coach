@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import java.util.UUID;
+
 /**
  * Factory that builds an {@link AiProfile} entity from completed wizard data.
  * Extracts coaching style, language, children context (names/ages),
@@ -20,11 +22,11 @@ public class AiProfileFactory {
     /**
      * Builds an AI profile from the completed wizard data.
      *
-     * @param fatherId   the father's ID
+     * @param fatherId   the father's UUID
      * @param wizardData the completed wizard data
      * @return a new AiProfile entity (not yet persisted)
      */
-    public AiProfile buildProfile(Long fatherId, WizardData wizardData) {
+    public AiProfile buildProfile(UUID fatherId, WizardData wizardData) {
         String coachingStyle = extractCoachingStyle(wizardData);
         String language = wizardData.getLanguage() != null ? wizardData.getLanguage() : "he";
         String childrenContext = buildChildrenContext(wizardData.getChildren());

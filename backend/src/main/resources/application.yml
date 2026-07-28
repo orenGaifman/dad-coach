@@ -16,6 +16,15 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  tomcat:
+    max-http-form-post-size: 262144  # 256 KB
+
+spring.servlet.multipart:
+  max-request-size: 256KB
+  max-file-size: 256KB
+
+spring.codec:
+  max-in-memory-size: 262144  # 256 KB
 
 management:
   endpoints:

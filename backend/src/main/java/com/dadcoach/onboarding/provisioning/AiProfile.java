@@ -24,7 +24,7 @@ public class AiProfile {
     private UUID profileId;
 
     @Column(name = "father_id", nullable = false, unique = true)
-    private Long fatherId;
+    private UUID fatherId;
 
     @Column(name = "coaching_style", length = 30, nullable = false)
     private String coachingStyle;
@@ -51,7 +51,7 @@ public class AiProfile {
         // JPA requires a no-arg constructor
     }
 
-    public AiProfile(Long fatherId, String coachingStyle, String language,
+    public AiProfile(UUID fatherId, String coachingStyle, String language,
                      String childrenContext, String goalsContext, String personalityBrief) {
         this.fatherId = fatherId;
         this.coachingStyle = coachingStyle;
@@ -68,8 +68,8 @@ public class AiProfile {
     public UUID getProfileId() { return profileId; }
     public void setProfileId(UUID profileId) { this.profileId = profileId; }
 
-    public Long getFatherId() { return fatherId; }
-    public void setFatherId(Long fatherId) { this.fatherId = fatherId; }
+    public UUID getFatherId() { return fatherId; }
+    public void setFatherId(UUID fatherId) { this.fatherId = fatherId; }
 
     public String getCoachingStyle() { return coachingStyle; }
     public void setCoachingStyle(String coachingStyle) { this.coachingStyle = coachingStyle; }

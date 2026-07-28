@@ -27,7 +27,7 @@ public interface ActivationService {
      * @param sessionId the onboarding session ID
      * @return the created activation record with PENDING status
      */
-    ActivationRecord createPendingActivation(Long fatherId, UUID sessionId);
+    ActivationRecord createPendingActivation(UUID fatherId, UUID sessionId);
 
     /**
      * Marks the activation as link-clicked (father tapped the WhatsApp deep link).

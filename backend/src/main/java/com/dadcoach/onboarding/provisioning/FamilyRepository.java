@@ -15,5 +15,5 @@ public interface FamilyRepository extends JpaRepository<Family, UUID> {
     /**
      * Find the family for a given father.
      */
-    Optional<Family> findByFatherId(Long fatherId);
+    Optional<Family> findByFatherId(UUID fatherId);
 }

@@ -19,7 +19,7 @@ public interface ActivationRecordRepository extends JpaRepository<ActivationReco
     /**
      * Find the activation record for a given father.
      */
-    Optional<ActivationRecord> findByFatherId(Long fatherId);
+    Optional<ActivationRecord> findByFatherId(UUID fatherId);
 
     /**
      * Find the activation record for a given session.
