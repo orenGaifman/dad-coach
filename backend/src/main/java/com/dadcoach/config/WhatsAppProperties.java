@@ -11,5 +11,6 @@ public record WhatsAppProperties(
     @NotBlank String apiVersion,
     String phoneNumberId,
     String accessToken,
-    String verifyToken
+    String verifyToken,
+    String webhookSecret
 ) {}
