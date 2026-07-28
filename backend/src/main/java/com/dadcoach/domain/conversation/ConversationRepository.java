@@ -27,7 +27,7 @@ import java.util.Optional;
  *   <li>idx_conversation_expires ON conversation(expires_at) WHERE status = 'ACTIVE'</li>
  * </ul>
  */
-@Repository
+@Repository("domainConversationRepository")
 public interface ConversationRepository extends JpaRepository<Conversation, Long> {
 
     // ─── Active Conversation Queries ─────────────────────────────────────
@@ -39,7 +39,7 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
      * @param fatherId the father ID
      * @return the active conversation, if any
      */
-    @Query("SELECT c FROM Conversation c WHERE c.fatherId = :fatherId " +
+    @Query("SELECT c FROM DomainConversation c WHERE c.fatherId = :fatherId " +
            "AND c.status = com.dadcoach.conversation.ConversationStatus.ACTIVE")
     Optional<Conversation> findActiveByFatherId(@Param("fatherId") Long fatherId);
 
@@ -50,7 +50,7 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
      * @param fatherId the father ID
      * @return list of active conversations
      */
-    @Query("SELECT c FROM Conversation c WHERE c.fatherId = :fatherId " +
+    @Query("SELECT c FROM DomainConversation c WHERE c.fatherId = :fatherId " +
            "AND c.status = com.dadcoach.conversation.ConversationStatus.ACTIVE")
     List<Conversation> findAllActiveByFatherId(@Param("fatherId") Long fatherId);
 
@@ -61,7 +61,7 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
      * @param fatherId the father ID
      * @return the count of active conversations (should be 0 or 1)
      */
-    @Query("SELECT COUNT(c) FROM Conversation c WHERE c.fatherId = :fatherId " +
+    @Query("SELECT COUNT(c) FROM DomainConversation c WHERE c.fatherId = :fatherId " +
            "AND c.status = com.dadcoach.conversation.ConversationStatus.ACTIVE")
     long countActiveByFatherId(@Param("fatherId") Long fatherId);
 
@@ -75,7 +75,7 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
      * @param now the current time
      * @return list of expired conversations
      */
-    @Query("SELECT c FROM Conversation c WHERE c.status = com.dadcoach.conversation.ConversationStatus.ACTIVE " +
+    @Query("SELECT c FROM DomainConversation c WHERE c.status = com.dadcoach.conversation.ConversationStatus.ACTIVE " +
            "AND c.expiresAt < :now")
     List<Conversation> findExpired(@Param("now") Instant now);
 

@@ -6,6 +6,7 @@ import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.father.FatherStatus;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +37,7 @@ public class SchedulingServiceImpl implements SchedulingService {
     private final ConversationRepository conversationRepository;
 
     public SchedulingServiceImpl(FatherRepository fatherRepository,
-                                  ConversationRepository conversationRepository) {
+                                  @Qualifier("domainConversationRepository") ConversationRepository conversationRepository) {
         this.fatherRepository = fatherRepository;
         this.conversationRepository = conversationRepository;
     }

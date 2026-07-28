@@ -42,9 +42,9 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
  */
 @Order(1)
 @RestControllerAdvice(basePackages = "com.dadcoach.api")
-public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
     private static final MediaType PROBLEM_JSON = MediaType.valueOf("application/problem+json");
 
     // --- 400: Validation Failures ---

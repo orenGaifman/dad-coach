@@ -11,19 +11,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 /**
- * Unit tests for {@link GlobalExceptionHandler}.
+ * Unit tests for {@link ApiExceptionHandler}.
  *
  * <p>Tests verify RFC 9457 Problem Details formatting, correct HTTP status codes,
  * and that 500 errors never expose internal details.</p>
  */
-class GlobalExceptionHandlerTest {
+class ApiExceptionHandlerTest {
 
-    private GlobalExceptionHandler handler;
+    private ApiExceptionHandler handler;
     private MockHttpServletRequest request;
 
     @BeforeEach
     void setUp() {
-        handler = new GlobalExceptionHandler();
+        handler = new ApiExceptionHandler();
         request = new MockHttpServletRequest("GET", "/api/v1/fathers/me/children");
     }
 
