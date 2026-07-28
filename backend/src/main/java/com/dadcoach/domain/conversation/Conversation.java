@@ -27,7 +27,7 @@ import java.time.Instant;
  *   <li>DIFFICULT_SITUATION conversations preempt (close) existing active conversations</li>
  * </ul>
  */
-@Entity
+@Entity(name = "DomainConversation")
 @Table(name = "conversation")
 public class Conversation {
 
