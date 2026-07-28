@@ -1,4 +1,8 @@
-# Tasks — Communication Channels
+# Implementation Plan
+
+## Overview
+
+Implementation of the Communication Channels layer (SPEC-006) for the Dad Coach application. This layer abstracts messaging providers behind a channel-agnostic interface, handling inbound/outbound message normalization, delivery tracking, session windows, template management, and media lifecycle. WhatsApp Cloud API is the first supported channel.
 
 ## Task Dependency Graph
 
@@ -9,185 +13,126 @@ graph TD
     T2 --> T4[Task 4: WhatsApp Message Parser]
     T1 --> T5[Task 5: WhatsApp Adapter Implementation]
     T4 --> T5
+    T1 --> T9[Task 9: Message Formatter & Downgrader]
     T2 --> T6[Task 6: Session Window Service]
     T6 --> T7[Task 7: Delivery Service & Orchestration]
     T5 --> T7
     T7 --> T8[Task 8: Delivery Retry & Status Tracking]
-    T1 --> T9[Task 9: Message Formatter & Downgrader]
     T2 --> T10[Task 10: Template Registry]
     T2 --> T11[Task 11: Media Service & Asset Storage]
     T1 --> T12[Task 12: Flyway Migration - Communication Tables]
 ```
 
+```json
+{
+  "waves": [
+    {"tasks": [1]},
+    {"tasks": [2, 9, 12]},
+    {"tasks": [3, 4, 6, 10, 11]},
+    {"tasks": [5]},
+    {"tasks": [7]},
+    {"tasks": [8]}
+  ]
+}
+```
+
 ## Tasks
 
-### Task 1: Channel Adapter Interface & Router
-- **Description**: Implement the ChannelAdapter interface and ChannelRouter that routes messages to the correct adapter based on the father's primary communication endpoint.
-- **Files to create/modify**:
-  - `backend/src/main/java/com/dadcoach/channel/ChannelAdapter.java`
-  - `backend/src/main/java/com/dadcoach/channel/ChannelRouter.java`
-  - `backend/src/main/java/com/dadcoach/channel/capability/ChannelCapabilities.java`
-  - `backend/src/main/java/com/dadcoach/channel/dto/InboundMessageDto.java`
-  - `backend/src/main/java/com/dadcoach/channel/dto/OutboundMessageDto.java`
-- **Acceptance criteria**:
-  - [ ] ChannelAdapter interface defines: getChannelName, getCapabilities, normalizeInbound, sendMessage, getSessionState, getDeliveryStatus
-  - [ ] ChannelRouter selects adapter by endpoint channel type
-  - [ ] ChannelCapabilities describes supported features (text, image, audio, video, document, template)
-  - [ ] InboundMessageDto/OutboundMessageDto are the normalized internal formats
-  - [ ] New channel = new adapter bean + endpoint entry (no core changes)
-- **Dependencies**: None
+- [x] 1. Channel Adapter Interface & Router
+  - [x] 1.1 Create ChannelAdapter interface with methods: getChannelName, getCapabilities, normalizeInbound, sendMessage, getSessionState, getDeliveryStatus
+  - [x] 1.2 Create ChannelRouter that selects adapter by endpoint channel type
+  - [x] 1.3 Create ChannelCapabilities value object describing supported features (text, image, audio, video, document, template)
+  - [x] 1.4 Create InboundMessageDto and OutboundMessageDto as normalized internal formats
+  - [x] 1.5 Verify extensibility: new channel = new adapter bean + endpoint entry (no core changes)
 
-### Task 2: Communication Endpoint Entity
-- **Description**: Implement the CommunicationEndpoint JPA entity that maps fathers to their channel identities (phone numbers), tracking session state and primary endpoint.
-- **Files to create/modify**:
-  - `backend/src/main/java/com/dadcoach/channel/CommunicationEndpoint.java`
-  - `backend/src/main/java/com/dadcoach/channel/CommunicationEndpointRepository.java`
-- **Acceptance criteria**:
-  - [ ] Entity maps to communication_endpoints table
-  - [ ] Fields: father_id, channel, channel_identity, is_primary, session timestamps
-  - [ ] Unique constraint on (channel, channel_identity)
-  - [ ] Repository: findPrimaryByFatherId, findByChannelAndIdentity
-  - [ ] Supports multiple endpoints per father (is_primary flag)
-- **Dependencies**: Task 1
+- [x] 2. Communication Endpoint Entity
+  - [x] 2.1 Create CommunicationEndpoint JPA entity mapping to communication_endpoints table
+  - [x] 2.2 Define fields: father_id, channel, channel_identity, is_primary, session timestamps
+  - [x] 2.3 Add unique constraint on (channel, channel_identity)
+  - [x] 2.4 Create CommunicationEndpointRepository with findPrimaryByFatherId and findByChannelAndIdentity
+  - [x] 2.5 Support multiple endpoints per father with is_primary flag
 
-### Task 3: WhatsApp Webhook & Signature Verification
-- **Description**: Refactor the existing WhatsApp webhook controller to add HMAC-SHA256 signature verification, ensuring no unsigned payload enters the system.
-- **Files to create/modify**:
-  - `backend/src/main/java/com/dadcoach/whatsapp/WhatsAppWebhookController.java` (modify)
-  - `backend/src/main/java/com/dadcoach/whatsapp/WhatsAppSignatureVerifier.java`
-- **Acceptance criteria**:
-  - [ ] HMAC-SHA256 signature verified BEFORE any payload parsing
-  - [ ] Invalid signature → 401 response immediately
-  - [ ] Source IP and timestamp logged on rejection
-  - [ ] Verification uses X-Hub-Signature-256 header
-  - [ ] Webhook secret loaded from secure configuration
-  - [ ] Verified payload forwarded to message parser
-- **Dependencies**: Task 2
+- [x] 3. WhatsApp Webhook & Signature Verification
+  - [x] 3.1 Implement HMAC-SHA256 signature verification BEFORE any payload parsing
+  - [x] 3.2 Return 401 response immediately on invalid signature
+  - [x] 3.3 Log source IP and timestamp on rejection
+  - [x] 3.4 Use X-Hub-Signature-256 header for verification
+  - [x] 3.5 Load webhook secret from secure configuration
+  - [x] 3.6 Forward verified payload to message parser
 
-### Task 4: WhatsApp Message Parser
-- **Description**: Implement the WhatsAppMessageParser that transforms raw WhatsApp webhook JSON payloads into normalized InboundMessageDto objects.
-- **Files to create/modify**:
-  - `backend/src/main/java/com/dadcoach/whatsapp/WhatsAppMessageParser.java`
-  - `backend/src/main/java/com/dadcoach/whatsapp/dto/WhatsAppWebhookPayload.java`
-- **Acceptance criteria**:
-  - [ ] Parses text messages, media messages, status updates
-  - [ ] Extracts: sender phone, message content, message type, timestamp, provider_message_id
-  - [ ] Handles all WhatsApp message types: text, image, audio, video, document, location
-  - [ ] Status updates (sent, delivered, read) extracted for delivery tracking
-  - [ ] Invalid/unparseable payloads logged and discarded (no exception propagation)
-- **Dependencies**: Task 2
+- [x] 4. WhatsApp Message Parser
+  - [x] 4.1 Parse text messages, media messages, and status updates from webhook payload
+  - [x] 4.2 Extract sender phone, message content, message type, timestamp, provider_message_id
+  - [x] 4.3 Handle all WhatsApp message types: text, image, audio, video, document, location
+  - [x] 4.4 Extract status updates (sent, delivered, read) for delivery tracking
+  - [x] 4.5 Log and discard invalid/unparseable payloads without exception propagation
 
-### Task 5: WhatsApp Adapter Implementation
-- **Description**: Implement the WhatsAppAdapter (ChannelAdapter implementation) that coordinates inbound normalization, outbound sending via the Cloud API, and session state management.
-- **Files to create/modify**:
-  - `backend/src/main/java/com/dadcoach/whatsapp/WhatsAppAdapter.java`
-  - `backend/src/main/java/com/dadcoach/whatsapp/WhatsAppApiClient.java`
-- **Acceptance criteria**:
-  - [ ] Implements ChannelAdapter interface fully
-  - [ ] Uses Spring WebClient for non-blocking outbound API calls
-  - [ ] Reports capabilities: text, image, audio, video, document, template
-  - [ ] Sends messages via WhatsApp Cloud API with proper format
-  - [ ] Handles rate limit responses from WhatsApp API
-  - [ ] Circuit breaker: 10 consecutive failures in 5min → pause 60s
-- **Dependencies**: Task 1, Task 4
+- [x] 5. WhatsApp Adapter Implementation
+  - [x] 5.1 Implement ChannelAdapter interface fully in WhatsAppAdapter
+  - [x] 5.2 Use Spring WebClient for non-blocking outbound API calls
+  - [x] 5.3 Report capabilities: text, image, audio, video, document, template
+  - [x] 5.4 Send messages via WhatsApp Cloud API with proper format
+  - [x] 5.5 Handle rate limit responses from WhatsApp API
+  - [x] 5.6 Implement circuit breaker: 10 consecutive failures in 5min → pause 60s
 
-### Task 6: Session Window Service
-- **Description**: Implement the SessionWindowService that tracks WhatsApp's 24-hour messaging window per endpoint, opening on inbound message and closing 24 hours later.
-- **Files to create/modify**:
-  - `backend/src/main/java/com/dadcoach/channel/session/SessionWindowService.java`
-  - `backend/src/main/java/com/dadcoach/channel/session/SessionState.java`
-- **Acceptance criteria**:
-  - [ ] Window opens when inbound message received (session_opens_at = now)
-  - [ ] Window closes 24 hours after last inbound (session_closes_at = opens_at + 24h)
-  - [ ] Session state checked BEFORE every outbound delivery
-  - [ ] Closed session → requires template message or deferred delivery
-  - [ ] Session state persisted in communication_endpoints table
-  - [ ] Method: `isOpen(endpoint)` → boolean
-- **Dependencies**: Task 2
+- [x] 6. Session Window Service
+  - [x] 6.1 Open window when inbound message received (session_opens_at = now)
+  - [x] 6.2 Close window 24 hours after last inbound (session_closes_at = opens_at + 24h)
+  - [x] 6.3 Check session state BEFORE every outbound delivery
+  - [x] 6.4 Require template message or deferred delivery when session is closed
+  - [x] 6.5 Persist session state in communication_endpoints table
+  - [x] 6.6 Implement isOpen(endpoint) method returning boolean
 
-### Task 7: Delivery Service & Orchestration
-- **Description**: Implement the DeliveryService that orchestrates outbound message delivery: resolve endpoint → check session → check capabilities → downgrade if needed → send via adapter.
-- **Files to create/modify**:
-  - `backend/src/main/java/com/dadcoach/channel/delivery/DeliveryService.java`
-  - `backend/src/main/java/com/dadcoach/channel/delivery/DeliveryResult.java`
-  - `backend/src/main/java/com/dadcoach/channel/delivery/DeliveryStatus.java`
-- **Acceptance criteria**:
-  - [ ] Resolves primary endpoint for father
-  - [ ] Checks session window (closed + non-template → rejected)
-  - [ ] Checks capabilities and downgrades if needed
-  - [ ] Returns structured DeliveryResult (success/failure/rejected with reason)
-  - [ ] SESSION_CLOSED result returned to Conversation Engine for decision
-  - [ ] TEMPLATE_UNAVAILABLE result when template not approved
-- **Dependencies**: Task 5, Task 6
+- [x] 7. Delivery Service & Orchestration
+  - [x] 7.1 Resolve primary endpoint for father
+  - [x] 7.2 Check session window (closed + non-template → rejected)
+  - [x] 7.3 Check capabilities and downgrade if needed
+  - [x] 7.4 Return structured DeliveryResult (success/failure/rejected with reason)
+  - [x] 7.5 Return SESSION_CLOSED result to Conversation Engine for decision
+  - [x] 7.6 Return TEMPLATE_UNAVAILABLE result when template not approved
 
-### Task 8: Delivery Retry & Status Tracking
-- **Description**: Implement transport-level retry (exponential backoff: 2s-32s, max 5 attempts) and delivery status tracking correlated by provider_message_id.
-- **Files to create/modify**:
-  - `backend/src/main/java/com/dadcoach/channel/delivery/DeliveryRetryService.java`
-  - `backend/src/main/java/com/dadcoach/channel/delivery/DeliveryRecord.java`
-  - `backend/src/main/java/com/dadcoach/channel/delivery/DeliveryRecordRepository.java`
-- **Acceptance criteria**:
-  - [ ] Retry schedule: 2s, 4s, 8s, 16s, 32s (5 attempts max)
-  - [ ] Delivery status tracked: PENDING → SENT → DELIVERED → READ / FAILED
-  - [ ] Status updates correlated by provider_message_id
-  - [ ] Unknown provider_message_id status updates discarded
-  - [ ] DeliveryRecord persists full lifecycle per message
-  - [ ] Failed deliveries after max retries marked FAILED with reason
-- **Dependencies**: Task 7
+- [x] 8. Delivery Retry & Status Tracking
+  - [x] 8.1 Implement retry schedule: 2s, 4s, 8s, 16s, 32s (5 attempts max)
+  - [x] 8.2 Track delivery status: PENDING → SENT → DELIVERED → READ / FAILED
+  - [x] 8.3 Correlate status updates by provider_message_id
+  - [x] 8.4 Discard unknown provider_message_id status updates
+  - [x] 8.5 Persist full lifecycle per message in DeliveryRecord
+  - [x] 8.6 Mark failed deliveries after max retries as FAILED with reason
 
-### Task 9: Message Formatter & Downgrader
-- **Description**: Implement the WhatsAppMessageFormatter (OutboundMessageDto → WhatsApp API format) and MessageDowngrader (automatic type downgrade when channel doesn't support a feature).
-- **Files to create/modify**:
-  - `backend/src/main/java/com/dadcoach/whatsapp/WhatsAppMessageFormatter.java`
-  - `backend/src/main/java/com/dadcoach/channel/capability/MessageDowngrader.java`
-- **Acceptance criteria**:
-  - [ ] Formatter handles: text, template with variables, media messages
-  - [ ] WhatsApp markdown applied (bold, italic, monospace)
-  - [ ] Character limits enforced (4096 for text)
-  - [ ] Downgrader: unsupported media → text description with link
-  - [ ] Downgrader: unsupported template → plain text equivalent
-  - [ ] Emoji properly encoded in messages
-- **Dependencies**: Task 1
+- [x] 9. Message Formatter & Downgrader
+  - [x] 9.1 Format outbound messages: text, template with variables, media messages
+  - [x] 9.2 Apply WhatsApp markdown (bold, italic, monospace)
+  - [x] 9.3 Enforce character limits (4096 for text)
+  - [x] 9.4 Implement downgrader: unsupported media → text description with link
+  - [x] 9.5 Implement downgrader: unsupported template → plain text equivalent
+  - [x] 9.6 Ensure emoji properly encoded in messages
 
-### Task 10: Template Registry
-- **Description**: Implement the TemplateRegistry that stores and retrieves approved WhatsApp message templates for use when session window is closed.
-- **Files to create/modify**:
-  - `backend/src/main/java/com/dadcoach/channel/template/TemplateRegistry.java`
-  - `backend/src/main/java/com/dadcoach/channel/template/TemplateMessage.java`
-  - `backend/src/main/java/com/dadcoach/channel/template/TemplateMessageRepository.java`
-- **Acceptance criteria**:
-  - [ ] Templates stored with: name, language (es), category, body, max_variables
-  - [ ] Only APPROVED templates available for sending
-  - [ ] Variable substitution in template body
-  - [ ] Lookup by name and language
-  - [ ] Templates registered/updated via admin process
-- **Dependencies**: Task 2
+- [x] 10. Template Registry
+  - [x] 10.1 Store templates with: name, language (es), category, body, max_variables
+  - [x] 10.2 Only make APPROVED templates available for sending
+  - [x] 10.3 Implement variable substitution in template body
+  - [x] 10.4 Implement lookup by name and language
+  - [x] 10.5 Support templates registered/updated via admin process
 
-### Task 11: Media Service & Asset Storage
-- **Description**: Implement the MediaService for downloading, storing, and retrieving media assets (images, audio, video, documents) with 90-day retention and daily cleanup.
-- **Files to create/modify**:
-  - `backend/src/main/java/com/dadcoach/channel/media/MediaService.java`
-  - `backend/src/main/java/com/dadcoach/channel/media/MediaAsset.java`
-  - `backend/src/main/java/com/dadcoach/channel/media/MediaAssetRepository.java`
-  - `backend/src/main/java/com/dadcoach/channel/media/MediaCleanupJob.java`
-- **Acceptance criteria**:
-  - [ ] Downloads media from WhatsApp API URL on inbound
-  - [ ] Stores as BYTEA in database (launch scale; future: object storage)
-  - [ ] 90-day retention; expires_at set at download time
-  - [ ] Daily cleanup job deletes expired media assets
-  - [ ] If download fails, message delivered without media (text still sent)
-  - [ ] MIME type and file size tracked
-- **Dependencies**: Task 2
+- [x] 11. Media Service & Asset Storage
+  - [x] 11.1 Download media from WhatsApp API URL on inbound
+  - [x] 11.2 Store as BYTEA in database (launch scale; future: object storage)
+  - [x] 11.3 Set 90-day retention with expires_at at download time
+  - [x] 11.4 Implement daily cleanup job to delete expired media assets
+  - [x] 11.5 Deliver message without media if download fails (text still sent)
+  - [x] 11.6 Track MIME type and file size
 
-### Task 12: Flyway Migration - Communication Tables
-- **Description**: Create the Flyway migration for communication tables: communication_endpoints, delivery_records, template_messages, media_assets.
-- **Files to create/modify**:
-  - `backend/src/main/resources/db/migration/V6__communication_channels.sql`
-- **Acceptance criteria**:
-  - [ ] communication_endpoints with unique(channel, channel_identity)
-  - [ ] delivery_records with status tracking and indexes
-  - [ ] template_messages with unique template_name
-  - [ ] media_assets with BYTEA content and expiration index
-  - [ ] All indexes from design created
-  - [ ] Migration runs successfully against PostgreSQL
-- **Dependencies**: Task 1
+- [x] 12. Flyway Migration - Communication Tables
+  - [x] 12.1 Create communication_endpoints table with unique(channel, channel_identity)
+  - [x] 12.2 Create delivery_records table with status tracking and indexes
+  - [x] 12.3 Create template_messages table with unique template_name
+  - [x] 12.4 Create media_assets table with BYTEA content and expiration index
+  - [x] 12.5 Create all indexes from design
+  - [x] 12.6 Verify migration runs successfully against PostgreSQL
+
+## Notes
+
+- Files to create/modify per task are documented in the design.md package structure
+- WhatsApp-specific implementations go in `com.dadcoach.whatsapp` package
+- Channel-agnostic abstractions go in `com.dadcoach.channel` package
+- Task 12 (Flyway migration) should use filename `V6__communication_channels.sql`

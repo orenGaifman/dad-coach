@@ -18,6 +18,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * Route access rules:
  * <ul>
  *   <li>{@code /actuator/health/**} — public (liveness/readiness probes)</li>
+ *   <li>{@code /webhook/**} — public (provider webhooks use their own signature verification)</li>
  *   <li>{@code /api/v1/admin/**} — requires ADMIN role</li>
  *   <li>{@code /api/v1/service/**} — requires SERVICE role</li>
  *   <li>{@code /api/v1/fathers/me/**} — requires FATHER role</li>
@@ -59,6 +60,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**").permitAll()
+                        .requestMatchers("/webhook/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/service/**").hasRole("SERVICE")
                         .requestMatchers("/api/v1/fathers/me/**").hasRole("FATHER")
