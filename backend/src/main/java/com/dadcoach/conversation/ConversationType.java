@@ -11,5 +11,6 @@ public enum ConversationType {
     INACTIVITY_CHECK,
     CELEBRATION,
     DIFFICULT_SITUATION,
+    /** Used internally by the AI layer for mission generation context. */
     MISSION_GENERATION
 }
