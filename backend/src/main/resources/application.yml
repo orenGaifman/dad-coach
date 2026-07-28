@@ -62,6 +62,7 @@ dad-coach:
     api-base-url: https://graph.facebook.com
     api-version: ${WHATSAPP_API_VERSION:v25.0}
     phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
+    phone-number: ${WHATSAPP_PHONE_NUMBER:+972501234567}
     access-token: ${WHATSAPP_ACCESS_TOKEN:}
     verify-token: ${WHATSAPP_VERIFY_TOKEN:}
     webhook-secret: ${WHATSAPP_WEBHOOK_SECRET:}
@@ -77,6 +78,11 @@ dad-coach:
       api-version: "2023-06-01"
     cost:
       daily-token-budget: ${AI_DAILY_TOKEN_BUDGET:50000}
+
+dadcoach:
+  onboarding:
+    security:
+      wizard-data-encryption-key: ${WIZARD_DATA_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
 
 api:
   rate-limit:
