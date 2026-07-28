@@ -37,6 +37,17 @@ management:
     readinessstate:
       enabled: true
 
+conversation:
+  session-lock:
+    timeout-seconds: 45
+  expiration-windows:
+    ONBOARDING: PT48H
+    DAILY_COACHING: PT24H
+    FOLLOW_UP: PT24H
+    REFLECTION: PT24H
+    INACTIVITY_CHECK: PT48H
+    CELEBRATION: PT24H
+
 dad-coach:
   whatsapp:
     api-base-url: https://graph.facebook.com
