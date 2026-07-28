@@ -1,7 +1,7 @@
 package com.dadcoach.channel.delivery;
 
 import com.dadcoach.channel.dto.OutboundMessageDto;
-import com.dadcoach.whatsapp.dto.StatusUpdateDto;
+import com.dadcoach.channel.dto.StatusUpdateDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

@@ -2,7 +2,7 @@ package com.dadcoach.whatsapp;
 
 import com.dadcoach.channel.dto.InboundMessageDto;
 import com.dadcoach.channel.dto.MessageType;
-import com.dadcoach.whatsapp.dto.StatusUpdateDto;
+import com.dadcoach.channel.dto.StatusUpdateDto;
 import com.dadcoach.whatsapp.dto.WhatsAppWebhookPayload;
 import com.dadcoach.whatsapp.dto.WhatsAppWebhookPayload.*;
 import org.junit.jupiter.api.DisplayName;

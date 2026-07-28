@@ -1,4 +1,4 @@
-package com.dadcoach.whatsapp.dto;
+package com.dadcoach.channel.dto;
 
 import java.time.Instant;
 

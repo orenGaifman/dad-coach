@@ -3,7 +3,7 @@ package com.dadcoach.channel.delivery;
 import com.dadcoach.channel.dto.MessagePriority;
 import com.dadcoach.channel.dto.MessageType;
 import com.dadcoach.channel.dto.OutboundMessageDto;
-import com.dadcoach.whatsapp.dto.StatusUpdateDto;
+import com.dadcoach.channel.dto.StatusUpdateDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
