@@ -25,7 +25,6 @@ CREATE TABLE rate_limit_entries (
     CONSTRAINT chk_rate_limit_attempt_count CHECK (attempt_count >= 1)
 );
 
--- Partial index on active windows (last 2 hours) for efficient cleanup queries
+-- Index on window_start for efficient cleanup queries (ordered by recency)
 CREATE INDEX idx_rate_limit_active_windows
-    ON rate_limit_entries (window_start)
-    WHERE window_start > now() - interval '2 hours';
+    ON rate_limit_entries (window_start DESC);

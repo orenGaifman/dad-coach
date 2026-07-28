@@ -3,6 +3,7 @@ package com.dadcoach.ai.safety;
 import com.dadcoach.ai.safety.SafetyClassification.SafetyCategory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.util.Set;
 
@@ -26,6 +27,7 @@ import java.util.Set;
  *   <li>SAFE — default when no unsafe patterns detected</li>
  * </ol>
  */
+@Component
 public class SafetyClassifier {
 
     private static final Logger log = LoggerFactory.getLogger(SafetyClassifier.class);

@@ -156,11 +156,11 @@ class ProvisioningServiceImplTest {
             when(fatherRepository.findByPhone(PHONE_NUMBER)).thenReturn(Optional.of(existingFather));
 
             // Setup existing entities for idempotent result
-            Family existingFamily = new Family(42L, "David's Family");
-            when(familyRepository.findByFatherId(42L)).thenReturn(Optional.of(existingFamily));
+            Family existingFamily = new Family(new UUID(0L, 42L), "David's Family");
+            when(familyRepository.findByFatherId(new UUID(0L, 42L))).thenReturn(Optional.of(existingFamily));
             when(childRepository.findByFatherId(42L)).thenReturn(List.of());
             when(goalRepository.findByFatherId(42L)).thenReturn(List.of());
-            when(activationRecordRepository.findByFatherId(42L)).thenReturn(Optional.empty());
+            when(activationRecordRepository.findByFatherId(new UUID(0L, 42L))).thenReturn(Optional.empty());
 
             ProvisioningResult result = provisioningService.provision(SESSION_ID);
 
@@ -184,7 +184,7 @@ class ProvisioningServiceImplTest {
             savedFather.setDisplayName("David");
             when(fatherRepository.save(any(Father.class))).thenReturn(savedFather);
 
-            Family savedFamily = new Family(1L, "David's Family");
+            Family savedFamily = new Family(new UUID(0L, 1L), "David's Family");
             when(familyRepository.save(any(Family.class))).thenReturn(savedFamily);
 
             when(childRepository.save(any(Child.class))).thenAnswer(inv -> {
@@ -203,11 +203,11 @@ class ProvisioningServiceImplTest {
             when(communicationPreferenceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(communicationEndpointRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-            AiProfile mockProfile = new AiProfile(1L, "BALANCED", "he", "context", "goals", "brief");
-            when(aiProfileFactory.buildProfile(eq(1L), any(WizardData.class))).thenReturn(mockProfile);
+            AiProfile mockProfile = new AiProfile(new UUID(0L, 1L), "BALANCED", "he", "context", "goals", "brief");
+            when(aiProfileFactory.buildProfile(eq(new UUID(0L, 1L)), any(WizardData.class))).thenReturn(mockProfile);
             when(aiProfileRepository.save(any())).thenReturn(mockProfile);
 
-            ActivationRecord mockActivation = new ActivationRecord(1L, SESSION_ID);
+            ActivationRecord mockActivation = new ActivationRecord(new UUID(0L, 1L), SESSION_ID);
             when(activationRecordRepository.save(any())).thenReturn(mockActivation);
 
             Invitation invitation = createInvitation();
@@ -251,7 +251,7 @@ class ProvisioningServiceImplTest {
             when(languagePreferenceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(communicationPreferenceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(communicationEndpointRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(aiProfileFactory.buildProfile(any(), any())).thenReturn(new AiProfile(1L, "BALANCED", "he", "", "", ""));
+            when(aiProfileFactory.buildProfile(any(), any())).thenReturn(new AiProfile(new UUID(0L, 1L), "BALANCED", "he", "", "", ""));
             when(aiProfileRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(activationRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             Invitation invitation = createInvitation();
@@ -283,7 +283,7 @@ class ProvisioningServiceImplTest {
             when(languagePreferenceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(communicationPreferenceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(communicationEndpointRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(aiProfileFactory.buildProfile(any(), any())).thenReturn(new AiProfile(1L, "BALANCED", "he", "", "", ""));
+            when(aiProfileFactory.buildProfile(any(), any())).thenReturn(new AiProfile(new UUID(0L, 1L), "BALANCED", "he", "", "", ""));
             when(aiProfileRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(activationRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -316,7 +316,7 @@ class ProvisioningServiceImplTest {
             when(languagePreferenceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(communicationPreferenceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(communicationEndpointRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(aiProfileFactory.buildProfile(any(), any())).thenReturn(new AiProfile(1L, "BALANCED", "he", "", "", ""));
+            when(aiProfileFactory.buildProfile(any(), any())).thenReturn(new AiProfile(new UUID(0L, 1L), "BALANCED", "he", "", "", ""));
             when(aiProfileRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(activationRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             Invitation invitation = createInvitation();
@@ -349,7 +349,7 @@ class ProvisioningServiceImplTest {
             when(languagePreferenceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(communicationPreferenceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(communicationEndpointRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(aiProfileFactory.buildProfile(any(), any())).thenReturn(new AiProfile(1L, "BALANCED", "he", "", "", ""));
+            when(aiProfileFactory.buildProfile(any(), any())).thenReturn(new AiProfile(new UUID(0L, 1L), "BALANCED", "he", "", "", ""));
             when(aiProfileRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(activationRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             Invitation invitation = createInvitation();
@@ -383,7 +383,7 @@ class ProvisioningServiceImplTest {
             when(languagePreferenceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(communicationPreferenceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(communicationEndpointRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(aiProfileFactory.buildProfile(any(), any())).thenReturn(new AiProfile(1L, "BALANCED", "he", "", "", ""));
+            when(aiProfileFactory.buildProfile(any(), any())).thenReturn(new AiProfile(new UUID(0L, 1L), "BALANCED", "he", "", "", ""));
             when(aiProfileRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(activationRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             Invitation invitation = createInvitation();
@@ -414,7 +414,7 @@ class ProvisioningServiceImplTest {
             when(languagePreferenceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(communicationPreferenceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(communicationEndpointRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(aiProfileFactory.buildProfile(any(), any())).thenReturn(new AiProfile(1L, "BALANCED", "he", "", "", ""));
+            when(aiProfileFactory.buildProfile(any(), any())).thenReturn(new AiProfile(new UUID(0L, 1L), "BALANCED", "he", "", "", ""));
             when(aiProfileRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(activationRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             Invitation invitation = createInvitation();

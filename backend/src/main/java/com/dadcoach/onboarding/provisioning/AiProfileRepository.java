@@ -15,5 +15,5 @@ public interface AiProfileRepository extends JpaRepository<AiProfile, UUID> {
     /**
      * Find the AI profile for a given father.
      */
-    Optional<AiProfile> findByFatherId(Long fatherId);
+    Optional<AiProfile> findByFatherId(UUID fatherId);
 }

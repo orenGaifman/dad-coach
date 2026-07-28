@@ -1,5 +1,7 @@
 package com.dadcoach.workspace;
 
+import com.dadcoach.api.auth.ActorContext;
+import com.dadcoach.api.auth.AuthActor;
 import com.dadcoach.workspace.dto.response.MetricsDashboardResponse;
 import com.dadcoach.workspace.dto.response.MonthlyStatisticsResponse;
 import com.dadcoach.workspace.dto.response.WeeklyStatisticsResponse;
@@ -10,7 +12,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.security.Principal;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -35,16 +36,16 @@ public class StatisticsController {
     /**
      * Returns weekly statistics for the father.
      *
-     * @param principal the authenticated user
+     * @param actor     the authenticated actor context
      * @param weekStart optional Monday date for the desired week (defaults to current week)
      * @return 200 OK with weekly statistics
      */
     @GetMapping("/statistics/weekly")
     public ResponseEntity<WeeklyStatisticsResponse> getWeeklyStatistics(
-            Principal principal,
+            @AuthActor ActorContext actor,
             @RequestParam(value = "week_start", required = false) String weekStart) {
 
-        UUID fatherId = extractFatherId(principal);
+        UUID fatherId = actor.getActorId();
         LocalDate start = weekStart != null ? LocalDate.parse(weekStart) : null;
 
         WeeklyStatisticsResponse response = statisticsService.getWeeklyStatistics(fatherId, start);
@@ -54,16 +55,16 @@ public class StatisticsController {
     /**
      * Returns monthly statistics for the father.
      *
-     * @param principal  the authenticated user
+     * @param actor      the authenticated actor context
      * @param monthStart optional first day of month (defaults to current month)
      * @return 200 OK with monthly statistics
      */
     @GetMapping("/statistics/monthly")
     public ResponseEntity<MonthlyStatisticsResponse> getMonthlyStatistics(
-            Principal principal,
+            @AuthActor ActorContext actor,
             @RequestParam(value = "month_start", required = false) String monthStart) {
 
-        UUID fatherId = extractFatherId(principal);
+        UUID fatherId = actor.getActorId();
         LocalDate start = monthStart != null ? LocalDate.parse(monthStart) : null;
 
         MonthlyStatisticsResponse response = statisticsService.getMonthlyStatistics(fatherId, start);
@@ -73,20 +74,13 @@ public class StatisticsController {
     /**
      * Returns the metrics dashboard for the father.
      *
-     * @param principal the authenticated user
+     * @param actor the authenticated actor context
      * @return 200 OK with dashboard metrics
      */
     @GetMapping("/metrics")
-    public ResponseEntity<MetricsDashboardResponse> getMetricsDashboard(Principal principal) {
-        UUID fatherId = extractFatherId(principal);
+    public ResponseEntity<MetricsDashboardResponse> getMetricsDashboard(@AuthActor ActorContext actor) {
+        UUID fatherId = actor.getActorId();
         MetricsDashboardResponse response = statisticsService.getMetricsDashboard(fatherId);
         return ResponseEntity.ok(response);
-    }
-
-    private UUID extractFatherId(Principal principal) {
-        if (principal == null) {
-            return UUID.fromString("00000000-0000-0000-0000-000000000001");
-        }
-        return UUID.fromString(principal.getName());
     }
 }

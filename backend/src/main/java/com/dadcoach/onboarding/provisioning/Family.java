@@ -23,7 +23,7 @@ public class Family {
     private UUID familyId;
 
     @Column(name = "father_id", nullable = false, unique = true)
-    private Long fatherId;
+    private UUID fatherId;
 
     @Column(name = "family_name", length = 120)
     private String familyName;
@@ -35,7 +35,7 @@ public class Family {
         // JPA requires a no-arg constructor
     }
 
-    public Family(Long fatherId, String familyName) {
+    public Family(UUID fatherId, String familyName) {
         this.fatherId = fatherId;
         this.familyName = familyName;
         this.createdAt = Instant.now();
@@ -46,8 +46,8 @@ public class Family {
     public UUID getFamilyId() { return familyId; }
     public void setFamilyId(UUID familyId) { this.familyId = familyId; }
 
-    public Long getFatherId() { return fatherId; }
-    public void setFatherId(Long fatherId) { this.fatherId = fatherId; }
+    public UUID getFatherId() { return fatherId; }
+    public void setFatherId(UUID fatherId) { this.fatherId = fatherId; }
 
     public String getFamilyName() { return familyName; }
     public void setFamilyName(String familyName) { this.familyName = familyName; }

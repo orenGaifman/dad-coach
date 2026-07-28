@@ -106,7 +106,8 @@ class FlywayMigrationVerificationTest {
 
         assertThat(v8Versions).containsExactlyInAnyOrder(
                 "8.001", "8.002", "8.003", "8.004", "8.005",
-                "8.006", "8.007", "8.008", "8.009", "8.010", "8.011"
+                "8.006", "8.007", "8.008", "8.009", "8.010", "8.011",
+                "8.012", "8.013"
         );
     }
 
@@ -161,28 +162,29 @@ class FlywayMigrationVerificationTest {
 
     @Test
     void v8003FatherStreaksHasNoFkToFatherTable() throws Exception {
-        // V8.003 father_streaks uses UUID father_id without FK to father(id BIGSERIAL)
-        // This is intentional — FK will be added when father table migrates to UUID PKs
+        // V8.003 father_streaks uses UUID father_id without FK to father(id BIGSERIAL).
+        // V8.012 adds FK via father(external_id UUID). Verify the FK now references external_id.
         migrateUpToV12();
 
         try (Connection conn = DriverManager.getConnection(
                 postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
              Statement stmt = conn.createStatement()) {
 
-            // Verify father_streaks.father_id has UUID type and no FK constraint
+            // Verify father_streaks.father_id has UUID type
             ResultSet rs = stmt.executeQuery(
                     "SELECT data_type FROM information_schema.columns " +
                     "WHERE table_name = 'father_streaks' AND column_name = 'father_id'");
             assertThat(rs.next()).isTrue();
             assertThat(rs.getString("data_type")).isEqualTo("uuid");
 
-            // Verify there are no foreign key constraints on father_streaks
+            // V8.012 adds FK constraint fk_father_streaks_father referencing father(external_id)
             ResultSet fkRs = stmt.executeQuery(
                     "SELECT constraint_name FROM information_schema.table_constraints " +
                     "WHERE table_name = 'father_streaks' AND constraint_type = 'FOREIGN KEY'");
             assertThat(fkRs.next())
-                    .as("father_streaks should have no FK constraints (UUID/BIGSERIAL type mismatch)")
-                    .isFalse();
+                    .as("father_streaks should have FK constraint after V8.012 migration")
+                    .isTrue();
+            assertThat(fkRs.getString("constraint_name")).isEqualTo("fk_father_streaks_father");
         }
     }
 

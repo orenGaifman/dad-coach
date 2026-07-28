@@ -53,7 +53,7 @@ class StreakLifecycleIntegrationTest {
         streak.setStreakStartDate(LocalDate.of(2024, 1, 12));
 
         when(fatherStreakRepository.findByFatherId(fatherId)).thenReturn(Optional.of(streak));
-        when(fatherStreakRepository.save(any(FatherStreak.class)))
+        when(fatherStreakRepository.saveAndFlush(any(FatherStreak.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
         // When - record today (2024-01-15)
@@ -79,7 +79,7 @@ class StreakLifecycleIntegrationTest {
         streak.setStreakStartDate(LocalDate.of(2024, 1, 9));
 
         when(fatherStreakRepository.findByFatherId(fatherId)).thenReturn(Optional.of(streak));
-        when(fatherStreakRepository.save(any(FatherStreak.class)))
+        when(fatherStreakRepository.saveAndFlush(any(FatherStreak.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
         // When - record today (2024-01-15), missed yesterday
@@ -127,7 +127,7 @@ class StreakLifecycleIntegrationTest {
         streak.setStreakStartDate(LocalDate.of(2024, 1, 9));
 
         when(fatherStreakRepository.findByFatherId(fatherId)).thenReturn(Optional.of(streak));
-        when(fatherStreakRepository.save(any(FatherStreak.class)))
+        when(fatherStreakRepository.saveAndFlush(any(FatherStreak.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
         // When - record today → streak goes from 6 to 7

@@ -1,5 +1,7 @@
 package com.dadcoach.workspace;
 
+import com.dadcoach.api.auth.ActorContext;
+import com.dadcoach.api.auth.AuthActor;
 import com.dadcoach.workspace.dto.response.ActivityFeedResponse;
 import com.dadcoach.workspace.feed.ActivityFeedItem;
 import com.dadcoach.workspace.feed.ActivityFeedService;
@@ -9,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.security.Principal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -43,11 +44,11 @@ public class ActivityFeedController {
      */
     @GetMapping
     public ResponseEntity<ActivityFeedResponse> getActivityFeed(
-            Principal principal,
+            @AuthActor ActorContext actor,
             @RequestParam(value = "cursor", required = false) String cursor,
             @RequestParam(value = "page_size", required = false, defaultValue = "20") Integer pageSize) {
 
-        UUID fatherId = extractFatherId(principal);
+        UUID fatherId = actor.getActorId();
         Instant cursorInstant = cursor != null ? Instant.parse(cursor) : null;
 
         ActivityFeedService.FeedPage feedPage = activityFeedService.getFeed(fatherId, cursorInstant, pageSize);
@@ -77,12 +78,5 @@ public class ActivityFeedController {
                 item.getRelatedEntityType(),
                 item.getEventTimestamp()
         );
-    }
-
-    private UUID extractFatherId(Principal principal) {
-        if (principal == null) {
-            return UUID.fromString("00000000-0000-0000-0000-000000000001");
-        }
-        return UUID.fromString(principal.getName());
     }
 }

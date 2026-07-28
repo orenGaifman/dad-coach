@@ -3,6 +3,7 @@ package com.dadcoach.ai.safety;
 import com.dadcoach.ai.safety.SafetyClassification.SafetyCategory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -18,6 +19,7 @@ import java.util.UUID;
  * - MEDICAL → redirect to pediatrician
  * - LEGAL → redirect to family law attorney
  */
+@Component
 public class SafetyResponseProvider {
 
     private static final Logger log = LoggerFactory.getLogger(SafetyResponseProvider.class);

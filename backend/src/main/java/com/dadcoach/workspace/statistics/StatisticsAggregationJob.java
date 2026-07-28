@@ -22,6 +22,13 @@ import java.util.*;
  * week, and current month for all active fathers. Stores results as JSONB in the
  * statistics_aggregates table for fast read access.</p>
  *
+ * <p><strong>Idempotency:</strong> This operation IS idempotent. The {@code upsertAggregate}
+ * method checks for an existing record with the same (father_id, period_type, period_start)
+ * and updates it if found, or inserts a new one otherwise. The database UNIQUE constraint
+ * {@code uq_father_period} prevents duplicates even under concurrent execution. Re-running
+ * the job overwrites the aggregate with freshly computed data (harmless). Safe for
+ * multi-instance deployments.</p>
+ *
  * <p>Requirement 8.4: Statistics are pre-computed nightly for performance.</p>
  */
 @Component

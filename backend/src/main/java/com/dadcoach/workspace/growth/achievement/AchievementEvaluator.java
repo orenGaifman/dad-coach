@@ -49,6 +49,9 @@ public class AchievementEvaluator {
      * {@link AchievementCriteriaEvaluator}, and saves a new {@link FatherAchievement}
      * if criteria are met.</p>
      *
+     * <p>Handles concurrent evaluation gracefully: if a unique constraint violation occurs
+     * (another thread already awarded the same achievement), the duplicate is silently skipped.</p>
+     *
      * @param fatherId the father's unique identifier
      * @return list of newly awarded {@link FatherAchievement} records
      */
@@ -73,13 +76,19 @@ public class AchievementEvaluator {
             }
 
             if (criteriaEvaluator.isMet(criteria, fatherId)) {
-                FatherAchievement earned = new FatherAchievement(
-                        fatherId, achievement.getAchievementId(), Instant.now());
-                fatherAchievementRepository.save(earned);
-                newlyAwarded.add(earned);
+                try {
+                    FatherAchievement earned = new FatherAchievement(
+                            fatherId, achievement.getAchievementId(), Instant.now());
+                    fatherAchievementRepository.saveAndFlush(earned);
+                    newlyAwarded.add(earned);
 
-                log.info("Achievement earned: father={}, achievement={} ({})",
-                        fatherId, achievement.getAchievementId(), achievement.getName());
+                    log.info("Achievement earned: father={}, achievement={} ({})",
+                            fatherId, achievement.getAchievementId(), achievement.getName());
+                } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                    // Concurrent thread already awarded this achievement — skip silently
+                    log.debug("Achievement already awarded concurrently: father={}, achievement={} — skipping",
+                            fatherId, achievement.getAchievementId());
+                }
             }
         }
 

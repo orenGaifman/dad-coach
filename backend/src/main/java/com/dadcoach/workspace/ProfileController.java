@@ -1,5 +1,7 @@
 package com.dadcoach.workspace;
 
+import com.dadcoach.api.auth.ActorContext;
+import com.dadcoach.api.auth.AuthActor;
 import com.dadcoach.workspace.aggregation.ProfileReadService;
 import com.dadcoach.workspace.dto.response.ProfileResponse;
 import org.springframework.http.ResponseEntity;
@@ -7,7 +9,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.security.Principal;
 import java.util.UUID;
 
 /**
@@ -29,20 +30,13 @@ public class ProfileController {
     /**
      * Returns the profile data for the authenticated father.
      *
-     * @param principal the authenticated user
+     * @param actor the authenticated actor context
      * @return 200 OK with the profile response
      */
     @GetMapping("/profile")
-    public ResponseEntity<ProfileResponse> getProfile(Principal principal) {
-        UUID fatherId = extractFatherId(principal);
+    public ResponseEntity<ProfileResponse> getProfile(@AuthActor ActorContext actor) {
+        UUID fatherId = actor.getActorId();
         ProfileResponse response = profileReadService.getProfile(fatherId);
         return ResponseEntity.ok(response);
-    }
-
-    private UUID extractFatherId(Principal principal) {
-        if (principal == null) {
-            return UUID.fromString("00000000-0000-0000-0000-000000000001");
-        }
-        return UUID.fromString(principal.getName());
     }
 }

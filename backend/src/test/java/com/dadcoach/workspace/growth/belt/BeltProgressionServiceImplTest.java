@@ -228,7 +228,7 @@ class BeltProgressionServiceImplTest {
         void promotesAndEmitsEvent() {
             UUID fatherId = UUID.randomUUID();
             FatherBelt belt = createBelt(fatherId, BeltLevel.WHITE, 100);
-            when(fatherBeltRepository.findByFatherId(fatherId)).thenReturn(Optional.of(belt));
+            when(fatherBeltRepository.findByFatherIdForUpdate(fatherId)).thenReturn(Optional.of(belt));
             when(fatherBeltRepository.save(any(FatherBelt.class))).thenAnswer(inv -> inv.getArgument(0));
 
             service.promoteBelt(fatherId, BeltLevel.YELLOW);
@@ -251,7 +251,7 @@ class BeltProgressionServiceImplTest {
         void throwsOnDowngrade() {
             UUID fatherId = UUID.randomUUID();
             FatherBelt belt = createBelt(fatherId, BeltLevel.GREEN, 500);
-            when(fatherBeltRepository.findByFatherId(fatherId)).thenReturn(Optional.of(belt));
+            when(fatherBeltRepository.findByFatherIdForUpdate(fatherId)).thenReturn(Optional.of(belt));
 
             assertThatThrownBy(() -> service.promoteBelt(fatherId, BeltLevel.YELLOW))
                     .isInstanceOf(IllegalStateException.class)
@@ -266,7 +266,7 @@ class BeltProgressionServiceImplTest {
         void throwsOnSameLevel() {
             UUID fatherId = UUID.randomUUID();
             FatherBelt belt = createBelt(fatherId, BeltLevel.GREEN, 500);
-            when(fatherBeltRepository.findByFatherId(fatherId)).thenReturn(Optional.of(belt));
+            when(fatherBeltRepository.findByFatherIdForUpdate(fatherId)).thenReturn(Optional.of(belt));
 
             assertThatThrownBy(() -> service.promoteBelt(fatherId, BeltLevel.GREEN))
                     .isInstanceOf(IllegalStateException.class)
@@ -277,7 +277,7 @@ class BeltProgressionServiceImplTest {
         @DisplayName("creates belt record if none exists and promotes above WHITE")
         void createsRecordAndPromotes() {
             UUID fatherId = UUID.randomUUID();
-            when(fatherBeltRepository.findByFatherId(fatherId)).thenReturn(Optional.empty());
+            when(fatherBeltRepository.findByFatherIdForUpdate(fatherId)).thenReturn(Optional.empty());
             when(fatherBeltRepository.save(any(FatherBelt.class))).thenAnswer(inv -> inv.getArgument(0));
 
             service.promoteBelt(fatherId, BeltLevel.ORANGE);

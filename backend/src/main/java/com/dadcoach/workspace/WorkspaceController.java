@@ -1,5 +1,7 @@
 package com.dadcoach.workspace;
 
+import com.dadcoach.api.auth.ActorContext;
+import com.dadcoach.api.auth.AuthActor;
 import com.dadcoach.workspace.aggregation.QuickActionsService;
 import com.dadcoach.workspace.aggregation.WorkspaceSummaryService;
 import com.dadcoach.workspace.dto.response.PartialResponse;
@@ -10,7 +12,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
 
@@ -42,12 +43,12 @@ public class WorkspaceController {
      * is unavailable, the response still returns with available data and lists
      * the degraded sections.</p>
      *
-     * @param principal the authenticated user
+     * @param actor the authenticated actor context
      * @return 200 OK with the workspace summary wrapped in PartialResponse
      */
     @GetMapping("/summary")
-    public ResponseEntity<PartialResponse<WorkspaceSummaryResponse>> getSummary(Principal principal) {
-        UUID fatherId = extractFatherId(principal);
+    public ResponseEntity<PartialResponse<WorkspaceSummaryResponse>> getSummary(@AuthActor ActorContext actor) {
+        UUID fatherId = actor.getActorId();
         PartialResponse<WorkspaceSummaryResponse> response = workspaceSummaryService.getSummary(fatherId);
         return ResponseEntity.ok(response);
     }
@@ -58,12 +59,12 @@ public class WorkspaceController {
      * <p>Computes up to 5 priority-ordered suggestions based on current state signals:
      * active missions, unread notifications, streak at risk, goals nearing completion.</p>
      *
-     * @param principal the authenticated user
+     * @param actor the authenticated actor context
      * @return 200 OK with quick actions response
      */
     @GetMapping("/quick-actions")
-    public ResponseEntity<QuickActionsResponse> getQuickActions(Principal principal) {
-        UUID fatherId = extractFatherId(principal);
+    public ResponseEntity<QuickActionsResponse> getQuickActions(@AuthActor ActorContext actor) {
+        UUID fatherId = actor.getActorId();
         List<QuickActionsService.QuickActionItem> actions = quickActionsService.getQuickActions(fatherId);
 
         List<QuickActionsResponse.QuickActionItem> items = actions.stream()
@@ -78,18 +79,5 @@ public class WorkspaceController {
                 .toList();
 
         return ResponseEntity.ok(new QuickActionsResponse(items));
-    }
-
-    /**
-     * Extracts the father's UUID from the security context.
-     *
-     * <p>TODO: Integrate with production authentication infrastructure.
-     * Currently uses the principal name as a UUID string.</p>
-     */
-    private UUID extractFatherId(Principal principal) {
-        if (principal == null) {
-            return UUID.fromString("00000000-0000-0000-0000-000000000001");
-        }
-        return UUID.fromString(principal.getName());
     }
 }

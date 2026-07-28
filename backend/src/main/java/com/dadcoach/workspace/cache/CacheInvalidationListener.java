@@ -20,6 +20,8 @@ import java.util.UUID;
  *   <li>AchievementEarnedEvent → achievements</li>
  *   <li>FatherProfileUpdatedEvent → profile, summary</li>
  *   <li>StreakResetEvent → streak, summary</li>
+ *   <li>PositiveActivityReportedEvent → streak, summary, metrics, weekly_stats</li>
+ *   <li>QualityTimeReportedEvent → streak, summary, metrics, weekly_stats</li>
  * </ul>
  */
 @Component
@@ -80,6 +82,20 @@ public class CacheInvalidationListener {
         UUID fatherId = event.getFatherId();
         log.debug("Invalidating cache for StreakResetEvent, fatherId={}", fatherId);
         invalidateKeys(fatherId, "streak", "summary");
+    }
+
+    @EventListener
+    public void onPositiveActivityReported(PositiveActivityReportedEvent event) {
+        UUID fatherId = event.getFatherId();
+        log.debug("Invalidating cache for PositiveActivityReportedEvent, fatherId={}", fatherId);
+        invalidateKeys(fatherId, "streak", "summary", "metrics", "weekly_stats");
+    }
+
+    @EventListener
+    public void onQualityTimeReported(QualityTimeReportedEvent event) {
+        UUID fatherId = event.getFatherId();
+        log.debug("Invalidating cache for QualityTimeReportedEvent, fatherId={}", fatherId);
+        invalidateKeys(fatherId, "streak", "summary", "metrics", "weekly_stats");
     }
 
     private void invalidateKeys(UUID fatherId, String... dataTypes) {

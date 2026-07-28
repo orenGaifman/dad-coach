@@ -12,6 +12,11 @@ import org.springframework.stereotype.Component;
  * last qualifying interaction date is before yesterday in their configured timezone,
  * meaning they missed at least one full calendar day without a qualifying interaction.</p>
  *
+ * <p><strong>Idempotency:</strong> This operation IS idempotent. Resetting an already-reset
+ * streak (current_streak_days == 0) is a no-op — the inner loop skips such records.
+ * Running this job multiple times on the same day produces the same result.
+ * Safe for multi-instance deployments without distributed locking.</p>
+ *
  * @see StreakService#resetExpiredStreaks()
  */
 @Component

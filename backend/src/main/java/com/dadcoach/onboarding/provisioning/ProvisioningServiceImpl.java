@@ -232,7 +232,7 @@ public class ProvisioningServiceImpl implements ProvisioningService {
         String familyName = wizardData.getDisplayName() != null
                 ? wizardData.getDisplayName() + "'s Family"
                 : "Family";
-        Family family = new Family(father.getId(), familyName);
+        Family family = new Family(new UUID(0L, father.getId()), familyName);
         return familyRepository.save(family);
     }
 
@@ -279,12 +279,12 @@ public class ProvisioningServiceImpl implements ProvisioningService {
 
     private void createLanguagePreference(Father father, WizardData wizardData) {
         String language = wizardData.getLanguage() != null ? wizardData.getLanguage() : "he";
-        LanguagePreference pref = new LanguagePreference(father.getId(), language);
+        LanguagePreference pref = new LanguagePreference(new UUID(0L, father.getId()), language);
         languagePreferenceRepository.save(pref);
     }
 
     private void createCommunicationPreference(Father father, WizardData wizardData) {
-        CommunicationPreference pref = new CommunicationPreference(father.getId());
+        CommunicationPreference pref = new CommunicationPreference(new UUID(0L, father.getId()));
 
         Map<String, Object> preferences = wizardData.getPreferences();
         if (preferences != null) {
@@ -331,12 +331,14 @@ public class ProvisioningServiceImpl implements ProvisioningService {
     }
 
     private AiProfile createAiProfile(Father father, WizardData wizardData) {
-        AiProfile profile = aiProfileFactory.buildProfile(father.getId(), wizardData);
+        AiProfile profile = aiProfileFactory.buildProfile(new UUID(0L, father.getId()), wizardData);
         return aiProfileRepository.save(profile);
     }
 
     private ActivationRecord createActivationRecord(Father father, UUID sessionId) {
-        ActivationRecord record = new ActivationRecord(father.getId(), sessionId);
+        // Bridge: derive UUID from internal Long ID (same mapping as ActorContextFilter.resolveActorId)
+        UUID fatherUuid = new UUID(0L, father.getId());
+        ActivationRecord record = new ActivationRecord(fatherUuid, sessionId);
         return activationRecordRepository.save(record);
     }
 
@@ -360,9 +362,10 @@ public class ProvisioningServiceImpl implements ProvisioningService {
 
     private ProvisioningResult buildExistingResult(Father existingFather, UUID sessionId) {
         Long fatherId = existingFather.getId();
+        UUID fatherUuid = new UUID(0L, fatherId);
 
         // Look up existing family
-        UUID familyId = familyRepository.findByFatherId(fatherId)
+        UUID familyId = familyRepository.findByFatherId(fatherUuid)
                 .map(Family::getFamilyId)
                 .orElse(null);
 
@@ -375,7 +378,7 @@ public class ProvisioningServiceImpl implements ProvisioningService {
                 .stream().map(Goal::getId).toList();
 
         // Look up existing activation record
-        UUID activationId = activationRecordRepository.findByFatherId(fatherId)
+        UUID activationId = activationRecordRepository.findByFatherId(new UUID(0L, fatherId))
                 .map(ActivationRecord::getActivationId)
                 .orElse(null);
 

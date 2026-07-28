@@ -1,5 +1,7 @@
 package com.dadcoach.workspace;
 
+import com.dadcoach.api.auth.ActorContext;
+import com.dadcoach.api.auth.AuthActor;
 import com.dadcoach.workspace.dto.request.MarkCelebrationDisplayedRequest;
 import com.dadcoach.workspace.dto.response.CelebrationEventsResponse;
 import com.dadcoach.workspace.growth.celebration.CelebrationEvent;
@@ -8,7 +10,6 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,10 +38,10 @@ public class CelebrationController {
      */
     @GetMapping
     public ResponseEntity<CelebrationEventsResponse> getCelebrations(
-            Principal principal,
+            @AuthActor ActorContext actor,
             @RequestParam(name = "undisplayed_only", defaultValue = "true") boolean undisplayedOnly) {
 
-        UUID fatherId = extractFatherId(principal);
+        UUID fatherId = actor.getActorId();
         List<CelebrationEvent> events = celebrationEventService.getUndisplayed(fatherId);
 
         List<CelebrationEventsResponse.CelebrationItem> items = events.stream()
@@ -59,10 +60,10 @@ public class CelebrationController {
      */
     @PostMapping("/mark-displayed")
     public ResponseEntity<Void> markDisplayed(
-            Principal principal,
+            @AuthActor ActorContext actor,
             @Valid @RequestBody MarkCelebrationDisplayedRequest request) {
 
-        UUID fatherId = extractFatherId(principal);
+        UUID fatherId = actor.getActorId();
         celebrationEventService.markDisplayed(fatherId, request.getEventIds());
         return ResponseEntity.ok().build();
     }
@@ -78,12 +79,5 @@ public class CelebrationController {
                 event.getMotivationalPrompt(),
                 event.getCreatedAt()
         );
-    }
-
-    private UUID extractFatherId(Principal principal) {
-        if (principal == null) {
-            return UUID.fromString("00000000-0000-0000-0000-000000000001");
-        }
-        return UUID.fromString(principal.getName());
     }
 }

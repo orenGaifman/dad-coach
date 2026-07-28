@@ -84,7 +84,7 @@ public class ActivationServiceImpl implements ActivationService {
 
     @Override
     @Transactional
-    public ActivationRecord createPendingActivation(Long fatherId, UUID sessionId) {
+    public ActivationRecord createPendingActivation(UUID fatherId, UUID sessionId) {
         log.info("Creating pending activation for father {} session {}", fatherId, sessionId);
 
         // Check if activation already exists (idempotent)
@@ -152,7 +152,7 @@ public class ActivationServiceImpl implements ActivationService {
     public void handleActivationMessage(Long fatherId, String messageContent) {
         log.info("Handling activation message from father {}: '{}'", fatherId, messageContent);
 
-        ActivationRecord record = activationRecordRepository.findByFatherId(fatherId)
+        ActivationRecord record = activationRecordRepository.findByFatherId(new UUID(0L, fatherId))
                 .orElseThrow(() -> new IllegalArgumentException(
                         "No activation record found for father: " + fatherId));
 
@@ -240,10 +240,10 @@ public class ActivationServiceImpl implements ActivationService {
         activationRecordRepository.save(record);
 
         // Regenerate deep link (determine language from father's locale)
-        var father = fatherService.getFather(record.getFatherId());
+        var father = fatherService.getFather(record.getFatherId().getLeastSignificantBits());
         String language = father.getLocale() != null ? father.getLocale() : "he";
 
-        String deepLink = generateDeepLink(record.getFatherId(), language);
+        String deepLink = generateDeepLink(record.getFatherId().getLeastSignificantBits(), language);
         log.info("Regenerated deep link for activation {} (retry {})", activationId, record.getRetryCount());
 
         return deepLink;

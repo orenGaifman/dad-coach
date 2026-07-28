@@ -24,7 +24,7 @@ public class CommunicationPreference {
     private UUID preferenceId;
 
     @Column(name = "father_id", nullable = false, unique = true)
-    private Long fatherId;
+    private UUID fatherId;
 
     @Column(name = "preferred_coaching_time", nullable = false)
     private LocalTime preferredCoachingTime = LocalTime.of(8, 0);
@@ -48,7 +48,7 @@ public class CommunicationPreference {
         // JPA requires a no-arg constructor
     }
 
-    public CommunicationPreference(Long fatherId) {
+    public CommunicationPreference(UUID fatherId) {
         this.fatherId = fatherId;
         this.updatedAt = Instant.now();
     }
@@ -58,8 +58,8 @@ public class CommunicationPreference {
     public UUID getPreferenceId() { return preferenceId; }
     public void setPreferenceId(UUID preferenceId) { this.preferenceId = preferenceId; }
 
-    public Long getFatherId() { return fatherId; }
-    public void setFatherId(Long fatherId) { this.fatherId = fatherId; }
+    public UUID getFatherId() { return fatherId; }
+    public void setFatherId(UUID fatherId) { this.fatherId = fatherId; }
 
     public LocalTime getPreferredCoachingTime() { return preferredCoachingTime; }
     public void setPreferredCoachingTime(LocalTime preferredCoachingTime) { this.preferredCoachingTime = preferredCoachingTime; }

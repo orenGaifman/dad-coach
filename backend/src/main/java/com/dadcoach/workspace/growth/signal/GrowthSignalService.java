@@ -47,10 +47,10 @@ public class GrowthSignalService {
     /**
      * Records a new growth signal for a father.
      *
-     * <p>The method first checks for duplicates. If a signal with the same
-     * (father_id, signal_type, source_entity_id) combination already exists,
-     * a {@link DuplicateSignalException} is thrown. Otherwise, a new immutable
-     * signal is created with the configured point value and current scoring policy version.</p>
+     * <p>Uses database unique constraint {@code (father_id, signal_type, source_entity_id)} as
+     * the authoritative duplicate guard. A pre-check is performed for fast-path rejection,
+     * but the constraint handles the TOCTOU race condition when concurrent threads attempt
+     * to record the same signal simultaneously.</p>
      *
      * @param type             the type of growth signal
      * @param fatherId         the father's unique identifier
@@ -62,6 +62,7 @@ public class GrowthSignalService {
     @Transactional
     public GrowthSignal recordSignal(GrowthSignalType type, UUID fatherId,
                                      UUID sourceEntityId, String sourceEntityType) {
+        // Fast-path duplicate check (non-authoritative — race window exists)
         if (isDuplicate(type, fatherId, sourceEntityId)) {
             throw new DuplicateSignalException(sourceEntityId.toString());
         }
@@ -78,7 +79,12 @@ public class GrowthSignalService {
                 .createdAt(Instant.now())
                 .build();
 
-        return growthSignalRepository.save(signal);
+        try {
+            return growthSignalRepository.saveAndFlush(signal);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Constraint violation from concurrent insert — treat as duplicate
+            throw new DuplicateSignalException(sourceEntityId.toString());
+        }
     }
 
     /**

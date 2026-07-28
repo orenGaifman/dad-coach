@@ -19,6 +19,13 @@ import java.util.function.Supplier;
  *
  * <p>Provides per-father, per-data-type caching with configurable TTLs,
  * stampede protection via per-key ReentrantLocks, and bulk invalidation.</p>
+ *
+ * <p><strong>Multi-instance deployment note:</strong> This cache is per-instance (Caffeine is
+ * in-process only). In a multi-instance deployment, each instance maintains its own cache.
+ * Cache invalidation events are local to the instance that processes the domain event.
+ * Other instances will serve stale data until their TTL expires (max 10 minutes).
+ * This eventual consistency is acceptable per the workspace spec's cache design — workspace
+ * data is read-heavy and not transactionally critical.</p>
  */
 @Service
 public class WorkspaceCacheService {

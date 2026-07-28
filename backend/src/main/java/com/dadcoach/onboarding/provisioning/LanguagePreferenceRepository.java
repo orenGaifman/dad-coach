@@ -12,5 +12,5 @@ import java.util.UUID;
 @Repository
 public interface LanguagePreferenceRepository extends JpaRepository<LanguagePreference, UUID> {
 
-    Optional<LanguagePreference> findByFatherId(Long fatherId);
+    Optional<LanguagePreference> findByFatherId(UUID fatherId);
 }

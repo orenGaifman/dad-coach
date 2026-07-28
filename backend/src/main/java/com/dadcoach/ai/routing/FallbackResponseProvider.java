@@ -2,6 +2,7 @@ package com.dadcoach.ai.routing;
 
 import com.dadcoach.ai.provider.AiProviderResponse;
 import com.dadcoach.conversation.ConversationType;
+import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.Map;
@@ -14,6 +15,7 @@ import java.util.Map;
  * <p>Fallback responses are the last resort in the fallback chain and are guaranteed
  * to always be available (no external dependencies).
  */
+@Component
 public class FallbackResponseProvider {
 
     private static final String FALLBACK_PROVIDER = "fallback";

@@ -124,6 +124,7 @@ class BeltProgressionIntegrationTest {
         belt.setCurrentScore(50); // below YELLOW threshold
 
         when(fatherBeltRepository.findByFatherId(fatherId)).thenReturn(Optional.of(belt));
+        when(fatherBeltRepository.findByFatherIdForUpdate(fatherId)).thenReturn(Optional.of(belt));
 
         // When - evaluate with score below current belt
         Optional<BeltLevel> promotionResult = beltProgressionService.evaluatePromotion(fatherId, 50);

@@ -1,11 +1,13 @@
 package com.dadcoach.workspace.growth.belt;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,6 +30,17 @@ public interface FatherBeltRepository extends JpaRepository<FatherBelt, UUID> {
      * @return the belt record if one exists
      */
     Optional<FatherBelt> findByFatherId(UUID fatherId);
+
+    /**
+     * Finds the belt record for a specific father with a pessimistic write lock.
+     * Used by belt promotion to prevent concurrent promotions from racing.
+     *
+     * @param fatherId the father's unique identifier
+     * @return the belt record if one exists, locked for update
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT fb FROM FatherBelt fb WHERE fb.fatherId = :fatherId")
+    Optional<FatherBelt> findByFatherIdForUpdate(@Param("fatherId") UUID fatherId);
 
     /**
      * Checks whether a belt record exists for the given father.

@@ -112,7 +112,8 @@ public class BeltProgressionServiceImpl implements BeltProgressionService {
     @Override
     @Transactional
     public void promoteBelt(UUID fatherId, BeltLevel newBelt) {
-        FatherBelt fatherBelt = fatherBeltRepository.findByFatherId(fatherId)
+        // Use pessimistic lock to prevent concurrent belt promotions from racing
+        FatherBelt fatherBelt = fatherBeltRepository.findByFatherIdForUpdate(fatherId)
                 .orElseGet(() -> {
                     log.info("Creating initial belt record for promotion, father={}", fatherId);
                     FatherBelt created = new FatherBelt(fatherId);

@@ -49,10 +49,7 @@ public class FallbackChain {
      * @param fallbackResponseProvider provider of pre-written fallback responses
      */
     public FallbackChain(List<AiProvider> providers, FallbackResponseProvider fallbackResponseProvider) {
-        if (providers == null || providers.isEmpty()) {
-            throw new IllegalArgumentException("At least one AI provider is required");
-        }
-        this.providers = List.copyOf(providers);
+        this.providers = providers != null ? List.copyOf(providers) : List.of();
         this.fallbackResponseProvider = fallbackResponseProvider;
     }
 

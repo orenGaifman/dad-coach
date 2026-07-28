@@ -1,5 +1,7 @@
 package com.dadcoach.workspace;
 
+import com.dadcoach.api.auth.ActorContext;
+import com.dadcoach.api.auth.AuthActor;
 import com.dadcoach.workspace.dto.response.AchievementsResponse;
 import com.dadcoach.workspace.dto.response.BeltProgressionResponse;
 import com.dadcoach.workspace.dto.response.GrowthScoreBreakdownResponse;
@@ -15,7 +17,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.security.Principal;
 import java.time.*;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
@@ -51,12 +52,12 @@ public class GrowthController {
     /**
      * Returns the father's belt progression including current belt, score, and next belt progress.
      *
-     * @param principal the authenticated user
+     * @param actor the authenticated actor context
      * @return 200 OK with belt progression response
      */
     @GetMapping("/belt")
-    public ResponseEntity<BeltProgressionResponse> getBeltProgression(Principal principal) {
-        UUID fatherId = extractFatherId(principal);
+    public ResponseEntity<BeltProgressionResponse> getBeltProgression(@AuthActor ActorContext actor) {
+        UUID fatherId = actor.getActorId();
         BeltProgressionResponse response = beltProgressionService.getProgression(fatherId);
         return ResponseEntity.ok(response);
     }
@@ -64,12 +65,12 @@ public class GrowthController {
     /**
      * Returns the father's growth score breakdown by signal type, with period counts.
      *
-     * @param principal the authenticated user
+     * @param actor the authenticated actor context
      * @return 200 OK with growth score breakdown response
      */
     @GetMapping("/score")
-    public ResponseEntity<GrowthScoreBreakdownResponse> getScoreBreakdown(Principal principal) {
-        UUID fatherId = extractFatherId(principal);
+    public ResponseEntity<GrowthScoreBreakdownResponse> getScoreBreakdown(@AuthActor ActorContext actor) {
+        UUID fatherId = actor.getActorId();
 
         // Get score breakdown by signal type
         Map<GrowthSignalType, Integer> breakdown = growthSignalService.getScoreBreakdown(fatherId);
@@ -120,12 +121,12 @@ public class GrowthController {
     /**
      * Returns the father's streak status including current/longest streak and at-risk indicator.
      *
-     * @param principal the authenticated user
+     * @param actor the authenticated actor context
      * @return 200 OK with streak response
      */
     @GetMapping("/streak")
-    public ResponseEntity<StreakResponse> getStreak(Principal principal) {
-        UUID fatherId = extractFatherId(principal);
+    public ResponseEntity<StreakResponse> getStreak(@AuthActor ActorContext actor) {
+        UUID fatherId = actor.getActorId();
         StreakResponse response = streakService.getStreakResponse(fatherId);
         return ResponseEntity.ok(response);
     }
@@ -133,20 +134,13 @@ public class GrowthController {
     /**
      * Returns the father's achievements with earned status and next achievable.
      *
-     * @param principal the authenticated user
+     * @param actor the authenticated actor context
      * @return 200 OK with achievements response
      */
     @GetMapping("/achievements")
-    public ResponseEntity<AchievementsResponse> getAchievements(Principal principal) {
-        UUID fatherId = extractFatherId(principal);
+    public ResponseEntity<AchievementsResponse> getAchievements(@AuthActor ActorContext actor) {
+        UUID fatherId = actor.getActorId();
         AchievementsResponse response = achievementEvaluator.getAchievements(fatherId);
         return ResponseEntity.ok(response);
-    }
-
-    private UUID extractFatherId(Principal principal) {
-        if (principal == null) {
-            return UUID.fromString("00000000-0000-0000-0000-000000000001");
-        }
-        return UUID.fromString(principal.getName());
     }
 }

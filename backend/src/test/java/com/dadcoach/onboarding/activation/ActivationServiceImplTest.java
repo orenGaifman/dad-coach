@@ -47,6 +47,7 @@ class ActivationServiceImplTest {
     private ActivationServiceImpl activationService;
 
     private static final Long FATHER_ID = 1L;
+    private static final UUID FATHER_UUID = new UUID(0L, FATHER_ID);
     private static final UUID SESSION_ID = UUID.randomUUID();
     private static final UUID ACTIVATION_ID = UUID.randomUUID();
 
@@ -72,14 +73,14 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("creates new activation record with PENDING status")
         void createsNewRecord() {
-            when(activationRecordRepository.findByFatherId(FATHER_ID)).thenReturn(Optional.empty());
+            when(activationRecordRepository.findByFatherId(FATHER_UUID)).thenReturn(Optional.empty());
             when(activationRecordRepository.save(any(ActivationRecord.class)))
                     .thenAnswer(inv -> inv.getArgument(0));
 
-            ActivationRecord result = activationService.createPendingActivation(FATHER_ID, SESSION_ID);
+            ActivationRecord result = activationService.createPendingActivation(FATHER_UUID, SESSION_ID);
 
             assertThat(result).isNotNull();
-            assertThat(result.getFatherId()).isEqualTo(FATHER_ID);
+            assertThat(result.getFatherId()).isEqualTo(FATHER_UUID);
             assertThat(result.getSessionId()).isEqualTo(SESSION_ID);
             assertThat(result.getStatus()).isEqualTo(ActivationStatus.PENDING);
             verify(activationRecordRepository).save(any(ActivationRecord.class));
@@ -88,10 +89,10 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("returns existing record if already exists (idempotent)")
         void returnsExistingRecord() {
-            ActivationRecord existing = new ActivationRecord(FATHER_ID, SESSION_ID);
-            when(activationRecordRepository.findByFatherId(FATHER_ID)).thenReturn(Optional.of(existing));
+            ActivationRecord existing = new ActivationRecord(FATHER_UUID, SESSION_ID);
+            when(activationRecordRepository.findByFatherId(FATHER_UUID)).thenReturn(Optional.of(existing));
 
-            ActivationRecord result = activationService.createPendingActivation(FATHER_ID, SESSION_ID);
+            ActivationRecord result = activationService.createPendingActivation(FATHER_UUID, SESSION_ID);
 
             assertThat(result).isSameAs(existing);
             verify(activationRecordRepository, never()).save(any());
@@ -105,7 +106,7 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("transitions PENDING to LINK_CLICKED")
         void transitionsPendingToLinkClicked() {
-            ActivationRecord record = new ActivationRecord(FATHER_ID, SESSION_ID);
+            ActivationRecord record = new ActivationRecord(FATHER_UUID, SESSION_ID);
             record.setActivationId(ACTIVATION_ID);
             when(activationRecordRepository.findById(ACTIVATION_ID)).thenReturn(Optional.of(record));
             when(activationRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -120,7 +121,7 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("ignores if already in LINK_CLICKED state")
         void ignoresIfAlreadyClicked() {
-            ActivationRecord record = new ActivationRecord(FATHER_ID, SESSION_ID);
+            ActivationRecord record = new ActivationRecord(FATHER_UUID, SESSION_ID);
             record.setActivationId(ACTIVATION_ID);
             record.setStatus(ActivationStatus.LINK_CLICKED);
             record.setLinkClickedAt(Instant.now().minusSeconds(60));
@@ -149,9 +150,9 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("completes full activation flow on first message")
         void completesActivationFlow() {
-            ActivationRecord record = new ActivationRecord(FATHER_ID, SESSION_ID);
+            ActivationRecord record = new ActivationRecord(FATHER_UUID, SESSION_ID);
             record.setActivationId(ACTIVATION_ID);
-            when(activationRecordRepository.findByFatherId(FATHER_ID)).thenReturn(Optional.of(record));
+            when(activationRecordRepository.findByFatherId(FATHER_UUID)).thenReturn(Optional.of(record));
             when(activationRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             Father father = new Father("+972501234567");
@@ -162,9 +163,8 @@ class ActivationServiceImplTest {
             when(fatherService.activateFather(FATHER_ID)).thenReturn(father);
             when(fatherService.getFather(FATHER_ID)).thenReturn(father);
 
-            UUID fatherUuid = new UUID(0L, FATHER_ID);
-            CommunicationEndpoint endpoint = new CommunicationEndpoint(fatherUuid, "WHATSAPP", "+972501234567");
-            when(endpointRepository.findPrimaryByFatherId(fatherUuid)).thenReturn(Optional.of(endpoint));
+            CommunicationEndpoint endpoint = new CommunicationEndpoint(FATHER_UUID, "WHATSAPP", "+972501234567");
+            when(endpointRepository.findPrimaryByFatherId(FATHER_UUID)).thenReturn(Optional.of(endpoint));
 
             CoachingResponse welcomeResponse = new CoachingResponse(
                     "Welcome to Dad Coach!", "gpt-4", "openai",
@@ -193,9 +193,9 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("skips already-completed activation")
         void skipsCompletedActivation() {
-            ActivationRecord record = new ActivationRecord(FATHER_ID, SESSION_ID);
+            ActivationRecord record = new ActivationRecord(FATHER_UUID, SESSION_ID);
             record.setStatus(ActivationStatus.CONVERSATION_STARTED);
-            when(activationRecordRepository.findByFatherId(FATHER_ID)).thenReturn(Optional.of(record));
+            when(activationRecordRepository.findByFatherId(FATHER_UUID)).thenReturn(Optional.of(record));
 
             activationService.handleActivationMessage(FATHER_ID, "hello");
 
@@ -206,9 +206,9 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("any message triggers activation, not just START")
         void anyMessageTriggersActivation() {
-            ActivationRecord record = new ActivationRecord(FATHER_ID, SESSION_ID);
+            ActivationRecord record = new ActivationRecord(FATHER_UUID, SESSION_ID);
             record.setActivationId(ACTIVATION_ID);
-            when(activationRecordRepository.findByFatherId(FATHER_ID)).thenReturn(Optional.of(record));
+            when(activationRecordRepository.findByFatherId(FATHER_UUID)).thenReturn(Optional.of(record));
             when(activationRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             Father father = new Father("+972501234567");
@@ -219,9 +219,8 @@ class ActivationServiceImplTest {
             when(fatherService.activateFather(FATHER_ID)).thenReturn(father);
             when(fatherService.getFather(FATHER_ID)).thenReturn(father);
 
-            UUID fatherUuid = new UUID(0L, FATHER_ID);
-            when(endpointRepository.findPrimaryByFatherId(fatherUuid)).thenReturn(Optional.empty());
-            when(endpointRepository.findByFatherId(fatherUuid)).thenReturn(List.of());
+            when(endpointRepository.findPrimaryByFatherId(FATHER_UUID)).thenReturn(Optional.empty());
+            when(endpointRepository.findByFatherId(FATHER_UUID)).thenReturn(List.of());
 
             CoachingResponse welcomeResponse = CoachingResponse.fallback("ברוכים הבאים!");
             when(intelligenceLayer.generateCoachingResponse(any())).thenReturn(welcomeResponse);
@@ -242,7 +241,7 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("transitions to FAILED on timeout")
         void transitionsToFailed() {
-            ActivationRecord record = new ActivationRecord(FATHER_ID, SESSION_ID);
+            ActivationRecord record = new ActivationRecord(FATHER_UUID, SESSION_ID);
             record.setActivationId(ACTIVATION_ID);
             record.setStatus(ActivationStatus.PENDING);
             when(activationRecordRepository.findById(ACTIVATION_ID)).thenReturn(Optional.of(record));
@@ -257,7 +256,7 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("ignores timeout for terminal activation")
         void ignoresTerminalActivation() {
-            ActivationRecord record = new ActivationRecord(FATHER_ID, SESSION_ID);
+            ActivationRecord record = new ActivationRecord(FATHER_UUID, SESSION_ID);
             record.setActivationId(ACTIVATION_ID);
             record.setStatus(ActivationStatus.CONVERSATION_STARTED);
             when(activationRecordRepository.findById(ACTIVATION_ID)).thenReturn(Optional.of(record));
@@ -323,7 +322,7 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("retries failed activation by transitioning FAILED→PENDING")
         void retriesFailed() {
-            ActivationRecord record = new ActivationRecord(FATHER_ID, SESSION_ID);
+            ActivationRecord record = new ActivationRecord(FATHER_UUID, SESSION_ID);
             record.setActivationId(ACTIVATION_ID);
             record.setStatus(ActivationStatus.FAILED);
             record.setRetryCount(1);
@@ -347,7 +346,7 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("throws when max retries exceeded")
         void throwsWhenMaxRetriesExceeded() {
-            ActivationRecord record = new ActivationRecord(FATHER_ID, SESSION_ID);
+            ActivationRecord record = new ActivationRecord(FATHER_UUID, SESSION_ID);
             record.setActivationId(ACTIVATION_ID);
             record.setStatus(ActivationStatus.FAILED);
             record.setRetryCount(3);
@@ -361,7 +360,7 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("throws when status is not FAILED")
         void throwsWhenNotFailed() {
-            ActivationRecord record = new ActivationRecord(FATHER_ID, SESSION_ID);
+            ActivationRecord record = new ActivationRecord(FATHER_UUID, SESSION_ID);
             record.setActivationId(ACTIVATION_ID);
             record.setStatus(ActivationStatus.PENDING);
             when(activationRecordRepository.findById(ACTIVATION_ID)).thenReturn(Optional.of(record));
@@ -379,7 +378,7 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("returns immediately when status has changed")
         void returnsImmediatelyWhenChanged() {
-            ActivationRecord record = new ActivationRecord(FATHER_ID, SESSION_ID);
+            ActivationRecord record = new ActivationRecord(FATHER_UUID, SESSION_ID);
             record.setStatus(ActivationStatus.LINK_CLICKED);
             when(activationRecordRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.of(record));
 
@@ -391,7 +390,7 @@ class ActivationServiceImplTest {
         @Test
         @DisplayName("returns immediately when no lastStatus provided")
         void returnsImmediatelyWhenNoLastStatus() {
-            ActivationRecord record = new ActivationRecord(FATHER_ID, SESSION_ID);
+            ActivationRecord record = new ActivationRecord(FATHER_UUID, SESSION_ID);
             record.setStatus(ActivationStatus.PENDING);
             when(activationRecordRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.of(record));
 

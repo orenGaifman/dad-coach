@@ -114,7 +114,7 @@ class StreakServiceTest {
             FatherStreak streak = createStreak(fatherId, 3, 5,
                     LocalDate.of(2024, 3, 14), "UTC");
             when(fatherStreakRepository.findByFatherId(fatherId)).thenReturn(Optional.of(streak));
-            when(fatherStreakRepository.save(any(FatherStreak.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(fatherStreakRepository.saveAndFlush(any(FatherStreak.class))).thenAnswer(inv -> inv.getArgument(0));
 
             int result = service.recordQualifyingInteraction(fatherId,
                     Instant.parse("2024-03-15T08:00:00Z"));
@@ -122,7 +122,7 @@ class StreakServiceTest {
             assertThat(result).isEqualTo(4);
             assertThat(streak.getCurrentStreakDays()).isEqualTo(4);
             assertThat(streak.getLastQualifyingDate()).isEqualTo(LocalDate.of(2024, 3, 15));
-            verify(fatherStreakRepository).save(streak);
+            verify(fatherStreakRepository).saveAndFlush(streak);
         }
 
         @Test
@@ -132,7 +132,7 @@ class StreakServiceTest {
             FatherStreak streak = createStreak(fatherId, 10, 15,
                     LocalDate.of(2024, 3, 12), "UTC");
             when(fatherStreakRepository.findByFatherId(fatherId)).thenReturn(Optional.of(streak));
-            when(fatherStreakRepository.save(any(FatherStreak.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(fatherStreakRepository.saveAndFlush(any(FatherStreak.class))).thenAnswer(inv -> inv.getArgument(0));
 
             int result = service.recordQualifyingInteraction(fatherId,
                     Instant.parse("2024-03-15T08:00:00Z"));
@@ -151,7 +151,7 @@ class StreakServiceTest {
             UUID fatherId = UUID.randomUUID();
             FatherStreak streak = createStreak(fatherId, 0, 0, null, "UTC");
             when(fatherStreakRepository.findByFatherId(fatherId)).thenReturn(Optional.of(streak));
-            when(fatherStreakRepository.save(any(FatherStreak.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(fatherStreakRepository.saveAndFlush(any(FatherStreak.class))).thenAnswer(inv -> inv.getArgument(0));
 
             int result = service.recordQualifyingInteraction(fatherId,
                     Instant.parse("2024-03-15T08:00:00Z"));
@@ -170,7 +170,7 @@ class StreakServiceTest {
             FatherStreak streak = createStreak(fatherId, 5, 5,
                     LocalDate.of(2024, 3, 14), "UTC");
             when(fatherStreakRepository.findByFatherId(fatherId)).thenReturn(Optional.of(streak));
-            when(fatherStreakRepository.save(any(FatherStreak.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(fatherStreakRepository.saveAndFlush(any(FatherStreak.class))).thenAnswer(inv -> inv.getArgument(0));
 
             int result = service.recordQualifyingInteraction(fatherId,
                     Instant.parse("2024-03-15T08:00:00Z"));
@@ -188,7 +188,7 @@ class StreakServiceTest {
             FatherStreak streak = createStreak(fatherId, 3, 3,
                     LocalDate.of(2024, 3, 14), "Asia/Jerusalem");
             when(fatherStreakRepository.findByFatherId(fatherId)).thenReturn(Optional.of(streak));
-            when(fatherStreakRepository.save(any(FatherStreak.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(fatherStreakRepository.saveAndFlush(any(FatherStreak.class))).thenAnswer(inv -> inv.getArgument(0));
 
             // 2024-03-14T23:00 UTC = 2024-03-15T01:00 Asia/Jerusalem → new day in Jerusalem
             int result = service.recordQualifyingInteraction(fatherId,

@@ -58,6 +58,21 @@ public class StreakService {
                 .build();
     }
 
+    /**
+     * Records a qualifying interaction and updates the streak.
+     *
+     * <p>If the interaction is on the same calendar day as the last one (in the father's timezone),
+     * this is a no-op. If it's the next consecutive day, the streak increments.
+     * Otherwise, a new streak starts.</p>
+     *
+     * <p>Concurrency note: Multiple threads calling this for the same father on the same day
+     * will not produce inconsistent state because the same-day check returns early, and the
+     * father_streaks UNIQUE constraint on father_id prevents duplicate records.</p>
+     *
+     * @param fatherId  the father's unique identifier
+     * @param timestamp the time of the qualifying interaction
+     * @return the current streak day count after recording
+     */
     public int recordQualifyingInteraction(UUID fatherId, Instant timestamp) {
         FatherStreak streak = fatherStreakRepository.findByFatherId(fatherId)
                 .orElse(new FatherStreak(fatherId));
@@ -84,7 +99,14 @@ public class StreakService {
         }
 
         streak.setLastQualifyingDate(interactionDate);
-        fatherStreakRepository.save(streak);
+
+        try {
+            fatherStreakRepository.saveAndFlush(streak);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Concurrent insert for same father — reload and return current state
+            log.debug("Concurrent streak update for father {} — reloading", fatherId);
+            streak = fatherStreakRepository.findByFatherId(fatherId).orElse(streak);
+        }
 
         return streak.getCurrentStreakDays();
     }

@@ -111,7 +111,7 @@ class GrowthSignalPipelineIntegrationTest {
                 .thenReturn(false);
 
         // Signal save returns the signal
-        when(growthSignalRepository.save(any(GrowthSignal.class)))
+        when(growthSignalRepository.saveAndFlush(any(GrowthSignal.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         // Score increment: belt exists
@@ -125,7 +125,7 @@ class GrowthSignalPipelineIntegrationTest {
         // Streak: new streak
         FatherStreak streak = new FatherStreak(fatherId);
         when(fatherStreakRepository.findByFatherId(fatherId)).thenReturn(Optional.of(streak));
-        when(fatherStreakRepository.save(any(FatherStreak.class)))
+        when(fatherStreakRepository.saveAndFlush(any(FatherStreak.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
         // Achievements and milestones: none earned
@@ -137,7 +137,7 @@ class GrowthSignalPipelineIntegrationTest {
 
         // Then
         // 1. Signal was recorded
-        verify(growthSignalRepository).save(argThat(signal ->
+        verify(growthSignalRepository).saveAndFlush(argThat(signal ->
                 signal.getSignalType() == GrowthSignalType.MISSION_COMPLETED &&
                 signal.getFatherId().equals(fatherId) &&
                 signal.getPointsAwarded() == 10
@@ -200,7 +200,7 @@ class GrowthSignalPipelineIntegrationTest {
                 fatherId, GrowthSignalType.MISSION_COMPLETED, missionId))
                 .thenReturn(false);
 
-        when(growthSignalRepository.save(any(GrowthSignal.class)))
+        when(growthSignalRepository.saveAndFlush(any(GrowthSignal.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
         // Belt has score 95, signal adds 10 → new score 105 → crosses YELLOW threshold at 100
@@ -213,7 +213,7 @@ class GrowthSignalPipelineIntegrationTest {
 
         FatherStreak streak = new FatherStreak(fatherId);
         when(fatherStreakRepository.findByFatherId(fatherId)).thenReturn(Optional.of(streak));
-        when(fatherStreakRepository.save(any(FatherStreak.class)))
+        when(fatherStreakRepository.saveAndFlush(any(FatherStreak.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
         when(achievementEvaluator.evaluateAll(fatherId)).thenReturn(Collections.emptyList());
