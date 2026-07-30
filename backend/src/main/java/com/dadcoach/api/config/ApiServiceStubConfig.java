@@ -25,7 +25,6 @@ import com.dadcoach.api.pagination.CursorPageResponse;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 
 import java.util.*;
 
@@ -34,18 +33,13 @@ import java.util.*;
  * have domain-layer implementations. This allows the application to start and
  * API endpoints to return structured "not implemented" responses.
  * <p>
- * <strong>Active only in {@code local} and {@code test} profiles.</strong>
- * In production, missing service implementations will cause a fast startup failure
- * rather than silently returning empty results.
- * <p>
  * Each stub is registered only if no other bean of that type exists
  * ({@code @ConditionalOnMissingBean}), so domain implementations will take
- * precedence once they are available — even in local/test environments.
+ * precedence once they are available.
  * <p>
  * Delete this class once all real implementations are in place.
  */
 @Configuration
-@Profile({"local", "test"})
 public class ApiServiceStubConfig {
 
     @Bean("apiChildService")
