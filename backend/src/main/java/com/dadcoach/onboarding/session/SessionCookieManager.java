@@ -3,6 +3,7 @@ package com.dadcoach.onboarding.session;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
 
@@ -41,9 +42,11 @@ public class SessionCookieManager {
     private static final long COOKIE_MAX_AGE_SECONDS = 72 * 60 * 60;
 
     private final SecureRandom secureRandom;
+    private final boolean secureCookie;
 
-    public SessionCookieManager() {
+    public SessionCookieManager(@Value("${spring.profiles.active:prod}") String activeProfile) {
         this.secureRandom = new SecureRandom();
+        this.secureCookie = !"local".equals(activeProfile);
     }
 
     /**
@@ -66,8 +69,8 @@ public class SessionCookieManager {
     public void createCookie(HttpServletResponse response, String sessionId) {
         ResponseCookie cookie = ResponseCookie.from(COOKIE_NAME, sessionId)
                 .httpOnly(true)
-                .secure(true)
-                .sameSite("Strict")
+                .secure(secureCookie)
+                .sameSite(secureCookie ? "Strict" : "Lax")
                 .path(COOKIE_PATH)
                 .maxAge(COOKIE_MAX_AGE_SECONDS)
                 .build();
@@ -104,8 +107,8 @@ public class SessionCookieManager {
     public void invalidateCookie(HttpServletResponse response) {
         ResponseCookie cookie = ResponseCookie.from(COOKIE_NAME, "")
                 .httpOnly(true)
-                .secure(true)
-                .sameSite("Strict")
+                .secure(secureCookie)
+                .sameSite(secureCookie ? "Strict" : "Lax")
                 .path(COOKIE_PATH)
                 .maxAge(0)
                 .build();

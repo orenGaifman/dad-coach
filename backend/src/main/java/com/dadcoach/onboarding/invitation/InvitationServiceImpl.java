@@ -191,6 +191,13 @@ public class InvitationServiceImpl implements InvitationService {
 
     // ─── Private Helpers ─────────────────────────────────────────────────
 
+    @Override
+    public String getTokenById(UUID invitationId) {
+        return invitationRepository.findById(invitationId)
+                .map(Invitation::getToken)
+                .orElse("");
+    }
+
     private Invitation findByIdOrThrow(UUID invitationId) {
         return invitationRepository.findById(invitationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invitation", invitationId));
