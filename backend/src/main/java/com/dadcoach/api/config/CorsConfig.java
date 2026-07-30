@@ -37,6 +37,7 @@ public class CorsConfig {
                 "Authorization",
                 "Content-Type",
                 "X-Request-ID",
+                "X-CSRF-Token",
                 "Idempotency-Key"
         ));
         configuration.setExposedHeaders(List.of(
