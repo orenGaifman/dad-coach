@@ -70,7 +70,7 @@ public class SessionCookieManager {
         ResponseCookie cookie = ResponseCookie.from(COOKIE_NAME, sessionId)
                 .httpOnly(true)
                 .secure(secureCookie)
-                .sameSite(secureCookie ? "Strict" : "Lax")
+                .sameSite(secureCookie ? "None" : "Lax")
                 .path(COOKIE_PATH)
                 .maxAge(COOKIE_MAX_AGE_SECONDS)
                 .build();
@@ -108,7 +108,7 @@ public class SessionCookieManager {
         ResponseCookie cookie = ResponseCookie.from(COOKIE_NAME, "")
                 .httpOnly(true)
                 .secure(secureCookie)
-                .sameSite(secureCookie ? "Strict" : "Lax")
+                .sameSite(secureCookie ? "None" : "Lax")
                 .path(COOKIE_PATH)
                 .maxAge(0)
                 .build();
