@@ -48,7 +48,7 @@ public class ActivationServiceImpl implements ActivationService {
 
     private static final int MAX_RETRIES = 3;
     private static final String DEEP_LINK_TEMPLATE = "https://wa.me/%s?text=%s";
-    private static final long LONG_POLL_TIMEOUT_MS = 30_000;
+    private static final long LONG_POLL_TIMEOUT_MS = 25_000;
     private static final long POLL_INTERVAL_MS = 500;
 
     /** Localized activation messages. */
