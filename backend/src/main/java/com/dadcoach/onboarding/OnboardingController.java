@@ -302,22 +302,24 @@ public class OnboardingController {
     // --- Helper methods ---
 
     private void validateSessionCookie(UUID sessionId, HttpServletRequest request) {
-        // In local profile, skip cookie validation (browser cookie handling issues with proxy)
-        String activeProfile = System.getProperty("spring.profiles.active", "");
-        if ("local".equals(activeProfile)) return;
-
+        // Cross-origin deployments (Vercel→Render) may not reliably deliver cookies
+        // due to browser third-party cookie restrictions. The session ID in the URL path
+        // is already a 128-bit unguessable token, and CSRF validation provides additional
+        // protection against unauthorized state changes. Cookie validation is best-effort.
         Optional<String> cookieSessionId = cookieManager.readSessionId(request);
-        if (cookieSessionId.isEmpty() || !cookieSessionId.get().equals(sessionId.toString())) {
-            throw new SessionExpiredException("Invalid or missing session cookie");
+        if (cookieSessionId.isPresent() && !cookieSessionId.get().equals(sessionId.toString())) {
+            // Cookie is present but doesn't match — this is suspicious
+            throw new SessionExpiredException("Session cookie mismatch");
         }
+        // If cookie is absent, we allow the request (session ID in path + CSRF is sufficient)
     }
 
     private void validateCsrf(UUID sessionId, HttpServletRequest request) {
-        // In local profile, skip CSRF validation
-        String activeProfile = System.getProperty("spring.profiles.active", "");
-        if ("local".equals(activeProfile)) return;
-
         String csrfToken = request.getHeader(CsrfTokenService.CSRF_HEADER);
+        if (csrfToken == null || csrfToken.isBlank()) {
+            // No CSRF token provided — reject state-changing requests
+            throw new CsrfValidationException();
+        }
         if (!csrfTokenService.validateToken(sessionId, csrfToken)) {
             throw new CsrfValidationException();
         }
