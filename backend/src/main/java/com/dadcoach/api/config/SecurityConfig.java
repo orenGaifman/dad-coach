@@ -61,6 +61,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**").permitAll()
                         .requestMatchers("/webhook/**").permitAll()
+                        .requestMatchers("/api/v1/invitations/**").permitAll()
+                        .requestMatchers("/api/v1/onboarding/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/service/**").hasRole("SERVICE")
                         .requestMatchers("/api/v1/fathers/me/**").hasRole("FATHER")

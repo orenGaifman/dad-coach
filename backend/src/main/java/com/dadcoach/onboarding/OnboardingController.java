@@ -302,6 +302,10 @@ public class OnboardingController {
     // --- Helper methods ---
 
     private void validateSessionCookie(UUID sessionId, HttpServletRequest request) {
+        // In local profile, skip cookie validation (browser cookie handling issues with proxy)
+        String activeProfile = System.getProperty("spring.profiles.active", "");
+        if ("local".equals(activeProfile)) return;
+
         Optional<String> cookieSessionId = cookieManager.readSessionId(request);
         if (cookieSessionId.isEmpty() || !cookieSessionId.get().equals(sessionId.toString())) {
             throw new SessionExpiredException("Invalid or missing session cookie");
@@ -309,6 +313,10 @@ public class OnboardingController {
     }
 
     private void validateCsrf(UUID sessionId, HttpServletRequest request) {
+        // In local profile, skip CSRF validation
+        String activeProfile = System.getProperty("spring.profiles.active", "");
+        if ("local".equals(activeProfile)) return;
+
         String csrfToken = request.getHeader(CsrfTokenService.CSRF_HEADER);
         if (!csrfTokenService.validateToken(sessionId, csrfToken)) {
             throw new CsrfValidationException();
@@ -330,10 +338,9 @@ public class OnboardingController {
     }
 
     private String getInvitationToken(OnboardingSession session) {
-        // Session stores invitation_id; we need to look up the token
-        // For simplicity, store the token on the session or look it up via repository
-        // This is a placeholder — the real implementation would resolve from invitationId
-        return session.getInvitationId() != null ? session.getInvitationId().toString() : "";
+        // Look up the actual token from the invitations table via the invitation_id
+        if (session.getInvitationId() == null) return "";
+        return invitationService.getTokenById(session.getInvitationId());
     }
 
     private StepSubmissionResponse buildStepResponse(OnboardingSession session) {

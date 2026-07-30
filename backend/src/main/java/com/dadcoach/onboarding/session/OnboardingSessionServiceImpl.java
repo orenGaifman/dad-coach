@@ -64,7 +64,7 @@ public class OnboardingSessionServiceImpl implements OnboardingSessionService {
 
         OnboardingSession session = new OnboardingSession();
         session.setInvitationId(validationResult.invitationId());
-        session.setCurrentStep(WizardStep.WELCOME);
+        session.setCurrentStep(WizardStep.LANGUAGE);
         session.setStatus(SessionStatus.IN_PROGRESS);
         session.setWizardData(new WizardData());
         session.setStartedAt(now);

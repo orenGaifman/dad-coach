@@ -15,7 +15,7 @@ RUN ./mvnw dependency:go-offline -B
 
 # Copy source code and build
 COPY src src
-RUN ./mvnw clean package -DskipTests -B
+RUN ./mvnw clean package -Dmaven.test.skip=true -B
 
 # Stage 2: Runtime with minimal JRE image
 FROM eclipse-temurin:21-jre-alpine

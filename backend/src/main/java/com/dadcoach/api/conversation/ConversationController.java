@@ -27,7 +27,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/v1/fathers/me/conversations")
-public class ConversationController {
+public class    ConversationController {
 
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 100;

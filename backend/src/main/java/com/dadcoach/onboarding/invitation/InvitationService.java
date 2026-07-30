@@ -66,4 +66,12 @@ public interface InvitationService {
      * @return the number of invitations expired
      */
     int expireOverdue();
+
+    /**
+     * Retrieves the token string for an invitation by its ID.
+     *
+     * @param invitationId the invitation UUID
+     * @return the 32-character token string, or empty string if not found
+     */
+    String getTokenById(UUID invitationId);
 }
