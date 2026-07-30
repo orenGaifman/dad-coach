@@ -58,7 +58,7 @@ public class InvitationServiceImpl implements InvitationService {
         Invitation invitation = new Invitation();
         invitation.setToken(tokenGenerator.generateToken());
         invitation.setType(request.type());
-        invitation.setStatus(InvitationStatus.CREATED);
+        invitation.setStatus(InvitationStatus.SENT);
         invitation.setCreatedBy(createdBy);
         invitation.setCreatedAt(now);
         invitation.setExpiresAt(expiresAt);
