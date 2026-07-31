@@ -1,6 +1,11 @@
 package com.dadcoach.whatsapp;
 
+import com.dadcoach.channel.ChannelRouter;
+import com.dadcoach.channel.ChannelAdapter;
 import com.dadcoach.config.WhatsAppProperties;
+import com.dadcoach.conversation.ConversationOrchestrator;
+import com.dadcoach.conversation.dto.OutboundMessageDto;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import org.slf4j.Logger;
@@ -11,10 +16,6 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * Webhook endpoint for WhatsApp Cloud API notifications.
- * <p>
- * Handles both the GET verification challenge (used during webhook registration with Meta)
- * and POST inbound events (messages, status updates). Every POST is authenticated via
- * HMAC-SHA256 signature verification BEFORE any payload parsing occurs.
  */
 @RestController
 @RequestMapping("/webhook/whatsapp")
@@ -25,17 +26,22 @@ public class WhatsAppWebhookController {
 
     private final WhatsAppSignatureVerifier signatureVerifier;
     private final WhatsAppProperties properties;
+    private final ChannelRouter channelRouter;
+    private final ConversationOrchestrator conversationOrchestrator;
+    private final ObjectMapper objectMapper;
 
     public WhatsAppWebhookController(WhatsAppSignatureVerifier signatureVerifier,
-                                     WhatsAppProperties properties) {
+                                     WhatsAppProperties properties,
+                                     ChannelRouter channelRouter,
+                                     ConversationOrchestrator conversationOrchestrator,
+                                     ObjectMapper objectMapper) {
         this.signatureVerifier = signatureVerifier;
         this.properties = properties;
+        this.channelRouter = channelRouter;
+        this.conversationOrchestrator = conversationOrchestrator;
+        this.objectMapper = objectMapper;
     }
 
-    /**
-     * Webhook verification endpoint. Meta sends a GET request with a challenge to verify
-     * webhook ownership during registration.
-     */
     @GetMapping
     public ResponseEntity<String> verify(
             @RequestParam("hub.mode") String mode,
@@ -52,10 +58,6 @@ public class WhatsAppWebhookController {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
     }
 
-    /**
-     * Inbound webhook event handler. Verifies HMAC-SHA256 signature BEFORE any payload
-     * parsing. On valid signature, forwards raw body to the message parser for processing.
-     */
     @PostMapping
     public ResponseEntity<Void> handleWebhook(
             @RequestBody byte[] rawBody,
@@ -65,17 +67,62 @@ public class WhatsAppWebhookController {
         String sourceIp = extractSourceIp(request);
 
         if (!signatureVerifier.isValid(rawBody, signatureHeader, properties.webhookSecret())) {
-            log.warn("Webhook signature verification failed: sourceIp={}, timestamp={}, reason={}",
-                    sourceIp,
-                    Instant.now(),
-                    describeFailureReason(signatureHeader));
+            log.warn("Webhook signature verification failed: sourceIp={}, reason={}",
+                    sourceIp, describeFailureReason(signatureHeader));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        // Signature verified — forward to message parser
-        // The message parser (Task 4) will handle deserialization and normalization.
-        // For now, log acceptance and return 200.
         log.info("Webhook received and verified: sourceIp={}, bodySize={}", sourceIp, rawBody.length);
+
+        // Process the message asynchronously to return 200 quickly
+        try {
+            Object payload = objectMapper.readValue(rawBody, Object.class);
+            ChannelAdapter adapter = channelRouter.getAdapter("WHATSAPP");
+            com.dadcoach.channel.dto.InboundMessageDto inbound = adapter.normalizeInbound(payload);
+
+            if (inbound != null) {
+                log.info("Processing inbound message from: {}, text: {}", inbound.fatherChannelIdentity(), inbound.textContent());
+
+                // Convert to conversation DTO and process
+                com.dadcoach.conversation.dto.InboundMessageDto conversationDto =
+                    new com.dadcoach.conversation.dto.InboundMessageDto(
+                        "WHATSAPP",
+                        inbound.fatherChannelIdentity(),
+                        inbound.textContent(),
+                        "TEXT",
+                        inbound.idempotencyKey(),
+                        Instant.now(),
+                        null
+                    );
+
+                OutboundMessageDto response = conversationOrchestrator.processMessage(conversationDto);
+
+                if (response != null && response.content() != null) {
+                    log.info("Bot response generated, sending via WhatsApp to: {}", inbound.fatherChannelIdentity());
+                    // Convert conversation OutboundMessageDto to channel OutboundMessageDto
+                    com.dadcoach.channel.dto.OutboundMessageDto channelMessage =
+                        new com.dadcoach.channel.dto.OutboundMessageDto(
+                            java.util.UUID.randomUUID(),
+                            null, // fatherId resolved by adapter
+                            "WHATSAPP",
+                            com.dadcoach.channel.dto.MessageType.TEXT,
+                            response.content(),
+                            null, // no media
+                            false, // not a template
+                            null, null,
+                            com.dadcoach.channel.dto.MessagePriority.IMMEDIATE,
+                            Instant.now()
+                        );
+                    adapter.sendMessage(channelMessage, inbound.fatherChannelIdentity());
+                } else {
+                    log.warn("No response generated for message from: {}", inbound.fatherChannelIdentity());
+                }
+            } else {
+                log.debug("Webhook payload did not contain a processable message (status update or other event)");
+            }
+        } catch (Exception e) {
+            log.error("Error processing webhook payload: {}", e.getMessage(), e);
+        }
 
         return ResponseEntity.ok().build();
     }
@@ -83,19 +130,14 @@ public class WhatsAppWebhookController {
     private String extractSourceIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
         if (forwarded != null && !forwarded.isBlank()) {
-            // Take the first IP in the chain (client IP)
             return forwarded.split(",")[0].trim();
         }
         return request.getRemoteAddr();
     }
 
     private String describeFailureReason(String signatureHeader) {
-        if (signatureHeader == null) {
-            return "missing X-Hub-Signature-256 header";
-        }
-        if (!signatureHeader.startsWith("sha256=")) {
-            return "malformed signature header (missing sha256= prefix)";
-        }
+        if (signatureHeader == null) return "missing X-Hub-Signature-256 header";
+        if (!signatureHeader.startsWith("sha256=")) return "malformed signature header";
         return "signature mismatch";
     }
 }
