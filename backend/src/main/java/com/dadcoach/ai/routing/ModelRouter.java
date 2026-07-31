@@ -17,16 +17,16 @@ import java.util.Map;
  * defining the model, temperature, top_p, and max_tokens. Under normal conditions (no cost
  * or error constraints), the same conversation type always maps to the same model config.
  *
- * <p>Routing table (from SPEC-003 Req 10):
+ * <p>Routing table (using Anthropic Claude models):
  * <ul>
- *   <li>ONBOARDING → gpt-4o (0.7, 0.9, 300)</li>
- *   <li>DIFFICULT_SITUATION → gpt-4o (0.7, 0.9, 400)</li>
- *   <li>REFLECTION → gpt-4o (0.7, 0.9, 400)</li>
- *   <li>DAILY_COACHING → gpt-4o-mini (0.8, 0.95, 300)</li>
- *   <li>FOLLOW_UP → gpt-4o-mini (0.8, 0.95, 250)</li>
- *   <li>CELEBRATION → gpt-4o-mini (0.9, 0.95, 200)</li>
- *   <li>MISSION_GENERATION → gpt-4o-mini (0.3, 0.8, 400)</li>
- *   <li>INACTIVITY_CHECK → gpt-4o-mini (0.8, 0.95, 200)</li>
+ *   <li>ONBOARDING → claude-3-5-sonnet (0.7, 0.9, 300)</li>
+ *   <li>DIFFICULT_SITUATION → claude-3-5-sonnet (0.7, 0.9, 400)</li>
+ *   <li>REFLECTION → claude-3-5-sonnet (0.7, 0.9, 400)</li>
+ *   <li>DAILY_COACHING → claude-3-5-haiku (0.8, 0.95, 300)</li>
+ *   <li>FOLLOW_UP → claude-3-5-haiku (0.8, 0.95, 250)</li>
+ *   <li>CELEBRATION → claude-3-5-haiku (0.9, 0.95, 200)</li>
+ *   <li>MISSION_GENERATION → claude-3-5-haiku (0.3, 0.8, 400)</li>
+ *   <li>INACTIVITY_CHECK → claude-3-5-haiku (0.8, 0.95, 200)</li>
  * </ul>
  */
 public class ModelRouter {
@@ -41,14 +41,15 @@ public class ModelRouter {
 
     static {
         var table = new EnumMap<ConversationType, ModelConfig>(ConversationType.class);
-        table.put(ConversationType.ONBOARDING, new ModelConfig("gpt-4o", 0.7, 0.9, 300));
-        table.put(ConversationType.DIFFICULT_SITUATION, new ModelConfig("gpt-4o", 0.7, 0.9, 400));
-        table.put(ConversationType.REFLECTION, new ModelConfig("gpt-4o", 0.7, 0.9, 400));
-        table.put(ConversationType.DAILY_COACHING, new ModelConfig("gpt-4o-mini", 0.8, 0.95, 300));
-        table.put(ConversationType.FOLLOW_UP, new ModelConfig("gpt-4o-mini", 0.8, 0.95, 250));
-        table.put(ConversationType.CELEBRATION, new ModelConfig("gpt-4o-mini", 0.9, 0.95, 200));
-        table.put(ConversationType.MISSION_GENERATION, new ModelConfig("gpt-4o-mini", 0.3, 0.8, 400));
-        table.put(ConversationType.INACTIVITY_CHECK, new ModelConfig("gpt-4o-mini", 0.8, 0.95, 200));
+        // Using Anthropic Claude models as primary (Sonnet for complex, Haiku for routine)
+        table.put(ConversationType.ONBOARDING, new ModelConfig("claude-3-5-sonnet-20241022", 0.7, 0.9, 300));
+        table.put(ConversationType.DIFFICULT_SITUATION, new ModelConfig("claude-3-5-sonnet-20241022", 0.7, 0.9, 400));
+        table.put(ConversationType.REFLECTION, new ModelConfig("claude-3-5-sonnet-20241022", 0.7, 0.9, 400));
+        table.put(ConversationType.DAILY_COACHING, new ModelConfig("claude-3-5-haiku-20241022", 0.8, 0.95, 300));
+        table.put(ConversationType.FOLLOW_UP, new ModelConfig("claude-3-5-haiku-20241022", 0.8, 0.95, 250));
+        table.put(ConversationType.CELEBRATION, new ModelConfig("claude-3-5-haiku-20241022", 0.9, 0.95, 200));
+        table.put(ConversationType.MISSION_GENERATION, new ModelConfig("claude-3-5-haiku-20241022", 0.3, 0.8, 400));
+        table.put(ConversationType.INACTIVITY_CHECK, new ModelConfig("claude-3-5-haiku-20241022", 0.8, 0.95, 200));
         ROUTING_TABLE = Map.copyOf(table);
     }
 

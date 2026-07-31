@@ -5,10 +5,12 @@ import com.dadcoach.conversation.ConversationType;
 /**
  * AI models available for coaching conversations.
  * Model selection is based on conversation complexity:
- * - GPT_4O for complex types (ONBOARDING, DIFFICULT_SITUATION, REFLECTION)
- * - GPT_4O_MINI for routine types (DAILY_COACHING, FOLLOW_UP, CELEBRATION, INACTIVITY_CHECK)
+ * - CLAUDE_SONNET for complex types (ONBOARDING, DIFFICULT_SITUATION, REFLECTION)
+ * - CLAUDE_HAIKU for routine types (DAILY_COACHING, FOLLOW_UP, CELEBRATION, INACTIVITY_CHECK)
  */
 public enum AiModel {
+    CLAUDE_SONNET("claude-3-5-sonnet-20241022", 4096),
+    CLAUDE_HAIKU("claude-3-5-haiku-20241022", 4096),
     GPT_4O("gpt-4o", 4096),
     GPT_4O_MINI("gpt-4o-mini", 4096);
 
@@ -30,13 +32,13 @@ public enum AiModel {
 
     /**
      * Select the appropriate AI model based on conversation type.
-     * GPT-4o for complex conversations requiring deeper understanding.
-     * GPT-4o-mini for routine interactions.
+     * Claude Sonnet for complex conversations requiring deeper understanding.
+     * Claude Haiku for routine interactions.
      */
     public static AiModel forConversationType(ConversationType type) {
         return switch (type) {
-            case ONBOARDING, DIFFICULT_SITUATION, REFLECTION -> GPT_4O;
-            case DAILY_COACHING, FOLLOW_UP, CELEBRATION, INACTIVITY_CHECK, MISSION_GENERATION -> GPT_4O_MINI;
+            case ONBOARDING, DIFFICULT_SITUATION, REFLECTION -> CLAUDE_SONNET;
+            case DAILY_COACHING, FOLLOW_UP, CELEBRATION, INACTIVITY_CHECK, MISSION_GENERATION -> CLAUDE_HAIKU;
         };
     }
 }
