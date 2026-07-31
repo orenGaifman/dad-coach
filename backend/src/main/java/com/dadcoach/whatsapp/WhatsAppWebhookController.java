@@ -65,6 +65,8 @@ public class WhatsAppWebhookController {
             HttpServletRequest request) {
 
         String sourceIp = extractSourceIp(request);
+        log.info("Webhook POST received: sourceIp={}, signaturePresent={}, bodySize={}", 
+                 sourceIp, signatureHeader != null, rawBody.length);
 
         if (!signatureVerifier.isValid(rawBody, signatureHeader, properties.webhookSecret())) {
             log.warn("Webhook signature verification failed: sourceIp={}, reason={}",
