@@ -65,16 +65,28 @@ public class WhatsAppWebhookController {
             HttpServletRequest request) {
 
         String sourceIp = extractSourceIp(request);
-        log.info("Webhook POST received: sourceIp={}, signaturePresent={}, bodySize={}", 
-                 sourceIp, signatureHeader != null, rawBody.length);
+        log.info("Webhook POST received: sourceIp={}, signaturePresent={}, bodySize={}, webhookSecretConfigured={}", 
+                 sourceIp, signatureHeader != null, rawBody.length, 
+                 properties.webhookSecret() != null && !properties.webhookSecret().isBlank());
+
+        // Log the raw payload for debugging (mask sensitive data)
+        try {
+            String bodyStr = new String(rawBody, java.nio.charset.StandardCharsets.UTF_8);
+            // Log truncated body to avoid log bloat
+            log.debug("Webhook raw body (truncated): {}", 
+                     bodyStr.length() > 500 ? bodyStr.substring(0, 500) + "..." : bodyStr);
+        } catch (Exception e) {
+            log.debug("Could not convert raw body to string for logging");
+        }
 
         if (!signatureVerifier.isValid(rawBody, signatureHeader, properties.webhookSecret())) {
-            log.warn("Webhook signature verification failed: sourceIp={}, reason={}",
-                    sourceIp, describeFailureReason(signatureHeader));
+            log.warn("Webhook signature verification failed: sourceIp={}, reason={}, secretLength={}",
+                    sourceIp, describeFailureReason(signatureHeader),
+                    properties.webhookSecret() != null ? properties.webhookSecret().length() : 0);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        log.info("Webhook received and verified: sourceIp={}, bodySize={}", sourceIp, rawBody.length);
+        log.info("Webhook signature verified successfully: sourceIp={}, bodySize={}", sourceIp, rawBody.length);
 
         // Process the message asynchronously to return 200 quickly
         try {

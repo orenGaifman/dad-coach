@@ -377,10 +377,16 @@ public class ProvisioningServiceImpl implements ProvisioningService {
         List<Long> goalIds = goalRepository.findByFatherId(fatherId)
                 .stream().map(Goal::getId).toList();
 
-        // Look up existing activation record
-        UUID activationId = activationRecordRepository.findByFatherId(new UUID(0L, fatherId))
+        // Look up existing activation record, or create one if missing
+        // This handles the case where father was created but activation record wasn't
+        UUID activationId = activationRecordRepository.findByFatherId(fatherUuid)
                 .map(ActivationRecord::getActivationId)
-                .orElse(null);
+                .orElseGet(() -> {
+                    log.info("Creating missing activation record for existing father_id={}, session_id={}", 
+                            fatherId, sessionId);
+                    ActivationRecord record = new ActivationRecord(fatherUuid, sessionId);
+                    return activationRecordRepository.save(record).getActivationId();
+                });
 
         // Generate deep link
         String deepLink = generateDeepLink(existingFather.getPhone(), existingFather.getLocale());
