@@ -42,8 +42,9 @@ public class AnthropicProvider implements AiProvider {
     private static final Logger log = LoggerFactory.getLogger(AnthropicProvider.class);
     private static final String PROVIDER_NAME = "anthropic";
     private static final Set<String> SUPPORTED_MODELS = Set.of(
-        "claude-3-5-sonnet-20241022",
-        "claude-3-5-haiku-20241022"
+        "claude-sonnet-5",
+        "claude-haiku-4-5-20251001",
+        "claude-opus-5"
     );
 
     private final WebClient webClient;

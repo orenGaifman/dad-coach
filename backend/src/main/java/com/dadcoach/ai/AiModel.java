@@ -9,8 +9,8 @@ import com.dadcoach.conversation.ConversationType;
  * - CLAUDE_HAIKU for routine types (DAILY_COACHING, FOLLOW_UP, CELEBRATION, INACTIVITY_CHECK)
  */
 public enum AiModel {
-    CLAUDE_SONNET("claude-3-5-sonnet-20241022", 4096),
-    CLAUDE_HAIKU("claude-3-5-haiku-20241022", 4096),
+    CLAUDE_SONNET_5("claude-sonnet-5", 4096),
+    CLAUDE_HAIKU_45("claude-haiku-4-5-20251001", 4096),
     GPT_4O("gpt-4o", 4096),
     GPT_4O_MINI("gpt-4o-mini", 4096);
 
@@ -32,13 +32,13 @@ public enum AiModel {
 
     /**
      * Select the appropriate AI model based on conversation type.
-     * Claude Sonnet for complex conversations requiring deeper understanding.
-     * Claude Haiku for routine interactions.
+     * Claude Sonnet 5 for complex conversations requiring deeper understanding.
+     * Claude Haiku 4.5 for routine interactions.
      */
     public static AiModel forConversationType(ConversationType type) {
         return switch (type) {
-            case ONBOARDING, DIFFICULT_SITUATION, REFLECTION -> CLAUDE_SONNET;
-            case DAILY_COACHING, FOLLOW_UP, CELEBRATION, INACTIVITY_CHECK, MISSION_GENERATION -> CLAUDE_HAIKU;
+            case ONBOARDING, DIFFICULT_SITUATION, REFLECTION -> CLAUDE_SONNET_5;
+            case DAILY_COACHING, FOLLOW_UP, CELEBRATION, INACTIVITY_CHECK, MISSION_GENERATION -> CLAUDE_HAIKU_45;
         };
     }
 }

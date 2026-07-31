@@ -38,7 +38,8 @@ public class FallbackChain {
      */
     private static final Map<String, String> LOWER_TIER_MODELS = Map.of(
         "gpt-4o", "gpt-4o-mini",
-        "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"
+        "claude-sonnet-5", "claude-haiku-4-5-20251001",
+        "claude-opus-5", "claude-sonnet-5"
     );
 
     private final List<AiProvider> providers;
@@ -164,8 +165,8 @@ public class FallbackChain {
     private String findSupportedModel(AiProvider provider) {
         // Try common models in order of capability
         List<String> candidates = List.of(
-            "claude-3-5-sonnet-20241022",
-            "claude-3-5-haiku-20241022",
+            "claude-sonnet-5",
+            "claude-haiku-4-5-20251001",
             "gpt-4o",
             "gpt-4o-mini"
         );
