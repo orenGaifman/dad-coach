@@ -16,7 +16,7 @@ class CsrfTokenServiceTest {
 
     @BeforeEach
     void setUp() {
-        csrfTokenService = new CsrfTokenService();
+        csrfTokenService = new CsrfTokenService("test-secret-key-for-csrf-token-generation");
     }
 
     @Test

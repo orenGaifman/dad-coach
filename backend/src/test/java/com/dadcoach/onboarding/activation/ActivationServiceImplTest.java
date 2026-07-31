@@ -382,9 +382,10 @@ class ActivationServiceImplTest {
             record.setStatus(ActivationStatus.LINK_CLICKED);
             when(activationRecordRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.of(record));
 
-            ActivationStatusResponse response = activationService.getStatus(SESSION_ID, "PENDING");
+            var response = activationService.getStatus(SESSION_ID, "PENDING");
 
-            assertThat(response.status()).isEqualTo(ActivationStatus.LINK_CLICKED);
+            assertThat(response).isPresent();
+            assertThat(response.get().status()).isEqualTo(ActivationStatus.LINK_CLICKED);
         }
 
         @Test
@@ -394,19 +395,20 @@ class ActivationServiceImplTest {
             record.setStatus(ActivationStatus.PENDING);
             when(activationRecordRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.of(record));
 
-            ActivationStatusResponse response = activationService.getStatus(SESSION_ID, null);
+            var response = activationService.getStatus(SESSION_ID, null);
 
-            assertThat(response.status()).isEqualTo(ActivationStatus.PENDING);
+            assertThat(response).isPresent();
+            assertThat(response.get().status()).isEqualTo(ActivationStatus.PENDING);
         }
 
         @Test
-        @DisplayName("throws when session not found")
-        void throwsWhenSessionNotFound() {
+        @DisplayName("returns empty when session not found")
+        void returnsEmptyWhenSessionNotFound() {
             when(activationRecordRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> activationService.getStatus(SESSION_ID, null))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("No activation record found for session");
+            var response = activationService.getStatus(SESSION_ID, null);
+
+            assertThat(response).isEmpty();
         }
     }
 }

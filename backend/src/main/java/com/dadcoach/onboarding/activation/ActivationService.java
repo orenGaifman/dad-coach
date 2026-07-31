@@ -2,6 +2,7 @@ package com.dadcoach.onboarding.activation;
 
 import com.dadcoach.onboarding.provisioning.ActivationRecord;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -42,9 +43,9 @@ public interface ActivationService {
      *
      * @param sessionId  the onboarding session ID
      * @param lastStatus the last known status (for change detection); may be null
-     * @return the current activation status response
+     * @return Optional containing the activation status response, or empty if no record found
      */
-    ActivationStatusResponse getStatus(UUID sessionId, String lastStatus);
+    Optional<ActivationStatusResponse> getStatus(UUID sessionId, String lastStatus);
 
     /**
      * Handles an inbound activation message from an ONBOARDING father.

@@ -243,6 +243,7 @@ public class OnboardingController {
     )
     @ApiResponse(responseCode = "200", description = "Activation status",
         content = @Content(schema = @Schema(implementation = ActivationStatusResponse.class)))
+    @ApiResponse(responseCode = "404", description = "No activation record found for session")
     @ApiResponse(responseCode = "403", description = "Invalid session cookie",
         content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<ActivationStatusResponse> getActivationStatus(
@@ -254,8 +255,9 @@ public class OnboardingController {
         // Require valid session cookie for security (prevents information leakage)
         validateSessionCookie(sessionId, request);
 
-        ActivationStatusResponse status = activationService.getStatus(sessionId, lastStatus);
-        return ResponseEntity.ok(status);
+        return activationService.getStatus(sessionId, lastStatus)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     /**
@@ -279,7 +281,8 @@ public class OnboardingController {
         validateCsrf(sessionId, request);
 
         // Get activation record for this session to check retry count
-        ActivationStatusResponse status = activationService.getStatus(sessionId, null);
+        ActivationStatusResponse status = activationService.getStatus(sessionId, null)
+                .orElseThrow(() -> new IllegalArgumentException("No activation record found for session: " + sessionId));
         if (status.retryCount() >= 3) {
             throw new MaxRetriesExceededException(status.retryCount());
         }

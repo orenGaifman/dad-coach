@@ -117,14 +117,19 @@ public class ActivationServiceImpl implements ActivationService {
     }
 
     @Override
-    public ActivationStatusResponse getStatus(UUID sessionId, String lastStatus) {
-        ActivationRecord record = activationRecordRepository.findBySessionId(sessionId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "No activation record found for session: " + sessionId));
+    public Optional<ActivationStatusResponse> getStatus(UUID sessionId, String lastStatus) {
+        Optional<ActivationRecord> optRecord = activationRecordRepository.findBySessionId(sessionId);
+        
+        if (optRecord.isEmpty()) {
+            // No record found - return empty Optional (caller handles 404)
+            return Optional.empty();
+        }
+        
+        ActivationRecord record = optRecord.get();
 
         // If no lastStatus provided or status already changed, return immediately
         if (lastStatus == null || !record.getStatus().name().equals(lastStatus)) {
-            return ActivationStatusResponse.from(record);
+            return Optional.of(ActivationStatusResponse.from(record));
         }
 
         // Long-polling: wait up to 30 seconds for a status change
@@ -139,12 +144,12 @@ public class ActivationServiceImpl implements ActivationService {
 
             record = activationRecordRepository.findBySessionId(sessionId).orElse(record);
             if (!record.getStatus().name().equals(lastStatus)) {
-                return ActivationStatusResponse.from(record);
+                return Optional.of(ActivationStatusResponse.from(record));
             }
         }
 
         // Timeout — return current status
-        return ActivationStatusResponse.from(record);
+        return Optional.of(ActivationStatusResponse.from(record));
     }
 
     @Override

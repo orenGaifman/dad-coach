@@ -19,7 +19,7 @@ class SessionCookieManagerTest {
 
     @BeforeEach
     void setUp() {
-        cookieManager = new SessionCookieManager();
+        cookieManager = new SessionCookieManager("local");
     }
 
     @Test

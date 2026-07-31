@@ -187,13 +187,25 @@ class OnboardingControllerTest {
             when(cookieManager.readSessionId(request)).thenReturn(Optional.of(SESSION_ID.toString()));
             ActivationStatusResponse statusResponse = new ActivationStatusResponse(
                     ActivationStatus.PENDING, Instant.now(), null, null, null, 0, null);
-            when(activationService.getStatus(SESSION_ID, null)).thenReturn(statusResponse);
+            when(activationService.getStatus(SESSION_ID, null)).thenReturn(Optional.of(statusResponse));
 
             var result = controller.getActivationStatus(SESSION_ID, null, request);
 
             assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(result.getBody()).isNotNull();
             assertThat(result.getBody().status()).isEqualTo(ActivationStatus.PENDING);
+        }
+
+        @Test
+        @DisplayName("returns 404 when no activation record found")
+        void returns404WhenNotFound() {
+            when(cookieManager.readSessionId(request)).thenReturn(Optional.of(SESSION_ID.toString()));
+            when(activationService.getStatus(SESSION_ID, null)).thenReturn(Optional.empty());
+
+            var result = controller.getActivationStatus(SESSION_ID, null, request);
+
+            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(result.getBody()).isNull();
         }
 
         @Test
