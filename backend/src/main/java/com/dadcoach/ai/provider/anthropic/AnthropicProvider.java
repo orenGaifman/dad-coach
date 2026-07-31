@@ -179,8 +179,8 @@ public class AnthropicProvider implements AiProvider {
         body.put("model", request.model());
         body.put("max_tokens", request.maxTokens());
         body.put("messages", messages);
+        // Anthropic doesn't allow both temperature and top_p - use only temperature
         body.put("temperature", request.temperature());
-        body.put("top_p", request.topP());
 
         if (systemPrompt != null) {
             body.put("system", systemPrompt);
