@@ -49,15 +49,26 @@ public class IntelligenceLayerImpl implements IntelligenceLayer {
 
     private static final Logger log = LoggerFactory.getLogger(IntelligenceLayerImpl.class);
 
-    private static final String SAFETY_CRISIS_RESPONSE =
-        "Entiendo que estás pasando por un momento muy difícil. " +
-        "Tu bienestar es importante. Por favor, comunícate con la Línea de Crisis: 988 " +
-        "(disponible 24/7). No estás solo en esto.";
+    // Safety responses - English (default) and Hebrew versions will be selected based on context
+    private static final String SAFETY_CRISIS_RESPONSE_EN =
+        "I understand you're going through a very difficult time. " +
+        "Your wellbeing is important. Please reach out to the Crisis Line: 988 " +
+        "(available 24/7). You're not alone in this.";
 
-    private static final String SAFETY_CHILD_RESPONSE =
-        "Me preocupa lo que describes. La seguridad de los niños es lo más importante. " +
-        "Por favor, contacta la línea de protección infantil de tu localidad. " +
-        "Estoy aquí para apoyarte.";
+    private static final String SAFETY_CRISIS_RESPONSE_HE =
+        "אני מבין שאתה עובר תקופה קשה מאוד. " +
+        "הרווחה שלך חשובה. אנא פנה לקו החירום לבריאות הנפש: *2784 " +
+        "(זמין 24/7). אתה לא לבד בזה.";
+
+    private static final String SAFETY_CHILD_RESPONSE_EN =
+        "I'm concerned about what you're describing. Children's safety is the most important thing. " +
+        "Please contact child protective services in your area. " +
+        "I'm here to support you.";
+
+    private static final String SAFETY_CHILD_RESPONSE_HE =
+        "אני מודאג ממה שאתה מתאר. בטיחות הילדים היא הדבר הכי חשוב. " +
+        "אנא פנה לשירותי הרווחה באזורך. " +
+        "אני כאן לתמוך בך.";
 
     private final SafetyClassifier safetyClassifier;
     private final PromptAssembler promptAssembler;
@@ -303,10 +314,11 @@ public class IntelligenceLayerImpl implements IntelligenceLayer {
     // ===== Private Helper Methods =====
 
     private CoachingResponse buildSafetyResponse(SafetyClassification safety) {
+        // Default to English - context-aware locale selection would require passing context
         String message = switch (safety.category()) {
-            case CRISIS -> SAFETY_CRISIS_RESPONSE;
-            case CHILD_SAFETY -> SAFETY_CHILD_RESPONSE;
-            default -> SAFETY_CRISIS_RESPONSE;
+            case CRISIS -> SAFETY_CRISIS_RESPONSE_EN;
+            case CHILD_SAFETY -> SAFETY_CHILD_RESPONSE_EN;
+            default -> SAFETY_CRISIS_RESPONSE_EN;
         };
         return CoachingResponse.fallback(message);
     }
@@ -343,8 +355,8 @@ public class IntelligenceLayerImpl implements IntelligenceLayer {
         // For now, extract basic fields or return defaults
         try {
             // Basic extraction from JSON-like content
-            String title = extractJsonField(content, "title", "Misión para tu hijo");
-            String description = extractJsonField(content, "description", "Completa esta misión con tu hijo.");
+            String title = extractJsonField(content, "title", "Mission for your child");
+            String description = extractJsonField(content, "description", "Complete this mission with your child.");
             String category = extractJsonField(content, "category", "CONNECTION");
             int difficulty = extractJsonIntField(content, "difficulty", 3);
             int minutes = extractJsonIntField(content, "estimated_minutes", 30);
@@ -353,8 +365,8 @@ public class IntelligenceLayerImpl implements IntelligenceLayer {
         } catch (Exception e) {
             log.warn("Failed to parse mission output, using defaults: {}", e.getMessage());
             return new MissionOutput(
-                "Misión para tu hijo",
-                "Completa esta misión con tu hijo.",
+                "Mission for your child",
+                "Complete this mission with your child.",
                 "CONNECTION", 3, 30, false, model
             );
         }
@@ -379,7 +391,7 @@ public class IntelligenceLayerImpl implements IntelligenceLayer {
             - Avoid: %s
             
             Output valid JSON: {"title": "...", "description": "...", "category": "...", "difficulty": N, "estimated_minutes": N}
-            Respond in Latin American Spanish.
+            Respond in English.
             """,
             context.childName(), context.childAge(), String.join(", ", context.childInterests()),
             context.category(), context.difficulty(),
@@ -408,7 +420,7 @@ public class IntelligenceLayerImpl implements IntelligenceLayer {
         return String.format("""
             Generate a weekly coaching summary for the period %s to %s.
             Include: key achievements, challenges faced, growth observations.
-            Respond in Latin American Spanish. Be warm and encouraging.
+            Respond in English. Be warm and encouraging.
             """, period.periodStart(), period.periodEnd());
     }
 
@@ -417,7 +429,7 @@ public class IntelligenceLayerImpl implements IntelligenceLayer {
             Analyze this father's reflection. He is in %s phase, day %d.
             Extract: key insights, growth areas, suggested focus areas, emotional tone.
             Be empathetic and strengths-based.
-            Respond in Latin American Spanish.
+            Respond in English.
             """, input.currentPhase(), input.phaseDay());
     }
 

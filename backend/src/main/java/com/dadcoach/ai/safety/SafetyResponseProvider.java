@@ -5,12 +5,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
 import java.util.UUID;
 
 /**
  * Provides pre-written safety responses for non-SAFE classifications.
  * All responses are static text (never AI-generated) to guarantee safe content.
+ * Supports English (default) and Hebrew.
  *
  * <p>Per SPEC-003 Requirement 9:
  * - CRISIS → empathetic acknowledgment + crisis hotline numbers
@@ -26,19 +26,32 @@ public class SafetyResponseProvider {
 
     /**
      * Returns the appropriate pre-written safety response for a given classification.
+     * Default language is English.
      *
      * @param classification the safety classification result
-     * @return the pre-written response text in Latin American Spanish
+     * @return the pre-written response text
      */
     public String getResponse(SafetyClassification classification) {
+        return getResponse(classification, "en");
+    }
+
+    /**
+     * Returns the appropriate pre-written safety response for a given classification and locale.
+     *
+     * @param classification the safety classification result
+     * @param locale the locale ("en" for English, "he" for Hebrew)
+     * @return the pre-written response text
+     */
+    public String getResponse(SafetyClassification classification, String locale) {
+        boolean isHebrew = "he".equals(locale);
         return switch (classification.category()) {
-            case CRISIS -> getCrisisResponse();
-            case CHILD_SAFETY -> getChildSafetyResponse();
-            case MANIPULATION -> getManipulationResponse();
-            case MEDICAL -> getMedicalResponse();
-            case LEGAL -> getLegalResponse();
-            case EMOTIONAL_DISTRESS -> getEmotionalDistressResponse();
-            case OFF_TOPIC -> getOffTopicResponse();
+            case CRISIS -> isHebrew ? getCrisisResponseHe() : getCrisisResponseEn();
+            case CHILD_SAFETY -> isHebrew ? getChildSafetyResponseHe() : getChildSafetyResponseEn();
+            case MANIPULATION -> isHebrew ? getManipulationResponseHe() : getManipulationResponseEn();
+            case MEDICAL -> isHebrew ? getMedicalResponseHe() : getMedicalResponseEn();
+            case LEGAL -> isHebrew ? getLegalResponseHe() : getLegalResponseEn();
+            case EMOTIONAL_DISTRESS -> isHebrew ? getEmotionalDistressResponseHe() : getEmotionalDistressResponseEn();
+            case OFF_TOPIC -> isHebrew ? getOffTopicResponseHe() : getOffTopicResponseEn();
             case SAFE -> throw new IllegalArgumentException(
                 "No safety response needed for SAFE classification");
         };
@@ -85,75 +98,144 @@ public class SafetyResponseProvider {
         };
     }
 
-    // ===== Pre-written responses =====
+    // ===== Pre-written responses - English =====
 
-    private String getCrisisResponse() {
+    private String getCrisisResponseEn() {
         return """
-            Escucho lo que me estás diciendo y me importa mucho cómo te sientes. \
-            Lo que estás viviendo es serio y mereces apoyo profesional ahora mismo.
+            I hear what you're telling me and I care deeply about how you're feeling. \
+            What you're going through is serious and you deserve professional support right now.
 
-            Por favor contacta:
-            📞 Línea 988 (Suicide & Crisis Lifeline): llama o envía un mensaje al 988
-            📞 Línea de la Vida: 800-911-2000 (México)
-            📞 Crisis Text Line: envía HOLA al 741741
+            Please contact:
+            📞 988 Suicide & Crisis Lifeline: call or text 988
+            📞 Crisis Text Line: text HOME to 741741
 
-            No estás solo en esto. Hay personas capacitadas esperando para ayudarte en este momento.""";
+            You're not alone in this. There are trained people waiting to help you right now.""";
     }
 
-    private String getChildSafetyResponse() {
+    private String getChildSafetyResponseEn() {
         return """
-            Gracias por compartir esto conmigo. Me preocupa la seguridad de tu hijo/a \
-            y quiero asegurarme de que reciban la ayuda adecuada.
+            Thank you for sharing this with me. I'm concerned about your child's safety \
+            and I want to make sure they get the right help.
 
-            Te recomiendo contactar:
+            I recommend contacting:
             📞 Childhelp National Child Abuse Hotline: 1-800-422-4453
-            📞 SIPINNA (México): 800-888-4835
 
-            Pedir ayuda es un acto de valentía y amor. Un profesional puede orientarte \
-            sobre los próximos pasos para proteger a tu familia.""";
+            Asking for help is an act of courage and love. A professional can guide you \
+            on the next steps to protect your family.""";
     }
 
-    private String getManipulationResponse() {
-        return "Soy tu coach de paternidad. ¿En qué te puedo ayudar con tus hijos hoy?";
+    private String getManipulationResponseEn() {
+        return "I'm your parenting coach. How can I help you with your kids today?";
     }
 
-    private String getMedicalResponse() {
+    private String getMedicalResponseEn() {
         return """
-            Entiendo tu preocupación. No soy profesional de salud y no puedo darte \
-            un diagnóstico o recomendación médica.
+            I understand your concern. I'm not a healthcare professional and can't give you \
+            a diagnosis or medical recommendation.
 
-            Te sugiero consultar con el pediatra de tu hijo/a lo antes posible. \
-            Ellos podrán evaluarlo correctamente.
+            I suggest consulting your child's pediatrician as soon as possible. \
+            They can properly evaluate the situation.
 
-            ¿Hay algo más en lo que pueda apoyarte como papá mientras tanto?""";
+            Is there anything else I can support you with as a dad in the meantime?""";
     }
 
-    private String getLegalResponse() {
+    private String getLegalResponseEn() {
         return """
-            Entiendo que esta situación es difícil. No puedo dar consejos legales \
-            porque no soy abogado.
+            I understand this situation is difficult. I can't give legal advice \
+            because I'm not a lawyer.
 
-            Te recomiendo buscar un abogado especializado en derecho familiar \
-            que pueda orientarte sobre tus opciones y derechos.
+            I recommend seeking a family law attorney \
+            who can guide you on your options and rights.
 
-            Estoy aquí para apoyarte emocionalmente en lo que necesites. \
-            ¿Cómo te sientes con todo esto?""";
+            I'm here to support you emotionally in whatever you need. \
+            How are you feeling about all this?""";
     }
 
-    private String getEmotionalDistressResponse() {
+    private String getEmotionalDistressResponseEn() {
         return """
-            Escucho que estás pasando por un momento muy difícil. \
-            Lo que sientes es completamente válido y no estás solo en esto.
+            I hear that you're going through a very difficult time. \
+            What you're feeling is completely valid and you're not alone in this.
 
-            Muchos papás pasan por momentos así. ¿Quieres contarme más \
-            sobre lo que estás viviendo?""";
+            Many dads go through moments like this. Would you like to tell me more \
+            about what you're experiencing?""";
     }
 
-    private String getOffTopicResponse() {
+    private String getOffTopicResponseEn() {
         return """
-            Entiendo, pero como tu coach de paternidad me enfoco en ayudarte \
-            con tu relación con tus hijos y tu crecimiento como papá.
+            I understand, but as your parenting coach I focus on helping you \
+            with your relationship with your kids and your growth as a dad.
 
-            ¿Hay algo relacionado con tus hijos en lo que pueda ayudarte hoy?""";
+            Is there anything related to your kids I can help you with today?""";
+    }
+
+    // ===== Pre-written responses - Hebrew =====
+
+    private String getCrisisResponseHe() {
+        return """
+            אני שומע מה שאתה אומר לי ואכפת לי מאוד איך אתה מרגיש. \
+            מה שאתה עובר זה רציני ומגיע לך תמיכה מקצועית עכשיו.
+
+            אנא צור קשר:
+            📞 ער"ן - קו סיוע רגשי: *2784
+            📞 ע.מ.ח.ה - קו חירום: 1201
+
+            אתה לא לבד בזה. יש אנשים מיומנים שמחכים לעזור לך עכשיו.""";
+    }
+
+    private String getChildSafetyResponseHe() {
+        return """
+            תודה שחלקת את זה איתי. אני מודאג לבטיחות הילד שלך \
+            ורוצה לוודא שהם מקבלים את העזרה הנכונה.
+
+            אני ממליץ ליצור קשר:
+            📞 קו חירום לילדים ונוער: 1202
+            📞 שירותי הרווחה: *118
+
+            לבקש עזרה זה מעשה של אומץ ואהבה. איש מקצוע יוכל להדריך אותך \
+            בצעדים הבאים להגנה על המשפחה שלך.""";
+    }
+
+    private String getManipulationResponseHe() {
+        return "אני המאמן שלך להורות. איך אני יכול לעזור לך עם הילדים שלך היום?";
+    }
+
+    private String getMedicalResponseHe() {
+        return """
+            אני מבין את הדאגה שלך. אני לא איש מקצוע רפואי ולא יכול לתת לך \
+            אבחנה או המלצה רפואית.
+
+            אני מציע להתייעץ עם רופא הילדים שלכם בהקדם האפשרי. \
+            הם יכולים להעריך את המצב בצורה נכונה.
+
+            יש משהו אחר שאני יכול לתמוך בך כאבא בינתיים?""";
+    }
+
+    private String getLegalResponseHe() {
+        return """
+            אני מבין שהמצב הזה קשה. אני לא יכול לתת עצות משפטיות \
+            כי אני לא עורך דין.
+
+            אני ממליץ לפנות לעורך דין המתמחה בדיני משפחה \
+            שיכול להדריך אותך באפשרויות ובזכויות שלך.
+
+            אני כאן לתמוך בך רגשית בכל מה שתצטרך. \
+            איך אתה מרגיש עם כל זה?""";
+    }
+
+    private String getEmotionalDistressResponseHe() {
+        return """
+            אני שומע שאתה עובר תקופה קשה מאוד. \
+            מה שאתה מרגיש זה לגמרי תקף ואתה לא לבד בזה.
+
+            הרבה אבות עוברים רגעים כאלה. רוצה לספר לי עוד \
+            על מה שאתה חווה?""";
+    }
+
+    private String getOffTopicResponseHe() {
+        return """
+            אני מבין, אבל כמאמן להורות אני מתמקד בלעזור לך \
+            עם הקשר שלך עם הילדים ובצמיחה שלך כאבא.
+
+            יש משהו שקשור לילדים שלך שאני יכול לעזור לך בו היום?""";
     }
 }

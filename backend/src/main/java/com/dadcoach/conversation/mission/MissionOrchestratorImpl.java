@@ -112,7 +112,7 @@ public class MissionOrchestratorImpl implements MissionOrchestrator {
                     mission.getId(), targetChild.getName(), fatherId);
 
             return Optional.of(String.format(
-                    "Misión creada para %s: %s", targetChild.getName(), mission.getTitle()));
+                    "Mission created for %s: %s", targetChild.getName(), mission.getTitle()));
 
         } catch (Exception e) {
             log.error("Failed to create mission for child {} (father={}): {}",
@@ -238,7 +238,7 @@ public class MissionOrchestratorImpl implements MissionOrchestrator {
      * In production, this would be replaced by AI-generated content via MissionPlanner.
      */
     private String generateDefaultTitle(Child targetChild) {
-        return String.format("Misión de conexión con %s", targetChild.getName());
+        return String.format("Connection mission with %s", targetChild.getName());
     }
 
     /**
@@ -247,8 +247,8 @@ public class MissionOrchestratorImpl implements MissionOrchestrator {
      */
     private String generateDefaultDescription(Child targetChild) {
         return String.format(
-                "Dedica 15 minutos de tiempo de calidad con %s. " +
-                "Elige una actividad que disfruten juntos y enfócate en estar presente.",
+                "Dedicate 15 minutes of quality time with %s. " +
+                "Choose an activity you both enjoy and focus on being present.",
                 targetChild.getName());
     }
 }

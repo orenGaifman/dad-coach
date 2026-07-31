@@ -379,11 +379,11 @@ public class ConversationOrchestrator {
         } catch (Exception e) {
             // Last-resort: if even the fallback provider fails, use a hardcoded message
             log.error("FallbackResponseProvider failed. Using hardcoded last-resort message.", e);
-            fallbackContent = "Disculpa, estamos teniendo dificultades técnicas. Por favor intenta de nuevo más tarde.";
+            fallbackContent = "Sorry, we're experiencing technical difficulties. Please try again later.";
         }
 
         if (fallbackContent == null || fallbackContent.isBlank()) {
-            fallbackContent = "Disculpa, estamos teniendo dificultades técnicas. Por favor intenta de nuevo más tarde.";
+            fallbackContent = "Sorry, we're experiencing technical difficulties. Please try again later.";
         }
 
         UUID conversationId = (conversation != null) ? conversation.getId() : null;
