@@ -132,10 +132,13 @@ public class WhatsAppMessageParser {
         Instant receivedAt = parseTimestamp(msg.timestamp());
         Instant ingestedAt = Instant.now();
 
+        // Normalize phone number to E.164 format (WhatsApp sends without '+' prefix)
+        String phoneNumber = normalizeToE164(msg.from());
+
         return new InboundMessageDto(
             UUID.randomUUID(),
             msg.id(),           // idempotencyKey derived from provider message ID
-            msg.from(),         // fatherChannelIdentity (phone number)
+            phoneNumber,        // fatherChannelIdentity (phone number in E.164 format)
             "WHATSAPP",
             messageType,
             textContent,
@@ -280,5 +283,22 @@ public class WhatsAppMessageParser {
             log.warn("Invalid timestamp '{}', using current time", timestamp);
             return Instant.now();
         }
+    }
+
+    /**
+     * Normalizes a phone number to E.164 format by adding '+' prefix if missing.
+     * WhatsApp Cloud API sends phone numbers without the '+' prefix.
+     *
+     * @param phoneNumber the phone number from WhatsApp (e.g., "972501234567")
+     * @return the normalized phone number in E.164 format (e.g., "+972501234567")
+     */
+    String normalizeToE164(String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.isBlank()) {
+            return phoneNumber;
+        }
+        if (phoneNumber.startsWith("+")) {
+            return phoneNumber;
+        }
+        return "+" + phoneNumber;
     }
 }
