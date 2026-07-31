@@ -66,6 +66,8 @@ public class SecurityConfig {
                         .requestMatchers("/webhooks/whatsapp/**").permitAll()
                         // Onboarding endpoints (public)
                         .requestMatchers("/api/v1/onboarding/**").permitAll()
+                        // Invitations endpoints (public for dev/testing)
+                        .requestMatchers("/api/v1/invitations/**").permitAll()
                         // Role-based access
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/service/**").hasRole("SERVICE")
