@@ -84,7 +84,7 @@ dad-coach:
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:}
       base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
-      timeout-seconds: 10
+      timeout-seconds: 30
       api-version: "2023-06-01"
     cost:
       daily-token-budget: ${AI_DAILY_TOKEN_BUDGET:50000}

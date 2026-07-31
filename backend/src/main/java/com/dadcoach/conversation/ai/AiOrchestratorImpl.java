@@ -73,6 +73,9 @@ public class AiOrchestratorImpl implements AiOrchestrator {
     public AiResult orchestrate(ConversationContext context, InboundMessageDto message) {
         Instant startTime = Instant.now();
 
+        // Extract locale for fallback messages
+        String locale = getLocale(context);
+
         try {
             // Step 1: Safety classification runs FIRST — before any coaching generation
             SafetyClassification safety = safetyClassifier.classify(message.content());
@@ -109,17 +112,27 @@ public class AiOrchestratorImpl implements AiOrchestrator {
 
             // Step 6: Both attempts failed validation — deliver fallback
             log.warn("AI response failed validation after retry: failures={}", retryValidation.failures());
-            return buildFallbackResult(context.conversationType(), startTime);
+            return buildFallbackResult(context.conversationType(), startTime, locale);
 
         } catch (AiProviderUnavailableException e) {
             // Provider exception → deliver fallback
             log.error("AI provider unavailable during orchestration: {}", e.getMessage());
-            return buildFallbackResult(context.conversationType(), startTime);
+            return buildFallbackResult(context.conversationType(), startTime, locale);
         } catch (Exception e) {
             // Any other unexpected exception → deliver fallback (never throw)
             log.error("Unexpected error during AI orchestration, delivering fallback", e);
-            return buildFallbackResult(context.conversationType(), startTime);
+            return buildFallbackResult(context.conversationType(), startTime, locale);
         }
+    }
+
+    /**
+     * Extracts the locale from context, defaults to English.
+     */
+    private String getLocale(ConversationContext context) {
+        if (context.fatherProfile() != null && context.fatherProfile().get("locale") != null) {
+            return context.fatherProfile().get("locale").toString();
+        }
+        return "en";
     }
 
     // ===== Private helpers =====
@@ -176,18 +189,28 @@ public class AiOrchestratorImpl implements AiOrchestrator {
         return AiResult.success(response.message(), followUpAction, metadata);
     }
 
-    private AiResult buildFallbackResult(String conversationType, Instant startTime) {
+    private AiResult buildFallbackResult(String conversationType, Instant startTime, String locale) {
         Duration latency = Duration.between(startTime, Instant.now());
         String fallbackContent;
         try {
-            fallbackContent = fallbackProvider.getForType(conversationType);
+            if (fallbackProvider instanceof FallbackResponseProviderImpl impl) {
+                fallbackContent = impl.getForType(conversationType, locale);
+            } else {
+                fallbackContent = fallbackProvider.getForType(conversationType);
+            }
         } catch (Exception e) {
             log.error("FallbackProvider.getForType failed, using generic fallback", e);
             try {
-                fallbackContent = fallbackProvider.getGenericFallback();
+                if (fallbackProvider instanceof FallbackResponseProviderImpl impl) {
+                    fallbackContent = impl.getGenericFallback(locale);
+                } else {
+                    fallbackContent = fallbackProvider.getGenericFallback();
+                }
             } catch (Exception e2) {
                 log.error("FallbackProvider.getGenericFallback also failed, using hardcoded last-resort", e2);
-                fallbackContent = "Lo siento, estoy experimentando dificultades técnicas. Por favor intenta de nuevo más tarde.";
+                fallbackContent = "he".equals(locale)
+                        ? "סליחה, אני חווה קשיים טכניים. אנא נסה שוב מאוחר יותר."
+                        : "Sorry, I'm experiencing technical difficulties. Please try again later.";
             }
         }
         log.info("Delivering fallback response for conversationType={} after {}ms",
@@ -204,8 +227,21 @@ public class AiOrchestratorImpl implements AiOrchestrator {
     }
 
     private String buildSystemPrompt(ConversationContext context) {
-        return "You are Dad Coach, a parenting coach for Latin American fathers. "
-                + "Respond in conversational Latin American Spanish. "
+        // Get the father's language preference
+        String locale = "en"; // default to English
+        if (context.fatherProfile() != null && context.fatherProfile().get("locale") != null) {
+            locale = context.fatherProfile().get("locale").toString();
+        }
+
+        String languageInstruction;
+        if ("he".equals(locale)) {
+            languageInstruction = "Respond in conversational Hebrew. ";
+        } else {
+            languageInstruction = "Respond in conversational English. ";
+        }
+
+        return "You are Dad Coach, a warm and supportive parenting coach for fathers. "
+                + languageInstruction
                 + "Conversation type: " + context.conversationType();
     }
 

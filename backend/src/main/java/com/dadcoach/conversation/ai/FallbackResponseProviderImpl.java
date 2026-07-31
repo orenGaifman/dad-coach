@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Provides pre-written fallback responses per conversation type.
- * All messages are static text in conversational Latin American Spanish (never AI-generated).
+ * All messages are static text in English (default) or Hebrew (never AI-generated).
  *
  * <p>Tracks consecutive fallback usage per father and alerts operations
  * when 3 consecutive fallbacks are reached for the same father.
@@ -23,35 +23,64 @@ public class FallbackResponseProviderImpl implements FallbackResponseProvider {
 
     private static final int MAX_CONSECUTIVE_FALLBACKS = 3;
 
-    private static final String GENERIC_FALLBACK =
-            "Disculpa, estoy experimentando dificultades técnicas. Volveré contigo pronto.";
+    private static final String GENERIC_FALLBACK_EN =
+            "Sorry, I'm experiencing technical difficulties. I'll get back to you soon.";
+
+    private static final String GENERIC_FALLBACK_HE =
+            "סליחה, אני חווה קשיים טכניים. אחזור אליך בקרוב.";
 
     /**
-     * Static pre-written fallback messages per conversation type.
-     * These are NEVER AI-generated — they are safe, pre-approved messages
-     * in conversational Latin American Spanish.
+     * Static pre-written fallback messages per conversation type in English.
+     * These are NEVER AI-generated — they are safe, pre-approved messages.
      */
-    private static final Map<String, String> FALLBACK_MESSAGES = Map.of(
+    private static final Map<String, String> FALLBACK_MESSAGES_EN = Map.of(
             "DAILY_COACHING",
-            "¡Hola! Estoy aquí para acompañarte en tu camino como papá. ¿En qué puedo ayudarte hoy?",
+            "Hi there! I'm here to support you on your fatherhood journey. How can I help you today?",
 
             "ONBOARDING",
-            "¡Bienvenido! Estoy teniendo un pequeño problema técnico, pero en unos minutos estaré listo para conocerte mejor.",
+            "Welcome! I'm having a small technical issue, but I'll be ready to get to know you better in just a moment.",
 
             "DIFFICULT_SITUATION",
-            "Entiendo que estás pasando por un momento difícil. Estoy aquí para escucharte. ¿Podrías contarme un poco más?",
+            "I understand you're going through a difficult time. I'm here to listen. Could you tell me a bit more about what's happening?",
 
             "FOLLOW_UP",
-            "¡Qué bueno verte de vuelta! Tengo un pequeño inconveniente técnico, pero pronto podré retomar nuestra conversación.",
+            "Great to see you again! I'm having a small technical hiccup, but I'll be able to continue our conversation soon.",
 
             "REFLECTION",
-            "Me encanta que quieras reflexionar sobre tu experiencia como papá. Dame un momento y seguimos conversando.",
+            "I love that you want to reflect on your experience as a dad. Give me a moment and we'll continue our conversation.",
 
             "INACTIVITY_CHECK",
-            "¡Hola! Quería saber cómo estás. Estoy teniendo un pequeño problema técnico, pero pronto estaré disponible.",
+            "Hi! I wanted to check in and see how you're doing. I'm having a small technical issue, but I'll be available soon.",
 
             "CELEBRATION",
-            "¡Qué emoción! Quiero celebrar contigo. Dame un momento mientras soluciono un tema técnico."
+            "How exciting! I want to celebrate with you. Give me a moment while I sort out a technical issue."
+    );
+
+    /**
+     * Static pre-written fallback messages per conversation type in Hebrew.
+     * These are NEVER AI-generated — they are safe, pre-approved messages.
+     */
+    private static final Map<String, String> FALLBACK_MESSAGES_HE = Map.of(
+            "DAILY_COACHING",
+            "שלום! אני כאן ללוות אותך במסע האבהות שלך. איך אוכל לעזור לך היום?",
+
+            "ONBOARDING",
+            "ברוך הבא! יש לי בעיה טכנית קטנה, אבל עוד רגע אהיה מוכן להכיר אותך יותר טוב.",
+
+            "DIFFICULT_SITUATION",
+            "אני מבין שאתה עובר תקופה קשה. אני כאן להקשיב. תוכל לספר לי קצת יותר על מה שקורה?",
+
+            "FOLLOW_UP",
+            "כיף לראות אותך שוב! יש לי תקלה טכנית קטנה, אבל בקרוב אוכל להמשיך את השיחה שלנו.",
+
+            "REFLECTION",
+            "אני שמח שאתה רוצה לעשות רפלקציה על החוויה שלך כאבא. תן לי רגע ונמשיך לדבר.",
+
+            "INACTIVITY_CHECK",
+            "היי! רציתי לבדוק איך אתה מרגיש. יש לי בעיה טכנית קטנה, אבל בקרוב אהיה זמין.",
+
+            "CELEBRATION",
+            "איזה כיף! אני רוצה לחגוג איתך. תן לי רגע בזמן שאני מסדר בעיה טכנית."
     );
 
     /**
@@ -63,15 +92,40 @@ public class FallbackResponseProviderImpl implements FallbackResponseProvider {
 
     @Override
     public String getForType(String conversationType) {
+        return getForType(conversationType, "en");
+    }
+
+    /**
+     * Gets a fallback response for the given conversation type and locale.
+     *
+     * @param conversationType the type of conversation
+     * @param locale the locale code ("en" for English, "he" for Hebrew)
+     * @return the appropriate fallback message
+     */
+    public String getForType(String conversationType, String locale) {
         if (conversationType == null || conversationType.isBlank()) {
-            return GENERIC_FALLBACK;
+            return getGenericFallback(locale);
         }
-        return FALLBACK_MESSAGES.getOrDefault(conversationType.toUpperCase(), GENERIC_FALLBACK);
+
+        Map<String, String> messages = "he".equals(locale) ? FALLBACK_MESSAGES_HE : FALLBACK_MESSAGES_EN;
+        String genericFallback = "he".equals(locale) ? GENERIC_FALLBACK_HE : GENERIC_FALLBACK_EN;
+
+        return messages.getOrDefault(conversationType.toUpperCase(), genericFallback);
     }
 
     @Override
     public String getGenericFallback() {
-        return GENERIC_FALLBACK;
+        return GENERIC_FALLBACK_EN;
+    }
+
+    /**
+     * Gets the generic fallback message for the given locale.
+     *
+     * @param locale the locale code ("en" for English, "he" for Hebrew)
+     * @return the generic fallback message
+     */
+    public String getGenericFallback(String locale) {
+        return "he".equals(locale) ? GENERIC_FALLBACK_HE : GENERIC_FALLBACK_EN;
     }
 
     /**

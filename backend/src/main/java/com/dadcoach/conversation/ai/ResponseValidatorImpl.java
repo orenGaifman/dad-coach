@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -26,17 +27,23 @@ public class ResponseValidatorImpl implements ResponseValidator {
     private static final int MIN_WORD_COUNT = 10;
     private static final int MAX_WORD_COUNT = 500;
 
-    // Common Spanish words used as a heuristic language check
-    private static final Set<String> SPANISH_INDICATORS = Set.of(
-            "de", "la", "el", "en", "que", "los", "las", "del", "por", "con",
-            "una", "para", "es", "se", "un", "su", "al", "no", "lo", "como",
-            "más", "pero", "sus", "le", "ya", "o", "fue", "este", "ha", "si",
-            "porque", "esta", "entre", "cuando", "muy", "sin", "sobre", "ser",
-            "también", "me", "hasta", "hay", "donde", "quien", "desde", "todo",
-            "nos", "uno", "ni", "son", "te", "tu", "hijo", "hola", "puedo"
+    // Common English words used as a heuristic language check
+    private static final Set<String> ENGLISH_INDICATORS = Set.of(
+            "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+            "have", "has", "had", "do", "does", "did", "will", "would", "could",
+            "should", "may", "might", "must", "shall", "can", "need", "dare",
+            "to", "of", "in", "for", "on", "with", "at", "by", "from", "as",
+            "into", "through", "during", "before", "after", "above", "below",
+            "and", "but", "or", "nor", "so", "yet", "both", "either", "neither",
+            "not", "only", "own", "same", "than", "too", "very", "just", "also",
+            "i", "you", "he", "she", "it", "we", "they", "what", "which", "who",
+            "this", "that", "these", "those", "am", "your", "my", "his", "her"
     );
 
-    private static final int SPANISH_WORD_THRESHOLD = 3;
+    // Hebrew is detected by presence of Hebrew characters (Unicode block)
+    private static final Pattern HEBREW_PATTERN = Pattern.compile("[\\u0590-\\u05FF]");
+
+    private static final int LANGUAGE_WORD_THRESHOLD = 3;
 
     // Shame language patterns (case-insensitive)
     private static final List<Pattern> SHAME_PATTERNS = List.of(
@@ -80,7 +87,7 @@ public class ResponseValidatorImpl implements ResponseValidator {
         }
 
         String message = response.message();
-        validateLanguage(message, failures);
+        validateLanguage(message, context, failures);
         validateLength(message, failures);
         validateForbiddenContent(message, failures);
 
@@ -103,21 +110,33 @@ public class ResponseValidatorImpl implements ResponseValidator {
         }
     }
 
-    private void validateLanguage(String message, List<String> failures) {
-        String[] words = message.toLowerCase().split("\\s+");
-        long spanishWordCount = 0;
-        for (String word : words) {
-            // Strip punctuation for matching
-            String clean = word.replaceAll("[^\\p{L}\\p{N}]", "");
-            if (SPANISH_INDICATORS.contains(clean)) {
-                spanishWordCount++;
-            }
+    private void validateLanguage(String message, ConversationContext context, List<String> failures) {
+        // Get the father's language preference from fatherProfile
+        String locale = "en"; // default to English
+        if (context.fatherProfile() != null && context.fatherProfile().get("locale") != null) {
+            locale = context.fatherProfile().get("locale").toString();
         }
 
-        if (spanishWordCount < SPANISH_WORD_THRESHOLD) {
-            failures.add("Response does not appear to be in Spanish (found " +
-                    spanishWordCount + " Spanish indicator words, minimum is " +
-                    SPANISH_WORD_THRESHOLD + ")");
+        if ("he".equals(locale)) {
+            // Hebrew validation: check for Hebrew characters
+            if (!HEBREW_PATTERN.matcher(message).find()) {
+                failures.add("Response does not appear to be in Hebrew (no Hebrew characters found)");
+            }
+        } else {
+            // English validation: check for common English words
+            String[] words = message.toLowerCase().split("\\s+");
+            long englishWordCount = 0;
+            for (String word : words) {
+                String clean = word.replaceAll("[^\\p{L}\\p{N}]", "");
+                if (ENGLISH_INDICATORS.contains(clean)) {
+                    englishWordCount++;
+                }
+            }
+            if (englishWordCount < LANGUAGE_WORD_THRESHOLD) {
+                failures.add("Response does not appear to be in English (found " +
+                        englishWordCount + " English indicator words, minimum is " +
+                        LANGUAGE_WORD_THRESHOLD + ")");
+            }
         }
     }
 
