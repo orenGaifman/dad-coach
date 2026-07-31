@@ -179,8 +179,12 @@ public class AnthropicProvider implements AiProvider {
         body.put("model", request.model());
         body.put("max_tokens", request.maxTokens());
         body.put("messages", messages);
-        // Anthropic doesn't allow both temperature and top_p - use only temperature
-        body.put("temperature", request.temperature());
+        
+        // Note: claude-sonnet-5 and claude-opus-5 don't support temperature parameter
+        // Only add temperature for models that support it
+        if (!request.model().contains("sonnet-5") && !request.model().contains("opus-5")) {
+            body.put("temperature", request.temperature());
+        }
 
         if (systemPrompt != null) {
             body.put("system", systemPrompt);
