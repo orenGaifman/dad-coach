@@ -90,7 +90,8 @@ public class WhatsAppWebhookController {
 
         // Process the message asynchronously to return 200 quickly
         try {
-            Object payload = objectMapper.readValue(rawBody, Object.class);
+            com.dadcoach.whatsapp.dto.WhatsAppWebhookPayload payload = 
+                objectMapper.readValue(rawBody, com.dadcoach.whatsapp.dto.WhatsAppWebhookPayload.class);
             ChannelAdapter adapter = channelRouter.getAdapter("WHATSAPP");
             com.dadcoach.channel.dto.InboundMessageDto inbound = adapter.normalizeInbound(payload);
 
