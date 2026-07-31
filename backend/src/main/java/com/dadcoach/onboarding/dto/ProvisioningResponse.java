@@ -25,6 +25,14 @@ public record ProvisioningResponse(
     @Schema(description = "WhatsApp deep link for activation", example = "https://wa.me/972501234567?text=%F0%9F%9A%80%20START")
     String deepLink,
 
+    @JsonProperty("whatsapp_deep_link")
+    @Schema(description = "WhatsApp deep link for activation (alias for deep_link)", example = "https://wa.me/972501234567?text=%F0%9F%9A%80%20START")
+    String whatsappDeepLink,
+
+    @JsonProperty("activation_message")
+    @Schema(description = "The activation message to send", example = "🚀 START")
+    String activationMessage,
+
     @JsonProperty("activation_status")
     @Schema(description = "Current activation status", example = "PENDING")
     String activationStatus,

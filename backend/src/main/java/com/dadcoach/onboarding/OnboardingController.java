@@ -224,6 +224,8 @@ public class OnboardingController {
                 result.fatherId(),
                 result.activationId(),
                 result.deepLink(),
+                result.deepLink(),  // whatsapp_deep_link - same as deepLink for frontend compatibility
+                "🚀 START",         // activation_message - fallback text
                 "PENDING",
                 null, // whatsapp_number from config
                 null  // not a duplicate for initial provisioning
