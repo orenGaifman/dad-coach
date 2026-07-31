@@ -21,6 +21,7 @@ import com.dadcoach.onboarding.session.WizardData;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,7 +55,11 @@ public class ProvisioningServiceImpl implements ProvisioningService {
     private static final Logger log = LoggerFactory.getLogger(ProvisioningServiceImpl.class);
     private static final long SLA_THRESHOLD_MS = 3000;
     private static final String WHATSAPP_DEEP_LINK_TEMPLATE = "https://wa.me/%s?text=%s";
-    private static final String DEFAULT_ACTIVATION_MESSAGE = "🚀 START";
+    private static final String DEFAULT_ACTIVATION_MESSAGE_EN = "🚀 START";
+    private static final String DEFAULT_ACTIVATION_MESSAGE_HE = "🚀 התחל";
+
+    @Value("${dad-coach.whatsapp.phone-number:+972501234567}")
+    private String dadCoachWhatsAppNumber;
 
     private final OnboardingSessionRepository sessionRepository;
     private final InvitationRepository invitationRepository;
@@ -159,7 +164,7 @@ public class ProvisioningServiceImpl implements ProvisioningService {
             completeSession(session, father);
 
             // 14. Generate deep link
-            String deepLink = generateDeepLink(phoneNumber, wizardData.getLanguage());
+            String deepLink = generateDeepLink(wizardData.getLanguage());
 
             // 15. Build result
             List<Long> childIds = children.stream().map(Child::getId).toList();
@@ -389,20 +394,23 @@ public class ProvisioningServiceImpl implements ProvisioningService {
                 });
 
         // Generate deep link
-        String deepLink = generateDeepLink(existingFather.getPhone(), existingFather.getLocale());
+        String deepLink = generateDeepLink(existingFather.getLocale());
 
         return new ProvisioningResult(fatherId, familyId, childIds, goalIds, activationId, deepLink);
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────
 
-    private String generateDeepLink(String phoneNumber, String language) {
-        if (phoneNumber == null) {
-            return null;
-        }
-        // Strip + from phone number for wa.me link
-        String cleanPhone = phoneNumber.replaceAll("[^0-9]", "");
-        String encodedMessage = URLEncoder.encode(DEFAULT_ACTIVATION_MESSAGE, StandardCharsets.UTF_8);
+    private String generateDeepLink(String language) {
+        // Use Dad Coach's WhatsApp Business number
+        String cleanPhone = dadCoachWhatsAppNumber.replaceAll("[^0-9]", "");
+        
+        // Choose message based on language
+        String message = "he".equalsIgnoreCase(language) 
+            ? DEFAULT_ACTIVATION_MESSAGE_HE 
+            : DEFAULT_ACTIVATION_MESSAGE_EN;
+        
+        String encodedMessage = URLEncoder.encode(message, StandardCharsets.UTF_8);
         return String.format(WHATSAPP_DEEP_LINK_TEMPLATE, cleanPhone, encodedMessage);
     }
 
