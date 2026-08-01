@@ -14,6 +14,9 @@ import com.dadcoach.conversation.memory.MemoryOrchestrator;
 import com.dadcoach.conversation.mission.MissionOrchestrator;
 import com.dadcoach.conversation.repository.ConversationMessageRepository;
 import com.dadcoach.conversation.sideeffect.SideEffectScheduler;
+import com.dadcoach.domain.flash.FlashMissionService;
+import com.dadcoach.domain.father.Father;
+import com.dadcoach.domain.father.FatherRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,7 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Main pipeline coordinator for the Conversation Engine.
@@ -57,6 +62,19 @@ public class ConversationOrchestrator {
     private static final String REASON_MAX_MESSAGES = "MAX_MESSAGES";
     private static final String REASON_OBJECTIVE_MET = "OBJECTIVE_MET";
 
+    /**
+     * Trigger phrases for flash missions (Hebrew and English).
+     * When father sends these, immediately return a flash mission.
+     */
+    private static final Set<String> FLASH_TRIGGERS_EXACT = Set.of(
+            "עכשיו", "now", "יש לי דקה", "יש לי רגע", "פנוי", "פנויה",
+            "i have a minute", "got a moment", "free now", "בזק"
+    );
+    private static final Pattern FLASH_TRIGGERS_PATTERN = Pattern.compile(
+            "(עכשיו|now|פנוי|free|בזק|יש לי (דקה|רגע|זמן)|got (a )?moment)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
+    );
+
     private final IdempotencyService idempotencyService;
     private final SessionLockService sessionLockService;
     private final FatherResolver fatherResolver;
@@ -69,6 +87,8 @@ public class ConversationOrchestrator {
     private final ConversationEventPublisher eventPublisher;
     private final FallbackResponseProvider fallbackProvider;
     private final ConversationMessageRepository messageRepository;
+    private final FlashMissionService flashMissionService;
+    private final FatherRepository fatherRepository;
 
     /**
      * Maximum outbound messages per conversation before auto-completion.
@@ -89,6 +109,8 @@ public class ConversationOrchestrator {
             ConversationEventPublisher eventPublisher,
             FallbackResponseProvider fallbackProvider,
             ConversationMessageRepository messageRepository,
+            FlashMissionService flashMissionService,
+            FatherRepository fatherRepository,
             @Value("${conversation.pipeline.max-outbound-messages:8}") int maxOutboundMessages) {
         this.idempotencyService = idempotencyService;
         this.sessionLockService = sessionLockService;
@@ -102,6 +124,8 @@ public class ConversationOrchestrator {
         this.eventPublisher = eventPublisher;
         this.fallbackProvider = fallbackProvider;
         this.messageRepository = messageRepository;
+        this.flashMissionService = flashMissionService;
+        this.fatherRepository = fatherRepository;
         this.maxOutboundMessages = maxOutboundMessages;
     }
 
@@ -159,6 +183,14 @@ public class ConversationOrchestrator {
         // Step 4: Route conversation — find or create the appropriate conversation
         Conversation conversation = routeConversation(fatherId, father.status());
 
+        // Step 4.5: Check for flash mission trigger BEFORE AI orchestration
+        Optional<OutboundMessageDto> flashResponse = checkFlashMissionTrigger(message, fatherId, conversation);
+        if (flashResponse.isPresent()) {
+            // Record idempotency and return flash mission directly
+            idempotencyService.recordProcessed(message.idempotencyKey(), fatherId, null);
+            return flashResponse.get();
+        }
+
         // Step 5: Load context — assemble all subsystem data for AI
         ConversationContext context = contextAssembler.assembleContext(fatherId, conversation, message);
 
@@ -183,6 +215,62 @@ public class ConversationOrchestrator {
         // Build and return the outbound message
         // COMMIT releases the advisory lock automatically.
         return buildOutboundMessage(message, aiResult, conversation, outboundMessageId);
+    }
+
+    /**
+     * Checks if the message is a flash mission trigger ("עכשיו", "now", etc.)
+     * If so, returns an immediate flash mission response without going through AI.
+     */
+    private Optional<OutboundMessageDto> checkFlashMissionTrigger(InboundMessageDto message,
+                                                                   UUID fatherId,
+                                                                   Conversation conversation) {
+        String content = message.content().trim().toLowerCase();
+
+        // Check exact matches first
+        boolean isFlashTrigger = FLASH_TRIGGERS_EXACT.contains(content);
+
+        // Check pattern match for short messages (< 20 chars to avoid false positives)
+        if (!isFlashTrigger && content.length() < 20) {
+            isFlashTrigger = FLASH_TRIGGERS_PATTERN.matcher(content).find();
+        }
+
+        if (!isFlashTrigger) {
+            return Optional.empty();
+        }
+
+        // Extract the Long ID from the UUID (reverse of FatherResolverImpl.deriveUuid)
+        // UUID is created as new UUID(0L, domainId), so getLeastSignificantBits() returns the domain ID
+        Long fatherDomainId = fatherId.getLeastSignificantBits();
+        
+        // Verify the father exists
+        Optional<Father> fatherOpt = fatherRepository.findById(fatherDomainId);
+        if (fatherOpt.isEmpty()) {
+            log.warn("Flash trigger detected but father not found: UUID={}, domainId={}", fatherId, fatherDomainId);
+            return Optional.empty();
+        }
+
+        Father fatherEntity = fatherOpt.get();
+        log.info("Flash mission trigger detected for father {}: '{}'", fatherEntity.getId(), content);
+
+        try {
+            FlashMissionService.FlashMissionSuggestion suggestion =
+                    flashMissionService.getFlashMission(fatherEntity.getId(), null);
+
+            String responseContent = suggestion.toMessage();
+
+            return Optional.of(new OutboundMessageDto(
+                    message.senderId(),
+                    responseContent,
+                    "TEXT",
+                    conversation.getId(),
+                    Map.of("flash_mission", true,
+                           "template_id", suggestion.templateId() != null ? suggestion.templateId() : "",
+                           "child_id", suggestion.childId() != null ? suggestion.childId() : "")
+            ));
+        } catch (Exception e) {
+            log.error("Failed to get flash mission for father {}", fatherEntity.getId(), e);
+            return Optional.empty(); // Fall through to normal AI flow
+        }
     }
 
     /**

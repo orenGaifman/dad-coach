@@ -10,6 +10,7 @@ import com.dadcoach.ai.safety.SafetyResponseProvider;
 import com.dadcoach.conversation.ConversationType;
 import com.dadcoach.conversation.context.ConversationContext;
 import com.dadcoach.conversation.dto.InboundMessageDto;
+import com.dadcoach.domain.goal.FatherGoalService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -50,19 +51,22 @@ public class AiOrchestratorImpl implements AiOrchestrator {
     private final IntelligenceLayer intelligenceLayer;
     private final ResponseValidator responseValidator;
     private final FallbackResponseProvider fallbackProvider;
+    private final FatherGoalService fatherGoalService;
 
     public AiOrchestratorImpl(
             SafetyClassifier safetyClassifier,
             SafetyResponseProvider safetyResponseProvider,
             IntelligenceLayer intelligenceLayer,
             ResponseValidator responseValidator,
-            FallbackResponseProvider fallbackProvider
+            FallbackResponseProvider fallbackProvider,
+            FatherGoalService fatherGoalService
     ) {
         this.safetyClassifier = safetyClassifier;
         this.safetyResponseProvider = safetyResponseProvider;
         this.intelligenceLayer = intelligenceLayer;
         this.responseValidator = responseValidator;
         this.fallbackProvider = fallbackProvider;
+        this.fatherGoalService = fatherGoalService;
     }
 
     /**
@@ -277,6 +281,9 @@ public class AiOrchestratorImpl implements AiOrchestrator {
             }
         }
         
+        // Get goal progress info
+        String goalProgressInfo = getGoalProgressInfo(context, "he");
+        
         // Determine the CURRENT OBJECTIVE based on state
         String currentObjective = determineCurrentObjective(onboardingState, activeMission, fatherName, firstChildName);
         
@@ -298,6 +305,10 @@ public class AiOrchestratorImpl implements AiOrchestrator {
             אם שואלים על נושא לא קשור להורות:
             "אני כאן בשביל הקשר שלך עם הילדים 😊 מה קורה עם [שם הילד]?"
             
+            ## משימות בזק ⚡
+            האבא יכול לשלוח "עכשיו" או "יש לי דקה" ולקבל משימה מיידית של 2-5 דקות.
+            אם האבא מזכיר שיש לו זמן פנוי, הזכר לו: "אתה יכול לכתוב 'עכשיו' ולקבל משימת בזק!"
+            
             ## מצב נוכחי
             - שם האבא: %s
             - ילד ראשון: %s (גיל %s)
@@ -305,6 +316,9 @@ public class AiOrchestratorImpl implements AiOrchestrator {
             - משימה פעילה: %s
             - סטטוס משימה: %s
             - ילד במשימה: %s
+            
+            ## יעדים 🎯
+            %s
             
             ## המטרה הנוכחית שלך
             %s
@@ -334,6 +348,7 @@ public class AiOrchestratorImpl implements AiOrchestrator {
             - אל תסביר למה אתה שואל - פשוט שאל
             - אל תתן אפשרויות רבות - תן 2-3 מקסימום
             - תמיד הזכר את שם הילד אם יש
+            - כשסיימת onboarding, הזכר את משימות הבזק: "דרך אגב, כשיש לך דקה פנויה - כתוב 'עכשיו' ותקבל משימה מהירה ⚡"
             """.formatted(
                 fatherName.isEmpty() ? "(לא ידוע)" : fatherName,
                 firstChildName.isEmpty() ? "(לא רשום)" : firstChildName,
@@ -342,6 +357,7 @@ public class AiOrchestratorImpl implements AiOrchestrator {
                 missionTitle.isEmpty() ? "(אין)" : missionTitle,
                 missionStatus.isEmpty() ? "-" : missionStatus,
                 missionChildName.isEmpty() ? "-" : missionChildName,
+                goalProgressInfo,
                 currentObjective,
                 fatherName,
                 fatherName,
@@ -386,6 +402,9 @@ public class AiOrchestratorImpl implements AiOrchestrator {
             }
         }
         
+        // Get goal progress info
+        String goalProgressInfo = getGoalProgressInfo(context, "en");
+        
         // Determine the CURRENT OBJECTIVE based on state
         String currentObjective = determineCurrentObjectiveEnglish(onboardingState, activeMission, fatherName, firstChildName);
         
@@ -407,6 +426,10 @@ public class AiOrchestratorImpl implements AiOrchestrator {
             If asked about unrelated topics:
             "I'm here for your connection with your kids 😊 What's going on with [child name]?"
             
+            ## Flash Missions ⚡
+            Dad can send "now" or "got a minute" and get an instant 2-5 minute mission.
+            If dad mentions having free time, remind him: "You can type 'now' and get a flash mission!"
+            
             ## Current State
             - Father's name: %s
             - First child: %s (age %s)
@@ -414,6 +437,9 @@ public class AiOrchestratorImpl implements AiOrchestrator {
             - Active mission: %s
             - Mission status: %s
             - Child in mission: %s
+            
+            ## Goals 🎯
+            %s
             
             ## Your Current Objective
             %s
@@ -443,6 +469,7 @@ public class AiOrchestratorImpl implements AiOrchestrator {
             - Don't explain why you're asking - just ask
             - Don't give many options - give 2-3 max
             - Always mention the child's name if available
+            - After completing onboarding, mention flash missions: "BTW, when you have a free minute - type 'now' and get a quick mission ⚡"
             """.formatted(
                 fatherName.isEmpty() ? "(unknown)" : fatherName,
                 firstChildName.isEmpty() ? "(not registered)" : firstChildName,
@@ -451,6 +478,7 @@ public class AiOrchestratorImpl implements AiOrchestrator {
                 missionTitle.isEmpty() ? "(none)" : missionTitle,
                 missionStatus.isEmpty() ? "-" : missionStatus,
                 missionChildName.isEmpty() ? "-" : missionChildName,
+                goalProgressInfo,
                 currentObjective,
                 fatherName,
                 fatherName,
@@ -462,6 +490,35 @@ public class AiOrchestratorImpl implements AiOrchestrator {
                 fatherName,
                 missionChildName
             );
+    }
+
+    /**
+     * Gets goal progress information to include in the prompt.
+     */
+    private String getGoalProgressInfo(ConversationContext context, String locale) {
+        // Extract father ID from context to get goal progress
+        Object fatherIdObj = context.fatherProfile().get("id");
+        if (fatherIdObj == null) {
+            return locale.equals("he") ? "(אין מידע על יעדים)" : "(no goal info)";
+        }
+
+        try {
+            Long fatherId = fatherIdObj instanceof Long ? (Long) fatherIdObj : Long.parseLong(fatherIdObj.toString());
+            FatherGoalService.GoalProgressResult progress = fatherGoalService.getProgress(fatherId);
+            
+            StringBuilder sb = new StringBuilder();
+            sb.append(progress.getWeeklyProgressText(locale));
+            
+            String streakText = progress.getStreakText(locale);
+            if (!streakText.isEmpty()) {
+                sb.append("\n").append(streakText);
+            }
+            
+            return sb.toString();
+        } catch (Exception e) {
+            log.debug("Could not get goal progress: {}", e.getMessage());
+            return locale.equals("he") ? "(אין מידע על יעדים)" : "(no goal info)";
+        }
     }
 
     /**
