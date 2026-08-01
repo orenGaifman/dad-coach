@@ -207,6 +207,58 @@ public class MissionService {
         return transitionMission(missionId, MissionStatus.REFLECTED, "Father provided post-mission reflection");
     }
 
+    /**
+     * Reschedules a mission to a new time.
+     * Only allowed if the mission hasn't been rescheduled 3 times already.
+     *
+     * @param missionId      the mission ID
+     * @param scheduledFor   the new scheduled time
+     * @param reason         the reason for rescheduling (e.g., TOO_BUSY, CHILD_UNAVAILABLE)
+     * @return the updated Mission entity
+     * @throws ResourceNotFoundException      if the mission is not found
+     * @throws BusinessRuleViolationException if max reschedules exceeded
+     */
+    public Mission rescheduleMission(Long missionId, java.time.Instant scheduledFor, String reason) {
+        Mission mission = findMissionOrThrow(missionId);
+        
+        if (!mission.canReschedule()) {
+            throw new BusinessRuleViolationException("MAX_RESCHEDULES_EXCEEDED",
+                    "Mission " + missionId + " has been rescheduled " + mission.getRescheduleCount() + 
+                    " times. Maximum is 3.");
+        }
+        
+        mission.reschedule(scheduledFor, reason);
+        return missionRepository.save(mission);
+    }
+
+    /**
+     * Updates the scheduled time for a mission.
+     * Used when the father specifies when they will do the mission.
+     *
+     * @param missionId    the mission ID
+     * @param scheduledFor the scheduled time
+     * @return the updated Mission entity
+     * @throws ResourceNotFoundException if the mission is not found
+     */
+    public Mission setMissionSchedule(Long missionId, java.time.Instant scheduledFor) {
+        Mission mission = findMissionOrThrow(missionId);
+        mission.setScheduledFor(scheduledFor);
+        // Update expiration to 24 hours after scheduled time
+        mission.setExpiresAt(scheduledFor.plusSeconds(24 * 3600));
+        return missionRepository.save(mission);
+    }
+
+    /**
+     * Gets all missions for a father that need reminders.
+     *
+     * @param fatherId the father ID
+     * @return list of missions needing reminders
+     */
+    @Transactional(readOnly = true)
+    public List<Mission> getMissionsPendingReminder(Long fatherId) {
+        return missionRepository.findActiveMissionsByFatherId(fatherId);
+    }
+
     // ─── Retrieval ───────────────────────────────────────────────────────
 
     /**

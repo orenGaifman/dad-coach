@@ -104,6 +104,24 @@ public class Mission {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @Column(name = "reschedule_count", nullable = false)
+    private int rescheduleCount = 0;
+
+    @Column(name = "scheduled_for")
+    private Instant scheduledFor;
+
+    @Column(name = "reminder_sent_at")
+    private Instant reminderSentAt;
+
+    @Column(name = "last_reminded_at")
+    private Instant lastRemindedAt;
+
+    @Column(name = "calendar_event_id", length = 255)
+    private String calendarEventId;
+
+    @Column(name = "reschedule_reason", length = 100)
+    private String rescheduleReason;
+
     protected Mission() {
         // JPA requires a no-arg constructor
     }
@@ -395,5 +413,110 @@ public class Mission {
 
     public void setCompletedAt(Instant completedAt) {
         this.completedAt = completedAt;
+    }
+
+    public int getRescheduleCount() {
+        return rescheduleCount;
+    }
+
+    public void setRescheduleCount(int rescheduleCount) {
+        this.rescheduleCount = rescheduleCount;
+    }
+
+    public Instant getScheduledFor() {
+        return scheduledFor;
+    }
+
+    public void setScheduledFor(Instant scheduledFor) {
+        this.scheduledFor = scheduledFor;
+    }
+
+    public Instant getReminderSentAt() {
+        return reminderSentAt;
+    }
+
+    public void setReminderSentAt(Instant reminderSentAt) {
+        this.reminderSentAt = reminderSentAt;
+    }
+
+    public Instant getLastRemindedAt() {
+        return lastRemindedAt;
+    }
+
+    public void setLastRemindedAt(Instant lastRemindedAt) {
+        this.lastRemindedAt = lastRemindedAt;
+    }
+
+    public String getCalendarEventId() {
+        return calendarEventId;
+    }
+
+    public void setCalendarEventId(String calendarEventId) {
+        this.calendarEventId = calendarEventId;
+    }
+
+    public String getRescheduleReason() {
+        return rescheduleReason;
+    }
+
+    public void setRescheduleReason(String rescheduleReason) {
+        this.rescheduleReason = rescheduleReason;
+    }
+
+    // ─── Scheduling Methods ──────────────────────────────────────────────
+
+    /**
+     * Reschedules this mission to a new time.
+     * Increments the reschedule count and updates expiration.
+     *
+     * @param newScheduledFor the new scheduled time
+     * @param reason          the reason for rescheduling (e.g., TOO_BUSY, CHILD_UNAVAILABLE)
+     * @return true if rescheduling was allowed (under max limit), false otherwise
+     */
+    public boolean reschedule(Instant newScheduledFor, String reason) {
+        if (rescheduleCount >= 3) {
+            return false; // Max 3 reschedules allowed
+        }
+        this.rescheduleCount++;
+        this.scheduledFor = newScheduledFor;
+        this.rescheduleReason = reason;
+        // Extend expiration to 24 hours after new scheduled time
+        this.expiresAt = newScheduledFor.plusSeconds(24 * 3600);
+        return true;
+    }
+
+    /**
+     * Checks if this mission can be rescheduled (under the limit).
+     */
+    public boolean canReschedule() {
+        return rescheduleCount < 3;
+    }
+
+    /**
+     * Checks if a reminder should be sent for this mission.
+     * A reminder should be sent if:
+     * - Mission is in ASSIGNED or ACCEPTED status
+     * - Either no reminder was sent, or 12+ hours have passed since last reminder
+     */
+    public boolean shouldSendReminder() {
+        if (status != MissionStatus.ASSIGNED && status != MissionStatus.ACCEPTED) {
+            return false;
+        }
+        if (lastRemindedAt == null) {
+            return true;
+        }
+        // At least 12 hours between reminders
+        return Instant.now().isAfter(lastRemindedAt.plusSeconds(12 * 3600));
+    }
+
+    /**
+     * Marks that a reminder was sent for this mission.
+     */
+    public void markReminderSent() {
+        Instant now = Instant.now();
+        if (this.reminderSentAt == null) {
+            this.reminderSentAt = now;
+        }
+        this.lastRemindedAt = now;
     }
 }

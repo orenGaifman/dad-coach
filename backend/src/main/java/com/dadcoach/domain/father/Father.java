@@ -11,6 +11,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -81,6 +82,23 @@ public class Father {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "metadata", columnDefinition = "jsonb")
     private String metadata = "{}";
+
+    // ─── Google Calendar Integration ─────────────────────────────────────
+
+    @Column(name = "google_calendar_enabled")
+    private Boolean googleCalendarEnabled = false;
+
+    @Column(name = "google_refresh_token", length = 512)
+    private String googleRefreshToken;
+
+    @Column(name = "google_access_token", length = 2048)
+    private String googleAccessToken;
+
+    @Column(name = "google_token_expires_at")
+    private Instant googleTokenExpiresAt;
+
+    @Column(name = "google_calendar_id", length = 255)
+    private String googleCalendarId;
 
     protected Father() {
         // JPA requires a no-arg constructor
@@ -250,5 +268,69 @@ public class Father {
 
     public void setMetadata(String metadata) {
         this.metadata = metadata;
+    }
+
+    // ─── Google Calendar Getters & Setters ───────────────────────────────
+
+    public Boolean getGoogleCalendarEnabled() {
+        return googleCalendarEnabled;
+    }
+
+    public void setGoogleCalendarEnabled(Boolean googleCalendarEnabled) {
+        this.googleCalendarEnabled = googleCalendarEnabled;
+    }
+
+    public String getGoogleRefreshToken() {
+        return googleRefreshToken;
+    }
+
+    public void setGoogleRefreshToken(String googleRefreshToken) {
+        this.googleRefreshToken = googleRefreshToken;
+    }
+
+    public String getGoogleAccessToken() {
+        return googleAccessToken;
+    }
+
+    public void setGoogleAccessToken(String googleAccessToken) {
+        this.googleAccessToken = googleAccessToken;
+    }
+
+    public Instant getGoogleTokenExpiresAt() {
+        return googleTokenExpiresAt;
+    }
+
+    public void setGoogleTokenExpiresAt(Instant googleTokenExpiresAt) {
+        this.googleTokenExpiresAt = googleTokenExpiresAt;
+    }
+
+    public String getGoogleCalendarId() {
+        return googleCalendarId;
+    }
+
+    public void setGoogleCalendarId(String googleCalendarId) {
+        this.googleCalendarId = googleCalendarId;
+    }
+
+    /**
+     * Checks if Google Calendar integration is properly configured.
+     * @return true if refresh token exists and calendar is enabled
+     */
+    public boolean hasGoogleCalendarConfigured() {
+        return Boolean.TRUE.equals(googleCalendarEnabled) 
+            && googleRefreshToken != null 
+            && !googleRefreshToken.isEmpty();
+    }
+
+    /**
+     * Checks if the Google access token needs refreshing.
+     * @return true if token is expired or about to expire (within 5 minutes)
+     */
+    public boolean needsTokenRefresh() {
+        if (googleAccessToken == null || googleTokenExpiresAt == null) {
+            return true;
+        }
+        // Refresh if token expires within 5 minutes
+        return Instant.now().plusSeconds(300).isAfter(googleTokenExpiresAt);
     }
 }

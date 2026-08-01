@@ -216,4 +216,28 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
            "AND m.status IN (com.dadcoach.mission.MissionStatus.ASSIGNED, " +
            "com.dadcoach.mission.MissionStatus.ACCEPTED)")
     List<Mission> findExpiredMissions(@Param("now") Instant now);
+
+    // ─── Reminder and Scheduling Queries ──────────────────────────────────
+
+    /**
+     * Find missions by their status.
+     * Used by the MissionReminderScheduler to find missions needing reminders.
+     *
+     * @param statuses list of statuses to filter by
+     */
+    @Query("SELECT m FROM Mission m WHERE m.status IN :statuses")
+    List<Mission> findByStatusIn(@Param("statuses") List<MissionStatus> statuses);
+
+    /**
+     * Find all active missions for a father.
+     * Active states: ASSIGNED, ACCEPTED, IN_PROGRESS.
+     * Used by MissionService.getMissionsPendingReminder().
+     *
+     * @param fatherId the father ID
+     */
+    @Query("SELECT m FROM Mission m WHERE m.fatherId = :fatherId " +
+           "AND m.status IN (com.dadcoach.mission.MissionStatus.ASSIGNED, " +
+           "com.dadcoach.mission.MissionStatus.ACCEPTED, " +
+           "com.dadcoach.mission.MissionStatus.IN_PROGRESS)")
+    List<Mission> findActiveMissionsByFatherId(@Param("fatherId") Long fatherId);
 }
