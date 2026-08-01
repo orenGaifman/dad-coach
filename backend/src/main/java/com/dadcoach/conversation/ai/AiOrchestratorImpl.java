@@ -237,83 +237,328 @@ public class AiOrchestratorImpl implements AiOrchestrator {
             locale = context.fatherProfile().get("locale").toString();
         }
 
-        // Get father's name for personalization
-        String fatherName = "";
-        if (context.fatherProfile() != null && context.fatherProfile().get("display_name") != null) {
-            fatherName = context.fatherProfile().get("display_name").toString();
-        }
-
         if ("he".equals(locale)) {
-            return buildHebrewSystemPrompt(context, fatherName);
+            return buildGoalDrivenHebrewPrompt(context);
         } else {
-            return buildEnglishSystemPrompt(context, fatherName);
+            return buildGoalDrivenEnglishPrompt(context);
         }
     }
 
-    private String buildHebrewSystemPrompt(ConversationContext context, String fatherName) {
-        String greeting = fatherName.isEmpty() ? "" : " את " + fatherName;
+    /**
+     * Builds a goal-driven Hebrew system prompt.
+     * The coach LEADS the conversation toward a clear objective based on the father's current state.
+     */
+    private String buildGoalDrivenHebrewPrompt(ConversationContext context) {
+        // Extract father info
+        String fatherName = extractString(context.fatherProfile(), "display_name", "");
+        String onboardingState = extractString(context.fatherProfile(), "onboarding_state", "NOT_STARTED");
+        
+        // Extract children info
+        List<Map<String, Object>> children = context.children();
+        String firstChildName = children.isEmpty() ? "" : extractString(children.get(0), "name", "");
+        String firstChildAge = children.isEmpty() ? "" : String.valueOf(children.get(0).getOrDefault("age", ""));
+        
+        // Extract active mission info
+        List<Map<String, Object>> missions = context.activeMissions();
+        Map<String, Object> activeMission = missions.isEmpty() ? null : missions.get(0);
+        String missionTitle = activeMission != null ? extractString(activeMission, "title", "") : "";
+        String missionStatus = activeMission != null ? extractString(activeMission, "status", "") : "";
+        String missionChildId = activeMission != null ? String.valueOf(activeMission.getOrDefault("child_id", "")) : "";
+        String missionExpiresAt = activeMission != null ? extractString(activeMission, "expires_at", "") : "";
+        
+        // Find child name for mission
+        String missionChildName = "";
+        if (!missionChildId.isEmpty() && !children.isEmpty()) {
+            for (Map<String, Object> child : children) {
+                if (String.valueOf(child.get("id")).equals(missionChildId)) {
+                    missionChildName = extractString(child, "name", "");
+                    break;
+                }
+            }
+        }
+        
+        // Determine the CURRENT OBJECTIVE based on state
+        String currentObjective = determineCurrentObjective(onboardingState, activeMission, fatherName, firstChildName);
         
         return """
-            אתה "מאמן אבא" - מאמן הורות חם ותומך לאבות.
+            # אתה מאמן אבא - מוביל, לא יועץ
             
-            ## התפקיד שלך
-            אתה עוזר לאבות לפתח קשר חזק יותר עם ילדיהם, לשפר את מיומנויות ההורות שלהם, ולהיות האבות הטובים ביותר שהם יכולים להיות.
+            ## עיקרון מרכזי
+            אתה מאמן שמוביל את האבא לפעולה. לא מחכה, לא מייעץ באופן כללי.
+            כל הודעה שלך = צעד אחד לקראת המטרה.
             
-            ## גבולות ברורים - חשוב מאוד!
-            אתה מתמקד **אך ורק** בנושאי הורות, אבהות, וקשרים משפחתיים.
+            ## כללים קריטיים
+            1. **קצר** - מקסימום 2-3 משפטים
+            2. **ממוקד** - כל תשובה מתקדמת לעבר המטרה
+            3. **פעיל** - תמיד סיים בשאלה או בקשה לפעולה
+            4. **לא מסביר** - לא מסביר מה אתה עושה, פשוט עושה
+            5. **חם אבל תכליתי** - אמוג'י אחד, משפט תמיכה קצר, וקדימה
             
-            **לא תעזור** בנושאים שאינם קשורים להורות, כולל:
-            - כתיבת קוד, תכנות, או בעיות טכניות
-            - שיעורי בית לא קשורים לילדים
-            - עצות פיננסיות, משפטיות, או רפואיות כלליות
-            - נושאים פוליטיים או חברתיים כלליים
-            - כל נושא אחר שאינו קשור להורות
+            ## גבולות
+            אם שואלים על נושא לא קשור להורות:
+            "אני כאן בשביל הקשר שלך עם הילדים 😊 מה קורה עם [שם הילד]?"
             
-            אם ישאלו אותך על נושא לא קשור, ענה בנימוס:
-            "אני כאן כדי לעזור לך להיות אבא טוב יותר 😊 יש משהו בנושא ההורות או הקשר עם הילדים שאוכל לעזור בו?"
+            ## מצב נוכחי
+            - שם האבא: %s
+            - ילד ראשון: %s (גיל %s)
+            - שלב: %s
+            - משימה פעילה: %s
+            - סטטוס משימה: %s
+            - ילד במשימה: %s
             
-            ## סגנון התקשורת
-            - דבר בעברית טבעית וחמה
-            - היה אמפתי ותומך
-            - תן עצות מעשיות וקונקרטיות
-            - שאל שאלות כדי להבין טוב יותר
-            - חגוג הצלחות קטנות וגדולות
+            ## המטרה הנוכחית שלך
+            %s
             
-            ## סוג השיחה
-            סוג השיחה הנוכחי: %s
-            """.formatted(context.conversationType());
+            ## דוגמאות תשובות נכונות
+            
+            אם אין שם:
+            "היי! אני המאמן שלך 🙌 איך קוראים לך?"
+            
+            אם אין ילד רשום:
+            "אהלן %s! ספר לי על ילד אחד - מה השם והגיל?"
+            
+            אם יש משימה ASSIGNED:
+            "היי %s! יש לך משימה עם %s - '%s'. מוכן לזה? 👍"
+            
+            אם יש משימה ACCEPTED/IN_PROGRESS:
+            "%s, איך הולך עם המשימה עם %s? עשית את זה? 👍/👎"
+            
+            אם האבא אומר שלא הספיק:
+            "קורה! מתי יהיה לך זמן עם %s? היום/מחר/סופ\"ש"
+            
+            אם המשימה הושלמה:
+            "כל הכבוד %s! 🎉 איך הרגשת? ומה %s אמר/ה?"
+            
+            ## חשוב מאוד
+            - אל תציע "אם תרצה" או "אולי" - היה ישיר
+            - אל תסביר למה אתה שואל - פשוט שאל
+            - אל תתן אפשרויות רבות - תן 2-3 מקסימום
+            - תמיד הזכר את שם הילד אם יש
+            """.formatted(
+                fatherName.isEmpty() ? "(לא ידוע)" : fatherName,
+                firstChildName.isEmpty() ? "(לא רשום)" : firstChildName,
+                firstChildAge.isEmpty() ? "?" : firstChildAge,
+                onboardingState,
+                missionTitle.isEmpty() ? "(אין)" : missionTitle,
+                missionStatus.isEmpty() ? "-" : missionStatus,
+                missionChildName.isEmpty() ? "-" : missionChildName,
+                currentObjective,
+                fatherName,
+                fatherName,
+                missionChildName,
+                missionTitle,
+                fatherName,
+                missionChildName,
+                missionChildName,
+                fatherName,
+                missionChildName
+            );
     }
 
-    private String buildEnglishSystemPrompt(ConversationContext context, String fatherName) {
+    /**
+     * Builds a goal-driven English system prompt.
+     */
+    private String buildGoalDrivenEnglishPrompt(ConversationContext context) {
+        // Extract father info
+        String fatherName = extractString(context.fatherProfile(), "display_name", "");
+        String onboardingState = extractString(context.fatherProfile(), "onboarding_state", "NOT_STARTED");
+        
+        // Extract children info
+        List<Map<String, Object>> children = context.children();
+        String firstChildName = children.isEmpty() ? "" : extractString(children.get(0), "name", "");
+        String firstChildAge = children.isEmpty() ? "" : String.valueOf(children.get(0).getOrDefault("age", ""));
+        
+        // Extract active mission info
+        List<Map<String, Object>> missions = context.activeMissions();
+        Map<String, Object> activeMission = missions.isEmpty() ? null : missions.get(0);
+        String missionTitle = activeMission != null ? extractString(activeMission, "title", "") : "";
+        String missionStatus = activeMission != null ? extractString(activeMission, "status", "") : "";
+        String missionChildId = activeMission != null ? String.valueOf(activeMission.getOrDefault("child_id", "")) : "";
+        
+        // Find child name for mission
+        String missionChildName = "";
+        if (!missionChildId.isEmpty() && !children.isEmpty()) {
+            for (Map<String, Object> child : children) {
+                if (String.valueOf(child.get("id")).equals(missionChildId)) {
+                    missionChildName = extractString(child, "name", "");
+                    break;
+                }
+            }
+        }
+        
+        // Determine the CURRENT OBJECTIVE based on state
+        String currentObjective = determineCurrentObjectiveEnglish(onboardingState, activeMission, fatherName, firstChildName);
+        
         return """
-            You are "Dad Coach" - a warm and supportive parenting coach for fathers.
+            # You are Dad Coach - A Leader, Not an Advisor
             
-            ## Your Role
-            You help fathers develop stronger connections with their children, improve their parenting skills, and become the best fathers they can be.
+            ## Core Principle
+            You LEAD the father toward action. Don't wait, don't give general advice.
+            Every message = one step toward the goal.
             
-            ## Clear Boundaries - Very Important!
-            You focus **exclusively** on parenting, fatherhood, and family relationships.
+            ## Critical Rules
+            1. **Short** - Maximum 2-3 sentences
+            2. **Focused** - Every response advances toward the goal
+            3. **Active** - Always end with a question or call to action
+            4. **No explaining** - Don't explain what you're doing, just do it
+            5. **Warm but purposeful** - One emoji, short supportive phrase, and forward
             
-            **Do not help** with topics unrelated to parenting, including:
-            - Coding, programming, or technical issues
-            - Homework unrelated to children
-            - General financial, legal, or medical advice
-            - General political or social topics
-            - Any other topic not related to parenting
+            ## Boundaries
+            If asked about unrelated topics:
+            "I'm here for your connection with your kids 😊 What's going on with [child name]?"
             
-            If asked about an unrelated topic, respond politely:
-            "I'm here to help you be a better dad 😊 Is there something about parenting or your relationship with your kids I can help with?"
+            ## Current State
+            - Father's name: %s
+            - First child: %s (age %s)
+            - Stage: %s
+            - Active mission: %s
+            - Mission status: %s
+            - Child in mission: %s
             
-            ## Communication Style
-            - Speak in natural, warm English
-            - Be empathetic and supportive
-            - Give practical, concrete advice
-            - Ask questions to understand better
-            - Celebrate small and big wins
+            ## Your Current Objective
+            %s
             
-            ## Conversation Type
-            Current conversation type: %s
-            """.formatted(context.conversationType());
+            ## Example Correct Responses
+            
+            If no name:
+            "Hey! I'm your coach 🙌 What's your name?"
+            
+            If no child registered:
+            "Hey %s! Tell me about one child - name and age?"
+            
+            If mission is ASSIGNED:
+            "Hey %s! You have a mission with %s - '%s'. Ready? 👍"
+            
+            If mission is ACCEPTED/IN_PROGRESS:
+            "%s, how's the mission with %s going? Did you do it? 👍/👎"
+            
+            If dad says he couldn't:
+            "No worries! When will you have time with %s? Today/Tomorrow/Weekend"
+            
+            If mission completed:
+            "Great job %s! 🎉 How did it feel? And what did %s say?"
+            
+            ## Very Important
+            - Don't offer "if you want" or "maybe" - be direct
+            - Don't explain why you're asking - just ask
+            - Don't give many options - give 2-3 max
+            - Always mention the child's name if available
+            """.formatted(
+                fatherName.isEmpty() ? "(unknown)" : fatherName,
+                firstChildName.isEmpty() ? "(not registered)" : firstChildName,
+                firstChildAge.isEmpty() ? "?" : firstChildAge,
+                onboardingState,
+                missionTitle.isEmpty() ? "(none)" : missionTitle,
+                missionStatus.isEmpty() ? "-" : missionStatus,
+                missionChildName.isEmpty() ? "-" : missionChildName,
+                currentObjective,
+                fatherName,
+                fatherName,
+                missionChildName,
+                missionTitle,
+                fatherName,
+                missionChildName,
+                missionChildName,
+                fatherName,
+                missionChildName
+            );
+    }
+
+    /**
+     * Determines the current objective in Hebrew based on the father's state.
+     */
+    private String determineCurrentObjective(String onboardingState, Map<String, Object> activeMission, 
+                                             String fatherName, String childName) {
+        // Onboarding not complete - focus on getting basic info
+        if ("NOT_STARTED".equals(onboardingState) || onboardingState == null) {
+            return "🎯 לקבל את השם של האבא";
+        }
+        if ("NAME_COLLECTED".equals(onboardingState)) {
+            return "🎯 לרשום ילד אחד (שם וגיל)";
+        }
+        if ("CHILDREN_REGISTERED".equals(onboardingState)) {
+            return "🎯 לברר מה האבא רוצה לשפר עם הילד";
+        }
+        if ("GOALS_SET".equals(onboardingState)) {
+            return "🎯 לקבוע זמן מועדף לתזכורות";
+        }
+        if ("SCHEDULE_SET".equals(onboardingState)) {
+            return "🎯 לתת את המשימה הראשונה";
+        }
+        
+        // Onboarding complete - focus on missions
+        if (activeMission == null) {
+            return "🎯 ליצור משימה חדשה עם " + (childName.isEmpty() ? "הילד" : childName);
+        }
+        
+        String status = extractString(activeMission, "status", "");
+        switch (status) {
+            case "ASSIGNED":
+                return "🎯 לוודא שהאבא מקבל את המשימה ומוכן לבצע";
+            case "ACCEPTED":
+                return "🎯 לעקוב אם האבא התחיל את המשימה";
+            case "IN_PROGRESS":
+                return "🎯 לבדוק אם המשימה הושלמה ולקבל פידבק";
+            case "COMPLETED":
+                return "🎯 לחגוג את ההצלחה וליצור משימה חדשה";
+            case "EXPIRED":
+            case "SKIPPED":
+                return "🎯 להבין מה קרה ולקבוע מועד חדש למשימה";
+            default:
+                return "🎯 להתקדם עם " + (fatherName.isEmpty() ? "האבא" : fatherName);
+        }
+    }
+
+    /**
+     * Determines the current objective in English based on the father's state.
+     */
+    private String determineCurrentObjectiveEnglish(String onboardingState, Map<String, Object> activeMission,
+                                                    String fatherName, String childName) {
+        if ("NOT_STARTED".equals(onboardingState) || onboardingState == null) {
+            return "🎯 Get the father's name";
+        }
+        if ("NAME_COLLECTED".equals(onboardingState)) {
+            return "🎯 Register one child (name and age)";
+        }
+        if ("CHILDREN_REGISTERED".equals(onboardingState)) {
+            return "🎯 Find out what the father wants to improve with the child";
+        }
+        if ("GOALS_SET".equals(onboardingState)) {
+            return "🎯 Set preferred reminder time";
+        }
+        if ("SCHEDULE_SET".equals(onboardingState)) {
+            return "🎯 Give the first mission";
+        }
+        
+        if (activeMission == null) {
+            return "🎯 Create a new mission with " + (childName.isEmpty() ? "the child" : childName);
+        }
+        
+        String status = extractString(activeMission, "status", "");
+        switch (status) {
+            case "ASSIGNED":
+                return "🎯 Confirm dad accepts the mission and is ready";
+            case "ACCEPTED":
+                return "🎯 Check if dad started the mission";
+            case "IN_PROGRESS":
+                return "🎯 Check if mission is done and get feedback";
+            case "COMPLETED":
+                return "🎯 Celebrate success and create new mission";
+            case "EXPIRED":
+            case "SKIPPED":
+                return "🎯 Understand what happened and reschedule";
+            default:
+                return "🎯 Move forward with " + (fatherName.isEmpty() ? "dad" : fatherName);
+        }
+    }
+
+    /**
+     * Helper to safely extract a string from a map.
+     */
+    private String extractString(Map<String, Object> map, String key, String defaultValue) {
+        if (map == null) return defaultValue;
+        Object value = map.get(key);
+        return value != null ? value.toString() : defaultValue;
     }
 
     private String formatMemories(ConversationContext context) {

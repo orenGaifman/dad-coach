@@ -130,6 +130,7 @@ public class ContextAssemblerImpl implements ContextAssembler {
             Father father = fatherService.getFather(domainFatherId);
             Map<String, Object> profile = new LinkedHashMap<>();
             profile.put("status", father.getStatus() != null ? father.getStatus().name() : null);
+            profile.put("onboarding_state", father.getOnboardingState() != null ? father.getOnboardingState().name() : "NOT_STARTED");
             profile.put("coaching_phase", father.getCoachingPhase() != null ? father.getCoachingPhase().name() : null);
             profile.put("coaching_style", father.getCoachingStyle() != null ? father.getCoachingStyle().name() : null);
             profile.put("engagement_score", father.getEngagementScore());
@@ -139,6 +140,8 @@ public class ContextAssemblerImpl implements ContextAssembler {
             profile.put("timezone", father.getTimezone());
             profile.put("locale", father.getLocale());
             profile.put("display_name", father.getDisplayName());
+            profile.put("activation_date", father.getActivationDate() != null ? father.getActivationDate().toString() : null);
+            profile.put("last_interaction_at", father.getLastInteractionAt() != null ? father.getLastInteractionAt().toString() : null);
             return Collections.unmodifiableMap(profile);
         } catch (Exception e) {
             log.warn("Failed to retrieve father profile for domainFatherId={}: {}", domainFatherId, e.getMessage());
