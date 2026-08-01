@@ -16,4 +16,10 @@ public interface FamilyRepository extends JpaRepository<Family, UUID> {
      * Find the family for a given father.
      */
     Optional<Family> findByFatherId(UUID fatherId);
+
+    /**
+     * Delete the family for a given father.
+     * Used when deleting a father account.
+     */
+    void deleteByFatherId(UUID fatherId);
 }

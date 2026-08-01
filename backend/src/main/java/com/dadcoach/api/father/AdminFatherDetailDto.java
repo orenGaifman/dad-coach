@@ -77,6 +77,9 @@ public class AdminFatherDetailDto {
     @JsonProperty("last_active_at")
     private Instant lastActiveAt;
 
+    @JsonProperty("locale")
+    private String locale;
+
     @JsonProperty("internal_metadata")
     private Map<String, Object> internalMetadata;
 
@@ -227,6 +230,14 @@ public class AdminFatherDetailDto {
 
     public void setLastActiveAt(Instant lastActiveAt) {
         this.lastActiveAt = lastActiveAt;
+    }
+
+    public String getLocale() {
+        return locale;
+    }
+
+    public void setLocale(String locale) {
+        this.locale = locale;
     }
 
     public Map<String, Object> getInternalMetadata() {

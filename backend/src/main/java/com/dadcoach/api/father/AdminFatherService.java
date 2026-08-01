@@ -36,4 +36,15 @@ public interface AdminFatherService {
      * @return the full admin father detail, or empty if not found
      */
     Optional<AdminFatherDetailDto> getFatherDetail(UUID fatherId);
+
+    /**
+     * Deletes a father and all related data.
+     * <p>
+     * This is a destructive operation that removes the father and all associated
+     * entities (children, goals, preferences, communication endpoints, etc.).
+     *
+     * @param fatherId the father's internal Long ID
+     * @throws com.dadcoach.api.error.ResourceNotFoundException if the father is not found
+     */
+    void deleteFather(Long fatherId);
 }

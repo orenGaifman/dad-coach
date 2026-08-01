@@ -76,4 +76,12 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
     int updateProgress(@Param("goalId") Long goalId,
                        @Param("completedMissions") int completedMissions,
                        @Param("progressPercentage") int progressPercentage);
+
+    /**
+     * Delete all goals for a given father.
+     * Used when deleting a father account.
+     */
+    @Modifying
+    @Query("DELETE FROM Goal g WHERE g.fatherId = :fatherId")
+    void deleteByFatherId(@Param("fatherId") Long fatherId);
 }

@@ -203,6 +203,32 @@ public class AdminFatherController {
     }
 
     /**
+     * DELETE /api/v1/admin/fathers/{fatherId} — Deletes a father and all related data.
+     * <p>
+     * This is a destructive operation that removes the father and all associated
+     * entities (children, goals, preferences, etc.). Use with caution.
+     * <p>
+     * This endpoint is intended for development/testing purposes to allow
+     * re-registration of phone numbers with different settings.
+     *
+     * @param actor    the authenticated admin actor (injected via @AuthActor)
+     * @param fatherId the UUID of the father to delete
+     * @return 204 No Content on success
+     * @throws ResourceNotFoundException if the father is not found
+     */
+    @DeleteMapping("/{fatherId}")
+    public ResponseEntity<Void> deleteFather(
+            @AuthActor ActorContext actor,
+            @PathVariable UUID fatherId) {
+
+        // UUID is derived from Long ID using new UUID(0L, id)
+        // So the least significant bits contain the actual Long ID
+        Long internalId = fatherId.getLeastSignificantBits();
+        adminFatherService.deleteFather(internalId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Checks if the actor has SUPER_ADMIN role.
      * <p>
      * SUPER_ADMIN is a specific admin sub-role that grants access to

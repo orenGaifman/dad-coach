@@ -13,4 +13,10 @@ import java.util.UUID;
 public interface LanguagePreferenceRepository extends JpaRepository<LanguagePreference, UUID> {
 
     Optional<LanguagePreference> findByFatherId(UUID fatherId);
+
+    /**
+     * Delete the language preference for a given father.
+     * Used when deleting a father account.
+     */
+    void deleteByFatherId(UUID fatherId);
 }

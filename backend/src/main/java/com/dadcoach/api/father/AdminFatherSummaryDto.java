@@ -35,6 +35,9 @@ public class AdminFatherSummaryDto {
     @JsonProperty("created_at")
     private Instant createdAt;
 
+    @JsonProperty("locale")
+    private String locale;
+
     public AdminFatherSummaryDto() {
     }
 
@@ -94,5 +97,13 @@ public class AdminFatherSummaryDto {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getLocale() {
+        return locale;
+    }
+
+    public void setLocale(String locale) {
+        this.locale = locale;
     }
 }

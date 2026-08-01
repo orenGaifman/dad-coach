@@ -34,4 +34,10 @@ public interface CommunicationEndpointRepository extends JpaRepository<Communica
      * A father may have multiple endpoints across different channels.
      */
     List<CommunicationEndpoint> findByFatherId(UUID fatherId);
+
+    /**
+     * Delete all communication endpoints for a given father.
+     * Used when deleting a father account.
+     */
+    void deleteByFatherId(UUID fatherId);
 }

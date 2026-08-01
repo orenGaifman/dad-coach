@@ -13,4 +13,10 @@ import java.util.UUID;
 public interface CommunicationPreferenceRepository extends JpaRepository<CommunicationPreference, UUID> {
 
     Optional<CommunicationPreference> findByFatherId(UUID fatherId);
+
+    /**
+     * Delete the communication preference for a given father.
+     * Used when deleting a father account.
+     */
+    void deleteByFatherId(UUID fatherId);
 }

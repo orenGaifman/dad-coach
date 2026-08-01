@@ -24,4 +24,10 @@ public interface ChildRepository extends JpaRepository<Child, Long> {
      */
     @Query("SELECT COUNT(c) FROM Child c WHERE c.fatherId = :fatherId AND c.status = 'ACTIVE'")
     long countActiveByFatherId(@Param("fatherId") Long fatherId);
+
+    /**
+     * Delete all children belonging to a given father.
+     * Used when deleting a father account.
+     */
+    void deleteByFatherId(Long fatherId);
 }

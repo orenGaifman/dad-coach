@@ -16,4 +16,10 @@ public interface AiProfileRepository extends JpaRepository<AiProfile, UUID> {
      * Find the AI profile for a given father.
      */
     Optional<AiProfile> findByFatherId(UUID fatherId);
+
+    /**
+     * Delete the AI profile for a given father.
+     * Used when deleting a father account.
+     */
+    void deleteByFatherId(UUID fatherId);
 }

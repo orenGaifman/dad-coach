@@ -41,4 +41,10 @@ public interface ActivationRecordRepository extends JpaRepository<ActivationReco
     List<ActivationRecord> findTimedOutActivations(
             @Param("linkClickedCutoff") Instant linkClickedCutoff,
             @Param("pendingCutoff") Instant pendingCutoff);
+
+    /**
+     * Delete the activation record for a given father.
+     * Used when deleting a father account.
+     */
+    void deleteByFatherId(UUID fatherId);
 }

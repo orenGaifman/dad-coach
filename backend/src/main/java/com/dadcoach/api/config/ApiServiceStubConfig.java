@@ -144,6 +144,11 @@ public class ApiServiceStubConfig {
             public Optional<AdminFatherDetailDto> getFatherDetail(UUID fatherId) {
                 return Optional.empty();
             }
+
+            @Override
+            public void deleteFather(Long fatherId) {
+                throw new UnsupportedOperationException("Admin father service not yet implemented");
+            }
         };
     }
 
