@@ -72,6 +72,7 @@ dad-coach:
     api-base-url: https://graph.facebook.com
     api-version: ${WHATSAPP_API_VERSION:v25.0}
     phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
+    waba-id: ${WHATSAPP_WABA_ID:}
     phone-number: ${WHATSAPP_PHONE_NUMBER:+972501234567}
     access-token: ${WHATSAPP_ACCESS_TOKEN:}
     verify-token: ${WHATSAPP_VERIFY_TOKEN:}

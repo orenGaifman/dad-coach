@@ -236,7 +236,7 @@ public class WhatsAppWebhookController {
         }
 
         try {
-            String url = String.format("%s/%s/%s?fields=verified_name,code_verification_status,quality_rating,display_phone_number,name_status",
+            String url = String.format("%s/%s/%s?fields=verified_name,code_verification_status,quality_rating,display_phone_number,name_status,messaging_limit_tier,current_limit",
                     properties.apiBaseUrl(), properties.apiVersion(), properties.phoneNumberId());
 
             java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
@@ -265,6 +265,58 @@ public class WhatsAppWebhookController {
             }
         } catch (Exception e) {
             log.error("Failed to get phone status: {}", e.getMessage(), e);
+            return ResponseEntity.ok(Map.of(
+                "configured", true,
+                "api_status", "error",
+                "error", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Get WhatsApp Business Account info from Meta API.
+     * Shows app mode (live/development) and other WABA-level info.
+     * Access via: GET /webhook/whatsapp/waba-status
+     */
+    @GetMapping("/waba-status")
+    public ResponseEntity<Map<String, Object>> getWabaStatus() {
+        if (properties.wabaId() == null || properties.accessToken() == null) {
+            return ResponseEntity.ok(Map.of(
+                "error", "WABA not configured",
+                "configured", false
+            ));
+        }
+
+        try {
+            String url = String.format("%s/%s/%s?fields=name,timezone_id,message_template_namespace,account_review_status,business_verification_status",
+                    properties.apiBaseUrl(), properties.apiVersion(), properties.wabaId());
+
+            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(url))
+                    .header("Authorization", "Bearer " + properties.accessToken())
+                    .GET()
+                    .build();
+
+            java.net.http.HttpResponse<String> response = client.send(request, 
+                    java.net.http.HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = objectMapper.readValue(response.body(), Map.class);
+                data.put("configured", true);
+                data.put("api_status", "connected");
+                return ResponseEntity.ok(data);
+            } else {
+                return ResponseEntity.ok(Map.of(
+                    "configured", true,
+                    "api_status", "error",
+                    "error_code", response.statusCode(),
+                    "error_body", response.body()
+                ));
+            }
+        } catch (Exception e) {
+            log.error("Failed to get WABA status: {}", e.getMessage(), e);
             return ResponseEntity.ok(Map.of(
                 "configured", true,
                 "api_status", "error",

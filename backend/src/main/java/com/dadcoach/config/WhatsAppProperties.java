@@ -10,6 +10,7 @@ public record WhatsAppProperties(
     @NotBlank String apiBaseUrl,
     @NotBlank String apiVersion,
     String phoneNumberId,
+    String wabaId,
     String accessToken,
     String verifyToken,
     String webhookSecret
