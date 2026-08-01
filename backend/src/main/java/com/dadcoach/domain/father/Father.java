@@ -11,7 +11,6 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -99,6 +98,26 @@ public class Father {
 
     @Column(name = "google_calendar_id", length = 255)
     private String googleCalendarId;
+
+    // ─── Goals and Tracking ──────────────────────────────────────────────
+
+    @Column(name = "weekly_goal_minutes", nullable = false)
+    private Integer weeklyGoalMinutes = 30;
+
+    @Column(name = "monthly_goal_minutes", nullable = false)
+    private Integer monthlyGoalMinutes = 120;
+
+    @Column(name = "goals_started_at")
+    private LocalDate goalsStartedAt;
+
+    @Column(name = "current_streak_weeks", nullable = false)
+    private Integer currentStreakWeeks = 0;
+
+    @Column(name = "longest_streak_weeks", nullable = false)
+    private Integer longestStreakWeeks = 0;
+
+    @Column(name = "total_quality_minutes", nullable = false)
+    private Integer totalQualityMinutes = 0;
 
     protected Father() {
         // JPA requires a no-arg constructor
@@ -332,5 +351,55 @@ public class Father {
         }
         // Refresh if token expires within 5 minutes
         return Instant.now().plusSeconds(300).isAfter(googleTokenExpiresAt);
+    }
+
+    // ─── Goals Getters & Setters ─────────────────────────────────────────
+
+    public Integer getWeeklyGoalMinutes() {
+        return weeklyGoalMinutes;
+    }
+
+    public void setWeeklyGoalMinutes(Integer weeklyGoalMinutes) {
+        this.weeklyGoalMinutes = weeklyGoalMinutes;
+    }
+
+    public Integer getMonthlyGoalMinutes() {
+        return monthlyGoalMinutes;
+    }
+
+    public void setMonthlyGoalMinutes(Integer monthlyGoalMinutes) {
+        this.monthlyGoalMinutes = monthlyGoalMinutes;
+    }
+
+    public LocalDate getGoalsStartedAt() {
+        return goalsStartedAt;
+    }
+
+    public void setGoalsStartedAt(LocalDate goalsStartedAt) {
+        this.goalsStartedAt = goalsStartedAt;
+    }
+
+    public Integer getCurrentStreakWeeks() {
+        return currentStreakWeeks;
+    }
+
+    public void setCurrentStreakWeeks(Integer currentStreakWeeks) {
+        this.currentStreakWeeks = currentStreakWeeks;
+    }
+
+    public Integer getLongestStreakWeeks() {
+        return longestStreakWeeks;
+    }
+
+    public void setLongestStreakWeeks(Integer longestStreakWeeks) {
+        this.longestStreakWeeks = longestStreakWeeks;
+    }
+
+    public Integer getTotalQualityMinutes() {
+        return totalQualityMinutes;
+    }
+
+    public void setTotalQualityMinutes(Integer totalQualityMinutes) {
+        this.totalQualityMinutes = totalQualityMinutes;
     }
 }
