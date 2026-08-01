@@ -46,6 +46,7 @@ class WhatsAppApiClientTest {
                 "http://localhost:" + wireMock.port(),
                 "v18.0",
                 "123456789",
+                "waba-id",
                 "test-access-token",
                 "test-verify-token",
                 "test-webhook-secret"

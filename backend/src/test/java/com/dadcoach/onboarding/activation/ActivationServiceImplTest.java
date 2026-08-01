@@ -161,16 +161,9 @@ class ActivationServiceImplTest {
             father.setLocale("en");
             father.setStatus(FatherStatus.ACTIVE);
             when(fatherService.activateFather(FATHER_ID)).thenReturn(father);
-            when(fatherService.getFather(FATHER_ID)).thenReturn(father);
 
             CommunicationEndpoint endpoint = new CommunicationEndpoint(FATHER_UUID, "WHATSAPP", "+972501234567");
             when(endpointRepository.findPrimaryByFatherId(FATHER_UUID)).thenReturn(Optional.of(endpoint));
-
-            CoachingResponse welcomeResponse = new CoachingResponse(
-                    "Welcome to Dad Coach!", "gpt-4", "openai",
-                    100, 50, Duration.ofMillis(200), false, true, 0.9);
-            when(intelligenceLayer.generateCoachingResponse(any())).thenReturn(welcomeResponse);
-            when(deliveryService.deliver(any())).thenReturn(DeliveryResult.sent("msg-123"));
 
             activationService.handleActivationMessage(FATHER_ID, "🚀 START");
 
@@ -180,9 +173,10 @@ class ActivationServiceImplTest {
             // Verify session window opened
             verify(sessionWindowService).onInboundMessage(endpoint);
 
-            // Verify welcome conversation generated and delivered
-            verify(intelligenceLayer).generateCoachingResponse(any());
-            verify(deliveryService).deliver(any());
+            // Welcome message is NOT sent here anymore - ConversationOrchestrator handles it
+            // to prevent duplicate messages
+            verify(intelligenceLayer, never()).generateCoachingResponse(any());
+            verify(deliveryService, never()).deliver(any());
 
             // Verify final status
             assertThat(record.getStatus()).isEqualTo(ActivationStatus.CONVERSATION_STARTED);
@@ -217,20 +211,19 @@ class ActivationServiceImplTest {
             father.setLocale("he");
             father.setStatus(FatherStatus.ACTIVE);
             when(fatherService.activateFather(FATHER_ID)).thenReturn(father);
-            when(fatherService.getFather(FATHER_ID)).thenReturn(father);
 
             when(endpointRepository.findPrimaryByFatherId(FATHER_UUID)).thenReturn(Optional.empty());
             when(endpointRepository.findByFatherId(FATHER_UUID)).thenReturn(List.of());
-
-            CoachingResponse welcomeResponse = CoachingResponse.fallback("ברוכים הבאים!");
-            when(intelligenceLayer.generateCoachingResponse(any())).thenReturn(welcomeResponse);
-            when(deliveryService.deliver(any())).thenReturn(DeliveryResult.sent("msg-456"));
 
             // Use a random message instead of "🚀 START"
             activationService.handleActivationMessage(FATHER_ID, "שלום, אני מוכן להתחיל!");
 
             verify(fatherService).activateFather(FATHER_ID);
             assertThat(record.getStatus()).isEqualTo(ActivationStatus.CONVERSATION_STARTED);
+            
+            // Welcome message is NOT sent here anymore - ConversationOrchestrator handles it
+            verify(intelligenceLayer, never()).generateCoachingResponse(any());
+            verify(deliveryService, never()).deliver(any());
         }
     }
 
