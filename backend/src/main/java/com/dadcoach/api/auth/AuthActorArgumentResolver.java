@@ -11,8 +11,9 @@ import org.springframework.web.method.support.ModelAndViewContainer;
  * Resolves controller method parameters annotated with {@link AuthActor}
  * by providing the current {@link ActorContext} from thread-local storage.
  * <p>
- * If no ActorContext is available (unauthenticated request), throws an
- * {@link UnauthorizedActorException} that results in a 401 response.
+ * If no ActorContext is available (unauthenticated request) and the annotation
+ * has {@code required = true} (default), throws an {@link UnauthorizedActorException}
+ * that results in a 401 response. If {@code required = false}, returns null.
  */
 @Component
 public class AuthActorArgumentResolver implements HandlerMethodArgumentResolver {
@@ -29,8 +30,16 @@ public class AuthActorArgumentResolver implements HandlerMethodArgumentResolver 
                                   NativeWebRequest webRequest,
                                   WebDataBinderFactory binderFactory) {
         ActorContext context = ActorContext.current();
+        
         if (context == null) {
-            throw new UnauthorizedActorException();
+            AuthActor annotation = parameter.getParameterAnnotation(AuthActor.class);
+            boolean required = annotation == null || annotation.required();
+            
+            if (required) {
+                throw new UnauthorizedActorException();
+            }
+            // If not required, return null
+            return null;
         }
         return context;
     }

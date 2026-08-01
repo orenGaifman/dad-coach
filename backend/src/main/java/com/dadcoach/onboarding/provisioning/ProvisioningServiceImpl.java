@@ -369,6 +369,27 @@ public class ProvisioningServiceImpl implements ProvisioningService {
         Long fatherId = existingFather.getId();
         UUID fatherUuid = new UUID(0L, fatherId);
 
+        // Look up the session to get the new wizard data (for updating locale if changed)
+        OnboardingSession session = sessionRepository.findBySessionId(sessionId).orElse(null);
+        if (session != null && session.getWizardData() != null) {
+            WizardData wizardData = session.getWizardData();
+            
+            // Update locale if specified in new registration
+            if (wizardData.getLanguage() != null && 
+                !wizardData.getLanguage().equals(existingFather.getLocale())) {
+                log.info("Updating locale for existing father_id={} from '{}' to '{}'",
+                        fatherId, existingFather.getLocale(), wizardData.getLanguage());
+                existingFather.setLocale(wizardData.getLanguage());
+                fatherRepository.save(existingFather);
+            }
+            
+            // Update display name if specified
+            if (wizardData.getDisplayName() != null) {
+                existingFather.setDisplayName(wizardData.getDisplayName());
+                fatherRepository.save(existingFather);
+            }
+        }
+
         // Look up existing family
         UUID familyId = familyRepository.findByFatherId(fatherUuid)
                 .map(Family::getFamilyId)
@@ -393,7 +414,7 @@ public class ProvisioningServiceImpl implements ProvisioningService {
                     return activationRecordRepository.save(record).getActivationId();
                 });
 
-        // Generate deep link
+        // Generate deep link using current (possibly updated) locale
         String deepLink = generateDeepLink(existingFather.getLocale());
 
         return new ProvisioningResult(fatherId, familyId, childIds, goalIds, activationId, deepLink);

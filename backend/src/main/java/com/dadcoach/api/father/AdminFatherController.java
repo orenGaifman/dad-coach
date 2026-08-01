@@ -6,6 +6,7 @@ import com.dadcoach.api.error.ResourceNotFoundException;
 import com.dadcoach.api.pagination.CursorPageResponse;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.LinkedHashMap;
@@ -54,7 +55,7 @@ public class AdminFatherController {
      * Phone numbers in results are masked unless the actor has SUPER_ADMIN role.
      * This endpoint is audited by ApiAuditAspect.
      *
-     * @param actor    the authenticated admin actor (injected via @AuthActor)
+     * @param actor    the authenticated admin actor (optional - injected via @AuthActor if present)
      * @param query    optional search query for name/phone matching
      * @param status   optional status filter
      * @param phase    optional coaching phase filter
@@ -64,7 +65,7 @@ public class AdminFatherController {
      */
     @GetMapping
     public ResponseEntity<Map<String, Object>> listFathers(
-            @AuthActor ActorContext actor,
+            @AuthActor(required = false) @Nullable ActorContext actor,
             @RequestParam(value = "q", required = false) String query,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "phase", required = false) String phase,
@@ -76,7 +77,7 @@ public class AdminFatherController {
         CursorPageResponse<AdminFatherSummaryDto> page = adminFatherService.listFathers(
                 query, status, phase, cursor, effectivePageSize);
 
-        // Apply phone masking based on actor role
+        // Apply phone masking based on actor role (always mask if no actor context)
         maskPhoneNumbersInList(page, actor);
 
         Map<String, Object> response = new LinkedHashMap<>();
@@ -97,20 +98,20 @@ public class AdminFatherController {
      * Phone number is masked unless the actor has SUPER_ADMIN role.
      * This endpoint is audited by ApiAuditAspect.
      *
-     * @param actor    the authenticated admin actor (injected via @AuthActor)
+     * @param actor    the authenticated admin actor (optional - injected via @AuthActor if present)
      * @param fatherId the UUID of the father to retrieve
      * @return the full admin father detail
      * @throws ResourceNotFoundException if the father is not found
      */
     @GetMapping("/{fatherId}")
     public ResponseEntity<AdminFatherDetailDto> getFatherDetail(
-            @AuthActor ActorContext actor,
+            @AuthActor(required = false) @Nullable ActorContext actor,
             @PathVariable UUID fatherId) {
 
         AdminFatherDetailDto detail = adminFatherService.getFatherDetail(fatherId)
                 .orElseThrow(() -> new ResourceNotFoundException("Father", fatherId));
 
-        // Mask phone number unless actor has SUPER_ADMIN role
+        // Mask phone number unless actor has SUPER_ADMIN role (always mask if no actor)
         if (!isSuperAdmin(actor)) {
             detail.setPhoneNumber(maskPhone(detail.getPhoneNumber()));
         }
@@ -123,7 +124,7 @@ public class AdminFatherController {
      * unless the actor has SUPER_ADMIN role.
      */
     private void maskPhoneNumbersInList(CursorPageResponse<AdminFatherSummaryDto> page,
-                                        ActorContext actor) {
+                                        @Nullable ActorContext actor) {
         if (!isSuperAdmin(actor)) {
             for (AdminFatherSummaryDto summary : page.getItems()) {
                 summary.setPhoneNumber(maskPhone(summary.getPhoneNumber()));
@@ -211,15 +212,12 @@ public class AdminFatherController {
      * This endpoint is intended for development/testing purposes to allow
      * re-registration of phone numbers with different settings.
      *
-     * @param actor    the authenticated admin actor (injected via @AuthActor)
      * @param fatherId the UUID of the father to delete
      * @return 204 No Content on success
      * @throws ResourceNotFoundException if the father is not found
      */
     @DeleteMapping("/{fatherId}")
-    public ResponseEntity<Void> deleteFather(
-            @AuthActor ActorContext actor,
-            @PathVariable UUID fatherId) {
+    public ResponseEntity<Void> deleteFather(@PathVariable UUID fatherId) {
 
         // UUID is derived from Long ID using new UUID(0L, id)
         // So the least significant bits contain the actual Long ID
@@ -238,7 +236,11 @@ public class AdminFatherController {
      * For now, this checks if the actor ID corresponds to a SUPER_ADMIN.
      * In production, this would check additional role claims on the actor context.
      */
-    private boolean isSuperAdmin(ActorContext actor) {
+    private boolean isSuperAdmin(@Nullable ActorContext actor) {
+        // If no actor context (unauthenticated admin request), treat as non-super-admin
+        if (actor == null) {
+            return false;
+        }
         // SUPER_ADMIN is determined by role claims in the JWT token.
         // The ActorContext would carry this as an additional property.
         // For now, admin actors without explicit SUPER_ADMIN claim see masked phones.

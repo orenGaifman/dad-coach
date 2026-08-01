@@ -324,12 +324,30 @@ public class ActivationServiceImpl implements ActivationService {
     }
 
     private String buildWelcomeSystemPrompt(String fatherName, String locale) {
-        String lang = (locale != null && locale.startsWith("he")) ? "Hebrew" : "English";
-        return String.format(
-                "You are Dad Coach, a warm and supportive AI coach for fathers. " +
-                "Generate a personalized welcome message for %s who just activated their account. " +
-                "The message should be warm, encouraging, and set expectations for the coaching journey. " +
-                "Respond in %s. Keep the message concise (2-3 sentences).",
-                fatherName, lang);
+        if (locale != null && locale.startsWith("he")) {
+            return String.format("""
+                אתה "מאמן אבא" - מאמן הורות חם ותומך לאבות.
+                צור הודעת פתיחה מותאמת אישית ל%s שזה עתה הפעיל את החשבון שלו.
+                
+                ההודעה צריכה להיות:
+                - חמה ומעודדת
+                - מסבירה שאתה כאן לעזור לו להיות אבא טוב יותר
+                - קצרה (2-3 משפטים)
+                
+                אל תציע עזרה בנושאים שאינם קשורים להורות.
+                """, fatherName);
+        } else {
+            return String.format("""
+                You are "Dad Coach" - a warm and supportive parenting coach for fathers.
+                Generate a personalized welcome message for %s who just activated their account.
+                
+                The message should be:
+                - Warm and encouraging
+                - Explain that you're here to help them be a better dad
+                - Concise (2-3 sentences)
+                
+                Do not offer help with topics unrelated to parenting.
+                """, fatherName);
+        }
     }
 }
