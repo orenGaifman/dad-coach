@@ -139,6 +139,7 @@ public class AiOrchestratorImpl implements AiOrchestrator {
 
     private CoachingContext buildCoachingContext(ConversationContext context, InboundMessageDto message) {
         ConversationType conversationType = parseConversationType(context.conversationType());
+        String locale = getLocale(context);
         return new CoachingContext(
                 context.fatherId(),
                 conversationType,
@@ -147,13 +148,15 @@ public class AiOrchestratorImpl implements AiOrchestrator {
                 buildSystemPrompt(context),
                 formatMemories(context),
                 formatContextContent(context),
-                "" // output instructions
+                "", // output instructions
+                locale
         );
     }
 
     private CoachingContext buildRetryContext(ConversationContext context, InboundMessageDto message,
                                              List<String> validationFailures) {
         ConversationType conversationType = parseConversationType(context.conversationType());
+        String locale = getLocale(context);
         String correctionPrompt = buildSystemPrompt(context)
                 + "\n\n[CORRECTION REQUIRED] Previous response failed validation: "
                 + String.join("; ", validationFailures)
@@ -167,7 +170,8 @@ public class AiOrchestratorImpl implements AiOrchestrator {
                 correctionPrompt,
                 formatMemories(context),
                 formatContextContent(context),
-                ""
+                "",
+                locale
         );
     }
 

@@ -80,17 +80,15 @@ public class WhatsAppWebhookController {
             log.debug("Could not convert raw body to string for logging");
         }
 
-        // TEMPORARY: Skip signature verification for debugging - REMOVE IN PRODUCTION
+        // Verify the webhook signature
         boolean signatureValid = signatureVerifier.isValid(rawBody, signatureHeader, properties.webhookSecret());
         if (!signatureValid) {
-            log.warn("Webhook signature verification failed: sourceIp={}, reason={}, secretLength={} - PROCEEDING ANYWAY FOR DEBUG",
+            log.warn("Webhook signature verification failed: sourceIp={}, reason={}, secretLength={}",
                     sourceIp, describeFailureReason(signatureHeader),
                     properties.webhookSecret() != null ? properties.webhookSecret().length() : 0);
-            // TEMPORARY: Don't return 401, continue processing
-            // return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        } else {
-            log.info("Webhook signature verified successfully: sourceIp={}, bodySize={}", sourceIp, rawBody.length);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+        log.info("Webhook signature verified successfully: sourceIp={}, bodySize={}", sourceIp, rawBody.length);
 
         // Process the message asynchronously to return 200 quickly
         try {
@@ -221,5 +219,57 @@ public class WhatsAppWebhookController {
             "apiVersion", properties.apiVersion() != null ? properties.apiVersion() : "NOT SET",
             "serverTime", Instant.now().toString()
         ));
+    }
+
+    /**
+     * Get WhatsApp phone number status from Meta API.
+     * Useful for dev invite page to show current phone number health.
+     * Access via: GET /webhook/whatsapp/phone-status
+     */
+    @GetMapping("/phone-status")
+    public ResponseEntity<Map<String, Object>> getPhoneStatus() {
+        if (properties.phoneNumberId() == null || properties.accessToken() == null) {
+            return ResponseEntity.ok(Map.of(
+                "error", "WhatsApp not configured",
+                "configured", false
+            ));
+        }
+
+        try {
+            String url = String.format("%s/%s/%s?fields=verified_name,code_verification_status,quality_rating,display_phone_number,name_status",
+                    properties.apiBaseUrl(), properties.apiVersion(), properties.phoneNumberId());
+
+            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(url))
+                    .header("Authorization", "Bearer " + properties.accessToken())
+                    .GET()
+                    .build();
+
+            java.net.http.HttpResponse<String> response = client.send(request, 
+                    java.net.http.HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = objectMapper.readValue(response.body(), Map.class);
+                data.put("configured", true);
+                data.put("api_status", "connected");
+                return ResponseEntity.ok(data);
+            } else {
+                return ResponseEntity.ok(Map.of(
+                    "configured", true,
+                    "api_status", "error",
+                    "error_code", response.statusCode(),
+                    "error_body", response.body()
+                ));
+            }
+        } catch (Exception e) {
+            log.error("Failed to get phone status: {}", e.getMessage(), e);
+            return ResponseEntity.ok(Map.of(
+                "configured", true,
+                "api_status", "error",
+                "error", e.getMessage()
+            ));
+        }
     }
 }

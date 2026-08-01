@@ -100,7 +100,7 @@ public class IntelligenceLayerImpl implements IntelligenceLayer {
         if (safety.requiresIntervention()) {
             log.warn("Safety intervention required for father={}: category={}, confidence={}",
                 context.fatherId(), safety.category(), safety.confidence());
-            return buildSafetyResponse(safety);
+            return buildSafetyResponse(safety, context.locale());
         }
 
         // Step 2: Prompt assembly
@@ -313,12 +313,12 @@ public class IntelligenceLayerImpl implements IntelligenceLayer {
 
     // ===== Private Helper Methods =====
 
-    private CoachingResponse buildSafetyResponse(SafetyClassification safety) {
-        // Default to English - context-aware locale selection would require passing context
+    private CoachingResponse buildSafetyResponse(SafetyClassification safety, String locale) {
+        boolean isHebrew = "he".equals(locale);
         String message = switch (safety.category()) {
-            case CRISIS -> SAFETY_CRISIS_RESPONSE_EN;
-            case CHILD_SAFETY -> SAFETY_CHILD_RESPONSE_EN;
-            default -> SAFETY_CRISIS_RESPONSE_EN;
+            case CRISIS -> isHebrew ? SAFETY_CRISIS_RESPONSE_HE : SAFETY_CRISIS_RESPONSE_EN;
+            case CHILD_SAFETY -> isHebrew ? SAFETY_CHILD_RESPONSE_HE : SAFETY_CHILD_RESPONSE_EN;
+            default -> isHebrew ? SAFETY_CRISIS_RESPONSE_HE : SAFETY_CRISIS_RESPONSE_EN;
         };
         return CoachingResponse.fallback(message);
     }

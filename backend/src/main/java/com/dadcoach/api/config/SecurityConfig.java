@@ -59,8 +59,18 @@ public class SecurityConfig {
                         })
                 )
                 .authorizeHttpRequests(auth -> auth
-                        // TEMPORARY: Allow all requests for debugging
-                        .anyRequest().permitAll()
+                        // Health check endpoints (liveness/readiness probes)
+                        .requestMatchers("/actuator/health/**").permitAll()
+                        // WhatsApp webhooks (use their own signature verification)
+                        .requestMatchers("/webhook/**").permitAll()
+                        // Onboarding endpoints (no auth required - uses invitation tokens)
+                        .requestMatchers("/api/v1/onboarding/**").permitAll()
+                        .requestMatchers("/api/v1/invitations/**").permitAll()
+                        .requestMatchers("/api/v1/activation/**").permitAll()
+                        // Admin endpoints (for dev invite page - temporarily permitAll until auth is implemented)
+                        .requestMatchers("/api/v1/admin/**").permitAll()
+                        // All other requests require authentication
+                        .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();

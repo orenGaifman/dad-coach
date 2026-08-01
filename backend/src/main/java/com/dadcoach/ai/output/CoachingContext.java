@@ -22,6 +22,7 @@ import java.util.UUID;
  * @param memoryContent     formatted memory block (may be null if no memories)
  * @param contextContent    formatted context block (goals, missions, phase info)
  * @param outputInstructions output format instructions for the conversation type
+ * @param locale            the father's preferred language ("en" for English, "he" for Hebrew)
  */
 public record CoachingContext(
     UUID fatherId,
@@ -31,7 +32,8 @@ public record CoachingContext(
     String systemPrompt,
     String memoryContent,
     String contextContent,
-    String outputInstructions
+    String outputInstructions,
+    String locale
 ) {
     public CoachingContext {
         if (fatherId == null) {
@@ -54,5 +56,24 @@ public record CoachingContext(
         if (outputInstructions == null) {
             outputInstructions = "";
         }
+        if (locale == null || locale.isBlank()) {
+            locale = "en";
+        }
+    }
+
+    /**
+     * Backward compatibility constructor without locale (defaults to English).
+     */
+    public CoachingContext(
+            UUID fatherId,
+            ConversationType conversationType,
+            String userMessage,
+            List<AiMessage> conversationHistory,
+            String systemPrompt,
+            String memoryContent,
+            String contextContent,
+            String outputInstructions) {
+        this(fatherId, conversationType, userMessage, conversationHistory,
+             systemPrompt, memoryContent, contextContent, outputInstructions, "en");
     }
 }
