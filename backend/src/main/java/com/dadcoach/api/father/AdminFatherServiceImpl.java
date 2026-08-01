@@ -6,6 +6,7 @@ import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.domain.goal.GoalRepository;
+import com.dadcoach.domain.memory.MemoryRepository;
 import com.dadcoach.channel.CommunicationEndpointRepository;
 import com.dadcoach.onboarding.provisioning.ActivationRecordRepository;
 import com.dadcoach.onboarding.provisioning.AiProfileRepository;
@@ -35,6 +36,7 @@ public class AdminFatherServiceImpl implements AdminFatherService {
     private final FatherRepository fatherRepository;
     private final ChildRepository childRepository;
     private final GoalRepository goalRepository;
+    private final MemoryRepository memoryRepository;
     private final CommunicationEndpointRepository communicationEndpointRepository;
     private final FamilyRepository familyRepository;
     private final LanguagePreferenceRepository languagePreferenceRepository;
@@ -46,6 +48,7 @@ public class AdminFatherServiceImpl implements AdminFatherService {
             FatherRepository fatherRepository,
             ChildRepository childRepository,
             GoalRepository goalRepository,
+            MemoryRepository memoryRepository,
             CommunicationEndpointRepository communicationEndpointRepository,
             FamilyRepository familyRepository,
             LanguagePreferenceRepository languagePreferenceRepository,
@@ -55,6 +58,7 @@ public class AdminFatherServiceImpl implements AdminFatherService {
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.goalRepository = goalRepository;
+        this.memoryRepository = memoryRepository;
         this.communicationEndpointRepository = communicationEndpointRepository;
         this.familyRepository = familyRepository;
         this.languagePreferenceRepository = languagePreferenceRepository;
@@ -99,31 +103,34 @@ public class AdminFatherServiceImpl implements AdminFatherService {
         UUID fatherUuid = new UUID(0L, fatherId);
 
         // Delete related entities in order (due to foreign key constraints)
-        // 1. Delete children
+        // 1. Delete memories (must be deleted before father due to FK constraint)
+        memoryRepository.deleteByFatherId(fatherId);
+        
+        // 2. Delete children
         childRepository.deleteByFatherId(fatherId);
         
-        // 2. Delete goals
+        // 3. Delete goals
         goalRepository.deleteByFatherId(fatherId);
         
-        // 3. Delete communication endpoints
+        // 4. Delete communication endpoints
         communicationEndpointRepository.deleteByFatherId(fatherUuid);
         
-        // 4. Delete family
+        // 5. Delete family
         familyRepository.deleteByFatherId(fatherUuid);
         
-        // 5. Delete language preference
+        // 6. Delete language preference
         languagePreferenceRepository.deleteByFatherId(fatherUuid);
         
-        // 6. Delete communication preference
+        // 7. Delete communication preference
         communicationPreferenceRepository.deleteByFatherId(fatherUuid);
         
-        // 7. Delete AI profile
+        // 8. Delete AI profile
         aiProfileRepository.deleteByFatherId(fatherUuid);
         
-        // 8. Delete activation record
+        // 9. Delete activation record
         activationRecordRepository.deleteByFatherId(fatherUuid);
         
-        // 9. Finally delete the father
+        // 10. Finally delete the father
         fatherRepository.delete(father);
         
         log.info("Deleted father and all related data: id={}", fatherId);

@@ -129,4 +129,12 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
            "ORDER BY m.createdAt DESC")
     List<Memory> findActiveByFatherAndCategoryNoChild(@Param("fatherId") Long fatherId,
                                                       @Param("category") MemoryCategory category);
+
+    // ─── Delete Queries ───────────────────────────────────────────────────
+
+    /**
+     * Delete all memories for a father.
+     * Used when deleting a father account to comply with data deletion requirements.
+     */
+    void deleteByFatherId(Long fatherId);
 }
