@@ -163,13 +163,18 @@ public class AnthropicProvider implements AiProvider {
 
     private Map<String, Object> buildRequestBody(AiProviderRequest request) {
         // Anthropic uses system prompt as a separate top-level field
-        String systemPrompt = null;
+        // Multiple system messages must be concatenated into one (Anthropic only supports a single system field)
+        StringBuilder systemPromptBuilder = new StringBuilder();
         List<Map<String, String>> messages = new ArrayList<>();
 
         for (AiMessage msg : request.messages()) {
             if ("system".equals(msg.role())) {
                 // Anthropic's system goes in a top-level field, not in messages
-                systemPrompt = msg.content();
+                // Concatenate all system messages with newlines
+                if (!systemPromptBuilder.isEmpty()) {
+                    systemPromptBuilder.append("\n\n");
+                }
+                systemPromptBuilder.append(msg.content());
             } else {
                 messages.add(Map.of("role", msg.role(), "content", msg.content()));
             }
@@ -186,8 +191,8 @@ public class AnthropicProvider implements AiProvider {
             body.put("temperature", request.temperature());
         }
 
-        if (systemPrompt != null) {
-            body.put("system", systemPrompt);
+        if (!systemPromptBuilder.isEmpty()) {
+            body.put("system", systemPromptBuilder.toString());
         }
 
         return body;
