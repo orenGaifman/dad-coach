@@ -236,7 +236,7 @@ public class WhatsAppWebhookController {
         }
 
         try {
-            String url = String.format("%s/%s/%s?fields=verified_name,code_verification_status,quality_rating,display_phone_number,name_status,messaging_limit_tier,current_limit",
+            String url = String.format("%s/%s/%s?fields=verified_name,code_verification_status,quality_rating,display_phone_number,name_status,throughput",
                     properties.apiBaseUrl(), properties.apiVersion(), properties.phoneNumberId());
 
             java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
