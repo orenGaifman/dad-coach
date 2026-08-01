@@ -42,17 +42,22 @@ public class WhatsAppMessageFormatter {
             throw new IllegalArgumentException("Recipient phone must not be null or blank");
         }
 
+        // WhatsApp API expects phone numbers without '+' prefix
+        String normalizedPhone = recipientPhone.startsWith("+") 
+            ? recipientPhone.substring(1) 
+            : recipientPhone;
+
         if (message.isTemplate()) {
-            return formatTemplate(message, recipientPhone);
+            return formatTemplate(message, normalizedPhone);
         }
 
         return switch (message.messageType()) {
-            case TEXT -> formatText(message, recipientPhone);
-            case IMAGE -> formatMedia(message, recipientPhone, "image");
-            case AUDIO -> formatMedia(message, recipientPhone, "audio");
-            case VIDEO -> formatMedia(message, recipientPhone, "video");
-            case DOCUMENT -> formatMedia(message, recipientPhone, "document");
-            case INTERACTIVE -> formatText(message, recipientPhone);
+            case TEXT -> formatText(message, normalizedPhone);
+            case IMAGE -> formatMedia(message, normalizedPhone, "image");
+            case AUDIO -> formatMedia(message, normalizedPhone, "audio");
+            case VIDEO -> formatMedia(message, normalizedPhone, "video");
+            case DOCUMENT -> formatMedia(message, normalizedPhone, "document");
+            case INTERACTIVE -> formatText(message, normalizedPhone);
             default -> throw new IllegalArgumentException(
                 "Unsupported message type for WhatsApp formatting: " + message.messageType());
         };
