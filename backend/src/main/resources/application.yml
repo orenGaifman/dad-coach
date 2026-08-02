@@ -62,6 +62,8 @@ conversation:
     CELEBRATION: PT24H
 
 dad-coach:
+  web:
+    base-url: ${WEB_BASE_URL:http://localhost:3000}
   security:
     jwt:
       secret: ${JWT_SECRET:default-dev-secret-change-in-production-must-be-at-least-256-bits-long!!}

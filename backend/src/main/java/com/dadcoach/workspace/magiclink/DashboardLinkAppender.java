@@ -82,48 +82,48 @@ public class DashboardLinkAppender {
          * After logging quality time with a child.
          */
         QUALITY_TIME_LOGGED("/growth/achievements", """
-            📊 *Tu progreso está actualizado*
-            Mira tus logros en el dashboard: %s
+            📊 *ההתקדמות שלך עודכנה*
+            צפה בהישגים שלך בדשבורד: %s
             """),
 
         /**
          * After earning an achievement.
          */
         ACHIEVEMENT_EARNED("/growth/achievements", """
-            🏆 *¡Logro desbloqueado!*
-            Mira tu nuevo logro: %s
+            🏆 *הישג חדש!*
+            צפה בהישג החדש שלך: %s
             """),
 
         /**
          * After leveling up belt.
          */
         BELT_LEVEL_UP("/growth", """
-            🥋 *¡Subiste de nivel!*
-            Mira tu nuevo cinturón: %s
+            🥋 *עלית רמה!*
+            צפה בחגורה החדשה שלך: %s
             """),
 
         /**
          * Streak milestone reached.
          */
         STREAK_MILESTONE("/growth/streak", """
-            🔥 *¡Racha increíble!*
-            Mira tu racha de días: %s
+            🔥 *רצף מדהים!*
+            צפה ברצף הימים שלך: %s
             """),
 
         /**
          * Weekly check-in reminder.
          */
         WEEKLY_CHECKIN("/dashboard", """
-            📅 *Tu resumen semanal*
-            Mira cómo te fue esta semana: %s
+            📅 *הסיכום השבועי שלך*
+            ראה איך עבר לך השבוע: %s
             """),
 
         /**
          * Prompt to log activity.
          */
         LOG_ACTIVITY_PROMPT("/coaching/log", """
-            ✍️ *Registra tu actividad*
-            Accede aquí para registrar: %s
+            ✍️ *דווח על פעילות*
+            לחץ כאן לדיווח: %s
             """);
 
         private final String redirectPath;
