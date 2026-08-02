@@ -17,6 +17,8 @@ import com.dadcoach.conversation.sideeffect.SideEffectScheduler;
 import com.dadcoach.domain.flash.FlashMissionService;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
+import com.dadcoach.workspace.magiclink.DashboardLinkAppender;
+import com.dadcoach.workspace.magiclink.DashboardLinkAppender.DashboardLinkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -89,6 +91,7 @@ public class ConversationOrchestrator {
     private final ConversationMessageRepository messageRepository;
     private final FlashMissionService flashMissionService;
     private final FatherRepository fatherRepository;
+    private final DashboardLinkAppender dashboardLinkAppender;
 
     /**
      * Maximum outbound messages per conversation before auto-completion.
@@ -111,6 +114,7 @@ public class ConversationOrchestrator {
             ConversationMessageRepository messageRepository,
             FlashMissionService flashMissionService,
             FatherRepository fatherRepository,
+            DashboardLinkAppender dashboardLinkAppender,
             @Value("${conversation.pipeline.max-outbound-messages:8}") int maxOutboundMessages) {
         this.idempotencyService = idempotencyService;
         this.sessionLockService = sessionLockService;
@@ -126,6 +130,7 @@ public class ConversationOrchestrator {
         this.messageRepository = messageRepository;
         this.flashMissionService = flashMissionService;
         this.fatherRepository = fatherRepository;
+        this.dashboardLinkAppender = dashboardLinkAppender;
         this.maxOutboundMessages = maxOutboundMessages;
     }
 
@@ -214,7 +219,7 @@ public class ConversationOrchestrator {
 
         // Build and return the outbound message
         // COMMIT releases the advisory lock automatically.
-        return buildOutboundMessage(message, aiResult, conversation, outboundMessageId);
+        return buildOutboundMessage(message, aiResult, conversation, outboundMessageId, fatherId);
     }
 
     /**
@@ -439,21 +444,80 @@ public class ConversationOrchestrator {
 
     /**
      * Builds the OutboundMessageDto for delivery to the father.
+     * Appends a dashboard link for DAILY_COACHING conversations when appropriate.
      */
     private OutboundMessageDto buildOutboundMessage(InboundMessageDto inbound, AiResult aiResult,
-                                                     Conversation conversation, UUID outboundMessageId) {
+                                                     Conversation conversation, UUID outboundMessageId,
+                                                     UUID fatherId) {
         Map<String, Object> metadata = new HashMap<>(aiResult.metadata());
         metadata.put("outbound_message_id", outboundMessageId.toString());
         metadata.put("fallback_used", aiResult.fallbackUsed());
         metadata.put("retried", aiResult.retried());
 
+        String responseContent = aiResult.responseContent();
+
+        // Append dashboard link for DAILY_COACHING conversations (not onboarding)
+        // Include link when: mission is generated, conversation is closed, or periodically
+        if (TYPE_DAILY_COACHING.equals(conversation.getType()) && !aiResult.fallbackUsed()) {
+            try {
+                responseContent = appendDashboardLinkIfNeeded(responseContent, fatherId, 
+                        aiResult.suggestedFollowUpAction(), conversation);
+                metadata.put("dashboard_link_included", true);
+            } catch (Exception e) {
+                // Non-critical: log and continue without dashboard link
+                log.warn("Failed to append dashboard link for father {}: {}", fatherId, e.getMessage());
+                metadata.put("dashboard_link_included", false);
+            }
+        }
+
         return new OutboundMessageDto(
                 inbound.senderId(),
-                aiResult.responseContent(),
+                responseContent,
                 "TEXT",
                 conversation.getId(),
                 metadata
         );
+    }
+
+    /**
+     * Appends a dashboard link to the response content when appropriate.
+     * 
+     * Links are added when:
+     * - A mission is being generated (GENERATE_MISSION follow-up)
+     * - The conversation is being closed (CLOSE_CONVERSATION follow-up)
+     * - Every 3rd message in the conversation (to ensure periodic visibility)
+     * 
+     * @return The response content with dashboard link appended, or original if no link needed
+     */
+    private String appendDashboardLinkIfNeeded(String responseContent, UUID fatherId, 
+                                                String followUpAction, Conversation conversation) {
+        // Determine if we should include a dashboard link
+        DashboardLinkContext linkContext = null;
+
+        if (FOLLOW_UP_GENERATE_MISSION.equals(followUpAction)) {
+            // Mission was generated - link to dashboard
+            linkContext = DashboardLinkContext.WEEKLY_CHECKIN;
+        } else if (FOLLOW_UP_CLOSE_CONVERSATION.equals(followUpAction)) {
+            // Conversation completed - link to see progress
+            linkContext = DashboardLinkContext.QUALITY_TIME_LOGGED;
+        } else if (conversation.getSystemMessageCount() > 0 && conversation.getSystemMessageCount() % 3 == 0) {
+            // Every 3rd message - periodic reminder
+            linkContext = DashboardLinkContext.WEEKLY_CHECKIN;
+        }
+
+        if (linkContext == null) {
+            return responseContent; // No link needed
+        }
+
+        // Extract the Long ID from the UUID
+        Long fatherDomainId = fatherId.getLeastSignificantBits();
+
+        // Generate and append the dashboard link
+        String linkMessage = dashboardLinkAppender.generateLinkMessage(fatherDomainId, linkContext);
+        
+        log.debug("Appending dashboard link for father {} with context {}", fatherDomainId, linkContext);
+        
+        return responseContent + "\n\n" + linkMessage;
     }
 
     /**
