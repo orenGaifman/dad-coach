@@ -480,33 +480,26 @@ public class ConversationOrchestrator {
     }
 
     /**
-     * Appends a dashboard link to the response content when appropriate.
+     * Appends a dashboard link to the response content.
      * 
-     * Links are added when:
-     * - A mission is being generated (GENERATE_MISSION follow-up)
-     * - The conversation is being closed (CLOSE_CONVERSATION follow-up)
-     * - Every 3rd message in the conversation (to ensure periodic visibility)
+     * Links are added to EVERY DAILY_COACHING message so fathers always
+     * have easy access to their dashboard from WhatsApp.
      * 
-     * @return The response content with dashboard link appended, or original if no link needed
+     * @return The response content with dashboard link appended
      */
     private String appendDashboardLinkIfNeeded(String responseContent, UUID fatherId, 
                                                 String followUpAction, Conversation conversation) {
-        // Determine if we should include a dashboard link
-        DashboardLinkContext linkContext = null;
+        // Always include a dashboard link for daily coaching messages
+        // Choose context based on the follow-up action for more relevant messaging
+        DashboardLinkContext linkContext;
 
         if (FOLLOW_UP_GENERATE_MISSION.equals(followUpAction)) {
-            // Mission was generated - link to dashboard
             linkContext = DashboardLinkContext.WEEKLY_CHECKIN;
         } else if (FOLLOW_UP_CLOSE_CONVERSATION.equals(followUpAction)) {
-            // Conversation completed - link to see progress
             linkContext = DashboardLinkContext.QUALITY_TIME_LOGGED;
-        } else if (conversation.getSystemMessageCount() > 0 && conversation.getSystemMessageCount() % 3 == 0) {
-            // Every 3rd message - periodic reminder
+        } else {
+            // Default: link to dashboard for easy access
             linkContext = DashboardLinkContext.WEEKLY_CHECKIN;
-        }
-
-        if (linkContext == null) {
-            return responseContent; // No link needed
         }
 
         // Extract the Long ID from the UUID
