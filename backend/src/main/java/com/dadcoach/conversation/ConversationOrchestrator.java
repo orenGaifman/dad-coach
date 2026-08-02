@@ -17,6 +17,9 @@ import com.dadcoach.conversation.sideeffect.SideEffectScheduler;
 import com.dadcoach.domain.flash.FlashMissionService;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
+import com.dadcoach.workspace.commitment.CommitmentExtractor;
+import com.dadcoach.workspace.commitment.CommitmentExtractor.ExtractedCommitment;
+import com.dadcoach.workspace.commitment.CommitmentService;
 import com.dadcoach.workspace.magiclink.DashboardLinkAppender;
 import com.dadcoach.workspace.magiclink.DashboardLinkAppender.DashboardLinkContext;
 import org.slf4j.Logger;
@@ -92,6 +95,8 @@ public class ConversationOrchestrator {
     private final FlashMissionService flashMissionService;
     private final FatherRepository fatherRepository;
     private final DashboardLinkAppender dashboardLinkAppender;
+    private final CommitmentExtractor commitmentExtractor;
+    private final CommitmentService commitmentService;
 
     /**
      * Maximum outbound messages per conversation before auto-completion.
@@ -115,6 +120,8 @@ public class ConversationOrchestrator {
             FlashMissionService flashMissionService,
             FatherRepository fatherRepository,
             DashboardLinkAppender dashboardLinkAppender,
+            CommitmentExtractor commitmentExtractor,
+            CommitmentService commitmentService,
             @Value("${conversation.pipeline.max-outbound-messages:8}") int maxOutboundMessages) {
         this.idempotencyService = idempotencyService;
         this.sessionLockService = sessionLockService;
@@ -131,6 +138,8 @@ public class ConversationOrchestrator {
         this.flashMissionService = flashMissionService;
         this.fatherRepository = fatherRepository;
         this.dashboardLinkAppender = dashboardLinkAppender;
+        this.commitmentExtractor = commitmentExtractor;
+        this.commitmentService = commitmentService;
         this.maxOutboundMessages = maxOutboundMessages;
     }
 
@@ -202,6 +211,10 @@ public class ConversationOrchestrator {
         // Step 6: AI orchestration — safety → generate → validate → retry/fallback
         AiResult aiResult = aiOrchestrator.orchestrate(context, message);
 
+        // Step 6.5: Check for time commitment in father's message
+        // If father mentions a time, create a commitment and acknowledge it
+        boolean commitmentCreated = tryExtractAndCreateCommitment(message, fatherId, conversation);
+
         // Step 7: Process follow-up action from AI response
         processFollowUpAction(aiResult.suggestedFollowUpAction(), fatherId, conversation);
 
@@ -220,6 +233,63 @@ public class ConversationOrchestrator {
         // Build and return the outbound message
         // COMMIT releases the advisory lock automatically.
         return buildOutboundMessage(message, aiResult, conversation, outboundMessageId, fatherId);
+    }
+
+    /**
+     * Tries to extract a time commitment from the father's message.
+     * If found, creates a commitment and returns true.
+     * 
+     * Examples:
+     * - "יום ראשון ב-17:00" → creates commitment for Sunday 17:00
+     * - "מחר בשש" → creates commitment for tomorrow 18:00
+     * 
+     * @return true if a commitment was created
+     */
+    private boolean tryExtractAndCreateCommitment(InboundMessageDto message, UUID fatherId, 
+                                                   Conversation conversation) {
+        // Only extract commitments for daily coaching conversations
+        if (!TYPE_DAILY_COACHING.equals(conversation.getType())) {
+            return false;
+        }
+
+        // Check if message contains a time commitment
+        if (!commitmentExtractor.containsTimeCommitment(message.content())) {
+            return false;
+        }
+
+        // Get father's timezone
+        Long fatherDomainId = fatherId.getLeastSignificantBits();
+        Optional<Father> fatherOpt = fatherRepository.findById(fatherDomainId);
+        if (fatherOpt.isEmpty()) {
+            return false;
+        }
+
+        String timezone = fatherOpt.get().getTimezone();
+
+        // Try to extract commitment details
+        Optional<ExtractedCommitment> extracted = commitmentExtractor.extract(message.content(), timezone);
+        if (extracted.isEmpty()) {
+            return false;
+        }
+
+        try {
+            ExtractedCommitment commitment = extracted.get();
+            commitmentService.createCommitment(
+                    fatherDomainId,
+                    null, // No specific child yet
+                    commitment.scheduledAt(),
+                    null, // Activity type to be filled by AI or father
+                    message.content(), // Use original message as note
+                    "WHATSAPP",
+                    conversation.getId()
+            );
+            log.info("Created commitment for father {} at {}", fatherDomainId, commitment.scheduledAt());
+            return true;
+        } catch (Exception e) {
+            log.warn("Failed to create commitment from message for father {}: {}", 
+                    fatherDomainId, e.getMessage());
+            return false;
+        }
     }
 
     /**
