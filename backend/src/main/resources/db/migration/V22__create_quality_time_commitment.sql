@@ -3,8 +3,8 @@
 
 CREATE TABLE IF NOT EXISTS quality_time_commitment (
     id              BIGSERIAL PRIMARY KEY,
-    father_id       BIGINT NOT NULL REFERENCES fathers(id) ON DELETE CASCADE,
-    child_id        BIGINT REFERENCES children(id) ON DELETE SET NULL,
+    father_id       BIGINT NOT NULL REFERENCES father(id) ON DELETE CASCADE,
+    child_id        BIGINT REFERENCES child(id) ON DELETE SET NULL,
     
     -- Scheduled time
     scheduled_date  DATE NOT NULL,
