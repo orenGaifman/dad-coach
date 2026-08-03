@@ -27,36 +27,36 @@ public interface WorkflowTransitionLogRepository extends JpaRepository<WorkflowT
      * 
      * Requirements: 16.1
      * 
-     * @param fatherId the father's external UUID
+     * @param fatherId the father's database ID (Long)
      * @return list of transitions ordered by most recent first
      */
-    List<WorkflowTransition> findByFatherIdOrderByCreatedAtDesc(UUID fatherId);
+    List<WorkflowTransition> findByFatherIdOrderByCreatedAtDesc(Long fatherId);
 
     /**
      * Find the most recent workflow transition for a father.
      * 
-     * @param fatherId the father's external UUID
+     * @param fatherId the father's database ID (Long)
      * @return the most recent transition, or empty list if none
      */
-    List<WorkflowTransition> findTop1ByFatherIdOrderByCreatedAtDesc(UUID fatherId);
+    List<WorkflowTransition> findTop1ByFatherIdOrderByCreatedAtDesc(Long fatherId);
 
     /**
      * Find all transitions for a father from a specific state.
      * Useful for analyzing workflow patterns.
      * 
-     * @param fatherId the father's external UUID
+     * @param fatherId the father's database ID (Long)
      * @param fromState the source state to filter by
      * @return list of matching transitions
      */
-    List<WorkflowTransition> findByFatherIdAndFromState(UUID fatherId, WorkflowState fromState);
+    List<WorkflowTransition> findByFatherIdAndFromState(Long fatherId, WorkflowState fromState);
 
     /**
      * Find all transitions for a father to a specific state.
      * Useful for analyzing workflow patterns.
      * 
-     * @param fatherId the father's external UUID
+     * @param fatherId the father's database ID (Long)
      * @param toState the target state to filter by
      * @return list of matching transitions
      */
-    List<WorkflowTransition> findByFatherIdAndToState(UUID fatherId, WorkflowState toState);
+    List<WorkflowTransition> findByFatherIdAndToState(Long fatherId, WorkflowState toState);
 }

@@ -208,15 +208,29 @@ public enum MessageType {
     /**
      * Finds a MessageType by its template key.
      * 
+     * <p>Performs case-insensitive matching to handle both uppercase values
+     * from the database (e.g., 'WELCOME_GREETING') and lowercase template keys
+     * (e.g., 'welcome_greeting').</p>
+     * 
      * @param templateKey the template key to search for
      * @return the matching MessageType
      * @throws IllegalArgumentException if no MessageType matches the template key
      */
     public static MessageType fromTemplateKey(String templateKey) {
+        if (templateKey == null) {
+            throw new IllegalArgumentException("Template key cannot be null");
+        }
+        String normalizedKey = templateKey.toLowerCase();
         for (MessageType type : values()) {
-            if (type.templateKey.equals(templateKey)) {
+            if (type.templateKey.equalsIgnoreCase(normalizedKey)) {
                 return type;
             }
+        }
+        // Also try matching by enum name (for uppercase database values)
+        try {
+            return MessageType.valueOf(templateKey.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            // Fall through to throw more descriptive error
         }
         throw new IllegalArgumentException("Unknown message type template key: " + templateKey);
     }
