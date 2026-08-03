@@ -8,6 +8,7 @@ import com.dadcoach.ai.provider.AiProviderResponse;
 import com.dadcoach.workflow.metrics.WorkflowMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -68,11 +69,14 @@ public class MessageGeneratorImpl implements MessageGenerator {
     /**
      * Creates a new MessageGeneratorImpl.
      * 
-     * @param aiProvider the AI provider for text generation
+     * @param aiProvider the AI provider for text generation (uses Anthropic for Claude models)
      * @param fallbackMessages the fallback message provider
      * @param workflowMetrics the metrics collector for message generation monitoring (Requirement 16.2)
      */
-    public MessageGeneratorImpl(AiProvider aiProvider, FallbackMessages fallbackMessages, WorkflowMetrics workflowMetrics) {
+    public MessageGeneratorImpl(
+            @Qualifier("anthropicProvider") AiProvider aiProvider, 
+            FallbackMessages fallbackMessages, 
+            WorkflowMetrics workflowMetrics) {
         this.aiProvider = aiProvider;
         this.fallbackMessages = fallbackMessages;
         this.workflowMetrics = workflowMetrics;

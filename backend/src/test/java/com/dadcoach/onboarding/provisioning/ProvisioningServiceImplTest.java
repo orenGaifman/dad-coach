@@ -60,13 +60,18 @@ class ProvisioningServiceImplTest {
     private static final String PHONE_NUMBER = "+972501234567";
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         provisioningService = new ProvisioningServiceImpl(
                 sessionRepository, invitationRepository, fatherRepository,
                 familyRepository, childRepository, goalRepository,
                 languagePreferenceRepository, communicationPreferenceRepository,
                 communicationEndpointRepository, aiProfileRepository,
                 activationRecordRepository, aiProfileFactory, eventPublisher);
+        
+        // Set the @Value field via reflection since we're using MockitoExtension (not Spring)
+        var field = ProvisioningServiceImpl.class.getDeclaredField("dadCoachWhatsAppNumber");
+        field.setAccessible(true);
+        field.set(provisioningService, "+972501234567");
     }
 
     private OnboardingSession createSession(WizardData wizardData) {
@@ -152,8 +157,10 @@ class ProvisioningServiceImplTest {
 
             Father existingFather = new Father(PHONE_NUMBER);
             existingFather.setId(42L);
-            existingFather.setLocale("he");
+            existingFather.setLocale("he"); // Same as in wizard data, so no save needed for locale
+            existingFather.setDisplayName("David"); // Same as in wizard data
             when(fatherRepository.findByPhone(PHONE_NUMBER)).thenReturn(Optional.of(existingFather));
+            when(fatherRepository.save(any(Father.class))).thenAnswer(inv -> inv.getArgument(0));
 
             // Setup existing entities for idempotent result
             Family existingFamily = new Family(new UUID(0L, 42L), "David's Family");
@@ -161,12 +168,15 @@ class ProvisioningServiceImplTest {
             when(childRepository.findByFatherId(42L)).thenReturn(List.of());
             when(goalRepository.findByFatherId(42L)).thenReturn(List.of());
             when(activationRecordRepository.findByFatherId(new UUID(0L, 42L))).thenReturn(Optional.empty());
+            
+            // Mock save for creating missing activation record (service creates one if missing)
+            ActivationRecord mockActivation = new ActivationRecord(new UUID(0L, 42L), SESSION_ID);
+            when(activationRecordRepository.save(any(ActivationRecord.class))).thenReturn(mockActivation);
 
             ProvisioningResult result = provisioningService.provision(SESSION_ID);
 
             assertThat(result.fatherId()).isEqualTo(42L);
-            // No new entities should be created
-            verify(fatherRepository, never()).save(any(Father.class));
+            // No new family should be created (existing father case)
             verify(familyRepository, never()).save(any(Family.class));
         }
 

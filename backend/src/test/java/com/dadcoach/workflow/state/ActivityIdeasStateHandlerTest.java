@@ -499,16 +499,18 @@ class ActivityIdeasStateHandlerTest {
             SystemState systemState = createMockSystemState("en");
             when(systemStateLoader.loadState(FATHER_UUID)).thenReturn(systemState);
             
-            when(messageGenerator.generateWithFallback(eq(MessageType.CLARIFICATION), any(), anyLong()))
-                    .thenReturn("I didn't understand. You can say: 1, 2, 3, more, or thanks");
-            
-            // Act
+            // Act - Per Requirement 11.4, handleUnmatched uses hardcoded messages, NOT AI
             StateAction action = handler.handleUnmatched(context);
             
             // Assert
             assertThat(action.getActionType()).isEqualTo(StateAction.ActionType.CLARIFY);
             assertThat(action.hasResponse()).isTrue();
             assertThat(action.isTransition()).isFalse();
+            // Verify the hardcoded English clarification message
+            assertThat(action.getResponseMessage().orElse(""))
+                    .contains("Type a number (1-3)")
+                    .contains("more")
+                    .contains("thanks");
         }
         
         @Test
@@ -519,15 +521,17 @@ class ActivityIdeasStateHandlerTest {
             SystemState systemState = createMockSystemState("he");
             when(systemStateLoader.loadState(FATHER_UUID)).thenReturn(systemState);
             
-            when(messageGenerator.generateWithFallback(eq(MessageType.CLARIFICATION), any(), anyLong()))
-                    .thenReturn("לא הבנתי. אתה יכול להגיד: 1, 2, 3, עוד, או תודה");
-            
-            // Act
+            // Act - Per Requirement 11.4, handleUnmatched uses hardcoded messages, NOT AI
             StateAction action = handler.handleUnmatched(context);
             
             // Assert
             assertThat(action.getActionType()).isEqualTo(StateAction.ActionType.CLARIFY);
             assertThat(action.hasResponse()).isTrue();
+            // Verify the hardcoded Hebrew clarification message
+            assertThat(action.getResponseMessage().orElse(""))
+                    .contains("לא הבנתי")
+                    .contains("עוד")
+                    .contains("תודה");
         }
         
         @Test

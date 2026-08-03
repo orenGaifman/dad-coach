@@ -119,12 +119,18 @@ class OnboardingControllerTest {
         }
 
         @Test
-        @DisplayName("throws SessionExpiredException when cookie missing")
-        void missingCookie_throwsException() {
+        @DisplayName("allows request when cookie is missing (cross-origin support)")
+        void missingCookie_allowsRequest() {
+            // Per validateSessionCookie: cookie absence is allowed for cross-origin deployments
+            // Session ID in path + CSRF validation is sufficient
             when(cookieManager.readSessionId(request)).thenReturn(Optional.empty());
+            OnboardingSession session = buildSession(SESSION_ID, WizardStep.CHILDREN, SessionStatus.IN_PROGRESS);
+            when(sessionService.getSession(SESSION_ID)).thenReturn(session);
 
-            assertThatThrownBy(() -> controller.getSession(SESSION_ID, request))
-                    .isInstanceOf(SessionExpiredException.class);
+            var result = controller.getSession(SESSION_ID, request);
+
+            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(result.getBody()).isNotNull();
         }
 
         @Test
@@ -150,7 +156,11 @@ class OnboardingControllerTest {
 
             OnboardingSession session = buildSession(SESSION_ID, WizardStep.ACTIVATION, SessionStatus.IN_PROGRESS);
             when(sessionService.getSession(SESSION_ID)).thenReturn(session);
-            when(invitationService.validate(anyString(), anyString()))
+            
+            // Controller calls getTokenById to get the token before validating
+            String invitationToken = "aBcDeFgHiJkLmNoPqRsTuVwXyZ012345";
+            when(invitationService.getTokenById(session.getInvitationId())).thenReturn(invitationToken);
+            when(invitationService.validate(eq(invitationToken), eq("192.168.1.1")))
                     .thenReturn(InvitationValidationResult.valid(buildInvitation()));
 
             ProvisioningResult provResult = new ProvisioningResult(
@@ -170,7 +180,7 @@ class OnboardingControllerTest {
         @DisplayName("throws CsrfValidationException when CSRF invalid")
         void invalidCsrf_throwsException() {
             when(cookieManager.readSessionId(request)).thenReturn(Optional.of(SESSION_ID.toString()));
-            when(csrfTokenService.validateToken(eq(SESSION_ID), any())).thenReturn(false);
+            // Don't add CSRF header - controller checks for null/blank first and throws
 
             assertThatThrownBy(() -> controller.complete(SESSION_ID, request))
                     .isInstanceOf(CsrfValidationException.class);
@@ -209,12 +219,17 @@ class OnboardingControllerTest {
         }
 
         @Test
-        @DisplayName("requires valid session cookie")
-        void requiresCookie() {
+        @DisplayName("allows request when cookie is missing (cross-origin support)")
+        void allowsRequestWhenCookieMissing() {
+            // Per validateSessionCookie: cookie absence is allowed for cross-origin deployments
             when(cookieManager.readSessionId(request)).thenReturn(Optional.empty());
+            ActivationStatusResponse statusResponse = new ActivationStatusResponse(
+                    ActivationStatus.PENDING, Instant.now(), null, null, null, 0, null);
+            when(activationService.getStatus(SESSION_ID, null)).thenReturn(Optional.of(statusResponse));
 
-            assertThatThrownBy(() -> controller.getActivationStatus(SESSION_ID, null, request))
-                    .isInstanceOf(SessionExpiredException.class);
+            var result = controller.getActivationStatus(SESSION_ID, null, request);
+
+            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         }
     }
 

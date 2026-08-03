@@ -330,16 +330,18 @@ class WelcomeStateHandlerTest {
             Father father = createTestFather("en");
             when(fatherRepository.findById(FATHER_ID)).thenReturn(Optional.of(father));
             
-            when(messageGenerator.generateWithFallback(eq(MessageType.CLARIFICATION), any(), anyLong()))
-                    .thenReturn("I didn't understand. Please say: Ready to schedule or Tell me more");
-            
-            // Act
+            // Act - Per Requirement 11.4, handleUnmatched uses hardcoded messages, NOT AI
             StateAction action = handler.handleUnmatched(context);
             
             // Assert
             assertThat(action.getActionType()).isEqualTo(StateAction.ActionType.CLARIFY);
             assertThat(action.isTransition()).isFalse();
             assertThat(action.hasResponse()).isTrue();
+            // Verify the hardcoded English clarification message
+            assertThat(action.getResponseMessage().orElse(""))
+                    .contains("didn't understand")
+                    .contains("yes")
+                    .contains("tell me more");
         }
         
         @Test
@@ -350,23 +352,15 @@ class WelcomeStateHandlerTest {
             
             Father father = createTestFather("en");
             when(fatherRepository.findById(FATHER_ID)).thenReturn(Optional.of(father));
-            when(messageGenerator.generateWithFallback(any(), any(), anyLong()))
-                    .thenReturn("Clarification message");
             
-            // Act
-            handler.handleUnmatched(context);
+            // Act - Per Requirement 11.4, handleUnmatched uses hardcoded messages, NOT AI
+            StateAction action = handler.handleUnmatched(context);
             
-            // Assert - verify the message context includes English options
-            verify(messageGenerator).generateWithFallback(
-                    eq(MessageType.CLARIFICATION),
-                    argThat(ctx -> {
-                        List<String> options = ctx.getValidOptions();
-                        return options != null && 
-                               options.contains("Ready to schedule") && 
-                               options.contains("Tell me more");
-                    }),
-                    anyLong()
-            );
+            // Assert - verify the hardcoded message contains English options
+            String response = action.getResponseMessage().orElse("");
+            assertThat(response).contains("didn't understand");
+            assertThat(response).containsIgnoringCase("yes");
+            assertThat(response).containsIgnoringCase("tell me more");
         }
         
         @Test
@@ -377,23 +371,15 @@ class WelcomeStateHandlerTest {
             
             Father father = createTestFather("he");
             when(fatherRepository.findById(FATHER_ID)).thenReturn(Optional.of(father));
-            when(messageGenerator.generateWithFallback(any(), any(), anyLong()))
-                    .thenReturn("Clarification message in Hebrew");
             
-            // Act
-            handler.handleUnmatched(context);
+            // Act - Per Requirement 11.4, handleUnmatched uses hardcoded messages, NOT AI
+            StateAction action = handler.handleUnmatched(context);
             
-            // Assert - verify the message context includes Hebrew options
-            verify(messageGenerator).generateWithFallback(
-                    eq(MessageType.CLARIFICATION),
-                    argThat(ctx -> {
-                        List<String> options = ctx.getValidOptions();
-                        return options != null && 
-                               options.contains("מוכן לתאם") && 
-                               options.contains("ספר לי עוד");
-                    }),
-                    anyLong()
-            );
+            // Assert - verify the hardcoded message contains Hebrew options
+            String response = action.getResponseMessage().orElse("");
+            assertThat(response).contains("לא הבנתי");
+            assertThat(response).contains("כן");
+            assertThat(response).contains("ספר לי עוד");
         }
         
         @Test
@@ -404,22 +390,13 @@ class WelcomeStateHandlerTest {
             
             Father father = createTestFatherWithNullLocale();
             when(fatherRepository.findById(FATHER_ID)).thenReturn(Optional.of(father));
-            when(messageGenerator.generateWithFallback(any(), any(), anyLong()))
-                    .thenReturn("Clarification message");
             
-            // Act
-            handler.handleUnmatched(context);
+            // Act - Per Requirement 11.4, handleUnmatched uses hardcoded messages, NOT AI
+            StateAction action = handler.handleUnmatched(context);
             
             // Assert - should use English options
-            verify(messageGenerator).generateWithFallback(
-                    eq(MessageType.CLARIFICATION),
-                    argThat(ctx -> {
-                        List<String> options = ctx.getValidOptions();
-                        return options != null && 
-                               options.contains("Ready to schedule");
-                    }),
-                    anyLong()
-            );
+            String response = action.getResponseMessage().orElse("");
+            assertThat(response).contains("didn't understand");
         }
         
         @Test
@@ -457,8 +434,7 @@ class WelcomeStateHandlerTest {
             
             Father father = createTestFather("en");
             when(fatherRepository.findById(FATHER_ID)).thenReturn(Optional.of(father));
-            when(messageGenerator.generateWithFallback(eq(MessageType.CLARIFICATION), any(), anyLong()))
-                    .thenReturn("Clarification message");
+            // Note: Per Requirement 11.4, handleUnmatched uses hardcoded messages, NOT messageGenerator
             
             // Act
             StateAction action = handler.handle(context, noMatch);
@@ -477,8 +453,7 @@ class WelcomeStateHandlerTest {
             
             Father father = createTestFather("en");
             when(fatherRepository.findById(FATHER_ID)).thenReturn(Optional.of(father));
-            when(messageGenerator.generateWithFallback(eq(MessageType.CLARIFICATION), any(), anyLong()))
-                    .thenReturn("Clarification message");
+            // Note: Per Requirement 11.4, handleUnmatched uses hardcoded messages, NOT messageGenerator
             
             // Act
             StateAction action = handler.handle(context, match);
