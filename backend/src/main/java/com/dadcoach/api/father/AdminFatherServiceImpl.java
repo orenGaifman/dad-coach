@@ -152,16 +152,12 @@ public class AdminFatherServiceImpl implements AdminFatherService {
             ? father.getCurrentWorkflowState().name() : null);
         dto.setWorkflowStateEnteredAt(father.getWorkflowStateEnteredAt());
         
-        // Generate dashboard magic link
+        // Get existing valid magic link (if any) - read-only operation
         try {
-            String dashboardUrl = magicLinkService.generateMagicLink(
-                father.getId(), 
-                "/growth", 
-                "admin_dashboard"
-            );
-            dto.setDashboardUrl(dashboardUrl);
+            magicLinkService.getExistingValidLink(father.getId())
+                .ifPresent(dto::setDashboardUrl);
         } catch (Exception e) {
-            log.warn("Failed to generate dashboard URL for father {}: {}", father.getId(), e.getMessage());
+            log.warn("Failed to get dashboard URL for father {}: {}", father.getId(), e.getMessage());
         }
         
         return dto;
