@@ -1,6 +1,6 @@
 package com.dadcoach.workspace.aggregation;
 
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
 import com.dadcoach.workspace.dto.response.ActiveMissionsResponse;
 import org.springframework.stereotype.Service;
 
@@ -15,10 +15,10 @@ import java.util.UUID;
 @Service
 public class MissionsOverviewService {
 
-    private static final List<MissionStatus> ACTIVE_STATUSES = List.of(
-            MissionStatus.ASSIGNED,
-            MissionStatus.ACCEPTED,
-            MissionStatus.IN_PROGRESS
+    private static final List<LegacyMissionStatus> ACTIVE_STATUSES = List.of(
+            LegacyMissionStatus.ASSIGNED,
+            LegacyMissionStatus.ACCEPTED,
+            LegacyMissionStatus.IN_PROGRESS
     );
 
     private final MissionDataService missionDataService;

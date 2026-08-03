@@ -36,7 +36,7 @@ Implementation of the AI Architecture Intelligence Layer for Dad Coach — provi
   - [x] 2.3 Implement fallback order: same provider lower-tier → secondary provider → pre-written fallback
   - [x] 2.4 Ensure total fallback chain completes within 30 seconds
   - [x] 2.5 Ensure no step in the chain is skipped
-  - [x] 2.6 Write pre-written fallbacks in conversational Latin American Spanish
+  - [x] 2.6 Write pre-written fallbacks in father's preferred language (English or Hebrew)
 
 - [x] 3. Prompt Templates & Registry
   - [x] 3.1 Implement templates loaded from YAML/resource files at startup
@@ -57,7 +57,7 @@ Implementation of the AI Architecture Intelligence Layer for Dad Coach — provi
 - [x] 5. Safety Classifier
   - [x] 5.1 Return exactly one classification with confidence in range 0.0 to 1.0
   - [x] 5.2 Ensure classification is never null or undefined
-  - [x] 5.3 Detect Spanish crisis keywords (self-harm, abuse, violence)
+  - [x] 5.3 Detect crisis keywords in both English and Hebrew (self-harm, abuse, violence)
   - [x] 5.4 Return pre-written safety response with hotline numbers for CRISIS classification
   - [x] 5.5 Flag CHILD_SAFETY for human review with 2h SLA
   - [x] 5.6 Ensure classification runs BEFORE any coaching generation

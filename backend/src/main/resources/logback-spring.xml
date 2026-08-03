@@ -1,20 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <!-- Local profile: plain-text console output -->
+    <!-- Local profile: plain-text console output with MDC fields -->
     <springProfile name="local">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
-                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+                <!-- Include father_id and workflow_state from MDC when present -->
+                <!-- Format: timestamp [thread] LEVEL logger - [father_id:X state:Y] message -->
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %X{father_id:--} %X{workflow_state:--} %msg%n</pattern>
             </encoder>
         </appender>
 
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
         </root>
+        
+        <!-- Enable DEBUG logging for workflow package during local development -->
+        <logger name="com.dadcoach.workflow" level="DEBUG"/>
     </springProfile>
 
-    <!-- Dev and Prod profiles: JSON structured logging -->
+    <!-- Dev and Prod profiles: JSON structured logging with MDC fields -->
+    <!-- Implements Requirement 16.6: ALL logs SHALL include father_id as a field -->
     <springProfile name="dev | prod">
         <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
             <encoder class="net.logstash.logback.encoder.LogstashEncoder">
@@ -23,12 +29,24 @@
                     <timestamp>timestamp</timestamp>
                     <version>[ignore]</version>
                 </fieldNames>
+                <!-- Include all MDC fields automatically -->
+                <includeMdcKeyName>father_id</includeMdcKeyName>
+                <includeMdcKeyName>workflow_state</includeMdcKeyName>
+                <includeMdcKeyName>trigger_type</includeMdcKeyName>
+                <includeMdcKeyName>message_id</includeMdcKeyName>
+                <includeMdcKeyName>from_state</includeMdcKeyName>
+                <includeMdcKeyName>to_state</includeMdcKeyName>
+                <includeMdcKeyName>trigger_reason</includeMdcKeyName>
+                <includeMdcKeyName>job_name</includeMdcKeyName>
             </encoder>
         </appender>
 
         <root level="INFO">
             <appender-ref ref="CONSOLE_JSON"/>
         </root>
+        
+        <!-- Workflow package logging configuration -->
+        <logger name="com.dadcoach.workflow" level="INFO"/>
     </springProfile>
 
 </configuration>

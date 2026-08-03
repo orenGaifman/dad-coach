@@ -7,6 +7,7 @@ import com.dadcoach.workspace.aggregation.WorkspaceSummaryService;
 import com.dadcoach.workspace.dto.response.PartialResponse;
 import com.dadcoach.workspace.dto.response.QuickActionsResponse;
 import com.dadcoach.workspace.dto.response.WorkspaceSummaryResponse;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,9 +22,13 @@ import java.util.UUID;
  * <p>Provides the workspace summary endpoint that aggregates data from multiple
  * domain services with partial degradation support, and the quick actions endpoint
  * for contextual suggestions.</p>
+ * 
+ * <p>Note: This controller is only active when the deterministic-workflow-engine feature
+ * flag is disabled. When enabled, the workflow API's WorkspaceController takes precedence.</p>
  */
 @RestController
 @RequestMapping("/api/v1/workspace")
+@ConditionalOnProperty(name = "dadcoach.features.deterministic-workflow-engine", havingValue = "false")
 public class WorkspaceController {
 
     private final WorkspaceSummaryService workspaceSummaryService;

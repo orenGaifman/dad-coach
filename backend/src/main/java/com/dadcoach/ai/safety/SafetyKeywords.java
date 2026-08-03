@@ -4,8 +4,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Spanish keyword lists for safety classification detection.
- * Keywords are in Latin American Spanish as specified by SPEC-003 Requirement 9.
+ * English and Hebrew keyword lists for safety classification detection.
+ * Keywords support both English and Hebrew as specified by SPEC-003 Requirement 9.
  *
  * <p>Detection achieves precision >= 0.95 and recall >= 0.90 —
  * false positives are acceptable, false negatives are not.
@@ -20,168 +20,249 @@ public final class SafetyKeywords {
 
     /**
      * Keywords indicating suicidal ideation or self-harm intent.
+     * Includes English and Hebrew variants.
      */
     public static final Set<String> CRISIS_SELF_HARM = Set.of(
-        "suicidio",
-        "suicidarme",
-        "matarme",
-        "no quiero vivir",
-        "hacerme daño",
-        "autolesión",
-        "cortarme",
-        "acabar con todo",
-        "no vale la pena vivir",
-        "quiero morir",
-        "me quiero morir",
-        "quitarme la vida",
-        "terminar con mi vida",
-        "ya no puedo más"
+        // English
+        "suicide",
+        "kill myself",
+        "don't want to live",
+        "hurt myself",
+        "self-harm",
+        "cut myself",
+        "end it all",
+        "not worth living",
+        "want to die",
+        "take my life",
+        "end my life",
+        "can't go on",
+        // Hebrew
+        "התאבדות",
+        "להרוג את עצמי",
+        "לא רוצה לחיות",
+        "לפגוע בעצמי",
+        "פגיעה עצמית",
+        "לחתוך את עצמי",
+        "לסיים עם הכל",
+        "רוצה למות",
+        "לקחת את החיים שלי",
+        "לא יכול יותר"
     );
 
     /**
      * Keywords indicating violence toward children or others.
+     * Includes English and Hebrew variants.
      */
     public static final Set<String> CRISIS_VIOLENCE = Set.of(
-        "golpeé",
-        "golpeo",
-        "le pegué",
-        "le pego",
-        "abuso",
-        "violencia",
-        "lastimé",
-        "maltrato",
-        "lo golpeé",
-        "la golpeé",
-        "le doy golpes",
-        "cachetada",
-        "cinturón",
-        "le di con"
+        // English
+        "I hit",
+        "I beat",
+        "I struck",
+        "abuse",
+        "violence",
+        "I hurt",
+        "maltreatment",
+        "I gave him a slap",
+        "I gave her a slap",
+        "belt",
+        // Hebrew
+        "הכיתי",
+        "היכיתי",
+        "נתתי לו מכה",
+        "נתתי לה מכה",
+        "התעללות",
+        "אלימות",
+        "פגעתי",
+        "סטירה",
+        "חגורה"
     );
 
     // ===== CHILD_SAFETY Keywords =====
 
     /**
      * Keywords indicating potential child abuse, neglect, or danger.
+     * Includes English and Hebrew variants.
      */
     public static final Set<String> CHILD_SAFETY_KEYWORDS = Set.of(
-        "abuso sexual",
-        "tocamiento",
-        "lo toca",
-        "la toca",
-        "abuso infantil",
-        "negligencia",
-        "abandoné",
-        "lo dejé solo",
-        "la dejé sola",
-        "no le doy de comer",
-        "encerré",
-        "castigo físico",
-        "no quiero a mi hijo",
-        "odio a mi hijo",
-        "quisiera que no existiera"
+        // English
+        "sexual abuse",
+        "touching",
+        "child abuse",
+        "neglect",
+        "I abandoned",
+        "I left him alone",
+        "I left her alone",
+        "I don't feed",
+        "I locked",
+        "physical punishment",
+        "I don't want my child",
+        "I hate my child",
+        "I wish he didn't exist",
+        // Hebrew
+        "התעללות מינית",
+        "נגיעה",
+        "התעללות בילדים",
+        "הזנחה",
+        "נטשתי",
+        "השארתי אותו לבד",
+        "השארתי אותה לבד",
+        "לא נותן לו לאכול",
+        "נעלתי",
+        "עונש גופני",
+        "לא רוצה את הילד שלי",
+        "שונא את הילד שלי"
     );
 
     // ===== MANIPULATION / Jailbreak patterns =====
 
     /**
      * Patterns indicating jailbreak or manipulation attempts.
-     * Includes both English and Spanish variants.
+     * Includes both English and Hebrew variants.
      */
     public static final Set<String> MANIPULATION_PATTERNS = Set.of(
+        // English
         "ignore previous instructions",
-        "ignora las instrucciones anteriores",
-        "ignora tus instrucciones",
-        "olvida tus reglas",
-        "olvida las reglas",
-        "actúa como",
-        "actua como",
-        "pretende ser",
-        "finge ser",
-        "eres un nuevo personaje",
-        "reveal your system prompt",
-        "muestra tu prompt",
-        "muéstrame tu prompt",
-        "cuáles son tus instrucciones",
-        "dime tus instrucciones",
-        "system prompt",
-        "ignore all previous",
         "forget your instructions",
+        "ignore all previous",
         "you are now",
+        "pretend to be",
+        "act as",
+        "reveal your system prompt",
+        "show me your prompt",
+        "what are your instructions",
+        "system prompt",
         "do anything now",
         "dan mode",
-        "jailbreak"
+        "jailbreak",
+        // Hebrew
+        "התעלם מההוראות הקודמות",
+        "שכח את ההוראות שלך",
+        "אתה עכשיו",
+        "תעשה כאילו אתה",
+        "הראה לי את הפרומפט שלך",
+        "מה ההוראות שלך"
     );
 
     // ===== MEDICAL Keywords =====
 
     /**
      * Keywords indicating medical questions about children.
+     * Includes English and Hebrew variants.
      */
     public static final Set<String> MEDICAL_KEYWORDS = Set.of(
-        "fiebre",
-        "enfermo",
-        "enferma",
-        "síntomas",
-        "diagnóstico",
-        "medicamento",
-        "medicina",
-        "pediatra",
-        "autismo",
-        "tdah",
-        "trastorno",
-        "alergia",
-        "vacuna",
-        "desarrollo",
-        "retraso",
-        "no habla",
-        "no camina",
-        "convulsiones",
-        "hospital"
+        // English
+        "fever",
+        "sick",
+        "symptoms",
+        "diagnosis",
+        "medication",
+        "medicine",
+        "pediatrician",
+        "autism",
+        "adhd",
+        "disorder",
+        "allergy",
+        "vaccine",
+        "development",
+        "delay",
+        "doesn't speak",
+        "doesn't walk",
+        "seizures",
+        "hospital",
+        // Hebrew
+        "חום",
+        "חולה",
+        "תסמינים",
+        "אבחון",
+        "תרופה",
+        "רופא ילדים",
+        "אוטיזם",
+        "קשב וריכוז",
+        "הפרעה",
+        "אלרגיה",
+        "חיסון",
+        "התפתחות",
+        "עיכוב",
+        "לא מדבר",
+        "לא הולך",
+        "פרכוסים",
+        "בית חולים"
     );
 
     // ===== LEGAL Keywords =====
 
     /**
      * Keywords indicating legal questions (custody, divorce).
+     * Includes English and Hebrew variants.
      */
     public static final Set<String> LEGAL_KEYWORDS = Set.of(
-        "custodia",
-        "divorcio",
-        "demanda",
-        "abogado",
-        "juez",
-        "tribunal",
-        "pensión alimenticia",
-        "régimen de visitas",
-        "patria potestad",
-        "orden de alejamiento",
-        "denuncia",
-        "derechos legales",
-        "juicio"
+        // English
+        "custody",
+        "divorce",
+        "lawsuit",
+        "lawyer",
+        "judge",
+        "court",
+        "child support",
+        "visitation rights",
+        "parental rights",
+        "restraining order",
+        "complaint",
+        "legal rights",
+        "trial",
+        // Hebrew
+        "משמורת",
+        "גירושין",
+        "תביעה",
+        "עורך דין",
+        "שופט",
+        "בית משפט",
+        "מזונות",
+        "הסדרי ראייה",
+        "זכויות הורים",
+        "צו הרחקה",
+        "תלונה",
+        "זכויות משפטיות"
     );
 
     // ===== EMOTIONAL DISTRESS Keywords =====
 
     /**
      * Keywords indicating significant emotional distress (not crisis-level).
+     * Includes English and Hebrew variants.
      */
     public static final Set<String> EMOTIONAL_DISTRESS_KEYWORDS = Set.of(
-        "no puedo más",
-        "estoy desesperado",
-        "me siento solo",
-        "fracasé como padre",
-        "soy un mal padre",
-        "no sirvo para esto",
-        "me siento culpable",
-        "angustia",
-        "ansiedad",
-        "deprimido",
-        "depresión",
-        "no duermo",
-        "agotado",
-        "perdido",
-        "abrumado",
-        "overwhelmed"
+        // English
+        "can't take it anymore",
+        "I'm desperate",
+        "I feel alone",
+        "I failed as a father",
+        "I'm a bad father",
+        "I'm not cut out for this",
+        "I feel guilty",
+        "anxiety",
+        "anxious",
+        "depressed",
+        "depression",
+        "can't sleep",
+        "exhausted",
+        "lost",
+        "overwhelmed",
+        // Hebrew
+        "לא יכול יותר",
+        "אני מיואש",
+        "אני מרגיש לבד",
+        "נכשלתי כאבא",
+        "אני אבא רע",
+        "אני לא מתאים לזה",
+        "אני מרגיש אשם",
+        "חרדה",
+        "דיכאון",
+        "מדוכא",
+        "לא ישן",
+        "מותש",
+        "אבוד",
+        "מוצף"
     );
 
     /**

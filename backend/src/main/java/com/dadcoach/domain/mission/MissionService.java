@@ -8,7 +8,7 @@ import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.domain.goal.Goal;
 import com.dadcoach.domain.goal.GoalRepository;
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
 import com.dadcoach.statemachine.StateMachineEngine;
 
 import org.springframework.stereotype.Service;
@@ -111,7 +111,7 @@ public class MissionService {
      * @throws com.dadcoach.common.InvalidStateTransitionException if the transition is invalid
      */
     public Mission acceptMission(Long missionId) {
-        return transitionMission(missionId, MissionStatus.ACCEPTED, "Father acknowledged mission");
+        return transitionMission(missionId, LegacyMissionStatus.ACCEPTED, "Father acknowledged mission");
     }
 
     /**
@@ -123,7 +123,7 @@ public class MissionService {
      * @throws com.dadcoach.common.InvalidStateTransitionException if the transition is invalid
      */
     public Mission startMission(Long missionId) {
-        return transitionMission(missionId, MissionStatus.IN_PROGRESS, "Father reported starting");
+        return transitionMission(missionId, LegacyMissionStatus.IN_PROGRESS, "Father reported starting");
     }
 
     /**
@@ -147,10 +147,10 @@ public class MissionService {
 
         // Perform audited transition
         stateMachineEngine.transition(
-                "Mission", mission.getId(), mission.getStatus(), MissionStatus.COMPLETED,
+                "Mission", mission.getId(), mission.getStatus(), LegacyMissionStatus.COMPLETED,
                 "Father reported completion"
         );
-        mission.transitionTo(MissionStatus.COMPLETED);
+        mission.transitionTo(LegacyMissionStatus.COMPLETED);
 
         // Set outcome data
         mission.setOutcomeRating(outcomeRating);
@@ -168,7 +168,7 @@ public class MissionService {
      * @throws com.dadcoach.common.InvalidStateTransitionException if the transition is invalid
      */
     public Mission skipMission(Long missionId) {
-        return transitionMission(missionId, MissionStatus.SKIPPED, "Father explicitly declined");
+        return transitionMission(missionId, LegacyMissionStatus.SKIPPED, "Father explicitly declined");
     }
 
     /**
@@ -180,7 +180,7 @@ public class MissionService {
      * @throws com.dadcoach.common.InvalidStateTransitionException if the transition is invalid
      */
     public Mission expireMission(Long missionId) {
-        return transitionMission(missionId, MissionStatus.EXPIRED, "Deadline passed without response");
+        return transitionMission(missionId, LegacyMissionStatus.EXPIRED, "Deadline passed without response");
     }
 
     /**
@@ -192,7 +192,7 @@ public class MissionService {
      * @throws com.dadcoach.common.InvalidStateTransitionException if the transition is invalid
      */
     public Mission abandonMission(Long missionId) {
-        return transitionMission(missionId, MissionStatus.ABANDONED, "Deadline passed while in progress");
+        return transitionMission(missionId, LegacyMissionStatus.ABANDONED, "Deadline passed while in progress");
     }
 
     /**
@@ -204,7 +204,7 @@ public class MissionService {
      * @throws com.dadcoach.common.InvalidStateTransitionException if the transition is invalid
      */
     public Mission reflectOnMission(Long missionId) {
-        return transitionMission(missionId, MissionStatus.REFLECTED, "Father provided post-mission reflection");
+        return transitionMission(missionId, LegacyMissionStatus.REFLECTED, "Father provided post-mission reflection");
     }
 
     /**
@@ -290,7 +290,7 @@ public class MissionService {
      * Performs an audited state transition on a mission.
      * Uses the StateMachineEngine for audit logging and the Mission entity for state validation.
      */
-    private Mission transitionMission(Long missionId, MissionStatus targetStatus, String reason) {
+    private Mission transitionMission(Long missionId, LegacyMissionStatus targetStatus, String reason) {
         Mission mission = findMissionOrThrow(missionId);
 
         // Audit-logged transition via StateMachineEngine

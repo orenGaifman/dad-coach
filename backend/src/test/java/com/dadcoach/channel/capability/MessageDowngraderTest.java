@@ -152,8 +152,8 @@ class MessageDowngraderTest {
         @DisplayName("TEMPLATE with session open → TEXT with variables substituted")
         void templateDowngradeSessionOpen() {
             var msg = templateMessage("daily_coaching",
-                "Hola {{1}} 👋 {{2}}",
-                Map.of("1", "Carlos", "2", "¿Cómo va tu día?"));
+                "Hello {{1}} 👋 {{2}}",
+                Map.of("1", "Carlos", "2", "How's your day going?"));
             var caps = ChannelCapabilities.textOnly();
 
             var result = downgrader.downgradeIfNeeded(msg, caps, true);
@@ -163,7 +163,7 @@ class MessageDowngraderTest {
             var downgraded = success.downgradedMessage();
 
             assertEquals(MessageType.TEXT, downgraded.messageType());
-            assertEquals("Hola Carlos 👋 ¿Cómo va tu día?", downgraded.textContent());
+            assertEquals("Hello Carlos 👋 How's your day going?", downgraded.textContent());
             assertFalse(downgraded.isTemplate());
         }
 
@@ -171,7 +171,7 @@ class MessageDowngraderTest {
         @DisplayName("TEMPLATE with session closed → rejected")
         void templateDowngradeSessionClosed() {
             var msg = templateMessage("daily_coaching",
-                "Hola {{1}} 👋",
+                "Hello {{1}} 👋",
                 Map.of("1", "Carlos"));
             var caps = ChannelCapabilities.textOnly();
 

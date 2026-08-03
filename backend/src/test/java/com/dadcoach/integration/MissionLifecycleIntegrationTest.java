@@ -8,7 +8,8 @@ import com.dadcoach.domain.father.FatherService;
 import com.dadcoach.domain.mission.Mission;
 import com.dadcoach.domain.mission.MissionService;
 import com.dadcoach.father.FatherStatus;
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
+import static com.dadcoach.mission.LegacyMissionStatus.*;
 import com.dadcoach.missionengine.MissionEngineImpl;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -63,19 +64,19 @@ class MissionLifecycleIntegrationTest extends IntegrationTestBase {
                 "CONNECTION", 2, 20
         );
         assertThat(mission.getId()).isNotNull();
-        assertThat(mission.getStatus()).isEqualTo(MissionStatus.ASSIGNED);
+        assertThat(mission.getStatus()).isEqualTo(ASSIGNED);
 
         // Step 2: Accept mission
         Mission accepted = missionService.acceptMission(mission.getId());
-        assertThat(accepted.getStatus()).isEqualTo(MissionStatus.ACCEPTED);
+        assertThat(accepted.getStatus()).isEqualTo(ACCEPTED);
 
         // Step 3: Start mission
         Mission inProgress = missionService.startMission(mission.getId());
-        assertThat(inProgress.getStatus()).isEqualTo(MissionStatus.IN_PROGRESS);
+        assertThat(inProgress.getStatus()).isEqualTo(IN_PROGRESS);
 
         // Step 4: Complete with a high rating
         Mission completed = missionService.completeMission(mission.getId(), 5, "Great bonding time!");
-        assertThat(completed.getStatus()).isEqualTo(MissionStatus.COMPLETED);
+        assertThat(completed.getStatus()).isEqualTo(COMPLETED);
         assertThat(completed.getOutcomeRating()).isEqualTo(5);
 
         // Step 5: Verify difficulty adaptation (rating 5 → increase difficulty)
@@ -95,6 +96,6 @@ class MissionLifecycleIntegrationTest extends IntegrationTestBase {
 
         // Skip the mission
         Mission skipped = missionService.skipMission(mission.getId());
-        assertThat(skipped.getStatus()).isEqualTo(MissionStatus.SKIPPED);
+        assertThat(skipped.getStatus()).isEqualTo(SKIPPED);
     }
 }

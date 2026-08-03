@@ -1,6 +1,6 @@
 package com.dadcoach.workspace.aggregation;
 
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
 
 import java.util.List;
 import java.util.Optional;
@@ -23,7 +23,7 @@ public interface MissionDataService {
      * @param statuses the set of mission statuses to include
      * @return list of matching mission read models
      */
-    List<MissionReadModel> getMissionsByFatherIdAndStatus(UUID fatherId, List<MissionStatus> statuses);
+    List<MissionReadModel> getMissionsByFatherIdAndStatus(UUID fatherId, List<LegacyMissionStatus> statuses);
 
     /**
      * Retrieves missions associated with a specific child.

@@ -13,7 +13,7 @@ import java.util.UUID;
  * @param fatherId         the father this summary is for
  * @param periodStart      start date of the summary period
  * @param periodEnd        end date of the summary period
- * @param summary          the generated summary text in Spanish
+ * @param summary          the generated summary text in the father's preferred language (English or Hebrew)
  * @param highlights       key highlights from the week
  * @param missionsCompleted number of missions completed
  * @param streakDays       current streak at end of period

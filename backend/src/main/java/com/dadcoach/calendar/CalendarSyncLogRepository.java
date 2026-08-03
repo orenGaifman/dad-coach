@@ -5,6 +5,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Repository for calendar sync log entries.
@@ -26,4 +27,14 @@ public interface CalendarSyncLogRepository extends JpaRepository<CalendarSyncLog
      * Find failed sync attempts since a given time.
      */
     List<CalendarSyncLog> findBySuccessAndSyncedAtAfter(Boolean success, Instant since);
+
+    /**
+     * Find the most recent successful calendar sync log.
+     * Used by health indicator to check Google Calendar API status.
+     * 
+     * Requirements: 16.5 - Health endpoint reports Google Calendar API status
+     * 
+     * @return the most recent successful sync log, or empty if none exists
+     */
+    Optional<CalendarSyncLog> findTopBySuccessTrueOrderBySyncedAtDesc();
 }

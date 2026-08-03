@@ -3,7 +3,8 @@ package com.dadcoach.domain.mission;
 import com.dadcoach.common.InvalidStateTransitionException;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.father.Father;
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
+import static com.dadcoach.mission.LegacyMissionStatus.*;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -43,103 +44,103 @@ class MissionTest {
         @Test
         void newMissionShouldHaveAssignedStatus() {
             Mission mission = createMission();
-            assertThat(mission.getStatus()).isEqualTo(MissionStatus.ASSIGNED);
+            assertThat(mission.getStatus()).isEqualTo(ASSIGNED);
         }
 
         @Test
         void assignedCanTransitionToAccepted() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
-            assertThat(mission.getStatus()).isEqualTo(MissionStatus.ACCEPTED);
+            mission.transitionTo(ACCEPTED);
+            assertThat(mission.getStatus()).isEqualTo(ACCEPTED);
             assertThat(mission.getAcceptedAt()).isNotNull();
         }
 
         @Test
         void assignedCanTransitionToSkipped() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.SKIPPED);
-            assertThat(mission.getStatus()).isEqualTo(MissionStatus.SKIPPED);
+            mission.transitionTo(SKIPPED);
+            assertThat(mission.getStatus()).isEqualTo(SKIPPED);
         }
 
         @Test
         void assignedCanTransitionToExpired() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.EXPIRED);
-            assertThat(mission.getStatus()).isEqualTo(MissionStatus.EXPIRED);
+            mission.transitionTo(EXPIRED);
+            assertThat(mission.getStatus()).isEqualTo(EXPIRED);
         }
 
         @Test
         void acceptedCanTransitionToInProgress() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
-            mission.transitionTo(MissionStatus.IN_PROGRESS);
-            assertThat(mission.getStatus()).isEqualTo(MissionStatus.IN_PROGRESS);
+            mission.transitionTo(ACCEPTED);
+            mission.transitionTo(IN_PROGRESS);
+            assertThat(mission.getStatus()).isEqualTo(IN_PROGRESS);
         }
 
         @Test
         void acceptedCanTransitionToExpired() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
-            mission.transitionTo(MissionStatus.EXPIRED);
-            assertThat(mission.getStatus()).isEqualTo(MissionStatus.EXPIRED);
+            mission.transitionTo(ACCEPTED);
+            mission.transitionTo(EXPIRED);
+            assertThat(mission.getStatus()).isEqualTo(EXPIRED);
         }
 
         @Test
         void inProgressCanTransitionToCompleted() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
-            mission.transitionTo(MissionStatus.IN_PROGRESS);
-            mission.transitionTo(MissionStatus.COMPLETED);
-            assertThat(mission.getStatus()).isEqualTo(MissionStatus.COMPLETED);
+            mission.transitionTo(ACCEPTED);
+            mission.transitionTo(IN_PROGRESS);
+            mission.transitionTo(COMPLETED);
+            assertThat(mission.getStatus()).isEqualTo(COMPLETED);
             assertThat(mission.getCompletedAt()).isNotNull();
         }
 
         @Test
         void inProgressCanTransitionToAbandoned() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
-            mission.transitionTo(MissionStatus.IN_PROGRESS);
-            mission.transitionTo(MissionStatus.ABANDONED);
-            assertThat(mission.getStatus()).isEqualTo(MissionStatus.ABANDONED);
+            mission.transitionTo(ACCEPTED);
+            mission.transitionTo(IN_PROGRESS);
+            mission.transitionTo(ABANDONED);
+            assertThat(mission.getStatus()).isEqualTo(ABANDONED);
         }
 
         @Test
         void completedCanTransitionToReflected() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
-            mission.transitionTo(MissionStatus.IN_PROGRESS);
-            mission.transitionTo(MissionStatus.COMPLETED);
-            mission.transitionTo(MissionStatus.REFLECTED);
-            assertThat(mission.getStatus()).isEqualTo(MissionStatus.REFLECTED);
+            mission.transitionTo(ACCEPTED);
+            mission.transitionTo(IN_PROGRESS);
+            mission.transitionTo(COMPLETED);
+            mission.transitionTo(REFLECTED);
+            assertThat(mission.getStatus()).isEqualTo(REFLECTED);
         }
 
         @Test
         void invalidTransitionThrowsException() {
             Mission mission = createMission();
-            assertThatThrownBy(() -> mission.transitionTo(MissionStatus.COMPLETED))
+            assertThatThrownBy(() -> mission.transitionTo(COMPLETED))
                     .isInstanceOf(InvalidStateTransitionException.class);
         }
 
         @Test
         void assignedCannotTransitionToInProgress() {
             Mission mission = createMission();
-            assertThatThrownBy(() -> mission.transitionTo(MissionStatus.IN_PROGRESS))
+            assertThatThrownBy(() -> mission.transitionTo(IN_PROGRESS))
                     .isInstanceOf(InvalidStateTransitionException.class);
         }
 
         @Test
         void skippedCannotTransitionToAnything() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.SKIPPED);
-            assertThatThrownBy(() -> mission.transitionTo(MissionStatus.ACCEPTED))
+            mission.transitionTo(SKIPPED);
+            assertThatThrownBy(() -> mission.transitionTo(ACCEPTED))
                     .isInstanceOf(InvalidStateTransitionException.class);
         }
 
         @Test
         void expiredCannotTransitionToAnything() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.EXPIRED);
-            assertThatThrownBy(() -> mission.transitionTo(MissionStatus.ACCEPTED))
+            mission.transitionTo(EXPIRED);
+            assertThatThrownBy(() -> mission.transitionTo(ACCEPTED))
                     .isInstanceOf(InvalidStateTransitionException.class);
         }
     }
@@ -239,39 +240,39 @@ class MissionTest {
         @Test
         void isActiveReturnsTrueForAccepted() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
+            mission.transitionTo(ACCEPTED);
             assertThat(mission.isActive()).isTrue();
         }
 
         @Test
         void isActiveReturnsTrueForInProgress() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
-            mission.transitionTo(MissionStatus.IN_PROGRESS);
+            mission.transitionTo(ACCEPTED);
+            mission.transitionTo(IN_PROGRESS);
             assertThat(mission.isActive()).isTrue();
         }
 
         @Test
         void isActiveReturnsFalseForTerminalStates() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.SKIPPED);
+            mission.transitionTo(SKIPPED);
             assertThat(mission.isActive()).isFalse();
         }
 
         @Test
         void isTerminalReturnsTrueForSkipped() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.SKIPPED);
+            mission.transitionTo(SKIPPED);
             assertThat(mission.isTerminal()).isTrue();
         }
 
         @Test
         void isTerminalReturnsTrueForReflected() {
             Mission mission = createMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
-            mission.transitionTo(MissionStatus.IN_PROGRESS);
-            mission.transitionTo(MissionStatus.COMPLETED);
-            mission.transitionTo(MissionStatus.REFLECTED);
+            mission.transitionTo(ACCEPTED);
+            mission.transitionTo(IN_PROGRESS);
+            mission.transitionTo(COMPLETED);
+            mission.transitionTo(REFLECTED);
             assertThat(mission.isTerminal()).isTrue();
         }
 

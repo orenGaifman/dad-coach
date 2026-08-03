@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for SafetyResponseProvider — pre-written safety responses and human review flagging.
+ * Tests English (default) and Hebrew responses as specified by SPEC-003.
  */
 class SafetyResponseProviderTest {
 
@@ -24,8 +25,8 @@ class SafetyResponseProviderTest {
     }
 
     @Nested
-    @DisplayName("Crisis Response")
-    class CrisisResponse {
+    @DisplayName("Crisis Response - English")
+    class CrisisResponseEnglish {
 
         @Test
         @DisplayName("returns response with 988 hotline number")
@@ -37,21 +38,21 @@ class SafetyResponseProviderTest {
         }
 
         @Test
-        @DisplayName("returns response with Línea de la Vida")
-        void containsLineaDeLaVida() {
+        @DisplayName("returns response with Crisis Lifeline")
+        void containsCrisisLifeline() {
             var classification = new SafetyClassification(SafetyCategory.CRISIS, 0.95, "test");
             String response = provider.getResponse(classification);
 
-            assertThat(response).contains("Línea de la Vida");
+            assertThat(response).contains("Crisis Lifeline");
         }
 
         @Test
-        @DisplayName("returns empathetic acknowledgment in Spanish")
-        void isInSpanish() {
+        @DisplayName("returns empathetic acknowledgment in English")
+        void isInEnglish() {
             var classification = new SafetyClassification(SafetyCategory.CRISIS, 0.95, "test");
             String response = provider.getResponse(classification);
 
-            assertThat(response).contains("No estás solo");
+            assertThat(response).contains("not alone");
         }
 
         @Test
@@ -61,6 +62,29 @@ class SafetyResponseProviderTest {
             String response = provider.getResponse(classification);
 
             assertThat(response.length()).isGreaterThan(100);
+        }
+    }
+
+    @Nested
+    @DisplayName("Crisis Response - Hebrew")
+    class CrisisResponseHebrew {
+
+        @Test
+        @DisplayName("returns response with Israeli crisis hotline")
+        void containsIsraeliHotline() {
+            var classification = new SafetyClassification(SafetyCategory.CRISIS, 0.95, "test");
+            String response = provider.getResponse(classification, "he");
+
+            assertThat(response).containsAnyOf("2784", "1201");
+        }
+
+        @Test
+        @DisplayName("returns Hebrew acknowledgment")
+        void isInHebrew() {
+            var classification = new SafetyClassification(SafetyCategory.CRISIS, 0.95, "test");
+            String response = provider.getResponse(classification, "he");
+
+            assertThat(response).contains("לא לבד");
         }
     }
 
@@ -78,12 +102,12 @@ class SafetyResponseProviderTest {
         }
 
         @Test
-        @DisplayName("response is non-judgmental")
-        void isNonJudgmental() {
+        @DisplayName("response acknowledges courage")
+        void acknowledgesCourage() {
             var classification = new SafetyClassification(SafetyCategory.CHILD_SAFETY, 0.90, "test");
             String response = provider.getResponse(classification);
 
-            assertThat(response).contains("valentía");
+            assertThat(response).contains("courage");
         }
     }
 
@@ -92,13 +116,23 @@ class SafetyResponseProviderTest {
     class ManipulationResponse {
 
         @Test
-        @DisplayName("returns redirect to coaching")
+        @DisplayName("returns redirect to coaching in English")
         void redirectsToCoaching() {
             var classification = new SafetyClassification(SafetyCategory.MANIPULATION, 0.95, "test");
             String response = provider.getResponse(classification);
 
             assertThat(response).isEqualTo(
-                "Soy tu coach de paternidad. ¿En qué te puedo ayudar con tus hijos hoy?");
+                "I'm your parenting coach. How can I help you with your kids today?");
+        }
+
+        @Test
+        @DisplayName("returns redirect to coaching in Hebrew")
+        void redirectsToCoachingHebrew() {
+            var classification = new SafetyClassification(SafetyCategory.MANIPULATION, 0.95, "test");
+            String response = provider.getResponse(classification, "he");
+
+            assertThat(response).contains("מאמן");
+            assertThat(response).contains("ילדים");
         }
     }
 
@@ -112,7 +146,7 @@ class SafetyResponseProviderTest {
             var classification = new SafetyClassification(SafetyCategory.MEDICAL, 0.85, "test");
             String response = provider.getResponse(classification);
 
-            assertThat(response).contains("No soy profesional de salud");
+            assertThat(response).contains("not a healthcare professional");
         }
 
         @Test
@@ -121,7 +155,7 @@ class SafetyResponseProviderTest {
             var classification = new SafetyClassification(SafetyCategory.MEDICAL, 0.85, "test");
             String response = provider.getResponse(classification);
 
-            assertThat(response).contains("pediatra");
+            assertThat(response).contains("pediatrician");
         }
     }
 
@@ -135,16 +169,16 @@ class SafetyResponseProviderTest {
             var classification = new SafetyClassification(SafetyCategory.LEGAL, 0.85, "test");
             String response = provider.getResponse(classification);
 
-            assertThat(response).contains("No puedo dar consejos legales");
+            assertThat(response).containsIgnoringCase("can't give legal advice");
         }
 
         @Test
-        @DisplayName("recommends family law attorney")
+        @DisplayName("recommends attorney")
         void recommendsAttorney() {
             var classification = new SafetyClassification(SafetyCategory.LEGAL, 0.85, "test");
             String response = provider.getResponse(classification);
 
-            assertThat(response).contains("abogado");
+            assertThat(response).contains("attorney");
         }
     }
 

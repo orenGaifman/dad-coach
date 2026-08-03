@@ -24,12 +24,21 @@ class FallbackResponseProviderImplTest {
     class PreWrittenMessages {
 
         @Test
-        @DisplayName("DAILY_COACHING returns specific fallback message")
+        @DisplayName("DAILY_COACHING returns specific fallback message in English")
         void dailyCoaching_returnsFallback() {
             String result = provider.getForType("DAILY_COACHING");
 
             assertThat(result).isEqualTo(
-                    "¡Hola! Estoy aquí para acompañarte en tu camino como papá. ¿En qué puedo ayudarte hoy?");
+                    "Hi there! I'm here to support you on your fatherhood journey. How can I help you today?");
+        }
+
+        @Test
+        @DisplayName("DAILY_COACHING returns specific fallback message in Hebrew")
+        void dailyCoaching_returnsFallbackHebrew() {
+            String result = provider.getForType("DAILY_COACHING", "he");
+
+            assertThat(result).isEqualTo(
+                    "שלום! אני כאן ללוות אותך במסע האבהות שלך. איך אוכל לעזור לך היום?");
         }
 
         @Test
@@ -38,7 +47,7 @@ class FallbackResponseProviderImplTest {
             String result = provider.getForType("ONBOARDING");
 
             assertThat(result).isEqualTo(
-                    "¡Bienvenido! Estoy teniendo un pequeño problema técnico, pero en unos minutos estaré listo para conocerte mejor.");
+                    "Welcome! I'm having a small technical issue, but I'll be ready to get to know you better in just a moment.");
         }
 
         @Test
@@ -47,7 +56,7 @@ class FallbackResponseProviderImplTest {
             String result = provider.getForType("DIFFICULT_SITUATION");
 
             assertThat(result).isEqualTo(
-                    "Entiendo que estás pasando por un momento difícil. Estoy aquí para escucharte. ¿Podrías contarme un poco más?");
+                    "I understand you're going through a difficult time. I'm here to listen. Could you tell me a bit more about what's happening?");
         }
 
         @Test
@@ -56,7 +65,7 @@ class FallbackResponseProviderImplTest {
             String result = provider.getForType("FOLLOW_UP");
 
             assertThat(result).isNotBlank();
-            assertThat(result).contains("verte de vuelta");
+            assertThat(result).contains("see you again");
         }
 
         @Test
@@ -65,7 +74,7 @@ class FallbackResponseProviderImplTest {
             String result = provider.getForType("REFLECTION");
 
             assertThat(result).isNotBlank();
-            assertThat(result).contains("reflexionar");
+            assertThat(result).contains("reflect");
         }
 
         @Test
@@ -74,7 +83,7 @@ class FallbackResponseProviderImplTest {
             String result = provider.getForType("INACTIVITY_CHECK");
 
             assertThat(result).isNotBlank();
-            assertThat(result).contains("cómo estás");
+            assertThat(result).contains("how you're doing");
         }
 
         @Test
@@ -83,7 +92,7 @@ class FallbackResponseProviderImplTest {
             String result = provider.getForType("CELEBRATION");
 
             assertThat(result).isNotBlank();
-            assertThat(result).contains("celebrar");
+            assertThat(result).contains("celebrate");
         }
 
         @Test
@@ -92,7 +101,7 @@ class FallbackResponseProviderImplTest {
             String result = provider.getForType("UNKNOWN_TYPE");
 
             assertThat(result).isEqualTo(
-                    "Disculpa, estoy experimentando dificultades técnicas. Volveré contigo pronto.");
+                    "Sorry, I'm experiencing technical difficulties. I'll get back to you soon.");
         }
 
         @Test
@@ -165,33 +174,56 @@ class FallbackResponseProviderImplTest {
     }
 
     @Nested
-    @DisplayName("8.6 — Fallback messages in conversational Latin American Spanish")
-    class SpanishMessages {
+    @DisplayName("8.6 — Fallback messages support English and Hebrew")
+    class LocalizedMessages {
 
         @Test
-        @DisplayName("all messages contain Spanish characters/words")
-        void allMessages_inSpanish() {
+        @DisplayName("English messages contain common English words")
+        void englishMessages_containEnglishWords() {
             String[] types = {
                 "DAILY_COACHING", "ONBOARDING", "DIFFICULT_SITUATION",
                 "FOLLOW_UP", "REFLECTION", "INACTIVITY_CHECK", "CELEBRATION"
             };
 
             for (String type : types) {
-                String msg = provider.getForType(type);
-                // Check for common Spanish patterns (accent marks, Spanish words)
+                String msg = provider.getForType(type, "en");
                 assertThat(msg)
-                        .as("Fallback for type '%s' should be in Spanish", type)
-                        .containsAnyOf("á", "é", "í", "ó", "ú", "ñ", "¡", "¿");
+                        .as("Fallback for type '%s' should be in English", type)
+                        .containsAnyOf("I'm", "you", "help", "your", "here", "with");
             }
         }
 
         @Test
-        @DisplayName("generic fallback is in Spanish")
-        void genericFallback_inSpanish() {
-            String msg = provider.getGenericFallback();
+        @DisplayName("Hebrew messages contain Hebrew characters")
+        void hebrewMessages_containHebrewChars() {
+            String[] types = {
+                "DAILY_COACHING", "ONBOARDING", "DIFFICULT_SITUATION",
+                "FOLLOW_UP", "REFLECTION", "INACTIVITY_CHECK", "CELEBRATION"
+            };
 
-            assertThat(msg).contains("Disculpa");
-            assertThat(msg).containsAnyOf("á", "é", "í", "ó", "ú");
+            for (String type : types) {
+                String msg = provider.getForType(type, "he");
+                assertThat(msg)
+                        .as("Fallback for type '%s' should be in Hebrew", type)
+                        .matches(".*[\\u0590-\\u05FF].*");
+            }
+        }
+
+        @Test
+        @DisplayName("generic fallback in English is correct")
+        void genericFallbackEnglish() {
+            String msg = provider.getGenericFallback("en");
+
+            assertThat(msg).contains("Sorry");
+            assertThat(msg).contains("technical difficulties");
+        }
+
+        @Test
+        @DisplayName("generic fallback in Hebrew is correct")
+        void genericFallbackHebrew() {
+            String msg = provider.getGenericFallback("he");
+
+            assertThat(msg).contains("סליחה");
         }
     }
 

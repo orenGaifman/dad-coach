@@ -31,12 +31,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       probes:
         enabled: true
-      show-details: never
+      show-details: when_authorized
       group:
         liveness:
           include: livenessState
@@ -44,6 +44,20 @@ management:
         readiness:
           include: readinessState,db
           show-details: never
+        # Custom workflow health group for detailed monitoring
+        workflow:
+          include: workflowEngine,googleCalendar,whatsApp,scheduler
+          show-details: always
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    export:
+      prometheus:
+        enabled: true
   health:
     livenessstate:
       enabled: true
@@ -93,6 +107,30 @@ dad-coach:
       daily-token-budget: ${AI_DAILY_TOKEN_BUDGET:50000}
 
 dadcoach:
+  features:
+    deterministic-workflow-engine: true  # Master switch for new workflow engine (vs ConversationOrchestrator)
+    ai-message-generation: true          # Toggle AI vs fallback template messages
+    morning-reminders: true              # Toggle morning reminder scheduler job for Quality Time
+  scheduler:
+    # Morning reminder job - runs at 7:50 AM UTC, sends at 8 AM local time
+    morning-reminder-cron: "0 50 7 * * *"
+    # Follow-up transition job - checks for ended Quality Time events (every 15 minutes)
+    follow-up-interval-ms: 900000
+    # Stale state detection job - checks for fathers stuck in follow-up state (every 1 hour)
+    stale-detection-interval-ms: 3600000
+    # Batch size for processing fathers to avoid overwhelming WhatsApp rate limits
+    batch-size: 100
+  workflow:
+    # Maximum message exchanges before forcing summary/exit (Requirement 5.6)
+    max-exchanges-per-state: 5
+    # Days ahead to look in Google Calendar for slots (Requirement 2.3)
+    calendar-lookahead-days: 7
+    # Minimum Quality Time slot duration in minutes (Requirement 2.3)
+    min-slot-duration-minutes: 30
+    # AI message generation timeout in milliseconds (Requirement 10.6)
+    message-generator-timeout-ms: 5000
+    # Maximum exchanges for follow-up conversations (Requirement 7.5)
+    max-follow-up-exchanges: 3
   onboarding:
     security:
       wizard-data-encryption-key: ${WIZARD_DATA_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}

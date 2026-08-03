@@ -229,7 +229,7 @@ class ModelRouterPropertyTest {
         AiProvider successProvider = new AiProvider() {
             @Override
             public AiProviderResponse sendPrompt(AiProviderRequest request) {
-                return new AiProviderResponse("Hola", request.model(), "openai", 10, 5, "stop", Duration.ofMillis(100));
+                return new AiProviderResponse("Hello", request.model(), "openai", 10, 5, "stop", Duration.ofMillis(100));
             }
             @Override
             public String getProviderName() { return "openai"; }
@@ -322,7 +322,7 @@ class ModelRouterPropertyTest {
     private AiProviderRequest createTestRequest(String model) {
         return new AiProviderRequest(
             model,
-            List.of(AiMessage.user("Hola")),
+            List.of(AiMessage.user("Hello")),
             0.7,
             0.9,
             300,
@@ -332,6 +332,6 @@ class ModelRouterPropertyTest {
     }
 
     private AiProviderResponse successResponse(String model, String provider) {
-        return new AiProviderResponse("Respuesta exitosa", model, provider, 10, 5, "stop", Duration.ofMillis(50));
+        return new AiProviderResponse("Successful response", model, provider, 10, 5, "stop", Duration.ofMillis(50));
     }
 }

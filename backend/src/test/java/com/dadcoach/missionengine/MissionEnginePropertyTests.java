@@ -7,7 +7,8 @@ import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.domain.mission.Mission;
 import com.dadcoach.domain.mission.MissionRepository;
 import com.dadcoach.father.CoachingPhase;
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
+import static com.dadcoach.mission.LegacyMissionStatus.*;
 
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.IntRange;
@@ -466,13 +467,13 @@ class MissionEnginePropertyTests {
             Child child = new Child(father, "TestChild", LocalDate.of(2018, 6, 15));
             child.setId(10L);
             Mission skip1 = new Mission(father, child, "M1", "D1", "C1", 2, 10);
-            skip1.setStatus(MissionStatus.SKIPPED);
+            skip1.setStatus(SKIPPED);
             skip1.setAssignedAt(Instant.now().minus(1, ChronoUnit.DAYS));
             Mission skip2 = new Mission(father, child, "M2", "D2", "C2", 2, 10);
-            skip2.setStatus(MissionStatus.SKIPPED);
+            skip2.setStatus(SKIPPED);
             skip2.setAssignedAt(Instant.now().minus(2, ChronoUnit.DAYS));
             Mission skip3 = new Mission(father, child, "M3", "D3", "C3", 2, 10);
-            skip3.setStatus(MissionStatus.EXPIRED);
+            skip3.setStatus(EXPIRED);
             skip3.setAssignedAt(Instant.now().minus(3, ChronoUnit.DAYS));
 
             when(mockRepo.findRecentByChildIdSince(eq(10L), any(Instant.class)))
@@ -486,7 +487,7 @@ class MissionEnginePropertyTests {
                 child.setId(10L);
                 Mission completedMission = new Mission(father, child, "Completed", "Desc", "CONNECTION", 2, 15);
                 completedMission.setId(100L);
-                completedMission.setStatus(MissionStatus.COMPLETED);
+                completedMission.setStatus(COMPLETED);
                 completedMission.setOutcomeRating(lastRating);
                 completedMission.setCompletedAt(Instant.now().minus(1, ChronoUnit.DAYS));
 

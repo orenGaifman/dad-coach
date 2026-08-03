@@ -101,7 +101,16 @@ public class WhatsAppMessageFormatter {
         template.put("name", message.templateName());
 
         Map<String, Object> language = new LinkedHashMap<>();
-        language.put("code", "es");
+        // Language code should come from father's preference. Default to "en" if not specified.
+        // Template names should be suffixed with language code (e.g., daily_coaching_en, daily_coaching_he)
+        String templateName = message.templateName();
+        String langCode = "en"; // Default to English
+        if (templateName.endsWith("_he")) {
+            langCode = "he";
+        } else if (templateName.endsWith("_en")) {
+            langCode = "en";
+        }
+        language.put("code", langCode);
         template.put("language", language);
 
         // Build template components with variable parameters

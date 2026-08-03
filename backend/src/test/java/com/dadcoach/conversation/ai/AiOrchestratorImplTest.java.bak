@@ -72,7 +72,7 @@ class AiOrchestratorImplTest {
     private InboundMessageDto createMessage(String content) {
         return new InboundMessageDto(
                 "whatsapp",
-                "+5491155551234",
+                "+15551234567",
                 content,
                 "TEXT",
                 "msg-" + UUID.randomUUID(),
@@ -96,13 +96,13 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("safety classification is called before intelligenceLayer")
         void safetyClassificationRunsFirst() {
-            InboundMessageDto message = createMessage("Hola, necesito ayuda");
+            InboundMessageDto message = createMessage("Hello, I need help");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(message.content()))
                     .thenReturn(SafetyClassification.safe());
             when(intelligenceLayer.generateCoachingResponse(any()))
-                    .thenReturn(createCoachingResponse("Te ayudo con gusto"));
+                    .thenReturn(createCoachingResponse("I'm happy to help you"));
             when(responseValidator.validate(any(), any()))
                     .thenReturn(ValidationResult.pass());
 
@@ -116,13 +116,13 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("safety classification runs even for normal messages")
         void safetyAlwaysRuns() {
-            InboundMessageDto message = createMessage("¿Cómo le enseño a mi hijo?");
+            InboundMessageDto message = createMessage("How do I teach my child?");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(message.content()))
                     .thenReturn(SafetyClassification.safe());
             when(intelligenceLayer.generateCoachingResponse(any()))
-                    .thenReturn(createCoachingResponse("Respuesta coaching"));
+                    .thenReturn(createCoachingResponse("Coaching response"));
             when(responseValidator.validate(any(), any()))
                     .thenReturn(ValidationResult.pass());
 
@@ -139,18 +139,18 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("CRISIS classification returns immediate safety response without generation")
         void crisisReturnsImmediateSafetyResponse() {
-            InboundMessageDto message = createMessage("No quiero seguir viviendo");
+            InboundMessageDto message = createMessage("I don't want to live anymore");
             ConversationContext context = createContext();
 
             SafetyClassification crisis = new SafetyClassification(
                     SafetyCategory.CRISIS, 0.95, "Self-harm keyword detected");
             when(safetyClassifier.classify(message.content())).thenReturn(crisis);
             when(safetyResponseProvider.getResponse(crisis))
-                    .thenReturn("Línea 988: llama al 988");
+                    .thenReturn("988 Lifeline: Call 988");
 
             AiResult result = orchestrator.orchestrate(context, message);
 
-            assertThat(result.responseContent()).isEqualTo("Línea 988: llama al 988");
+            assertThat(result.responseContent()).isEqualTo("988 Lifeline: Call 988");
             assertThat(result.isSafetyEscalation()).isTrue();
             assertThat(result.safetyClassification()).isEqualTo("CRISIS");
             assertThat(result.fallbackUsed()).isFalse();
@@ -164,18 +164,18 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("CHILD_SAFETY classification returns immediate safety response without generation")
         void childSafetyReturnsImmediateSafetyResponse() {
-            InboundMessageDto message = createMessage("Mi hijo tiene moretones");
+            InboundMessageDto message = createMessage("My child has bruises");
             ConversationContext context = createContext();
 
             SafetyClassification childSafety = new SafetyClassification(
                     SafetyCategory.CHILD_SAFETY, 0.90, "Child safety keyword detected");
             when(safetyClassifier.classify(message.content())).thenReturn(childSafety);
             when(safetyResponseProvider.getResponse(childSafety))
-                    .thenReturn("Contacta Childhelp: 1-800-422-4453");
+                    .thenReturn("Contact Childhelp: 1-800-422-4453");
 
             AiResult result = orchestrator.orchestrate(context, message);
 
-            assertThat(result.responseContent()).isEqualTo("Contacta Childhelp: 1-800-422-4453");
+            assertThat(result.responseContent()).isEqualTo("Contact Childhelp: 1-800-422-4453");
             assertThat(result.isSafetyEscalation()).isTrue();
             assertThat(result.safetyClassification()).isEqualTo("CHILD_SAFETY");
 
@@ -185,7 +185,7 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("non-escalation safety classification proceeds to generation")
         void nonEscalationProceeds() {
-            InboundMessageDto message = createMessage("Tengo preguntas médicas");
+            InboundMessageDto message = createMessage("I have medical questions");
             ConversationContext context = createContext();
 
             // MEDICAL is not an escalation (requiresIntervention = false)
@@ -193,7 +193,7 @@ class AiOrchestratorImplTest {
                     SafetyCategory.MEDICAL, 0.85, "Medical keyword detected");
             when(safetyClassifier.classify(message.content())).thenReturn(medical);
             when(intelligenceLayer.generateCoachingResponse(any()))
-                    .thenReturn(createCoachingResponse("Consulta con tu pediatra"));
+                    .thenReturn(createCoachingResponse("Please consult with your pediatrician"));
             when(responseValidator.validate(any(), any()))
                     .thenReturn(ValidationResult.pass());
 
@@ -212,18 +212,18 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("successful first attempt returns without retry")
         void successfulFirstAttempt() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(any())).thenReturn(SafetyClassification.safe());
             when(intelligenceLayer.generateCoachingResponse(any()))
-                    .thenReturn(createCoachingResponse("Respuesta exitosa"));
+                    .thenReturn(createCoachingResponse("Successful response"));
             when(responseValidator.validate(any(), any()))
                     .thenReturn(ValidationResult.pass());
 
             AiResult result = orchestrator.orchestrate(context, message);
 
-            assertThat(result.responseContent()).isEqualTo("Respuesta exitosa");
+            assertThat(result.responseContent()).isEqualTo("Successful response");
             assertThat(result.retried()).isFalse();
             assertThat(result.fallbackUsed()).isFalse();
 
@@ -234,7 +234,7 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("failed validation triggers retry with correction and succeeds")
         void failedValidationRetrySucceeds() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             CoachingResponse badResponse = createCoachingResponse("Bad response");
@@ -262,7 +262,7 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("maximum 1 retry (2 total AI calls)")
         void maxOneRetry() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(any())).thenReturn(SafetyClassification.safe());
@@ -287,21 +287,21 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("both attempts failing validation delivers fallback")
         void bothAttemptsFail_deliversFallback() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(any())).thenReturn(SafetyClassification.safe());
             when(intelligenceLayer.generateCoachingResponse(any()))
                     .thenReturn(createCoachingResponse("Invalid response"));
             when(responseValidator.validate(any(), any()))
-                    .thenReturn(ValidationResult.fail(List.of("too short", "not in Spanish")));
+                    .thenReturn(ValidationResult.fail(List.of("too short", "language mismatch")));
             when(fallbackProvider.getForType("DAILY_COACHING"))
-                    .thenReturn("Estoy aquí para ayudarte. ¿En qué puedo apoyarte?");
+                    .thenReturn("I'm here to help you. How can I support you?");
 
             AiResult result = orchestrator.orchestrate(context, message);
 
             assertThat(result.responseContent())
-                    .isEqualTo("Estoy aquí para ayudarte. ¿En qué puedo apoyarte?");
+                    .isEqualTo("I'm here to help you. How can I support you?");
             assertThat(result.fallbackUsed()).isTrue();
             assertThat(result.retried()).isFalse(); // fallback result doesn't track retry
         }
@@ -309,7 +309,7 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("fallback result has correct metadata")
         void fallbackHasCorrectMetadata() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(any())).thenReturn(SafetyClassification.safe());
@@ -333,25 +333,25 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("AiProviderUnavailableException delivers fallback")
         void providerUnavailable_deliversFallback() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(any())).thenReturn(SafetyClassification.safe());
             when(intelligenceLayer.generateCoachingResponse(any()))
                     .thenThrow(new AiProviderUnavailableException("All providers down", 3));
             when(fallbackProvider.getForType("DAILY_COACHING"))
-                    .thenReturn("Tenemos dificultades técnicas");
+                    .thenReturn("We're experiencing technical difficulties");
 
             AiResult result = orchestrator.orchestrate(context, message);
 
-            assertThat(result.responseContent()).isEqualTo("Tenemos dificultades técnicas");
+            assertThat(result.responseContent()).isEqualTo("We're experiencing technical difficulties");
             assertThat(result.fallbackUsed()).isTrue();
         }
 
         @Test
         @DisplayName("exception during retry still delivers fallback")
         void exceptionDuringRetry_deliversFallback() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             CoachingResponse badResponse = createCoachingResponse("Bad");
@@ -379,7 +379,7 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("RuntimeException in generate delivers fallback")
         void runtimeException_deliversFallback() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(any())).thenReturn(SafetyClassification.safe());
@@ -398,7 +398,7 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("exception in safety classifier delivers fallback")
         void safetyException_deliversFallback() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(any()))
@@ -416,7 +416,7 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("exception in validator delivers fallback")
         void validatorException_deliversFallback() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(any())).thenReturn(SafetyClassification.safe());
@@ -437,7 +437,7 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("null/error in fallback provider still returns something")
         void fallbackProviderException_stillReturnsResponse() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(any())).thenReturn(SafetyClassification.safe());
@@ -446,7 +446,7 @@ class AiOrchestratorImplTest {
             when(fallbackProvider.getForType(any()))
                     .thenThrow(new RuntimeException("fallback also broken"));
             when(fallbackProvider.getGenericFallback())
-                    .thenReturn("Lo siento, estoy experimentando dificultades.");
+                    .thenReturn("I'm sorry, I'm experiencing difficulties.");
 
             // This tests the absolute last-resort — if even the typed fallback fails,
             // the orchestrator should try the generic fallback
@@ -464,7 +464,7 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("successful first attempt: fallbackUsed=false, retried=false")
         void successFirstAttempt_tracking() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(any())).thenReturn(SafetyClassification.safe());
@@ -483,7 +483,7 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("successful retry: fallbackUsed=false, retried=true")
         void successRetry_tracking() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             CoachingResponse bad = createCoachingResponse("Bad");
@@ -507,7 +507,7 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("fallback used: fallbackUsed=true, retried=false")
         void fallbackUsed_tracking() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(any())).thenReturn(SafetyClassification.safe());
@@ -525,7 +525,7 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("safety escalation: safetyClassification is populated")
         void safetyEscalation_tracking() {
-            InboundMessageDto message = createMessage("Quiero matarme");
+            InboundMessageDto message = createMessage("I want to kill myself");
             ConversationContext context = createContext();
 
             SafetyClassification crisis = new SafetyClassification(
@@ -543,7 +543,7 @@ class AiOrchestratorImplTest {
         @Test
         @DisplayName("metadata includes model and latency for successful generation")
         void metadata_includesModelAndLatency() {
-            InboundMessageDto message = createMessage("Hola");
+            InboundMessageDto message = createMessage("Hello");
             ConversationContext context = createContext();
 
             when(safetyClassifier.classify(any())).thenReturn(SafetyClassification.safe());

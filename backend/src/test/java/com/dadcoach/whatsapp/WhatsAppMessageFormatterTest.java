@@ -53,7 +53,7 @@ class WhatsAppMessageFormatterTest {
         @Test
         @DisplayName("formats text message with correct WhatsApp API structure")
         void formatTextMessage() {
-            var msg = textMessage("Hola padre 👋");
+            var msg = textMessage("Hello dad 👋");
 
             Map<String, Object> result = formatter.format(msg, RECIPIENT);
 
@@ -64,14 +64,14 @@ class WhatsAppMessageFormatterTest {
 
             @SuppressWarnings("unchecked")
             var textBody = (Map<String, Object>) result.get("text");
-            assertEquals("Hola padre 👋", textBody.get("body"));
+            assertEquals("Hello dad 👋", textBody.get("body"));
             assertEquals(false, textBody.get("preview_url"));
         }
 
         @Test
         @DisplayName("formats template message with variables")
         void formatTemplateMessage() {
-            var msg = templateMessage("daily_coaching", Map.of("1", "Carlos", "2", "¿Cómo va tu día?"));
+            var msg = templateMessage("daily_coaching_en", Map.of("1", "Carlos", "2", "How is your day?"));
 
             Map<String, Object> result = formatter.format(msg, RECIPIENT);
 
@@ -79,11 +79,11 @@ class WhatsAppMessageFormatterTest {
 
             @SuppressWarnings("unchecked")
             var template = (Map<String, Object>) result.get("template");
-            assertEquals("daily_coaching", template.get("name"));
+            assertEquals("daily_coaching_en", template.get("name"));
 
             @SuppressWarnings("unchecked")
             var language = (Map<String, Object>) template.get("language");
-            assertEquals("es", language.get("code"));
+            assertEquals("en", language.get("code"));
 
             assertNotNull(template.get("components"));
         }
@@ -262,19 +262,19 @@ class WhatsAppMessageFormatterTest {
         @Test
         @DisplayName("emoji characters pass through unchanged in text messages")
         void emojiInText() {
-            var msg = textMessage("¡Genial! 👏🎉💪🏽 Sigue así papá 🦸‍♂️");
+            var msg = textMessage("Awesome! 👏🎉💪🏽 Keep it up dad 🦸‍♂️");
 
             Map<String, Object> result = formatter.format(msg, RECIPIENT);
 
             @SuppressWarnings("unchecked")
             var textBody = (Map<String, Object>) result.get("text");
-            assertEquals("¡Genial! 👏🎉💪🏽 Sigue así papá 🦸‍♂️", textBody.get("body"));
+            assertEquals("Awesome! 👏🎉💪🏽 Keep it up dad 🦸‍♂️", textBody.get("body"));
         }
 
         @Test
         @DisplayName("emoji in template parameters preserved")
         void emojiInTemplateParams() {
-            var msg = templateMessage("daily_coaching", Map.of("1", "Carlos 👋", "2", "¿Cómo estás? 🌟"));
+            var msg = templateMessage("daily_coaching_en", Map.of("1", "Carlos 👋", "2", "How are you? 🌟"));
 
             Map<String, Object> result = formatter.format(msg, RECIPIENT);
 
@@ -286,7 +286,7 @@ class WhatsAppMessageFormatterTest {
         @DisplayName("combined emoji sequences (skin tone modifiers, ZWJ) preserved")
         void combinedEmojiSequences() {
             // Family emoji with ZWJ sequence
-            String text = "Familia: 👨‍👩‍👧‍👦 Fuerza: 💪🏽";
+            String text = "Family: 👨‍👩‍👧‍👦 Strength: 💪🏽";
             var msg = textMessage(text);
 
             Map<String, Object> result = formatter.format(msg, RECIPIENT);

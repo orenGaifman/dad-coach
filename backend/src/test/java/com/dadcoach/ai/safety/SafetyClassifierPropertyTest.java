@@ -145,15 +145,15 @@ class SafetyClassifierPropertyTest {
     @Provide
     Arbitrary<String> arbitraryMessages() {
         return Arbitraries.oneOf(
-            // Normal Spanish parenting messages
+            // Normal English parenting messages
             Arbitraries.of(
-                "Hola, hoy jugué con mi hijo en el parque",
-                "Mi hija no quiere hacer la tarea",
-                "¿Qué actividad puedo hacer con Lucas?",
-                "Estoy feliz porque mi hijo me abrazó",
-                "No sé cómo manejar los berrinches",
-                "Quiero ser mejor papá",
-                "Mi hijo tiene 5 años y es muy activo"
+                "Hello, today I played with my son at the park",
+                "My daughter doesn't want to do her homework",
+                "What activity can I do with Lucas?",
+                "I'm happy because my son hugged me",
+                "I don't know how to handle tantrums",
+                "I want to be a better dad",
+                "My son is 5 years old and very active"
             ),
             // Empty/whitespace
             Arbitraries.of("", "   ", "\n\t"),
@@ -161,7 +161,7 @@ class SafetyClassifierPropertyTest {
             Arbitraries.strings().ofMinLength(0).ofMaxLength(500),
             // Messages with numbers and special chars
             Arbitraries.strings().ofMinLength(1).ofMaxLength(200)
-                .withChars('a', 'z', 'á', 'é', 'í', 'ó', 'ú', 'ñ', ' ', '?', '!', '0', '1')
+                .withChars('a', 'z', 'A', 'Z', ' ', '?', '!', '0', '1')
         );
     }
 
@@ -173,16 +173,16 @@ class SafetyClassifierPropertyTest {
     @Provide
     Arbitrary<String> messagesWithCrisisKeywords() {
         Arbitrary<String> prefixes = Arbitraries.of(
-            "Estoy pensando en ",
-            "Ya no puedo, quiero ",
-            "Ayer ",
-            "Me siento tan mal que "
+            "I'm thinking about ",
+            "I can't anymore, I want to ",
+            "Yesterday ",
+            "I feel so bad that I want to "
         );
         Arbitrary<String> crisisKeywords = Arbitraries.of(
             SafetyKeywords.CRISIS_SELF_HARM.toArray(new String[0])
         );
         Arbitrary<String> suffixes = Arbitraries.of(
-            "", ".", " no sé qué hacer", " ayuda"
+            "", ".", " I don't know what to do", " help"
         );
         return Combinators.combine(prefixes, crisisKeywords, suffixes)
             .as((prefix, keyword, suffix) -> prefix + keyword + suffix);
@@ -191,13 +191,13 @@ class SafetyClassifierPropertyTest {
     @Provide
     Arbitrary<String> messagesWithManipulation() {
         Arbitrary<String> prefixes = Arbitraries.of(
-            "", "Por favor ", "Necesito que ", "Quiero que "
+            "", "Please ", "I need you to ", "I want you to "
         );
         Arbitrary<String> patterns = Arbitraries.of(
             SafetyKeywords.MANIPULATION_PATTERNS.toArray(new String[0])
         );
         Arbitrary<String> suffixes = Arbitraries.of(
-            "", ".", " ahora", " por favor"
+            "", ".", " now", " please"
         );
         return Combinators.combine(prefixes, patterns, suffixes)
             .as((prefix, pattern, suffix) -> prefix + pattern + suffix);

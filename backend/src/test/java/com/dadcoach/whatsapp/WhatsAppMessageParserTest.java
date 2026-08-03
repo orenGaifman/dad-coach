@@ -129,7 +129,7 @@ class WhatsAppMessageParserTest {
         @Test
         @DisplayName("parses a text message from webhook payload")
         void parsesTextMessage() {
-            var payload = buildMessagePayload(textMessage("Hola, necesito ayuda"));
+            var payload = buildMessagePayload(textMessage("Hello, I need help"));
 
             var result = parser.parse(payload);
 
@@ -138,20 +138,20 @@ class WhatsAppMessageParserTest {
 
             InboundMessageDto msg = result.messages().get(0);
             assertEquals(MessageType.TEXT, msg.messageType());
-            assertEquals("Hola, necesito ayuda", msg.textContent());
+            assertEquals("Hello, I need help", msg.textContent());
         }
 
         @Test
         @DisplayName("parses an image message with caption")
         void parsesImageMessage() {
-            var payload = buildMessagePayload(imageMessage("Mi hijo jugando ⚽"));
+            var payload = buildMessagePayload(imageMessage("My son playing ⚽"));
 
             var result = parser.parse(payload);
 
             assertEquals(1, result.messages().size());
             InboundMessageDto msg = result.messages().get(0);
             assertEquals(MessageType.IMAGE, msg.messageType());
-            assertEquals("Mi hijo jugando ⚽", msg.textContent());
+            assertEquals("My son playing ⚽", msg.textContent());
             assertNull(msg.mediaReference()); // Populated later by media service
         }
 
@@ -175,7 +175,7 @@ class WhatsAppMessageParserTest {
         @Test
         @DisplayName("parses payload with both messages and status updates")
         void parsesBothMessagesAndStatuses() {
-            var message = textMessage("Hola");
+            var message = textMessage("Hello");
             var status = new Status("wamid.X", "read", "1700000200", "5491112345678", null);
             var payload = buildPayload(List.of(message), List.of(status));
 
@@ -391,23 +391,23 @@ class WhatsAppMessageParserTest {
         @Test
         @DisplayName("handles interactive button reply messages")
         void handlesInteractiveButton() {
-            var payload = buildMessagePayload(interactiveButtonMessage("btn_1", "Aceptar misión"));
+            var payload = buildMessagePayload(interactiveButtonMessage("btn_1", "Accept mission"));
             var result = parser.parse(payload);
 
             InboundMessageDto msg = result.messages().get(0);
             assertEquals(MessageType.INTERACTIVE, msg.messageType());
-            assertEquals("Aceptar misión", msg.textContent());
+            assertEquals("Accept mission", msg.textContent());
         }
 
         @Test
         @DisplayName("handles interactive list reply messages")
         void handlesInteractiveList() {
-            var payload = buildMessagePayload(interactiveListMessage("opt_2", "Jugar con mi hijo"));
+            var payload = buildMessagePayload(interactiveListMessage("opt_2", "Play with my son"));
             var result = parser.parse(payload);
 
             InboundMessageDto msg = result.messages().get(0);
             assertEquals(MessageType.INTERACTIVE, msg.messageType());
-            assertEquals("Jugar con mi hijo", msg.textContent());
+            assertEquals("Play with my son", msg.textContent());
         }
     }
 

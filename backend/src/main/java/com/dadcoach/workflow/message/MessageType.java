@@ -1,0 +1,223 @@
+package com.dadcoach.workflow.message;
+
+/**
+ * Enumeration of all message types in the deterministic workflow engine.
+ * 
+ * <p>Each message type corresponds to a specific message template used by the
+ * {@link MessageGenerator}. Templates are stored in the message_templates table
+ * and used as fallback when AI message generation fails or times out.</p>
+ * 
+ * <p>The message generator receives a MessageType along with contextual data
+ * and produces natural language text. The AI component only generates text;
+ * it does NOT make decisions about state transitions or business logic.</p>
+ * 
+ * <p>Implements Requirement 10.2 from the deterministic-workflow-engine spec.</p>
+ * 
+ * @see MessageGenerator
+ * @see MessageTemplate
+ * @see MessageContext
+ */
+public enum MessageType {
+    
+    // ─── WELCOME State Messages ─────────────────────────────────────────────
+    
+    /**
+     * Initial greeting message for new fathers entering the WELCOME state.
+     * Greets the father by name and explains the core concept of Dad Coach.
+     * 
+     * <p>Context required: fatherName</p>
+     * 
+     * @see WorkflowState#WELCOME
+     */
+    WELCOME_GREETING("welcome_greeting"),
+    
+    /**
+     * Explanation message when father requests more information in WELCOME state.
+     * Provides details about Quality Time, belt progression, and how the system works.
+     * 
+     * <p>Context required: fatherName</p>
+     * 
+     * @see WorkflowState#WELCOME
+     */
+    WELCOME_EXPLAIN("welcome_explain"),
+    
+    // ─── SCHEDULE_QUALITY_TIME State Messages ───────────────────────────────
+    
+    /**
+     * Message presenting available time slots for Quality Time scheduling.
+     * Shows 3-5 numbered time slots for the father to choose from.
+     * 
+     * <p>Context required: fatherName, childName, timeSlots, timezone</p>
+     * 
+     * @see WorkflowState#SCHEDULE_QUALITY_TIME
+     */
+    SCHEDULE_SLOTS("schedule_slots"),
+    
+    /**
+     * Confirmation message after successfully scheduling Quality Time.
+     * Includes event details and encouragement.
+     * 
+     * <p>Context required: fatherName, childName, scheduledStart, scheduledEnd</p>
+     * 
+     * @see WorkflowState#SCHEDULE_QUALITY_TIME
+     */
+    SCHEDULE_CONFIRM("schedule_confirm"),
+    
+    /**
+     * Message when no available time slots are found in the father's calendar.
+     * Suggests connecting calendar or trying different time ranges.
+     * 
+     * <p>Context required: fatherName</p>
+     * 
+     * @see WorkflowState#SCHEDULE_QUALITY_TIME
+     */
+    SCHEDULE_NO_SLOTS("schedule_no_slots"),
+    
+    // ─── WAITING State Messages ─────────────────────────────────────────────
+    
+    /**
+     * Morning reminder message sent on the day of scheduled Quality Time.
+     * Sent at 8:00 AM in the father's local timezone.
+     * 
+     * <p>Context required: fatherName, childName, scheduledTime</p>
+     * 
+     * @see WorkflowState#WAITING
+     */
+    WAITING_REMINDER("waiting_reminder"),
+    
+    /**
+     * Response when father inquires about their schedule while in WAITING state.
+     * Confirms the date, time, and child for the upcoming Quality Time.
+     * 
+     * <p>Context required: fatherName, childName, scheduledStart, scheduledEnd</p>
+     * 
+     * @see WorkflowState#WAITING
+     */
+    WAITING_SCHEDULE_INFO("waiting_schedule_info"),
+    
+    // ─── QUALITY_TIME_FOLLOW_UP State Messages ──────────────────────────────
+    
+    /**
+     * Question message asking if the father completed their Quality Time.
+     * Presents clear yes/no options.
+     * 
+     * <p>Context required: fatherName, childName</p>
+     * 
+     * @see WorkflowState#QUALITY_TIME_FOLLOW_UP
+     */
+    FOLLOW_UP_QUESTION("follow_up_question"),
+    
+    /**
+     * Celebration message when father confirms Quality Time completion.
+     * Includes streak update and possibly belt progression news.
+     * 
+     * <p>Context required: fatherName, childName, newStreak, beltEarned (optional)</p>
+     * 
+     * @see WorkflowState#QUALITY_TIME_FOLLOW_UP
+     */
+    FOLLOW_UP_COMPLETED("follow_up_completed"),
+    
+    /**
+     * Encouraging message when father reports they didn't complete Quality Time.
+     * Non-judgmental, invites them to try again.
+     * 
+     * <p>Context required: fatherName, childName</p>
+     * 
+     * @see WorkflowState#QUALITY_TIME_FOLLOW_UP
+     */
+    FOLLOW_UP_MISSED("follow_up_missed"),
+    
+    // ─── ACTIVITY_IDEAS State Messages ──────────────────────────────────────
+    
+    /**
+     * Message presenting activity ideas for Quality Time.
+     * Includes 3 numbered ideas with title, description, and duration.
+     * 
+     * <p>Context required: fatherName, childName, childAge, activityIdeas</p>
+     * 
+     * @see WorkflowState#ACTIVITY_IDEAS
+     */
+    ACTIVITY_IDEAS("activity_ideas"),
+    
+    // ─── DASHBOARD Messages ─────────────────────────────────────────────────
+    
+    /**
+     * Text summary of dashboard metrics for WhatsApp delivery.
+     * Includes belt, streak, achievements, and deep link to web dashboard.
+     * 
+     * <p>Context required: fatherName, currentBelt, currentStreak, 
+     * totalCompletions, dashboardUrl</p>
+     * 
+     * @see WorkflowState#DASHBOARD
+     */
+    DASHBOARD_SUMMARY("dashboard_summary"),
+    
+    // ─── General Messages ───────────────────────────────────────────────────
+    
+    /**
+     * Clarification message when user input doesn't match expected patterns.
+     * Provides explicit options for valid responses in the current state.
+     * 
+     * <p>Context required: fatherName, validOptions</p>
+     */
+    CLARIFICATION("clarification"),
+    
+    /**
+     * Generic error message when something goes wrong.
+     * Apologizes and asks father to try again.
+     * 
+     * <p>Context required: fatherName</p>
+     */
+    ERROR_GENERIC("error_generic"),
+    
+    /**
+     * Processing message sent when response takes longer than 30 seconds.
+     * Lets the father know the system is still working on their request.
+     * 
+     * <p>Implements Requirement 11.2: THE Workflow_Engine SHALL respond to every 
+     * WhatsApp message within 30 seconds. If processing takes longer, send a 
+     * "processing" message immediately and follow up with the real response.</p>
+     * 
+     * <p>Context required: fatherName</p>
+     */
+    PROCESSING("processing");
+    
+    private final String templateKey;
+    
+    /**
+     * Creates a MessageType with the corresponding template key.
+     * 
+     * @param templateKey the key used to look up the message template in the database
+     */
+    MessageType(String templateKey) {
+        this.templateKey = templateKey;
+    }
+    
+    /**
+     * Returns the template key used to look up the message template in the database.
+     * 
+     * <p>The template key matches the message_type column in the message_templates table,
+     * allowing fallback messages to be loaded when AI generation fails.</p>
+     * 
+     * @return the template key for database lookup
+     */
+    public String getTemplateKey() {
+        return templateKey;
+    }
+    
+    /**
+     * Finds a MessageType by its template key.
+     * 
+     * @param templateKey the template key to search for
+     * @return the matching MessageType
+     * @throws IllegalArgumentException if no MessageType matches the template key
+     */
+    public static MessageType fromTemplateKey(String templateKey) {
+        for (MessageType type : values()) {
+            if (type.templateKey.equals(templateKey)) {
+                return type;
+            }
+        }
+        throw new IllegalArgumentException("Unknown message type template key: " + templateKey);
+    }
+}

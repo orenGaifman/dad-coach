@@ -90,10 +90,10 @@ class IntelligenceLayerImplTest {
             when(promptAssembler.assemble(any(), any(), any(), any(), any()))
                 .thenReturn(List.of(AiMessage.system("test")));
             when(modelRouter.route(any(), any())).thenReturn(
-                mockSuccessfulRoute("Hola papá, hoy vamos a hacer algo divertido.")
+                mockSuccessfulRoute("Hello dad, today we're going to do something fun.")
             );
 
-            CoachingContext context = buildCoachingContext("Hola, quiero jugar con mi hijo");
+            CoachingContext context = buildCoachingContext("Hello, I want to play with my son");
             CoachingResponse response = intelligenceLayer.generateCoachingResponse(context);
 
             assertNotNull(response);
@@ -122,7 +122,7 @@ class IntelligenceLayerImplTest {
             DailyDecisionContext context = new DailyDecisionContext(
                 UUID.randomUUID(), "BUILDING", 15, 70,
                 Instant.now().minusSeconds(18000), Instant.now().minusSeconds(3600),
-                true, 10, "Hola, cómo estás"
+                true, 10, "Hello, how are you"
             );
 
             ActionRecommendation result = intelligenceLayer.decideDailyAction(context);
@@ -333,7 +333,7 @@ class IntelligenceLayerImplTest {
 
             CompletedConversation conversation = new CompletedConversation(
                 UUID.randomUUID(), UUID.randomUUID(), ConversationType.DAILY_COACHING,
-                List.of(AiMessage.user("Hola"), AiMessage.assistant("Hola papá"))
+                List.of(AiMessage.user("Hello"), AiMessage.assistant("Hello dad"))
             );
 
             MemoryExtractionOutput output = intelligenceLayer.extractMemories(conversation);
@@ -364,7 +364,7 @@ class IntelligenceLayerImplTest {
             SafetyClassification result = intelligenceLayer.classifyMessage(message);
 
             assertEquals(expected, result);
-            verify(safetyClassifier).classify("Estoy muy frustrado");
+            verify(safetyClassifier).classify("I'm very frustrated");
         }
 
         @Test
@@ -373,7 +373,7 @@ class IntelligenceLayerImplTest {
             when(safetyClassifier.classify(any())).thenReturn(SafetyClassification.safe());
 
             InboundMessage message = new InboundMessage(
-                UUID.randomUUID(), "Hola", Instant.now()
+                UUID.randomUUID(), "Hello", Instant.now()
             );
             SafetyClassification result = intelligenceLayer.classifyMessage(message);
 
@@ -385,7 +385,7 @@ class IntelligenceLayerImplTest {
         @DisplayName("passes message content directly to classifier without modification")
         void classifyMessage_passesContentDirectly() {
             when(safetyClassifier.classify(any())).thenReturn(SafetyClassification.safe());
-            String messageContent = "Mi hijo tiene un problema en la escuela";
+            String messageContent = "My son has a problem at school";
 
             InboundMessage message = new InboundMessage(
                 UUID.randomUUID(), messageContent, Instant.now()
@@ -429,7 +429,7 @@ class IntelligenceLayerImplTest {
             DailyDecisionContext context = new DailyDecisionContext(
                 UUID.randomUUID(), "FOUNDATION", 5, 50,
                 Instant.now().minusSeconds(18000), Instant.now(),
-                true, 3, "Hola, todo bien"
+                true, 3, "Hello, all good"
             );
 
             ActionRecommendation result = intelligenceLayer.decideDailyAction(context);
@@ -466,9 +466,9 @@ class IntelligenceLayerImplTest {
             when(promptAssembler.assemble(any(), any(), any(), any(), any()))
                 .thenReturn(List.of(AiMessage.system("test")));
             when(modelRouter.route(any(), any()))
-                .thenReturn(mockSuccessfulRoute("Respuesta de coaching para ti."));
+                .thenReturn(mockSuccessfulRoute("Coaching response for you."));
 
-            CoachingContext context = buildCoachingContext("Hola");
+            CoachingContext context = buildCoachingContext("Hello");
             CoachingResponse response = intelligenceLayer.generateCoachingResponse(context);
 
             // Response is a Java record — immutable by design
@@ -482,11 +482,11 @@ class IntelligenceLayerImplTest {
         void missionOutput_isRecommendationOnly() {
             when(modelRouter.route(any(), any()))
                 .thenReturn(mockSuccessfulRoute("""
-                    {"title": "Leer juntos", "description": "Lee un cuento.", "category": "READING", "difficulty": 2, "estimated_minutes": 20}
+                    {"title": "Read together", "description": "Read a story.", "category": "READING", "difficulty": 2, "estimated_minutes": 20}
                     """));
 
             MissionContext context = new MissionContext(
-                UUID.randomUUID(), "Lucas", 5, List.of("libros"),
+                UUID.randomUUID(), "Lucas", 5, List.of("books"),
                 "READING", 2, "GENTLE", "Tuesday", "evening",
                 "Fomentar lectura", List.of(), List.of()
             );

@@ -169,7 +169,7 @@ public class MissionOrchestratorImpl implements MissionOrchestrator {
         Mission mission = missionService.getMission(missionId);
 
         // If still in ACCEPTED state, transition through IN_PROGRESS first
-        if (mission.getStatus() == com.dadcoach.mission.MissionStatus.ACCEPTED) {
+        if (mission.getStatus() == com.dadcoach.mission.LegacyMissionStatus.ACCEPTED) {
             missionService.startMission(missionId);
         }
 

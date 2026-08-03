@@ -9,7 +9,8 @@ import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.domain.mission.Mission;
 import com.dadcoach.domain.mission.MissionRepository;
 import com.dadcoach.father.CoachingPhase;
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
+import static com.dadcoach.mission.LegacyMissionStatus.*;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -202,9 +203,9 @@ class MissionEngineImplTest {
 
             // Create 3 skipped missions
             List<Mission> skippedMissions = List.of(
-                    createMissionWithStatus(MissionStatus.SKIPPED),
-                    createMissionWithStatus(MissionStatus.SKIPPED),
-                    createMissionWithStatus(MissionStatus.SKIPPED)
+                    createMissionWithStatus(SKIPPED),
+                    createMissionWithStatus(SKIPPED),
+                    createMissionWithStatus(SKIPPED)
             );
             when(missionRepository.findRecentByChildIdSince(eq(10L), any(Instant.class)))
                     .thenReturn(skippedMissions);
@@ -220,9 +221,9 @@ class MissionEngineImplTest {
             when(fatherRepository.findById(1L)).thenReturn(Optional.of(father));
 
             List<Mission> expiredMissions = List.of(
-                    createMissionWithStatus(MissionStatus.EXPIRED),
-                    createMissionWithStatus(MissionStatus.EXPIRED),
-                    createMissionWithStatus(MissionStatus.EXPIRED)
+                    createMissionWithStatus(EXPIRED),
+                    createMissionWithStatus(EXPIRED),
+                    createMissionWithStatus(EXPIRED)
             );
             when(missionRepository.findRecentByChildIdSince(eq(10L), any(Instant.class)))
                     .thenReturn(expiredMissions);
@@ -463,13 +464,13 @@ class MissionEngineImplTest {
     private Mission createCompletedMission(int rating) {
         Mission mission = new Mission(father, child1, "Test", "Desc", "CONNECTION", 2, 15);
         mission.setId(100L);
-        mission.setStatus(MissionStatus.COMPLETED);
+        mission.setStatus(COMPLETED);
         mission.setOutcomeRating(rating);
         mission.setCompletedAt(Instant.now().minus(1, ChronoUnit.DAYS));
         return mission;
     }
 
-    private Mission createMissionWithStatus(MissionStatus status) {
+    private Mission createMissionWithStatus(LegacyMissionStatus status) {
         Mission mission = new Mission(father, child1, "Test", "Desc", "CONNECTION", 2, 15);
         mission.setId((long) (Math.random() * 1000));
         mission.setStatus(status);

@@ -1,6 +1,6 @@
 package com.dadcoach.workspace.aggregation;
 
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -15,7 +15,7 @@ import java.util.UUID;
 public class MissionDataServiceImpl implements MissionDataService {
 
     @Override
-    public List<MissionReadModel> getMissionsByFatherIdAndStatus(UUID fatherId, List<MissionStatus> statuses) {
+    public List<MissionReadModel> getMissionsByFatherIdAndStatus(UUID fatherId, List<LegacyMissionStatus> statuses) {
         return List.of();
     }
 

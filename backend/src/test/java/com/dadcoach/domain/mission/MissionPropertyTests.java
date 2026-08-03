@@ -6,7 +6,8 @@ import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.domain.goal.GoalRepository;
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
+import static com.dadcoach.mission.LegacyMissionStatus.*;
 import com.dadcoach.statemachine.StateMachineEngine;
 
 import net.jqwik.api.*;
@@ -241,7 +242,7 @@ class MissionPropertyTests {
      */
     @Property
     void secondActiveMissionForSameChildShouldBeRejected(
-            @ForAll("activeStatuses") MissionStatus existingMissionStatus) {
+            @ForAll("activeStatuses") LegacyMissionStatus existingMissionStatus) {
 
         // Set up mocks for MissionService
         MissionRepository mockMissionRepo = mock(MissionRepository.class);
@@ -320,7 +321,7 @@ class MissionPropertyTests {
         if (result == null) {
             throw new AssertionError("Mission creation should succeed when no active mission exists");
         }
-        if (result.getStatus() != MissionStatus.ASSIGNED) {
+        if (result.getStatus() != ASSIGNED) {
             throw new AssertionError("New mission should be in ASSIGNED status but got " + result.getStatus());
         }
     }
@@ -333,7 +334,7 @@ class MissionPropertyTests {
      * return true only for these three states.
      */
     @Property
-    void onlyThreeStatusesAreActive(@ForAll("allStatuses") MissionStatus status) {
+    void onlyThreeStatusesAreActive(@ForAll("allStatuses") LegacyMissionStatus status) {
         Father father = new Father("+972501234567");
         Child child = new Child(father, "Test Child", LocalDate.of(2018, 6, 15));
         Mission mission = new Mission(father, child, "Test", "Desc", "CONNECTION", 2, 20);
@@ -342,9 +343,9 @@ class MissionPropertyTests {
         transitionToStatus(mission, status);
 
         boolean isActive = mission.isActive();
-        boolean shouldBeActive = (status == MissionStatus.ASSIGNED
-                || status == MissionStatus.ACCEPTED
-                || status == MissionStatus.IN_PROGRESS);
+        boolean shouldBeActive = (status == ASSIGNED
+                || status == ACCEPTED
+                || status == IN_PROGRESS);
 
         if (isActive != shouldBeActive) {
             throw new AssertionError(
@@ -354,51 +355,51 @@ class MissionPropertyTests {
     }
 
     @Provide
-    Arbitrary<MissionStatus> activeStatuses() {
-        return Arbitraries.of(MissionStatus.ASSIGNED, MissionStatus.ACCEPTED, MissionStatus.IN_PROGRESS);
+    Arbitrary<LegacyMissionStatus> activeStatuses() {
+        return Arbitraries.of(ASSIGNED, ACCEPTED, IN_PROGRESS);
     }
 
     @Provide
-    Arbitrary<MissionStatus> allStatuses() {
-        return Arbitraries.of(MissionStatus.values());
+    Arbitrary<LegacyMissionStatus> allStatuses() {
+        return Arbitraries.of(LegacyMissionStatus.values());
     }
 
     /**
      * Transitions a mission to the target status via the valid path in the state machine.
      */
-    private void transitionToStatus(Mission mission, MissionStatus target) {
+    private void transitionToStatus(Mission mission, LegacyMissionStatus target) {
         switch (target) {
             case ASSIGNED:
                 // Already in ASSIGNED state
                 break;
             case ACCEPTED:
-                mission.transitionTo(MissionStatus.ACCEPTED);
+                mission.transitionTo(ACCEPTED);
                 break;
             case SKIPPED:
-                mission.transitionTo(MissionStatus.SKIPPED);
+                mission.transitionTo(SKIPPED);
                 break;
             case EXPIRED:
-                mission.transitionTo(MissionStatus.EXPIRED);
+                mission.transitionTo(EXPIRED);
                 break;
             case IN_PROGRESS:
-                mission.transitionTo(MissionStatus.ACCEPTED);
-                mission.transitionTo(MissionStatus.IN_PROGRESS);
+                mission.transitionTo(ACCEPTED);
+                mission.transitionTo(IN_PROGRESS);
                 break;
             case COMPLETED:
-                mission.transitionTo(MissionStatus.ACCEPTED);
-                mission.transitionTo(MissionStatus.IN_PROGRESS);
-                mission.transitionTo(MissionStatus.COMPLETED);
+                mission.transitionTo(ACCEPTED);
+                mission.transitionTo(IN_PROGRESS);
+                mission.transitionTo(COMPLETED);
                 break;
             case ABANDONED:
-                mission.transitionTo(MissionStatus.ACCEPTED);
-                mission.transitionTo(MissionStatus.IN_PROGRESS);
-                mission.transitionTo(MissionStatus.ABANDONED);
+                mission.transitionTo(ACCEPTED);
+                mission.transitionTo(IN_PROGRESS);
+                mission.transitionTo(ABANDONED);
                 break;
             case REFLECTED:
-                mission.transitionTo(MissionStatus.ACCEPTED);
-                mission.transitionTo(MissionStatus.IN_PROGRESS);
-                mission.transitionTo(MissionStatus.COMPLETED);
-                mission.transitionTo(MissionStatus.REFLECTED);
+                mission.transitionTo(ACCEPTED);
+                mission.transitionTo(IN_PROGRESS);
+                mission.transitionTo(COMPLETED);
+                mission.transitionTo(REFLECTED);
                 break;
         }
     }

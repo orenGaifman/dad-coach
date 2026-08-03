@@ -103,7 +103,7 @@ graph TD
   - [x] 8.3 Return ValidationResult with pass/fail + failure details
   - [x] 8.4 FallbackResponseProvider has pre-written messages per conversation type
   - [x] 8.5 Fallback messages are static text (never AI-generated)
-  - [x] 8.6 Fallback messages in conversational Latin American Spanish
+  - [x] 8.6 Fallback messages in father's preferred language (English or Hebrew)
   - [x] 8.7 Max 3 consecutive fallback responses before alerting operations
 
 - [x] 9. Implement the MissionOrchestrator that handles mission state transitions triggered by AI follow-up actions within conversations

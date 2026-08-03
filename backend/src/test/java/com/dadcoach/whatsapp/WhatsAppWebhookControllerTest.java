@@ -8,7 +8,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.dadcoach.channel.ChannelRouter;
 import com.dadcoach.config.WhatsAppProperties;
+import com.dadcoach.conversation.ConversationOrchestrator;
+import com.dadcoach.workflow.WorkflowEngine;
+import com.dadcoach.workflow.config.FeatureFlagsConfig;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +24,12 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+/**
+ * Unit tests for {@link WhatsAppWebhookController}.
+ * 
+ * <p>Tests webhook verification, signature validation, and message routing
+ * between the deterministic WorkflowEngine and legacy ConversationOrchestrator.</p>
+ */
 @WebMvcTest(
     controllers = WhatsAppWebhookController.class,
     excludeFilters = @ComponentScan.Filter(
@@ -38,6 +48,18 @@ class WhatsAppWebhookControllerTest {
 
     @MockBean
     private WhatsAppProperties properties;
+
+    @MockBean
+    private ChannelRouter channelRouter;
+
+    @MockBean
+    private ConversationOrchestrator conversationOrchestrator;
+
+    @MockBean
+    private WorkflowEngine workflowEngine;
+
+    @MockBean
+    private FeatureFlagsConfig featureFlags;
 
     @Test
     void verifyWebhook_validToken_returnsChallenge() throws Exception {

@@ -9,7 +9,7 @@ import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.mission.Mission;
 import com.dadcoach.domain.mission.MissionRepository;
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +65,7 @@ public class MissionReminderScheduler {
         
         // Find missions that need reminders
         List<Mission> pendingMissions = missionRepository.findByStatusIn(
-            List.of(MissionStatus.ASSIGNED, MissionStatus.ACCEPTED, MissionStatus.IN_PROGRESS)
+            List.of(LegacyMissionStatus.ASSIGNED, LegacyMissionStatus.ACCEPTED, LegacyMissionStatus.IN_PROGRESS)
         );
         
         int remindersSent = 0;
@@ -94,7 +94,7 @@ public class MissionReminderScheduler {
         
         // Find missions past their expiration that haven't been handled
         List<Mission> overdueMissions = missionRepository.findByStatusIn(
-            List.of(MissionStatus.ASSIGNED, MissionStatus.ACCEPTED)
+            List.of(LegacyMissionStatus.ASSIGNED, LegacyMissionStatus.ACCEPTED)
         );
         
         int overdueCount = 0;
@@ -132,7 +132,7 @@ public class MissionReminderScheduler {
         }
         
         // Check if 12+ hours since assignment with no activity
-        if (mission.getAssignedAt() != null && mission.getStatus() == MissionStatus.ASSIGNED) {
+        if (mission.getAssignedAt() != null && mission.getStatus() == LegacyMissionStatus.ASSIGNED) {
             Instant twelveHoursAfterAssignment = mission.getAssignedAt().plusSeconds(12 * 3600);
             if (now.isAfter(twelveHoursAfterAssignment)) {
                 return true;

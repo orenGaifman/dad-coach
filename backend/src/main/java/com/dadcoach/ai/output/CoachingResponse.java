@@ -8,7 +8,7 @@ import java.time.Duration;
  *
  * <p>The AI never directly mutates state; this record is purely advisory output.
  *
- * @param message          the generated coaching message in Spanish
+ * @param message          the generated coaching message in the father's preferred language (English or Hebrew)
  * @param model            the model that produced the response
  * @param provider         the provider that handled the request
  * @param inputTokens      tokens consumed by the prompt

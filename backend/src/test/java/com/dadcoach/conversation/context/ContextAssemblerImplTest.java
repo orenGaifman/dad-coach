@@ -72,7 +72,7 @@ class ContextAssemblerImplTest {
         setConversationId(conversation, conversationId);
 
         inboundMessage = new InboundMessageDto(
-                "whatsapp", "+972501234567", "Hola, quiero hablar sobre mi hijo",
+                "whatsapp", "+972501234567", "Hello, I want to talk about my son",
                 "TEXT", "msg-123", Instant.now(), Map.of()
         );
     }
@@ -332,9 +332,9 @@ class ContextAssemblerImplTest {
                     .thenReturn(List.of());
 
             List<ConversationMessage> messages = List.of(
-                    createMessage(conversationId, "INBOUND", "Hola", 1),
-                    createMessage(conversationId, "OUTBOUND", "Hola papá!", 2),
-                    createMessage(conversationId, "INBOUND", "Como hago con mi hijo?", 3)
+                    createMessage(conversationId, "INBOUND", "Hello", 1),
+                    createMessage(conversationId, "OUTBOUND", "Hello dad!", 2),
+                    createMessage(conversationId, "INBOUND", "How do I handle my son?", 3)
             );
             when(conversationMessageRepository.findByConversationIdOrderBySequenceNumberAsc(conversationId))
                     .thenReturn(messages);
@@ -343,7 +343,7 @@ class ContextAssemblerImplTest {
 
             assertThat(context.conversationHistory()).hasSize(3);
             assertThat(context.conversationHistory().get(0).get("direction")).isEqualTo("INBOUND");
-            assertThat(context.conversationHistory().get(0).get("content")).isEqualTo("Hola");
+            assertThat(context.conversationHistory().get(0).get("content")).isEqualTo("Hello");
             assertThat(context.conversationHistory().get(2).get("direction")).isEqualTo("INBOUND");
         }
 
@@ -396,7 +396,7 @@ class ContextAssemblerImplTest {
             // Verify that the message content is passed as the topic to memory retrieval
             verify(memorySystem).retrieveTopMemories(
                     eq(domainFatherId),
-                    eq("Hola, quiero hablar sobre mi hijo"),
+                    eq("Hello, I want to talk about my son"),
                     eq(10)
             );
         }

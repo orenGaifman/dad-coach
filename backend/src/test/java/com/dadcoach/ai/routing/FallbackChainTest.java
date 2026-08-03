@@ -108,14 +108,14 @@ class FallbackChainTest {
         }
 
         @Test
-        @DisplayName("Pre-written fallback is in Spanish")
-        void fallbackIsInSpanish() {
+        @DisplayName("Pre-written fallback is available for all conversation types")
+        void fallbackAvailableForAllTypes() {
             FallbackChain chain = createChainWithSuccess(3);
             AiProviderRequest request = testRequest("gpt-4o");
 
             for (ConversationType type : ConversationType.values()) {
                 FallbackChain.FallbackResult result = chain.execute(request, CONFIG_GPT4O, type);
-                // All fallback responses should contain Spanish characters/words
+                // All fallback responses should be non-blank
                 String content = result.response().content();
                 assertThat(content).isNotBlank();
             }
@@ -247,12 +247,12 @@ class FallbackChainTest {
     private AiProviderRequest testRequest(String model) {
         return new AiProviderRequest(
             model,
-            List.of(AiMessage.user("Hola, ¿cómo puedo mejorar?")),
+            List.of(AiMessage.user("Hello, how can I improve?")),
             0.7, 0.9, 300, false, Map.of()
         );
     }
 
     private AiProviderResponse success(String model, String provider) {
-        return new AiProviderResponse("Respuesta", model, provider, 10, 5, "stop", Duration.ofMillis(50));
+        return new AiProviderResponse("Response", model, provider, 10, 5, "stop", Duration.ofMillis(50));
     }
 }

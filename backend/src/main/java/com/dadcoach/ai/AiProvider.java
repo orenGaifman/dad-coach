@@ -17,7 +17,7 @@ public interface AiProvider {
 
     /**
      * Estimate token count for a given text.
-     * Uses approximate estimation (1 token ≈ 4 characters for English/Spanish text).
+     * Uses approximate estimation (1 token ≈ 4 characters for English/Hebrew text).
      *
      * @param text the text to estimate tokens for
      * @return estimated number of tokens

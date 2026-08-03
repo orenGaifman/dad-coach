@@ -5,6 +5,8 @@ import com.dadcoach.father.CoachingPhase;
 import com.dadcoach.father.CoachingStyle;
 import com.dadcoach.father.FatherStatus;
 import com.dadcoach.father.OnboardingState;
+import com.dadcoach.workflow.Belt;
+import com.dadcoach.workflow.WorkflowState;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -118,6 +120,37 @@ public class Father {
 
     @Column(name = "total_quality_minutes", nullable = false)
     private Integer totalQualityMinutes = 0;
+
+    // ─── Workflow State (Deterministic Workflow Engine) ──────────────────
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "current_workflow_state", length = 30)
+    private WorkflowState currentWorkflowState = WorkflowState.WELCOME;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "previous_workflow_state", length = 30)
+    private WorkflowState previousWorkflowState;
+
+    @Column(name = "workflow_state_entered_at")
+    private Instant workflowStateEnteredAt;
+
+    @Column(name = "welcomed_at")
+    private Instant welcomedAt;
+
+    // ─── Quality Time Tracking ───────────────────────────────────────────
+
+    @Column(name = "quality_time_streak", nullable = false)
+    private int qualityTimeStreak = 0;
+
+    @Column(name = "quality_time_longest_streak", nullable = false)
+    private int qualityTimeLongestStreak = 0;
+
+    @Column(name = "total_quality_times_completed", nullable = false)
+    private int totalQualityTimesCompleted = 0;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "current_belt", length = 20, nullable = false)
+    private Belt currentBelt = Belt.WHITE;
 
     protected Father() {
         // JPA requires a no-arg constructor
@@ -401,5 +434,73 @@ public class Father {
 
     public void setTotalQualityMinutes(Integer totalQualityMinutes) {
         this.totalQualityMinutes = totalQualityMinutes;
+    }
+
+    // ─── Workflow State Getters & Setters ────────────────────────────────
+
+    public WorkflowState getCurrentWorkflowState() {
+        return currentWorkflowState;
+    }
+
+    public void setCurrentWorkflowState(WorkflowState currentWorkflowState) {
+        this.currentWorkflowState = currentWorkflowState;
+    }
+
+    public WorkflowState getPreviousWorkflowState() {
+        return previousWorkflowState;
+    }
+
+    public void setPreviousWorkflowState(WorkflowState previousWorkflowState) {
+        this.previousWorkflowState = previousWorkflowState;
+    }
+
+    public Instant getWorkflowStateEnteredAt() {
+        return workflowStateEnteredAt;
+    }
+
+    public void setWorkflowStateEnteredAt(Instant workflowStateEnteredAt) {
+        this.workflowStateEnteredAt = workflowStateEnteredAt;
+    }
+
+    public Instant getWelcomedAt() {
+        return welcomedAt;
+    }
+
+    public void setWelcomedAt(Instant welcomedAt) {
+        this.welcomedAt = welcomedAt;
+    }
+
+    // ─── Quality Time Tracking Getters & Setters ─────────────────────────
+
+    public int getQualityTimeStreak() {
+        return qualityTimeStreak;
+    }
+
+    public void setQualityTimeStreak(int qualityTimeStreak) {
+        this.qualityTimeStreak = qualityTimeStreak;
+    }
+
+    public int getQualityTimeLongestStreak() {
+        return qualityTimeLongestStreak;
+    }
+
+    public void setQualityTimeLongestStreak(int qualityTimeLongestStreak) {
+        this.qualityTimeLongestStreak = qualityTimeLongestStreak;
+    }
+
+    public int getTotalQualityTimesCompleted() {
+        return totalQualityTimesCompleted;
+    }
+
+    public void setTotalQualityTimesCompleted(int totalQualityTimesCompleted) {
+        this.totalQualityTimesCompleted = totalQualityTimesCompleted;
+    }
+
+    public Belt getCurrentBelt() {
+        return currentBelt;
+    }
+
+    public void setCurrentBelt(Belt currentBelt) {
+        this.currentBelt = currentBelt;
     }
 }

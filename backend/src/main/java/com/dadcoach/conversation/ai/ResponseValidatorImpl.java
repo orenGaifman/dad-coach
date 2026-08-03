@@ -45,24 +45,38 @@ public class ResponseValidatorImpl implements ResponseValidator {
 
     private static final int LANGUAGE_WORD_THRESHOLD = 3;
 
-    // Shame language patterns (case-insensitive)
+    // Shame language patterns (case-insensitive) - English and Hebrew
     private static final List<Pattern> SHAME_PATTERNS = List.of(
-            Pattern.compile("deberías avergonzarte", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-            Pattern.compile("eres mal padre", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-            Pattern.compile("qué vergüenza", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-            Pattern.compile("mal padre", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-            Pattern.compile("deberías sentir vergüenza", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-            Pattern.compile("eres un fracaso", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE)
+            // English shame patterns
+            Pattern.compile("you should be ashamed", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("you('re| are) a bad (father|dad|parent)", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("what a shame", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("you('re| are) a failure", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("other (dads|fathers) already", Pattern.CASE_INSENSITIVE),
+            // Hebrew shame patterns
+            Pattern.compile("אתה צריך להתבייש", Pattern.UNICODE_CASE),
+            Pattern.compile("אתה אבא רע", Pattern.UNICODE_CASE),
+            Pattern.compile("איזה בושה", Pattern.UNICODE_CASE),
+            Pattern.compile("אתה כישלון", Pattern.UNICODE_CASE),
+            Pattern.compile("אבות אחרים כבר", Pattern.UNICODE_CASE)
     );
 
-    // Diagnostic language patterns (case-insensitive)
+    // Diagnostic language patterns (case-insensitive) - English and Hebrew
     private static final List<Pattern> DIAGNOSTIC_PATTERNS = List.of(
-            Pattern.compile("tu hijo tiene", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-            Pattern.compile("padece de", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-            Pattern.compile("síntomas de", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-            Pattern.compile("diagnóstico", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-            Pattern.compile("trastorno de", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-            Pattern.compile("enfermedad mental", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE)
+            // English diagnostic patterns
+            Pattern.compile("your (child|son|daughter) has", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("suffers from", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("symptoms of", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("diagnosis", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("disorder", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("mental illness", Pattern.CASE_INSENSITIVE),
+            // Hebrew diagnostic patterns
+            Pattern.compile("לילד שלך יש", Pattern.UNICODE_CASE),
+            Pattern.compile("סובל מ", Pattern.UNICODE_CASE),
+            Pattern.compile("תסמינים של", Pattern.UNICODE_CASE),
+            Pattern.compile("אבחון", Pattern.UNICODE_CASE),
+            Pattern.compile("הפרעת", Pattern.UNICODE_CASE),
+            Pattern.compile("מחלה נפשית", Pattern.UNICODE_CASE)
     );
 
     // PII patterns

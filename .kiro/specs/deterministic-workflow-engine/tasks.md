@@ -127,7 +127,7 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - Add findByWorkflowStateAndStateEnteredAtBefore for stale state detection
     - _Requirements: 12.5_
 
-- [ ] 5. System State Loader (Read Before Write)
+- [x] 5. System State Loader (Read Before Write)
   - [x] 5.1 Create SystemState record class
     - Include father profile, workflow state, calendar events, quality times, dashboard metrics, conversation context
     - Make immutable with record/value object pattern
@@ -151,7 +151,7 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - Cache state for duration of single request processing
     - _Requirements: 2.4_
 
-  - [ ] 5.5 Implement available slot calculation
+  - [x] 5.5 Implement available slot calculation
     - Read Google Calendar events
     - Identify busy periods
     - Calculate available slots of at least 30 minutes
@@ -164,7 +164,7 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - For any suggested slot, it does not overlap with any existing calendar event
     - **Validates: Requirement 2.3**
 
-- [ ] 6. Pattern Matching Engine
+- [x] 6. Pattern Matching Engine
   - [x] 6.1 Create PatternResult class
     - Include patternName, matchedAction, capturedGroups
     - _Requirements: 11.3_
@@ -178,13 +178,13 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - Static factory method of(name, pattern, action)
     - _Requirements: 11.3_
 
-  - [ ] 6.4 Implement PatternMatcherImpl with regex
+  - [x] 6.4 Implement PatternMatcherImpl with regex
     - Evaluate patterns in order, first match wins
     - Extract captured groups from regex
     - Return PatternResult with action
     - _Requirements: 11.3_
 
-  - [ ] 6.5 Define WELCOME_PATTERNS
+  - [x] 6.5 Define WELCOME_PATTERNS
     - AFFIRMATIVE_EN (English): yes|ready|let's go|ok|sure|start → TRANSITION_TO_SCHEDULE
     - AFFIRMATIVE_HE (Hebrew): כן|מוכן|יאללה|בסדר|התחל → TRANSITION_TO_SCHEDULE
     - MORE_INFO_EN (English): how|what is|explain|tell me more → EXPLAIN_AND_REPROMPT
@@ -196,7 +196,7 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - For any input, matches exactly one of AFFIRMATIVE, MORE_INFO, or UNMATCHED
     - **Validates: Requirements 4.2, 4.3**
 
-  - [ ] 6.7 Define SCHEDULE_PATTERNS
+  - [x] 6.7 Define SCHEDULE_PATTERNS
     - SLOT_NUMBER: ^([1-9])$ → SELECT_SLOT
     - SKIP_EN (English): skip|not now|later → POSTPONE_SCHEDULING
     - SKIP_HE (Hebrew): דלג|לא עכשיו|אחר כך → POSTPONE_SCHEDULING
@@ -218,7 +218,7 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - NOT_COMPLETED_HE (Hebrew): לא|עוד לא|לא הצלחתי → MARK_MISSED
     - _Requirements: 7.2, 7.3_
 
-  - [ ] 6.10 Define WAITING_PATTERNS
+  - [x] 6.10 Define WAITING_PATTERNS
     - REQUEST_IDEAS_EN (English): ideas|activity|suggestions|what can I do → TRANSITION_TO_ACTIVITY_IDEAS
     - REQUEST_IDEAS_HE (Hebrew): רעיונות|פעילות|הצעות|מה אפשר לעשות → TRANSITION_TO_ACTIVITY_IDEAS
     - RESCHEDULE_EN (English): reschedule|change|cancel → RESCHEDULE
@@ -229,7 +229,7 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - DASHBOARD_HE (Hebrew): דשבורד|התקדמות|חגורה|רצף → SHOW_DASHBOARD_SUMMARY
     - _Requirements: 6.4, 6.5_
 
-  - [ ] 6.11 Define ACTIVITY_IDEAS_PATTERNS
+  - [x] 6.11 Define ACTIVITY_IDEAS_PATTERNS
     - IDEA_NUMBER: ^([1-3])$ → SHOW_IDEA_DETAILS
     - MORE_IDEAS_EN (English): more|another|different → GENERATE_MORE_IDEAS
     - MORE_IDEAS_HE (Hebrew): עוד|אחר|שונה → GENERATE_MORE_IDEAS
@@ -242,36 +242,36 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - Transition to ACTIVITY_IDEAS only when message contains activity request keywords
     - **Validates: Requirement 9.1**
 
-- [ ] 7. Checkpoint - Pattern Matching Engine
+- [x] 7. Checkpoint - Pattern Matching Engine
   - Ensure all pattern definitions compile, pattern matcher correctly identifies actions for sample inputs. Ask the user if questions arise.
 
-- [ ] 8. Message Generator
-  - [ ] 8.1 Create MessageType enum
+- [x] 8. Message Generator
+  - [x] 8.1 Create MessageType enum
     - Define all message types: WELCOME_GREETING, WELCOME_EXPLAIN, SCHEDULE_SLOTS, SCHEDULE_CONFIRM, WAITING_REMINDER, FOLLOW_UP_QUESTION, FOLLOW_UP_COMPLETED, FOLLOW_UP_MISSED, ACTIVITY_IDEAS, DASHBOARD_SUMMARY, CLARIFICATION, ERROR_GENERIC
     - _Requirements: 10.2_
 
-  - [ ] 8.2 Create MessageContext class
+  - [x] 8.2 Create MessageContext class
     - Include messageType, fatherName, childName, timeSlots, timezone, locale, and other contextual data
     - Builder pattern for construction
     - _Requirements: 10.2_
 
-  - [ ] 8.3 Create MessageGenerator interface
+  - [x] 8.3 Create MessageGenerator interface
     - Define generate(MessageType type, MessageContext context) method
     - Define generateWithFallback(MessageType type, MessageContext context, long timeoutMs) method
     - _Requirements: 10.1_
 
-  - [ ] 8.4 Create FallbackMessages class
+  - [x] 8.4 Create FallbackMessages class
     - Load templates from message_templates table at startup
     - Provide get(MessageType) method for instant fallback access
     - _Requirements: 10.4_
 
-  - [ ] 8.5 Implement MessageGeneratorImpl
+  - [x] 8.5 Implement MessageGeneratorImpl
     - Use existing IntelligenceLayer for AI text generation
     - Pass simplified prompts that only request text, not decisions
     - Return only string output, no recommendations or metadata
     - _Requirements: 10.1, 10.3, 10.5_
 
-  - [ ] 8.6 Implement timeout and fallback logic
+  - [x] 8.6 Implement timeout and fallback logic
     - Execute AI call with CompletableFuture and timeout
     - Use fallback template if AI exceeds 5 seconds or fails
     - Log fallback usage as warning
@@ -282,16 +282,16 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - For any message request, if AI fails or times out, fallback template is used
     - **Validates: Requirements 10.4, 10.6**
 
-- [ ] 9. State Handlers
-  - [ ] 9.1 Create StateHandler interface
+- [x] 9. State Handlers
+  - [x] 9.1 Create StateHandler interface
     - Define getState(), getExpectedPatterns(), handle(context, match), handleUnmatched(context) methods
     - _Requirements: 1.1, 11.4_
 
-  - [ ] 9.2 Create StateAction class
+  - [x] 9.2 Create StateAction class
     - Include action type, next state (if transition), response message, updated entities
     - _Requirements: 1.3_
 
-  - [ ] 9.3 Implement WelcomeStateHandler
+  - [x] 9.3 Implement WelcomeStateHandler
     - On AFFIRMATIVE: transition to SCHEDULE_QUALITY_TIME, set welcomed_at timestamp
     - On MORE_INFO: send explanation, reprompt
     - On UNMATCHED: send clarification with two explicit options
@@ -302,7 +302,7 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - For any transition from WELCOME, welcomed_at is set to non-null
     - **Validates: Requirement 4.5**
 
-  - [ ] 9.5 Implement ScheduleStateHandler
+  - [x] 9.5 Implement ScheduleStateHandler
     - On entry: load available slots, present 3-5 options with numbers
     - On SLOT_NUMBER: re-read calendar, verify slot, create event, transition to WAITING
     - On SKIP: acknowledge, set reminder for 24h re-prompt, remain in state
@@ -316,14 +316,14 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - For any scheduling conversation, completes or receives summary by 5th exchange
     - **Validates: Requirement 5.6**
 
-  - [ ] 9.7 Implement WaitingStateHandler
+  - [x] 9.7 Implement WaitingStateHandler
     - On REQUEST_IDEAS: store previous state, transition to ACTIVITY_IDEAS
     - On RESCHEDULE: cancel existing QualityTime and calendar event, transition to SCHEDULE
     - On SCHEDULE_INQUIRY: read next QualityTime, send confirmation message
     - On DASHBOARD: send text summary with deep link
     - _Requirements: 6.1, 6.4, 6.5_
 
-  - [ ] 9.8 Implement FollowUpStateHandler
+  - [x] 9.8 Implement FollowUpStateHandler
     - On entry: send follow-up question asking about completion
     - On COMPLETED: mark QualityTime COMPLETED, increment streak, check belt milestone, transition to SCHEDULE
     - On NOT_COMPLETED: mark QualityTime MISSED, send encouraging message, transition to SCHEDULE
@@ -346,7 +346,7 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - For any follow-up conversation, completes by 3rd exchange
     - **Validates: Requirement 7.5**
 
-  - [ ] 9.12 Implement ActivityIdeasStateHandler
+  - [x] 9.12 Implement ActivityIdeasStateHandler
     - On entry: read child age/interests, weather, previous activities; generate 3 ideas via AI
     - On IDEA_NUMBER: show detailed idea information
     - On MORE_IDEAS: generate 3 new ideas
@@ -364,18 +364,18 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - For any exit from ACTIVITY_IDEAS, workflow returns to previous_workflow_state
     - **Validates: Requirement 9.6**
 
-- [ ] 10. Checkpoint - State Handlers
+- [x] 10. Checkpoint - State Handlers
   - Ensure all state handlers compile, handle patterns correctly, and generate appropriate responses. Ask the user if questions arise.
 
-- [ ] 11. Quality Time Service
-  - [ ] 11.1 Create QualityTimeService interface
+- [x] 11. Quality Time Service
+  - [x] 11.1 Create QualityTimeService interface
     - Define scheduleQualityTime(fatherId, childId, startTime, duration) method
     - Define completeQualityTime(qualityTimeId, notes) method
     - Define cancelQualityTime(qualityTimeId) method
     - Define getUpcomingQualityTime(fatherId) method
     - _Requirements: 3.3, 3.4_
 
-  - [ ] 11.2 Implement QualityTimeServiceImpl - scheduling
+  - [x] 11.2 Implement QualityTimeServiceImpl - scheduling
     - Re-read Google Calendar before write (conflict detection)
     - Create Google Calendar event with title, duration, description, reminders, green color
     - Create QualityTime database record with google_calendar_event_id
@@ -387,7 +387,7 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - For any created event, contains title with child name, duration>=30min, description, reminders, green color
     - **Validates: Requirement 3.3**
 
-  - [ ] 11.4 Implement QualityTimeServiceImpl - completion
+  - [x] 11.4 Implement QualityTimeServiceImpl - completion
     - Update QualityTime status to COMPLETED, set completed_at
     - Increment father's quality_time_streak
     - Update quality_time_longest_streak if new record
@@ -395,77 +395,77 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - Recalculate and update current_belt (SACRED Belt System)
     - _Requirements: 7.2, 8.5_
 
-  - [ ] 11.5 Implement QualityTimeServiceImpl - cancellation
+  - [x] 11.5 Implement QualityTimeServiceImpl - cancellation
     - Update QualityTime status to CANCELLED
     - Delete corresponding Google Calendar event
     - _Requirements: 3.7_
 
-  - [ ] 11.6 Implement calendar sync for externally deleted events
+  - [x] 11.6 Implement calendar sync for externally deleted events
     - On calendar read, detect missing events
     - Update QualityTime records to CANCELLED for missing calendar events
     - _Requirements: 3.7_
 
-- [ ] 11.5. Mission Service Abstraction (Extensibility Layer)
-  - [ ] 11.5.1 Create Mission interface
+- [x] 11.5. Mission Service Abstraction (Extensibility Layer)
+  - [x] 11.5.1 Create Mission interface
     - Define getId(), getFatherId(), getChildId(), getType(), getStatus() methods
     - Define getScheduledStart(), getScheduledEnd(), getCompletionNotes() methods
     - Define getCompletedAt() method
     - Document as abstract container for parenting activities
     - _Requirements: 1.1 (Mission concept)_
 
-  - [ ] 11.5.2 Create MissionType enum
+  - [x] 11.5.2 Create MissionType enum
     - Define QUALITY_TIME as MVP mission type
     - Add placeholder comments for future types (READING_TOGETHER, OUTDOOR_ACTIVITY)
     - _Requirements: 1.1 (Mission extensibility)_
 
-  - [ ] 11.5.3 Create MissionStatus enum
+  - [x] 11.5.3 Create MissionStatus enum
     - Define SCHEDULED, COMPLETED, MISSED, CANCELLED statuses
     - Reuse QualityTimeStatus or create shared enum
     - _Requirements: 3.4_
 
-  - [ ] 11.5.4 Create MissionService interface
+  - [x] 11.5.4 Create MissionService interface
     - Define schedule(), complete(), cancel() methods
     - Define getNextScheduled(), getRecentCompleted() methods
     - Define getSupportedType() method
     - Document as abstract service for mission operations
     - _Requirements: 1.1 (Mission abstraction)_
 
-  - [ ] 11.5.5 Implement QualityTimeMissionService
+  - [x] 11.5.5 Implement QualityTimeMissionService
     - Implement MissionService interface
     - Delegate to QualityTimeService for actual operations
     - Return QualityTime as Mission
     - Set getSupportedType() to return QUALITY_TIME
     - _Requirements: 1.1 (MVP implementation)_
 
-  - [ ] 11.5.6 Create MissionServiceFactory
+  - [x] 11.5.6 Create MissionServiceFactory
     - Auto-discover MissionService implementations via Spring
     - Map each service to its supported MissionType
     - Provide getService(MissionType) method
     - Provide getDefaultService() convenience method for MVP
     - _Requirements: 1.1 (Factory pattern)_
 
-  - [ ] 11.5.7 Update WorkflowEngine to use MissionService
+  - [x] 11.5.7 Update WorkflowEngine to use MissionService
     - Replace direct QualityTimeService calls with MissionService calls
     - Use MissionServiceFactory.getDefaultService() for MVP
     - Ensure all mission operations go through abstraction layer
     - _Requirements: 1.1, 1.7 (WEB-SPEC-007 integration)_
 
-- [ ] 12. Workflow Engine Core
+- [x] 12. Workflow Engine Core
   - [x] 12.1 Create WorkflowEngine interface
     - Define processMessage(InboundMessageDto) method
     - Define triggerTransition(fatherId, trigger) method
     - _Requirements: 1.1_
 
-  - [ ] 12.2 Create WorkflowContext class
+  - [x] 12.2 Create WorkflowContext class
     - Include systemState, fatherId, currentState, inboundMessage
     - Immutable with builder pattern
     - _Requirements: 11.1_
 
-  - [ ] 12.3 Create WorkflowTrigger enum
+  - [x] 12.3 Create WorkflowTrigger enum
     - Define USER_MESSAGE, QUALITY_TIME_ENDED, FOLLOW_UP_TIMEOUT, SCHEDULER_REMINDER
     - _Requirements: 12.1_
 
-  - [ ] 12.4 Implement WorkflowEngineImpl - message processing pipeline
+  - [x] 12.4 Implement WorkflowEngineImpl - message processing pipeline
     - Step 1: Parse and validate message
     - Step 2: Identify father from phone number
     - Step 3: Load SystemState (Read Before Write)
@@ -487,7 +487,7 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - For any successful transition, exactly one log entry created with correct from/to/trigger
     - **Validates: Requirement 1.4**
 
-  - [ ] 12.7 Implement unmatched message handling
+  - [x] 12.7 Implement unmatched message handling
     - Send clarification message specific to current state
     - Include explicit options for valid responses
     - Do NOT use AI to interpret unmatched messages
@@ -498,12 +498,12 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - For any unmatched message, clarification sent with explicit valid options
     - **Validates: Requirement 11.4**
 
-  - [ ] 12.9 Implement 30-second response timeout
+  - [x] 12.9 Implement 30-second response timeout
     - If processing takes >30 seconds, send "processing" message immediately
     - Follow up with actual response when ready
     - _Requirements: 11.2_
 
-  - [ ] 12.10 Implement timezone-aware message formatting
+  - [x] 12.10 Implement timezone-aware message formatting
     - All time suggestions formatted in father's configured timezone
     - _Requirements: 5.7_
 
@@ -512,16 +512,16 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - For any time slot suggestion, time formatted in father's configured timezone
     - **Validates: Requirement 5.7**
 
-- [ ] 13. Checkpoint - Workflow Engine Core
+- [x] 13. Checkpoint - Workflow Engine Core
   - Ensure WorkflowEngine processes messages through full pipeline, transitions states correctly, and generates responses. Ask the user if questions arise.
 
-- [ ] 14. Scheduler Jobs
-  - [ ] 14.1 Create WorkflowScheduler component
+- [x] 14. Scheduler Jobs
+  - [x] 14.1 Create WorkflowScheduler component
     - Use Spring @Scheduled annotations
     - Include QualityTimeRepository, FatherRepository, WorkflowEngine, WhatsAppService
     - _Requirements: 12.1, 12.3_
 
-  - [ ] 14.2 Implement morning reminder job
+  - [x] 14.2 Implement morning reminder job
     - Run at 7:50 AM UTC, send at 8 AM local time
     - Query Quality Times scheduled today
     - Filter by reminder_sent=false and isLocalTime8AM
@@ -536,7 +536,7 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - For any Quality Time and any number of scheduler runs, exactly one reminder sent per day
     - **Validates: Requirements 6.2, 6.3**
 
-  - [ ] 14.4 Implement follow-up transition job
+  - [x] 14.4 Implement follow-up transition job
     - Run every 15 minutes
     - Query Quality Times with status=SCHEDULED and end_time < now
     - Filter by follow_up_sent=false
@@ -545,7 +545,7 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - Mark follow_up_sent=true
     - _Requirements: 6.6, 12.4_
 
-  - [ ] 14.5 Implement stale state detection job
+  - [x] 14.5 Implement stale state detection job
     - Run every hour
     - Query fathers in QUALITY_TIME_FOLLOW_UP for >24 hours
     - Mark pending Quality Time as MISSED
@@ -558,59 +558,59 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - For any job and any number of executions, no duplicate messages, transitions, or state updates
     - **Validates: Requirement 12.2**
 
-- [ ] 15. REST API Controllers
-  - [ ] 15.1 Create WorkspaceSummaryDto response class
+- [x] 15. REST API Controllers
+  - [x] 15.1 Create WorkspaceSummaryDto response class
     - Include fatherDisplayName, currentWorkflowState, currentBelt, beltProgress, currentStreak, longestStreak, totalQualityTimesCompleted, weeklyGoalProgress, nextQualityTime, recentQualityTimes, recentAchievements, nextMilestone
     - _Requirements: 8.2, 14.1_
 
-  - [ ] 15.2 Create AvailableSlotsDto response class
+  - [x] 15.2 Create AvailableSlotsDto response class
     - Include list of slots with startTime, endTime, durationMinutes
     - Include calendarConnected flag and timezone
     - _Requirements: 14.1_
 
-  - [ ] 15.3 Create ScheduleRequest and ScheduleResponse DTOs
+  - [x] 15.3 Create ScheduleRequest and ScheduleResponse DTOs
     - Request: childId, startTime, durationMinutes
     - Response: qualityTimeId, calendarEventId, childName, startTime, endTime, status
     - _Requirements: 14.3_
 
-  - [ ] 15.4 Create CompleteRequest and CompleteResponse DTOs
+  - [x] 15.4 Create CompleteRequest and CompleteResponse DTOs
     - Request: notes (optional)
     - Response: qualityTimeId, status, streakUpdated, newStreak, beltEarned, pointsAwarded
     - _Requirements: 14.1_
 
-  - [ ] 15.5 Create ActivityIdeaDto and ActivityIdeasResponse DTOs
+  - [x] 15.5 Create ActivityIdeaDto and ActivityIdeasResponse DTOs
     - Include title, description, durationMinutes, indoor flag
     - _Requirements: 14.1_
 
-  - [ ] 15.6 Implement GET /api/v1/workspace/summary endpoint
+  - [x] 15.6 Implement GET /api/v1/workspace/summary endpoint
     - Load system state for authenticated father
     - Compute dashboard metrics in real-time
     - Return WorkspaceSummaryDto
     - _Requirements: 8.2, 14.1_
 
-  - [ ] 15.7 Implement GET /api/v1/quality-time/available-slots endpoint
+  - [x] 15.7 Implement GET /api/v1/quality-time/available-slots endpoint
     - Accept days_ahead and min_duration_minutes query params
     - Load available slots from SystemStateLoader
     - Return AvailableSlotsDto
     - _Requirements: 14.1_
 
-  - [ ] 15.8 Implement POST /api/v1/quality-time/schedule endpoint
+  - [x] 15.8 Implement POST /api/v1/quality-time/schedule endpoint
     - Validate request against calendar availability
     - Use QualityTimeService to create event
     - Return ScheduleResponse
     - _Requirements: 14.3_
 
-  - [ ] 15.9 Implement POST /api/v1/quality-time/{id}/complete endpoint
+  - [x] 15.9 Implement POST /api/v1/quality-time/{id}/complete endpoint
     - Use QualityTimeService to mark complete
     - Return CompleteResponse with updated metrics
     - _Requirements: 14.1_
 
-  - [ ] 15.10 Implement POST /api/v1/quality-time/{id}/cancel endpoint
+  - [x] 15.10 Implement POST /api/v1/quality-time/{id}/cancel endpoint
     - Use QualityTimeService to cancel event
     - Return updated QualityTimeResponse
     - _Requirements: 14.1_
 
-  - [ ] 15.11 Implement GET /api/v1/activity-ideas endpoint
+  - [x] 15.11 Implement GET /api/v1/activity-ideas endpoint
     - Accept child_id query param
     - Use MessageGenerator to generate 3 activity ideas
     - Return ActivityIdeasResponse
@@ -621,11 +621,11 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - Verify authentication requirements
     - _Requirements: 14.5_
 
-- [ ] 16. Checkpoint - Backend API Complete
+- [x] 16. Checkpoint - Backend API Complete
   - Ensure all REST endpoints work correctly, return proper DTOs, and handle errors gracefully. Ask the user if questions arise.
 
-- [ ] 17. Frontend TypeScript Types
-  - [ ] 17.1 Create qualityTime.ts types file
+- [x] 17. Frontend TypeScript Types
+  - [x] 17.1 Create qualityTime.ts types file
     - Define QualityTimeStatus, BeltLevel, WorkflowState types
     - Define QualityTime, AvailableSlot, BeltProgress, Achievement interfaces
     - Define WorkspaceSummary interface
@@ -633,8 +633,8 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - Define ActivityIdea interface
     - _Requirements: 13.1_
 
-- [ ] 18. Frontend API Services
-  - [ ] 18.1 Create qualityTime.ts API service
+- [x] 18. Frontend API Services
+  - [x] 18.1 Create qualityTime.ts API service
     - Implement getWorkspaceSummary() function
     - Implement getAvailableSlots(daysAhead, minDuration) function
     - Implement scheduleQualityTime(request) function
@@ -643,114 +643,114 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - Use existing apiClient pattern
     - _Requirements: 13.2_
 
-  - [ ] 18.2 Create activityIdeas.ts API service
+  - [x] 18.2 Create activityIdeas.ts API service
     - Implement getActivityIdeas(childId) function
     - _Requirements: 13.1_
 
-- [ ] 19. Frontend React Hooks
-  - [ ] 19.1 Create useWorkspaceSummary hook
+- [x] 19. Frontend React Hooks
+  - [x] 19.1 Create useWorkspaceSummary hook
     - Use @tanstack/react-query for data fetching
     - Configure refetchInterval at 60 seconds
     - Configure staleTime at 30 seconds
     - _Requirements: 13.2, 13.6_
 
-  - [ ] 19.2 Create useAvailableSlots hook
+  - [x] 19.2 Create useAvailableSlots hook
     - Fetch available time slots from API
     - Accept daysAhead and minDuration params
     - _Requirements: 13.4_
 
-  - [ ] 19.3 Create useScheduleQualityTime hook
+  - [x] 19.3 Create useScheduleQualityTime hook
     - Use @tanstack/react-query useMutation
     - Invalidate workspace summary on success
     - _Requirements: 13.4_
 
-  - [ ] 19.4 Create useCompleteQualityTime hook
+  - [x] 19.4 Create useCompleteQualityTime hook
     - Use useMutation for completion
     - Invalidate workspace summary on success
     - _Requirements: 13.1_
 
-  - [ ] 19.5 Create useBeltCelebration hook
+  - [x] 19.5 Create useBeltCelebration hook
     - Track previous belt and current belt
     - Detect belt progression
     - Return isActive, newBelt, dismiss function
     - _Requirements: 13.3, 13.6_
 
-- [ ] 20. Frontend Dashboard Components
-  - [ ] 20.1 Create BeltProgressionCard component
+- [x] 20. Frontend Dashboard Components
+  - [x] 20.1 Create BeltProgressionCard component
     - Display current belt icon/image
     - Show progress bar to next belt
     - Display Quality Times completed count
     - _Requirements: 13.1_
 
-  - [ ] 20.2 Create NextQualityTimeCard component
+  - [x] 20.2 Create NextQualityTimeCard component
     - Display scheduled date, time, child name
     - Show countdown timer
     - Include quick reschedule link
     - _Requirements: 13.1_
 
-  - [ ] 20.3 Create StreakDisplay component
+  - [x] 20.3 Create StreakDisplay component
     - Show current streak with flame icon
     - Display longest streak badge
     - _Requirements: 13.1_
 
-  - [ ] 20.4 Create RecentActivityFeed component
+  - [x] 20.4 Create RecentActivityFeed component
     - List last 5 Quality Time completions
     - Show date, child name, duration
     - _Requirements: 13.1_
 
-  - [ ] 20.5 Create AchievementBadges component
+  - [x] 20.5 Create AchievementBadges component
     - Display earned achievements as earned
     - Show locked achievements as silhouettes
     - _Requirements: 13.1_
 
-  - [ ] 20.6 Create ScheduleQualityTimeCTA component
+  - [x] 20.6 Create ScheduleQualityTimeCTA component
     - Primary action button "Schedule Quality Time"
     - Opens scheduling modal on click
     - _Requirements: 13.4_
 
-- [ ] 21. Checkpoint - Dashboard Components
+- [x] 21. Checkpoint - Dashboard Components
   - Ensure all dashboard components render correctly with mock data. Ask the user if questions arise.
 
-- [ ] 22. Frontend Quality Time Scheduling Components
-  - [ ] 22.1 Create AvailableSlotPicker component
+- [x] 22. Frontend Quality Time Scheduling Components
+  - [x] 22.1 Create AvailableSlotPicker component
     - Display available time slots from API
     - Allow selection of slot
     - Show date/time in user-friendly format
     - _Requirements: 13.4_
 
-  - [ ] 22.2 Create ChildSelector component
+  - [x] 22.2 Create ChildSelector component
     - Display list of children if multiple exist
     - Allow selection of child for Quality Time
     - Skip if only one child
     - _Requirements: 13.4_
 
-  - [ ] 22.3 Create ConfirmationModal component
+  - [x] 22.3 Create ConfirmationModal component
     - Show selected slot and child
     - Confirm button to schedule
     - Cancel button to close
     - _Requirements: 13.4_
 
-  - [ ] 22.4 Create ScheduleQualityTime modal component
+  - [x] 22.4 Create ScheduleQualityTime modal component
     - Integrate AvailableSlotPicker
     - Integrate ChildSelector (if multiple children)
     - Handle scheduling mutation
     - Show success/error states
     - _Requirements: 13.4_
 
-- [ ] 23. Frontend Celebration Components
-  - [ ] 23.1 Create BeltEarnedModal component
+- [x] 23. Frontend Celebration Components
+  - [x] 23.1 Create BeltEarnedModal component
     - Display new belt name with congratulations
     - Show celebratory animation
     - Include dismiss button
     - _Requirements: 13.3, 13.6_
 
-  - [ ] 23.2 Create CelebrationOverlay component
+  - [x] 23.2 Create CelebrationOverlay component
     - Generic celebration animation (confetti, etc.)
     - Configurable duration
     - _Requirements: 13.3_
 
-- [ ] 24. Frontend Workspace Dashboard Page
-  - [ ] 24.1 Create WorkspaceDashboard container component
+- [x] 24. Frontend Workspace Dashboard Page
+  - [x] 24.1 Create WorkspaceDashboard container component
     - Fetch workspace summary with useWorkspaceSummary
     - Manage scheduling modal state
     - Integrate belt celebration hook
@@ -758,38 +758,38 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - Handle loading and error states
     - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6_
 
-  - [ ] 24.2 Remove old AI chat interface components
+  - [x] 24.2 Remove old AI chat interface components
     - Remove complex conversation components
     - Remove memory/conversation history displays
     - Remove AI-generated coaching tips
     - _Requirements: 13.5_
 
-- [ ] 25. Checkpoint - Frontend Complete
+- [x] 25. Checkpoint - Frontend Complete
   - Ensure frontend workspace displays correctly, scheduling flow works end-to-end with backend. Ask the user if questions arise.
 
-- [ ] 26. Configuration and Feature Flags
-  - [ ] 26.1 Add workflow configuration properties
+- [x] 26. Configuration and Feature Flags
+  - [x] 26.1 Add workflow configuration properties
     - Add max-exchanges configuration per state
     - Add calendar-lookahead-days setting
     - Add min-slot-duration-minutes setting
     - Add message generator timeout setting
     - _Requirements: 5.6, 7.5, 10.6_
 
-  - [ ] 26.2 Add scheduler configuration properties
+  - [x] 26.2 Add scheduler configuration properties
     - Add morning-reminder-cron setting
     - Add follow-up-interval-ms setting
     - Add stale-detection-interval-ms setting
     - Add batch-size setting
     - _Requirements: 12.1_
 
-  - [ ] 26.3 Add feature flags
+  - [x] 26.3 Add feature flags
     - Add deterministic-workflow-engine master switch
     - Add ai-message-generation toggle
     - Add morning-reminders toggle
     - _Requirements: 15.6_
 
-- [ ] 27. Observability and Monitoring
-  - [ ] 27.1 Implement metrics collection
+- [x] 27. Observability and Monitoring
+  - [x] 27.1 Implement metrics collection
     - Count of fathers in each workflow state
     - State transition rates
     - Quality Time completion rate
@@ -797,32 +797,32 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - AI vs fallback usage
     - _Requirements: 16.2_
 
-  - [ ] 27.2 Implement health endpoint enhancements
+  - [x] 27.2 Implement health endpoint enhancements
     - Report Workflow Engine status
     - Report Google Calendar API status
     - Report WhatsApp API status
     - Report scheduler last-run timestamps
     - _Requirements: 16.5_
 
-  - [ ] 27.3 Add structured logging with father_id
+  - [x] 27.3 Add structured logging with father_id
     - Include father_id in all workflow logs
     - Log fallback usage as warnings
     - Log all state transitions
     - _Requirements: 16.4, 16.6_
 
-- [ ] 28. Integration and Wire-Up
-  - [ ] 28.1 Wire WorkflowEngine to WhatsApp webhook
+- [x] 28. Integration and Wire-Up
+  - [x] 28.1 Wire WorkflowEngine to WhatsApp webhook
     - Replace ConversationOrchestrator calls with WorkflowEngine
     - Maintain existing message parsing and response delivery
     - _Requirements: 11.1_
 
-  - [ ] 28.2 Wire schedulers to WorkflowEngine
+  - [x] 28.2 Wire schedulers to WorkflowEngine
     - Connect morning reminder job
     - Connect follow-up transition job
     - Connect stale state detection job
     - _Requirements: 12.1_
 
-  - [ ] 28.3 Register all StateHandlers with WorkflowEngine
+  - [x] 28.3 Register all StateHandlers with WorkflowEngine
     - Auto-discover or explicitly register all StateHandler implementations
     - Map each handler to its WorkflowState
     - _Requirements: 1.1_
@@ -833,7 +833,7 @@ This implementation plan transforms Dad Coach from an AI-driven conversational e
     - Test frontend → API → Backend flows
     - _Requirements: 11.1, 12.1, 13.1_
 
-- [ ] 29. Final Checkpoint - Full System Integration
+- [x] 29. Final Checkpoint - Full System Integration
   - Ensure all tests pass, system runs end-to-end, migrations complete successfully. Ask the user if questions arise.
 
 ## Notes

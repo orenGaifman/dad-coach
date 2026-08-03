@@ -79,8 +79,8 @@ class ConversationOrchestratorTest {
     private InboundMessageDto createInboundMessage() {
         return new InboundMessageDto(
                 "whatsapp",
-                "+5491155551234",
-                "Hola, necesito ayuda",
+                "+15551234567",
+                "Hello, I need help",
                 "TEXT",
                 "msg-key-" + UUID.randomUUID(),
                 Instant.now(),
@@ -120,7 +120,7 @@ class ConversationOrchestratorTest {
 
     private AiResult createSuccessfulAiResult() {
         return AiResult.success(
-                "¡Hola! ¿Cómo puedo ayudarte hoy?",
+                "Hello! How can I help you today?",
                 "NONE",
                 Map.of("model_used", "gpt-4")
         );
@@ -169,7 +169,7 @@ class ConversationOrchestratorTest {
             OutboundMessageDto result = orchestrator.processMessage(message);
 
             assertThat(result).isNotNull();
-            assertThat(result.content()).isEqualTo("¡Hola! ¿Cómo puedo ayudarte hoy?");
+            assertThat(result.content()).isEqualTo("Hello! How can I help you today?");
             assertThat(result.recipientId()).isEqualTo(message.senderId());
         }
 
@@ -382,13 +382,13 @@ class ConversationOrchestratorTest {
             setupHappyPath(message, conversation);
 
             // AI orchestrator returns a fallback (it never throws)
-            AiResult fallbackResult = AiResult.fallback("Respuesta de respaldo");
+            AiResult fallbackResult = AiResult.fallback("Fallback response");
             when(aiOrchestrator.orchestrate(any(), any())).thenReturn(fallbackResult);
 
             OutboundMessageDto result = orchestrator.processMessage(message);
 
             assertThat(result).isNotNull();
-            assertThat(result.content()).isEqualTo("Respuesta de respaldo");
+            assertThat(result.content()).isEqualTo("Fallback response");
             assertThat(result.metadata()).containsEntry("fallback_used", true);
         }
 
@@ -586,7 +586,7 @@ class ConversationOrchestratorTest {
             Conversation conversation = createActiveConversation();
             setupHappyPath(message, conversation);
 
-            AiResult fallbackResult = AiResult.fallback("Respuesta de respaldo");
+            AiResult fallbackResult = AiResult.fallback("Fallback response");
             when(aiOrchestrator.orchestrate(any(), any())).thenReturn(fallbackResult);
 
             orchestrator.processMessage(message);

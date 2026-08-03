@@ -48,10 +48,10 @@ class MemoryExtractorTest {
             UUID.randomUUID(),
             ConversationType.DAILY_COACHING,
             List.of(
-                AiMessage.user("Mi hijo tiene 5 años y le cuesta compartir con otros niños."),
-                AiMessage.assistant("Entiendo tu preocupación. Compartir es una habilidad que se desarrolla con el tiempo."),
-                AiMessage.user("Sí, me preocupa que no haga amigos."),
-                AiMessage.assistant("Es natural sentir eso. Los niños de 5 años están aprendiendo habilidades sociales.")
+                AiMessage.user("My son is 5 years old and has trouble sharing with other kids."),
+                AiMessage.assistant("I understand your concern. Sharing is a skill that develops over time."),
+                AiMessage.user("Yes, I worry that he won't make friends."),
+                AiMessage.assistant("That's a natural feeling. Children at 5 years old are learning social skills.")
             )
         );
     }
@@ -71,8 +71,8 @@ class MemoryExtractorTest {
         void extractsMemoriesFromValidResponse() {
             String aiResponse = """
                 [
-                  {"category": "CHALLENGE", "content": "El hijo tiene dificultad para compartir con otros niños", "importance_score": 7, "confidence_score": 0.9, "subject_type": "child"},
-                  {"category": "IDENTITY", "content": "Hijo de 5 años", "importance_score": 5, "confidence_score": 0.95, "subject_type": "child"}
+                  {"category": "CHALLENGE", "content": "Child has difficulty sharing with other kids", "importance_score": 7, "confidence_score": 0.9, "subject_type": "child"},
+                  {"category": "IDENTITY", "content": "5-year-old child", "importance_score": 5, "confidence_score": 0.95, "subject_type": "child"}
                 ]
                 """;
             when(modelRouter.route(any(AiProviderRequest.class), eq(ConversationType.DAILY_COACHING)))
@@ -459,11 +459,11 @@ class MemoryExtractorTest {
             // Create a very long conversation that would exceed the budget
             List<AiMessage> longMessages = new java.util.ArrayList<>();
             for (int i = 0; i < 100; i++) {
-                longMessages.add(AiMessage.user("Este es un mensaje muy largo del padre que " +
-                    "habla sobre muchas cosas diferentes con su hijo y su coach. " +
-                    "Mensaje número " + i));
-                longMessages.add(AiMessage.assistant("Esta es una respuesta detallada del coach " +
-                    "que proporciona orientación sobre crianza y paternidad. Respuesta " + i));
+                longMessages.add(AiMessage.user("This is a very long message from the father who " +
+                    "is talking about many different things with his son and his coach. " +
+                    "Message number " + i));
+                longMessages.add(AiMessage.assistant("This is a detailed response from the coach " +
+                    "who provides guidance on parenting and fatherhood. Response " + i));
             }
 
             CompletedConversation longConversation = new CompletedConversation(

@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * Utility for estimating token counts for text content.
- * Uses an approximation of ~4 characters per token for English/Spanish text,
+ * Uses an approximation of ~4 characters per token for English/Hebrew text,
  * which is a well-known heuristic for GPT-family models.
  */
 public final class TokenEstimator {

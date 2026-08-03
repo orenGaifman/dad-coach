@@ -1,6 +1,6 @@
 package com.dadcoach.workspace.aggregation;
 
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
 import com.dadcoach.workspace.ResourceNotFoundException;
 import com.dadcoach.workspace.dto.response.GoalProgressResponse;
 import com.dadcoach.workspace.dto.response.GoalsOverviewResponse;

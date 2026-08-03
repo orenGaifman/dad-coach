@@ -48,7 +48,7 @@ com.dadcoach.ai/
 │       └── AnthropicProvider.java     # Anthropic adapter (Claude 3.5)
 ├── safety/
 │   ├── SafetyClassifier.java          # Inbound message classification (Req 9)
-│   └── SafetyKeywords.java            # Spanish keyword lists for detection
+│   └── SafetyKeywords.java            # English and Hebrew keyword lists for detection
 ├── decision/
 │   ├── DecisionEngine.java            # Priority-tree action selection (Req 4)
 │   └── ActionHistory.java             # Per-father action tracking
@@ -382,7 +382,7 @@ public enum FallbackType {
 ```
 
 **Fallback message requirements:**
-- Written in conversational Latin American Spanish
+- Written in father's preferred language (English or Hebrew, matching their language_preferences setting)
 - Generic enough to work without specific context
 - Still warm and on-brand with the coaching persona
 - Includes a re-engagement hook (question or light prompt)
@@ -454,14 +454,14 @@ This feature combines **property-based tests** for the pure logic components wit
 **Generator strategy:**
 - `CoachingContext` generator: random fathers with 1-4 children, random phases, random engagement scores, random mission histories
 - `Memory` generator: random content, categories, importance (1-10), confidence (0.0-1.0), ages (0-365 days)
-- `Message` generator: random Spanish text, random lengths, random timestamps
+- `Message` generator: random English or Hebrew text, random lengths, random timestamps
 - `MissionHistory` generator: random sequences of completed/expired/skipped missions with categories and dates
 
 ### Example-Based Unit Tests
 
 | Component | Test Focus |
 |---|---|
-| SafetyClassifier | Known crisis keywords detected (Spanish), jailbreak patterns blocked, edge cases (ambiguous messages) |
+| SafetyClassifier | Known crisis keywords detected (English and Hebrew), jailbreak patterns blocked, edge cases (ambiguous messages) |
 | PromptAssembler | Specific prompt structures for each conversation type, placeholder resolution |
 | OutputContentFilter | Specific forbidden pattern detection (shame, diagnoses, PII) |
 | MissionPlanner | Specific temporal context handling (weekday vs weekend, morning vs evening) |

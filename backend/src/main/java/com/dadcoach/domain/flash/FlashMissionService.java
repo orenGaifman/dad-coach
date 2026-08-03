@@ -181,7 +181,7 @@ public class FlashMissionService {
         }
 
         Mission mission = new Mission(father, child, title, description, FLASH_CATEGORY, 1, actualMinutes);
-        mission.transitionTo(com.dadcoach.mission.MissionStatus.COMPLETED);
+        mission.transitionTo(com.dadcoach.mission.LegacyMissionStatus.COMPLETED);
         missionRepository.save(mission);
 
         // Update goals

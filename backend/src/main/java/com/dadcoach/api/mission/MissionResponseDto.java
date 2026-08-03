@@ -1,7 +1,7 @@
 package com.dadcoach.api.mission;
 
 import com.dadcoach.domain.mission.Mission;
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
 
 import java.time.Instant;
 
@@ -24,7 +24,7 @@ public class MissionResponseDto {
     private String category;
     private int difficulty;
     private int estimatedMinutes;
-    private MissionStatus status;
+    private LegacyMissionStatus status;
     private Integer outcomeRating;
     private String outcomeNotes;
     private Instant assignedAt;
@@ -125,11 +125,11 @@ public class MissionResponseDto {
         this.estimatedMinutes = estimatedMinutes;
     }
 
-    public MissionStatus getStatus() {
+    public LegacyMissionStatus getStatus() {
         return status;
     }
 
-    public void setStatus(MissionStatus status) {
+    public void setStatus(LegacyMissionStatus status) {
         this.status = status;
     }
 

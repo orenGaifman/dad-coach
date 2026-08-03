@@ -9,7 +9,8 @@ import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.domain.goal.Goal;
 import com.dadcoach.domain.goal.GoalRepository;
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
+import static com.dadcoach.mission.LegacyMissionStatus.*;
 import com.dadcoach.statemachine.StateMachineEngine;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -94,7 +95,7 @@ class MissionServiceTest {
             Mission result = missionService.createMission(1L, 10L, null,
                     "Test Mission", "Description", "CONNECTION", 2, 20);
 
-            assertThat(result.getStatus()).isEqualTo(MissionStatus.ASSIGNED);
+            assertThat(result.getStatus()).isEqualTo(ASSIGNED);
             assertThat(result.getTitle()).isEqualTo("Test Mission");
             assertThat(result.getDifficulty()).isEqualTo(2);
             assertThat(result.getEstimatedMinutes()).isEqualTo(20);
@@ -175,18 +176,18 @@ class MissionServiceTest {
             Mission mission = createTestMission();
             when(missionRepository.findById(100L)).thenReturn(Optional.of(mission));
             when(stateMachineEngine.transition(
-                    eq("Mission"), eq(100L), eq(MissionStatus.ASSIGNED),
-                    eq(MissionStatus.ACCEPTED), anyString()))
-                    .thenReturn(MissionStatus.ACCEPTED);
+                    eq("Mission"), eq(100L), eq(ASSIGNED),
+                    eq(ACCEPTED), anyString()))
+                    .thenReturn(ACCEPTED);
             when(missionRepository.save(any(Mission.class))).thenAnswer(inv -> inv.getArgument(0));
 
             Mission result = missionService.acceptMission(100L);
 
-            assertThat(result.getStatus()).isEqualTo(MissionStatus.ACCEPTED);
+            assertThat(result.getStatus()).isEqualTo(ACCEPTED);
             assertThat(result.getAcceptedAt()).isNotNull();
             verify(stateMachineEngine).transition(
-                    eq("Mission"), eq(100L), eq(MissionStatus.ASSIGNED),
-                    eq(MissionStatus.ACCEPTED), anyString());
+                    eq("Mission"), eq(100L), eq(ASSIGNED),
+                    eq(ACCEPTED), anyString());
         }
 
         @Test
@@ -206,18 +207,18 @@ class MissionServiceTest {
         @Test
         void shouldTransitionFromAcceptedToInProgress() {
             Mission mission = createTestMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
+            mission.transitionTo(ACCEPTED);
 
             when(missionRepository.findById(100L)).thenReturn(Optional.of(mission));
             when(stateMachineEngine.transition(
-                    eq("Mission"), eq(100L), eq(MissionStatus.ACCEPTED),
-                    eq(MissionStatus.IN_PROGRESS), anyString()))
-                    .thenReturn(MissionStatus.IN_PROGRESS);
+                    eq("Mission"), eq(100L), eq(ACCEPTED),
+                    eq(IN_PROGRESS), anyString()))
+                    .thenReturn(IN_PROGRESS);
             when(missionRepository.save(any(Mission.class))).thenAnswer(inv -> inv.getArgument(0));
 
             Mission result = missionService.startMission(100L);
 
-            assertThat(result.getStatus()).isEqualTo(MissionStatus.IN_PROGRESS);
+            assertThat(result.getStatus()).isEqualTo(IN_PROGRESS);
         }
     }
 
@@ -229,19 +230,19 @@ class MissionServiceTest {
         @Test
         void shouldTransitionToCompletedAndSetOutcome() {
             Mission mission = createTestMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
-            mission.transitionTo(MissionStatus.IN_PROGRESS);
+            mission.transitionTo(ACCEPTED);
+            mission.transitionTo(IN_PROGRESS);
 
             when(missionRepository.findById(100L)).thenReturn(Optional.of(mission));
             when(stateMachineEngine.transition(
-                    eq("Mission"), eq(100L), eq(MissionStatus.IN_PROGRESS),
-                    eq(MissionStatus.COMPLETED), anyString()))
-                    .thenReturn(MissionStatus.COMPLETED);
+                    eq("Mission"), eq(100L), eq(IN_PROGRESS),
+                    eq(COMPLETED), anyString()))
+                    .thenReturn(COMPLETED);
             when(missionRepository.save(any(Mission.class))).thenAnswer(inv -> inv.getArgument(0));
 
             Mission result = missionService.completeMission(100L, 4, "Great bonding time!");
 
-            assertThat(result.getStatus()).isEqualTo(MissionStatus.COMPLETED);
+            assertThat(result.getStatus()).isEqualTo(COMPLETED);
             assertThat(result.getOutcomeRating()).isEqualTo(4);
             assertThat(result.getOutcomeNotes()).isEqualTo("Great bonding time!");
             assertThat(result.getCompletedAt()).isNotNull();
@@ -264,14 +265,14 @@ class MissionServiceTest {
         @Test
         void shouldAcceptMinimumRating() {
             Mission mission = createTestMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
-            mission.transitionTo(MissionStatus.IN_PROGRESS);
+            mission.transitionTo(ACCEPTED);
+            mission.transitionTo(IN_PROGRESS);
 
             when(missionRepository.findById(100L)).thenReturn(Optional.of(mission));
-            when(stateMachineEngine.<MissionStatus>transition(
-                    eq("Mission"), eq(100L), eq(MissionStatus.IN_PROGRESS),
-                    eq(MissionStatus.COMPLETED), anyString()))
-                    .thenReturn(MissionStatus.COMPLETED);
+            when(stateMachineEngine.<LegacyMissionStatus>transition(
+                    eq("Mission"), eq(100L), eq(IN_PROGRESS),
+                    eq(COMPLETED), anyString()))
+                    .thenReturn(COMPLETED);
             when(missionRepository.save(any(Mission.class))).thenAnswer(inv -> inv.getArgument(0));
 
             Mission result = missionService.completeMission(100L, 1, null);
@@ -283,14 +284,14 @@ class MissionServiceTest {
         @Test
         void shouldAcceptMaximumRating() {
             Mission mission = createTestMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
-            mission.transitionTo(MissionStatus.IN_PROGRESS);
+            mission.transitionTo(ACCEPTED);
+            mission.transitionTo(IN_PROGRESS);
 
             when(missionRepository.findById(100L)).thenReturn(Optional.of(mission));
-            when(stateMachineEngine.<MissionStatus>transition(
-                    eq("Mission"), eq(100L), eq(MissionStatus.IN_PROGRESS),
-                    eq(MissionStatus.COMPLETED), anyString()))
-                    .thenReturn(MissionStatus.COMPLETED);
+            when(stateMachineEngine.<LegacyMissionStatus>transition(
+                    eq("Mission"), eq(100L), eq(IN_PROGRESS),
+                    eq(COMPLETED), anyString()))
+                    .thenReturn(COMPLETED);
             when(missionRepository.save(any(Mission.class))).thenAnswer(inv -> inv.getArgument(0));
 
             Mission result = missionService.completeMission(100L, 5, "Perfect!");
@@ -309,14 +310,14 @@ class MissionServiceTest {
             Mission mission = createTestMission();
             when(missionRepository.findById(100L)).thenReturn(Optional.of(mission));
             when(stateMachineEngine.transition(
-                    eq("Mission"), eq(100L), eq(MissionStatus.ASSIGNED),
-                    eq(MissionStatus.SKIPPED), anyString()))
-                    .thenReturn(MissionStatus.SKIPPED);
+                    eq("Mission"), eq(100L), eq(ASSIGNED),
+                    eq(SKIPPED), anyString()))
+                    .thenReturn(SKIPPED);
             when(missionRepository.save(any(Mission.class))).thenAnswer(inv -> inv.getArgument(0));
 
             Mission result = missionService.skipMission(100L);
 
-            assertThat(result.getStatus()).isEqualTo(MissionStatus.SKIPPED);
+            assertThat(result.getStatus()).isEqualTo(SKIPPED);
         }
     }
 
@@ -330,31 +331,31 @@ class MissionServiceTest {
             Mission mission = createTestMission();
             when(missionRepository.findById(100L)).thenReturn(Optional.of(mission));
             when(stateMachineEngine.transition(
-                    eq("Mission"), eq(100L), eq(MissionStatus.ASSIGNED),
-                    eq(MissionStatus.EXPIRED), anyString()))
-                    .thenReturn(MissionStatus.EXPIRED);
+                    eq("Mission"), eq(100L), eq(ASSIGNED),
+                    eq(EXPIRED), anyString()))
+                    .thenReturn(EXPIRED);
             when(missionRepository.save(any(Mission.class))).thenAnswer(inv -> inv.getArgument(0));
 
             Mission result = missionService.expireMission(100L);
 
-            assertThat(result.getStatus()).isEqualTo(MissionStatus.EXPIRED);
+            assertThat(result.getStatus()).isEqualTo(EXPIRED);
         }
 
         @Test
         void shouldTransitionFromAcceptedToExpired() {
             Mission mission = createTestMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
+            mission.transitionTo(ACCEPTED);
 
             when(missionRepository.findById(100L)).thenReturn(Optional.of(mission));
             when(stateMachineEngine.transition(
-                    eq("Mission"), eq(100L), eq(MissionStatus.ACCEPTED),
-                    eq(MissionStatus.EXPIRED), anyString()))
-                    .thenReturn(MissionStatus.EXPIRED);
+                    eq("Mission"), eq(100L), eq(ACCEPTED),
+                    eq(EXPIRED), anyString()))
+                    .thenReturn(EXPIRED);
             when(missionRepository.save(any(Mission.class))).thenAnswer(inv -> inv.getArgument(0));
 
             Mission result = missionService.expireMission(100L);
 
-            assertThat(result.getStatus()).isEqualTo(MissionStatus.EXPIRED);
+            assertThat(result.getStatus()).isEqualTo(EXPIRED);
         }
     }
 
@@ -366,19 +367,19 @@ class MissionServiceTest {
         @Test
         void shouldTransitionFromInProgressToAbandoned() {
             Mission mission = createTestMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
-            mission.transitionTo(MissionStatus.IN_PROGRESS);
+            mission.transitionTo(ACCEPTED);
+            mission.transitionTo(IN_PROGRESS);
 
             when(missionRepository.findById(100L)).thenReturn(Optional.of(mission));
             when(stateMachineEngine.transition(
-                    eq("Mission"), eq(100L), eq(MissionStatus.IN_PROGRESS),
-                    eq(MissionStatus.ABANDONED), anyString()))
-                    .thenReturn(MissionStatus.ABANDONED);
+                    eq("Mission"), eq(100L), eq(IN_PROGRESS),
+                    eq(ABANDONED), anyString()))
+                    .thenReturn(ABANDONED);
             when(missionRepository.save(any(Mission.class))).thenAnswer(inv -> inv.getArgument(0));
 
             Mission result = missionService.abandonMission(100L);
 
-            assertThat(result.getStatus()).isEqualTo(MissionStatus.ABANDONED);
+            assertThat(result.getStatus()).isEqualTo(ABANDONED);
         }
     }
 
@@ -390,20 +391,20 @@ class MissionServiceTest {
         @Test
         void shouldTransitionFromCompletedToReflected() {
             Mission mission = createTestMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
-            mission.transitionTo(MissionStatus.IN_PROGRESS);
-            mission.transitionTo(MissionStatus.COMPLETED);
+            mission.transitionTo(ACCEPTED);
+            mission.transitionTo(IN_PROGRESS);
+            mission.transitionTo(COMPLETED);
 
             when(missionRepository.findById(100L)).thenReturn(Optional.of(mission));
             when(stateMachineEngine.transition(
-                    eq("Mission"), eq(100L), eq(MissionStatus.COMPLETED),
-                    eq(MissionStatus.REFLECTED), anyString()))
-                    .thenReturn(MissionStatus.REFLECTED);
+                    eq("Mission"), eq(100L), eq(COMPLETED),
+                    eq(REFLECTED), anyString()))
+                    .thenReturn(REFLECTED);
             when(missionRepository.save(any(Mission.class))).thenAnswer(inv -> inv.getArgument(0));
 
             Mission result = missionService.reflectOnMission(100L);
 
-            assertThat(result.getStatus()).isEqualTo(MissionStatus.REFLECTED);
+            assertThat(result.getStatus()).isEqualTo(REFLECTED);
         }
     }
 
@@ -453,12 +454,12 @@ class MissionServiceTest {
         @Test
         void shouldNotAllowSkippingAcceptedMission() {
             Mission mission = createTestMission();
-            mission.transitionTo(MissionStatus.ACCEPTED);
+            mission.transitionTo(ACCEPTED);
 
             when(missionRepository.findById(100L)).thenReturn(Optional.of(mission));
             when(stateMachineEngine.transition(
-                    eq("Mission"), eq(100L), eq(MissionStatus.ACCEPTED),
-                    eq(MissionStatus.SKIPPED), anyString()))
+                    eq("Mission"), eq(100L), eq(ACCEPTED),
+                    eq(SKIPPED), anyString()))
                     .thenThrow(new InvalidStateTransitionException("Mission", 100L, "ACCEPTED", "SKIPPED"));
 
             assertThatThrownBy(() -> missionService.skipMission(100L))
@@ -471,8 +472,8 @@ class MissionServiceTest {
 
             when(missionRepository.findById(100L)).thenReturn(Optional.of(mission));
             when(stateMachineEngine.transition(
-                    eq("Mission"), eq(100L), eq(MissionStatus.ASSIGNED),
-                    eq(MissionStatus.ABANDONED), anyString()))
+                    eq("Mission"), eq(100L), eq(ASSIGNED),
+                    eq(ABANDONED), anyString()))
                     .thenThrow(new InvalidStateTransitionException("Mission", 100L, "ASSIGNED", "ABANDONED"));
 
             assertThatThrownBy(() -> missionService.abandonMission(100L))

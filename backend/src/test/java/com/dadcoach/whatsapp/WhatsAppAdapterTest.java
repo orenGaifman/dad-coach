@@ -77,7 +77,7 @@ class WhatsAppAdapterTest {
     private OutboundMessageDto textMessage() {
         return new OutboundMessageDto(
                 UUID.randomUUID(), UUID.randomUUID(), "WHATSAPP",
-                MessageType.TEXT, "Hola papá", null, false, null, null,
+                MessageType.TEXT, "Hello dad", null, false, null, null,
                 MessagePriority.IMMEDIATE, Instant.now());
     }
 

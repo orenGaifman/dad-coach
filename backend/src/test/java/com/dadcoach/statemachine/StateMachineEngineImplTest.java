@@ -4,7 +4,8 @@ import com.dadcoach.common.HabitStatus;
 import com.dadcoach.common.InvalidStateTransitionException;
 import com.dadcoach.conversation.ConversationStatus;
 import com.dadcoach.father.FatherStatus;
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
+import static com.dadcoach.mission.LegacyMissionStatus.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -94,17 +95,17 @@ class StateMachineEngineImplTest {
     @Test
     @DisplayName("Valid MissionStatus transition works")
     void validMissionTransition() {
-        MissionStatus result = engine.transition(
-                "Mission", 10L, MissionStatus.ASSIGNED, MissionStatus.ACCEPTED, "Father acknowledged");
+        LegacyMissionStatus result = engine.transition(
+                "Mission", 10L, ASSIGNED, ACCEPTED, "Father acknowledged");
 
-        assertThat(result).isEqualTo(MissionStatus.ACCEPTED);
+        assertThat(result).isEqualTo(ACCEPTED);
     }
 
     @Test
     @DisplayName("Invalid MissionStatus transition throws")
     void invalidMissionTransition() {
         assertThatThrownBy(() ->
-                engine.transition("Mission", 10L, MissionStatus.ASSIGNED, MissionStatus.COMPLETED, "Skip to done"))
+                engine.transition("Mission", 10L, ASSIGNED, COMPLETED, "Skip to done"))
                 .isInstanceOf(InvalidStateTransitionException.class);
     }
 
@@ -146,8 +147,8 @@ class StateMachineEngineImplTest {
     @Test
     @DisplayName("validTransitions for MissionStatus.IN_PROGRESS")
     void validTransitionsForMissionInProgress() {
-        Set<MissionStatus> result = engine.validTransitions(MissionStatus.class, MissionStatus.IN_PROGRESS);
+        Set<LegacyMissionStatus> result = engine.validTransitions(LegacyMissionStatus.class, IN_PROGRESS);
 
-        assertThat(result).containsExactlyInAnyOrder(MissionStatus.COMPLETED, MissionStatus.ABANDONED);
+        assertThat(result).containsExactlyInAnyOrder(COMPLETED, ABANDONED);
     }
 }

@@ -55,7 +55,7 @@ class DeliveryRetryServiceTest {
     private OutboundMessageDto textMessage() {
         return new OutboundMessageDto(
                 MESSAGE_ID, FATHER_ID, "WHATSAPP", MessageType.TEXT,
-                "Hola!", null, false, null, null,
+                "Hello!", null, false, null, null,
                 MessagePriority.IMMEDIATE, Instant.now());
     }
 

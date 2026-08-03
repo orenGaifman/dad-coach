@@ -7,7 +7,8 @@ import com.dadcoach.domain.child.ChildService;
 import com.dadcoach.domain.mission.Mission;
 import com.dadcoach.domain.mission.MissionRepository;
 import com.dadcoach.domain.mission.MissionService;
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
+import static com.dadcoach.mission.LegacyMissionStatus.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -222,7 +223,7 @@ class MissionOrchestratorImplTest {
         @DisplayName("completeMission starts and completes ACCEPTED mission")
         void completeMission_acceptedMission_startsAndCompletes() {
             Mission mission = mock(Mission.class);
-            when(mission.getStatus()).thenReturn(MissionStatus.ACCEPTED);
+            when(mission.getStatus()).thenReturn(ACCEPTED);
             when(missionService.getMission(42L)).thenReturn(mission);
 
             missionOrchestrator.completeMission(42L);
@@ -235,7 +236,7 @@ class MissionOrchestratorImplTest {
         @DisplayName("completeMission directly completes IN_PROGRESS mission")
         void completeMission_inProgressMission_completesDirectly() {
             Mission mission = mock(Mission.class);
-            when(mission.getStatus()).thenReturn(MissionStatus.IN_PROGRESS);
+            when(mission.getStatus()).thenReturn(IN_PROGRESS);
             when(missionService.getMission(42L)).thenReturn(mission);
 
             missionOrchestrator.completeMission(42L);
@@ -360,7 +361,7 @@ class MissionOrchestratorImplTest {
         Mission mission = mock(Mission.class, withSettings().lenient());
         when(mission.getId()).thenReturn(id);
         when(mission.getTitle()).thenReturn(title);
-        when(mission.getStatus()).thenReturn(MissionStatus.ASSIGNED);
+        when(mission.getStatus()).thenReturn(ASSIGNED);
         return mission;
     }
 }

@@ -30,7 +30,7 @@ public class TemplateRegistry {
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\{\\{(\\d+)}}");
 
     private static final String APPROVED_STATUS = "APPROVED";
-    private static final String DEFAULT_LANGUAGE = "es";
+    private static final String DEFAULT_LANGUAGE = "en";
 
     private final TemplateMessageRepository templateRepository;
 
@@ -52,7 +52,7 @@ public class TemplateRegistry {
      * Look up an approved template by name and language.
      *
      * @param templateName the unique template name
-     * @param language     the language code (e.g., "es")
+     * @param language     the language code (e.g., "en" or "he")
      * @return the template if found and APPROVED, empty otherwise
      */
     public Optional<TemplateMessage> findApprovedTemplate(String templateName, String language) {

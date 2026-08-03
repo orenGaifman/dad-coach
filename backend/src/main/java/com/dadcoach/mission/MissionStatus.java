@@ -1,44 +1,83 @@
 package com.dadcoach.mission;
 
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.Set;
+import com.dadcoach.qualitytime.QualityTimeStatus;
 
 /**
- * Lifecycle status of a coaching mission.
+ * Status of a Mission in its lifecycle.
+ * 
+ * <p>This enum mirrors {@link QualityTimeStatus} to maintain consistency across the
+ * deterministic workflow engine. For MVP, every Mission is a Quality Time session,
+ * so both status enums share the same values.</p>
+ * 
+ * <p><strong>Status Definitions:</strong></p>
+ * <ul>
+ *   <li>{@link #SCHEDULED} - Mission is scheduled and hasn't occurred yet</li>
+ *   <li>{@link #COMPLETED} - Father completed the mission</li>
+ *   <li>{@link #MISSED} - Father missed the mission (didn't complete after 24h follow-up)</li>
+ *   <li>{@link #CANCELLED} - Mission was cancelled by father or sync detected calendar deletion</li>
+ * </ul>
+ * 
+ * <p><strong>Conversion:</strong></p>
+ * Use {@link #fromQualityTimeStatus(QualityTimeStatus)} and {@link #toQualityTimeStatus()}
+ * for interoperability with the Quality Time subsystem.
+ * 
+ * Requirements: 3.4
+ * 
+ * @see QualityTimeStatus
+ * @see Mission
  */
 public enum MissionStatus {
-    ASSIGNED,
-    ACCEPTED,
-    SKIPPED,
-    EXPIRED,
-    IN_PROGRESS,
+    
+    /**
+     * Mission is scheduled and hasn't occurred yet.
+     */
+    SCHEDULED,
+    
+    /**
+     * Father completed the mission.
+     */
     COMPLETED,
-    ABANDONED,
-    REFLECTED;
-
+    
     /**
-     * Returns the set of valid states this status can transition to.
+     * Father missed the mission (didn't complete after 24h follow-up).
      */
-    public Set<MissionStatus> getValidTransitions() {
-        switch (this) {
-            case ASSIGNED:
-                return EnumSet.of(ACCEPTED, SKIPPED, EXPIRED);
-            case ACCEPTED:
-                return EnumSet.of(IN_PROGRESS, EXPIRED);
-            case IN_PROGRESS:
-                return EnumSet.of(COMPLETED, ABANDONED);
-            case COMPLETED:
-                return EnumSet.of(REFLECTED);
-            default:
-                return Collections.emptySet();
+    MISSED,
+    
+    /**
+     * Mission was cancelled by father or sync detected calendar deletion.
+     */
+    CANCELLED;
+    
+    /**
+     * Converts a {@link QualityTimeStatus} to the corresponding {@link MissionStatus}.
+     * 
+     * @param status the QualityTimeStatus to convert
+     * @return the corresponding MissionStatus
+     * @throws IllegalArgumentException if status is null
+     */
+    public static MissionStatus fromQualityTimeStatus(QualityTimeStatus status) {
+        if (status == null) {
+            throw new IllegalArgumentException("QualityTimeStatus cannot be null");
         }
+        return switch (status) {
+            case SCHEDULED -> SCHEDULED;
+            case COMPLETED -> COMPLETED;
+            case MISSED -> MISSED;
+            case CANCELLED -> CANCELLED;
+        };
     }
-
+    
     /**
-     * Checks whether a transition from this status to the target status is valid.
+     * Converts this {@link MissionStatus} to the corresponding {@link QualityTimeStatus}.
+     * 
+     * @return the corresponding QualityTimeStatus
      */
-    public boolean canTransitionTo(MissionStatus target) {
-        return getValidTransitions().contains(target);
+    public QualityTimeStatus toQualityTimeStatus() {
+        return switch (this) {
+            case SCHEDULED -> QualityTimeStatus.SCHEDULED;
+            case COMPLETED -> QualityTimeStatus.COMPLETED;
+            case MISSED -> QualityTimeStatus.MISSED;
+            case CANCELLED -> QualityTimeStatus.CANCELLED;
+        };
     }
 }

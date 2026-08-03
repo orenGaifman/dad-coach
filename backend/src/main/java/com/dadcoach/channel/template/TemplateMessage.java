@@ -8,9 +8,11 @@ import java.util.UUID;
  * JPA entity representing a pre-approved WhatsApp message template.
  * Templates are required for sending messages when the 24-hour session window is closed.
  *
- * Each template has a unique name, a language (default: Spanish), a category,
- * a body with numbered placeholders ({{1}}, {{2}}), and a status indicating
- * whether it is approved for sending.
+ * Each template has a unique name, a language (English 'en' or Hebrew 'he'),
+ * a category, a body with numbered placeholders ({{1}}, {{2}}), and a status 
+ * indicating whether it is approved for sending.
+ * 
+ * Note: Dad Coach supports ONLY English and Hebrew languages.
  */
 @Entity
 @Table(name = "template_messages")

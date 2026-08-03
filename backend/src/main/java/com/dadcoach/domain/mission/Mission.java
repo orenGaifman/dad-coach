@@ -4,7 +4,7 @@ import com.dadcoach.common.InvalidStateTransitionException;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.goal.Goal;
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
 
 import jakarta.persistence.*;
 
@@ -81,7 +81,7 @@ public class Mission {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20, nullable = false)
-    private MissionStatus status = MissionStatus.ASSIGNED;
+    private LegacyMissionStatus status = LegacyMissionStatus.ASSIGNED;
 
     @Column(name = "outcome_rating")
     private Integer outcomeRating;
@@ -158,16 +158,16 @@ public class Mission {
      * @param target the desired new status
      * @throws InvalidStateTransitionException if the transition is not allowed
      */
-    public void transitionTo(MissionStatus target) {
+    public void transitionTo(LegacyMissionStatus target) {
         if (!status.canTransitionTo(target)) {
             throw new InvalidStateTransitionException("Mission", id, status.name(), target.name());
         }
         this.status = target;
 
         // Set timestamps for specific transitions
-        if (target == MissionStatus.ACCEPTED) {
+        if (target == LegacyMissionStatus.ACCEPTED) {
             this.acceptedAt = Instant.now();
-        } else if (target == MissionStatus.COMPLETED) {
+        } else if (target == LegacyMissionStatus.COMPLETED) {
             this.completedAt = Instant.now();
         }
     }
@@ -184,9 +184,9 @@ public class Mission {
      * Active states: ASSIGNED, ACCEPTED, IN_PROGRESS
      */
     public boolean isActive() {
-        return status == MissionStatus.ASSIGNED
-                || status == MissionStatus.ACCEPTED
-                || status == MissionStatus.IN_PROGRESS;
+        return status == LegacyMissionStatus.ASSIGNED
+                || status == LegacyMissionStatus.ACCEPTED
+                || status == LegacyMissionStatus.IN_PROGRESS;
     }
 
     /**
@@ -204,7 +204,7 @@ public class Mission {
      * Checks whether the mission is in a state where it can expire.
      */
     private boolean isExpirable() {
-        return status == MissionStatus.ASSIGNED || status == MissionStatus.ACCEPTED;
+        return status == LegacyMissionStatus.ASSIGNED || status == LegacyMissionStatus.ACCEPTED;
     }
 
     // ─── Expiration Logic ────────────────────────────────────────────────
@@ -351,11 +351,11 @@ public class Mission {
         this.estimatedMinutes = estimatedMinutes;
     }
 
-    public MissionStatus getStatus() {
+    public LegacyMissionStatus getStatus() {
         return status;
     }
 
-    public void setStatus(MissionStatus status) {
+    public void setStatus(LegacyMissionStatus status) {
         this.status = status;
     }
 
@@ -499,7 +499,7 @@ public class Mission {
      * - Either no reminder was sent, or 12+ hours have passed since last reminder
      */
     public boolean shouldSendReminder() {
-        if (status != MissionStatus.ASSIGNED && status != MissionStatus.ACCEPTED) {
+        if (status != LegacyMissionStatus.ASSIGNED && status != LegacyMissionStatus.ACCEPTED) {
             return false;
         }
         if (lastRemindedAt == null) {

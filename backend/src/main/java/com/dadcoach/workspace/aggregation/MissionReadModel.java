@@ -1,6 +1,6 @@
 package com.dadcoach.workspace.aggregation;
 
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -16,7 +16,7 @@ public record MissionReadModel(
         UUID childId,
         String title,
         String description,
-        MissionStatus status,
+        LegacyMissionStatus status,
         Instant createdAt,
         Instant completedAt
 ) {}

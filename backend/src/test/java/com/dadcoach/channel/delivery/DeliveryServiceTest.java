@@ -71,7 +71,7 @@ class DeliveryServiceTest {
     private OutboundMessageDto textMessage() {
         return new OutboundMessageDto(
                 MESSAGE_ID, FATHER_ID, null, MessageType.TEXT,
-                "Hola!", null, false, null, null,
+                "Hello!", null, false, null, null,
                 MessagePriority.IMMEDIATE, Instant.now());
     }
 
@@ -85,7 +85,7 @@ class DeliveryServiceTest {
     private OutboundMessageDto messageWithExplicitChannel(String channel) {
         return new OutboundMessageDto(
                 MESSAGE_ID, FATHER_ID, channel, MessageType.TEXT,
-                "Hola!", null, false, null, null,
+                "Hello!", null, false, null, null,
                 MessagePriority.IMMEDIATE, Instant.now());
     }
 

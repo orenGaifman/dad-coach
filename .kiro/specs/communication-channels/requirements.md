@@ -346,7 +346,7 @@ stateDiagram-v2
 
 1. THE Communication_Channel SHALL maintain a registry of approved Template_Messages with:
    - template_name: unique identifier
-   - template_language: language code (es for Spanish)
+   - template_language: language code ('en' for English, 'he' for Hebrew)
    - template_category: UTILITY, MARKETING, or AUTHENTICATION
    - template_body: the message body with variable placeholders (e.g., {{1}}, {{2}})
    - template_status: APPROVED, PENDING, REJECTED
@@ -369,13 +369,18 @@ stateDiagram-v2
 
 4. THE Communication_Channel SHALL never send a Template_Message with status other than APPROVED. If a template is needed but not in APPROVED status, the delivery fails with TEMPLATE_UNAVAILABLE error.
 
-5. THE Dad_Coach SHALL require the following minimum templates for day-one operation:
-   - `daily_coaching`: "Hola {{1}} 👋 {{2}}" — for daily coaching initiation
-   - `inactivity_check`: "Hola {{1}}, hace unos días que no hablamos. {{2}}" — for re-engagement
-   - `weekly_summary`: "{{1}}, aquí va tu resumen semanal 📊 {{2}}" — for weekly summary
-   - `mission_reminder`: "{{1}}, tienes una misión pendiente con {{2}} 🎯" — for mission follow-up
-   - `welcome_back`: "¡{{1}}! Qué bueno verte de vuelta 💪 {{2}}" — for reactivation
-   - `system_notice`: "{{1}}" — for system-level notifications
+5. THE Dad_Coach SHALL require the following minimum templates for day-one operation (templates exist for both English and Hebrew):
+   - `daily_coaching_en`: "Hi {{1}} 👋 {{2}}" — for daily coaching initiation (English)
+   - `daily_coaching_he`: "שלום {{1}} 👋 {{2}}" — for daily coaching initiation (Hebrew)
+   - `inactivity_check_en`: "Hi {{1}}, we haven't talked in a few days. {{2}}" — for re-engagement (English)
+   - `inactivity_check_he`: "שלום {{1}}, לא דיברנו כמה ימים. {{2}}" — for re-engagement (Hebrew)
+   - `weekly_summary_en`: "{{1}}, here's your weekly summary 📊 {{2}}" — for weekly summary (English)
+   - `weekly_summary_he`: "{{1}}, הנה הסיכום השבועי שלך 📊 {{2}}" — for weekly summary (Hebrew)
+   - `mission_reminder_en`: "{{1}}, you have a pending mission with {{2}} 🎯" — for mission follow-up (English)
+   - `mission_reminder_he`: "{{1}}, יש לך משימה ממתינה עם {{2}} 🎯" — for mission follow-up (Hebrew)
+   - `welcome_back_en`: "{{1}}! Great to see you back 💪 {{2}}" — for reactivation (English)
+   - `welcome_back_he`: "{{1}}! טוב לראות אותך שוב 💪 {{2}}" — for reactivation (Hebrew)
+   - `system_notice`: "{{1}}" — for system-level notifications (language-agnostic)
 
 6. THE Communication_Channel SHALL log every template send with: template_name, father_id, variables_used, delivery_status, and timestamp — enabling template performance analysis
 
@@ -429,7 +434,7 @@ stateDiagram-v2
 
 4. THE Communication_Channel SHALL support line breaks in outbound messages, translating from the internal format to the platform-specific newline representation
 
-5. THE Communication_Channel SHALL NOT modify the language or content of outbound messages. The AI layer (SPEC-003) is responsible for generating content in the correct language (Spanish). The Communication_Channel only formats for the delivery platform.
+5. THE Communication_Channel SHALL NOT modify the language or content of outbound messages. The AI layer (SPEC-003) is responsible for generating content in the father's preferred language (English or Hebrew). The Communication_Channel only formats for the delivery platform.
 
 6. WHEN an outbound message contains structured content (numbered lists, bullet points), THE Communication_Channel SHALL format them using the target platform's supported markup or plain-text equivalents
 

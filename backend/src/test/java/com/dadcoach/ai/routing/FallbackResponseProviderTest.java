@@ -26,14 +26,24 @@ class FallbackResponseProviderTest {
     }
 
     @Test
-    @DisplayName("Fallback responses are in Spanish")
-    void fallbacksAreInSpanish() {
+    @DisplayName("Fallback responses are in English by default")
+    void fallbacksAreInEnglish() {
         for (ConversationType type : ConversationType.values()) {
             String text = provider.getFallbackText(type);
             assertThat(text).isNotBlank();
-            // Spanish indicators: common words or special chars
-            assertThat(text).containsAnyOf("¿", "¡", "á", "é", "í", "ó", "ú", "ñ",
-                "papá", "hoy", "es", "que", "acá", "hola", "un", "tu", "con");
+            // English indicators: common words
+            assertThat(text).containsAnyOf("I'm", "you", "help", "your", "here", "with", "today", "can", "moment");
+        }
+    }
+
+    @Test
+    @DisplayName("Fallback responses in Hebrew contain Hebrew characters")
+    void fallbacksInHebrew() {
+        for (ConversationType type : ConversationType.values()) {
+            String text = provider.getFallbackText(type, "he");
+            assertThat(text).isNotBlank();
+            // Hebrew indicator: contains Hebrew Unicode characters
+            assertThat(text).matches(".*[\\u0590-\\u05FF].*");
         }
     }
 
@@ -46,7 +56,7 @@ class FallbackResponseProviderTest {
                 continue; // JSON output and celebrations don't need a question hook
             }
             String text = provider.getFallbackText(type);
-            assertThat(text).containsAnyOf("?", "¿");
+            assertThat(text).contains("?");
         }
     }
 

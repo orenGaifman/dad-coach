@@ -5,6 +5,8 @@ import com.dadcoach.channel.ChannelAdapter;
 import com.dadcoach.config.WhatsAppProperties;
 import com.dadcoach.conversation.ConversationOrchestrator;
 import com.dadcoach.conversation.dto.OutboundMessageDto;
+import com.dadcoach.workflow.WorkflowEngine;
+import com.dadcoach.workflow.config.FeatureFlagsConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
@@ -17,6 +19,17 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * Webhook endpoint for WhatsApp Cloud API notifications.
+ * 
+ * <p>Routes incoming WhatsApp messages through either the deterministic WorkflowEngine
+ * (new architecture) or the ConversationOrchestrator (legacy), based on the feature flag
+ * {@code dadcoach.features.deterministic-workflow-engine}.</p>
+ * 
+ * <p>Implements Requirement 11.1 from the deterministic-workflow-engine spec:
+ * Message processing pipeline for WhatsApp messages.</p>
+ * 
+ * @see WorkflowEngine
+ * @see ConversationOrchestrator
+ * @see FeatureFlagsConfig
  */
 @RestController
 @RequestMapping("/webhook/whatsapp")
@@ -29,17 +42,23 @@ public class WhatsAppWebhookController {
     private final WhatsAppProperties properties;
     private final ChannelRouter channelRouter;
     private final ConversationOrchestrator conversationOrchestrator;
+    private final WorkflowEngine workflowEngine;
+    private final FeatureFlagsConfig featureFlags;
     private final ObjectMapper objectMapper;
 
     public WhatsAppWebhookController(WhatsAppSignatureVerifier signatureVerifier,
                                      WhatsAppProperties properties,
                                      ChannelRouter channelRouter,
                                      ConversationOrchestrator conversationOrchestrator,
+                                     WorkflowEngine workflowEngine,
+                                     FeatureFlagsConfig featureFlags,
                                      ObjectMapper objectMapper) {
         this.signatureVerifier = signatureVerifier;
         this.properties = properties;
         this.channelRouter = channelRouter;
         this.conversationOrchestrator = conversationOrchestrator;
+        this.workflowEngine = workflowEngine;
+        this.featureFlags = featureFlags;
         this.objectMapper = objectMapper;
     }
 
@@ -90,7 +109,7 @@ public class WhatsAppWebhookController {
         }
         log.info("Webhook signature verified successfully: sourceIp={}, bodySize={}", sourceIp, rawBody.length);
 
-        // Process the message asynchronously to return 200 quickly
+        // Process the message
         try {
             com.dadcoach.whatsapp.dto.WhatsAppWebhookPayload payload = 
                 objectMapper.readValue(rawBody, com.dadcoach.whatsapp.dto.WhatsAppWebhookPayload.class);
@@ -100,39 +119,12 @@ public class WhatsAppWebhookController {
             if (inbound != null) {
                 log.info("Processing inbound message from: {}, text: {}", inbound.fatherChannelIdentity(), inbound.textContent());
 
-                // Convert to conversation DTO and process
-                com.dadcoach.conversation.dto.InboundMessageDto conversationDto =
-                    new com.dadcoach.conversation.dto.InboundMessageDto(
-                        "WHATSAPP",
-                        inbound.fatherChannelIdentity(),
-                        inbound.textContent(),
-                        "TEXT",
-                        inbound.idempotencyKey(),
-                        Instant.now(),
-                        null
-                    );
-
-                OutboundMessageDto response = conversationOrchestrator.processMessage(conversationDto);
-
-                if (response != null && response.content() != null) {
-                    log.info("Bot response generated, sending via WhatsApp to: {}", inbound.fatherChannelIdentity());
-                    // Convert conversation OutboundMessageDto to channel OutboundMessageDto
-                    com.dadcoach.channel.dto.OutboundMessageDto channelMessage =
-                        new com.dadcoach.channel.dto.OutboundMessageDto(
-                            java.util.UUID.randomUUID(),
-                            null, // fatherId resolved by adapter
-                            "WHATSAPP",
-                            com.dadcoach.channel.dto.MessageType.TEXT,
-                            response.content(),
-                            null, // no media
-                            false, // not a template
-                            null, null,
-                            com.dadcoach.channel.dto.MessagePriority.IMMEDIATE,
-                            Instant.now()
-                        );
-                    adapter.sendMessage(channelMessage, inbound.fatherChannelIdentity());
+                // Route based on feature flag: deterministic-workflow-engine
+                // Implements Requirement 11.1: WhatsApp message processing pipeline
+                if (featureFlags.isDeterministicWorkflowEngine()) {
+                    processWithWorkflowEngine(inbound, adapter);
                 } else {
-                    log.warn("No response generated for message from: {}", inbound.fatherChannelIdentity());
+                    processWithConversationOrchestrator(inbound, adapter);
                 }
             } else {
                 log.debug("Webhook payload did not contain a processable message (status update or other event)");
@@ -142,6 +134,108 @@ public class WhatsAppWebhookController {
         }
 
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Processes an inbound message using the new deterministic WorkflowEngine.
+     * 
+     * <p>This is the new architecture that implements the deterministic workflow state machine.
+     * The WorkflowEngine directly uses channel DTOs (InboundMessageDto, OutboundMessageDto).</p>
+     * 
+     * <p>Implements Requirement 11.1: Message processing pipeline:
+     * <ol>
+     *   <li>Parse and validate message (already done by channel layer)</li>
+     *   <li>Identify father from phone number</li>
+     *   <li>Load SystemState (Read Before Write)</li>
+     *   <li>Determine current workflow state</li>
+     *   <li>Match message against expected patterns</li>
+     *   <li>Execute business logic for matched pattern</li>
+     *   <li>Generate response message (AI or fallback)</li>
+     *   <li>Persist state changes</li>
+     *   <li>Send response via WhatsApp</li>
+     * </ol></p>
+     * 
+     * @param inbound the normalized inbound message from the channel
+     * @param adapter the WhatsApp channel adapter for sending responses
+     */
+    private void processWithWorkflowEngine(com.dadcoach.channel.dto.InboundMessageDto inbound, 
+                                           ChannelAdapter adapter) {
+        log.info("Using deterministic WorkflowEngine for message processing (feature flag enabled)");
+        
+        try {
+            // Process message through the deterministic workflow engine
+            // WorkflowEngine.processMessage() implements the full 9-step pipeline
+            com.dadcoach.channel.dto.OutboundMessageDto response = workflowEngine.processMessage(inbound);
+            
+            if (response != null && response.textContent() != null) {
+                log.info("WorkflowEngine response generated, sending via WhatsApp to: {}", 
+                        inbound.fatherChannelIdentity());
+                adapter.sendMessage(response, inbound.fatherChannelIdentity());
+            } else {
+                log.warn("No response generated by WorkflowEngine for message from: {}", 
+                        inbound.fatherChannelIdentity());
+            }
+        } catch (Exception e) {
+            log.error("Error in WorkflowEngine processing for {}: {}", 
+                    inbound.fatherChannelIdentity(), e.getMessage(), e);
+            // Don't rethrow - we've already returned 200 OK to WhatsApp
+            // The error is logged for monitoring
+        }
+    }
+
+    /**
+     * Processes an inbound message using the legacy ConversationOrchestrator.
+     * 
+     * <p>This is the original AI-driven architecture that is being replaced by
+     * the deterministic WorkflowEngine. Kept for fallback and gradual migration.</p>
+     * 
+     * @param inbound the normalized inbound message from the channel
+     * @param adapter the WhatsApp channel adapter for sending responses
+     */
+    private void processWithConversationOrchestrator(com.dadcoach.channel.dto.InboundMessageDto inbound,
+                                                     ChannelAdapter adapter) {
+        log.info("Using ConversationOrchestrator for message processing (feature flag disabled)");
+        
+        try {
+            // Convert to conversation DTO and process
+            com.dadcoach.conversation.dto.InboundMessageDto conversationDto =
+                new com.dadcoach.conversation.dto.InboundMessageDto(
+                    "WHATSAPP",
+                    inbound.fatherChannelIdentity(),
+                    inbound.textContent(),
+                    "TEXT",
+                    inbound.idempotencyKey(),
+                    Instant.now(),
+                    null
+                );
+
+            OutboundMessageDto response = conversationOrchestrator.processMessage(conversationDto);
+
+            if (response != null && response.content() != null) {
+                log.info("Bot response generated, sending via WhatsApp to: {}", inbound.fatherChannelIdentity());
+                // Convert conversation OutboundMessageDto to channel OutboundMessageDto
+                com.dadcoach.channel.dto.OutboundMessageDto channelMessage =
+                    new com.dadcoach.channel.dto.OutboundMessageDto(
+                        java.util.UUID.randomUUID(),
+                        null, // fatherId resolved by adapter
+                        "WHATSAPP",
+                        com.dadcoach.channel.dto.MessageType.TEXT,
+                        response.content(),
+                        null, // no media
+                        false, // not a template
+                        null, null,
+                        com.dadcoach.channel.dto.MessagePriority.IMMEDIATE,
+                        Instant.now()
+                    );
+                adapter.sendMessage(channelMessage, inbound.fatherChannelIdentity());
+            } else {
+                log.warn("No response generated for message from: {}", inbound.fatherChannelIdentity());
+            }
+        } catch (Exception e) {
+            log.error("Error in ConversationOrchestrator processing for {}: {}", 
+                    inbound.fatherChannelIdentity(), e.getMessage(), e);
+            // Don't rethrow - we've already returned 200 OK to WhatsApp
+        }
     }
 
     private String extractSourceIp(HttpServletRequest request) {

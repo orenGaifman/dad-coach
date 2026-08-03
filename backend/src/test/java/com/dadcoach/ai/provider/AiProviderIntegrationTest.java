@@ -61,7 +61,7 @@ class AiProviderIntegrationTest {
                       "model": "gpt-4o",
                       "choices": [{
                         "index": 0,
-                        "message": {"role": "assistant", "content": "Hola, soy tu coach"},
+                        "message": {"role": "assistant", "content": "Hello, I'm your coach"},
                         "finish_reason": "stop"
                       }],
                       "usage": {"prompt_tokens": 50, "completion_tokens": 10, "total_tokens": 60}
@@ -73,7 +73,7 @@ class AiProviderIntegrationTest {
             "gpt-4o",
             List.of(
                 AiMessage.system("You are a coaching assistant"),
-                AiMessage.user("Hola")
+                AiMessage.user("Hello")
             ),
             0.7, 0.9, 300, false, Map.of()
         );
@@ -83,7 +83,7 @@ class AiProviderIntegrationTest {
 
         // Assert
         assertThat(response).isNotNull();
-        assertThat(response.content()).isEqualTo("Hola, soy tu coach");
+        assertThat(response.content()).isEqualTo("Hello, I'm your coach");
         assertThat(response.provider()).isEqualTo("openai");
         assertThat(response.model()).isEqualTo("gpt-4o");
         assertThat(response.inputTokens()).isEqualTo(50);
@@ -102,7 +102,7 @@ class AiProviderIntegrationTest {
             .withRequestBody(matchingJsonPath("$.messages[0].role", equalTo("system")))
             .withRequestBody(matchingJsonPath("$.messages[0].content", equalTo("You are a coaching assistant")))
             .withRequestBody(matchingJsonPath("$.messages[1].role", equalTo("user")))
-            .withRequestBody(matchingJsonPath("$.messages[1].content", equalTo("Hola")))
+            .withRequestBody(matchingJsonPath("$.messages[1].content", equalTo("Hello")))
         );
     }
 
@@ -216,7 +216,7 @@ class AiProviderIntegrationTest {
                       "type": "message",
                       "role": "assistant",
                       "model": "claude-3-5-sonnet-20241022",
-                      "content": [{"type": "text", "text": "Hola papá, ¿cómo estás?"}],
+                      "content": [{"type": "text", "text": "Hello dad, how are you?"}],
                       "stop_reason": "end_turn",
                       "usage": {"input_tokens": 40, "output_tokens": 12}
                     }
@@ -227,7 +227,7 @@ class AiProviderIntegrationTest {
             "claude-3-5-sonnet-20241022",
             List.of(
                 AiMessage.system("You are a coaching assistant"),
-                AiMessage.user("Hola")
+                AiMessage.user("Hello")
             ),
             0.7, 0.9, 300, false, Map.of()
         );
@@ -237,7 +237,7 @@ class AiProviderIntegrationTest {
 
         // Assert
         assertThat(response).isNotNull();
-        assertThat(response.content()).isEqualTo("Hola papá, ¿cómo estás?");
+        assertThat(response.content()).isEqualTo("Hello dad, how are you?");
         assertThat(response.provider()).isEqualTo("anthropic");
         assertThat(response.model()).isEqualTo("claude-3-5-sonnet-20241022");
         assertThat(response.inputTokens()).isEqualTo(40);
@@ -255,7 +255,7 @@ class AiProviderIntegrationTest {
             .withRequestBody(matchingJsonPath("$.top_p", equalTo("0.9")))
             .withRequestBody(matchingJsonPath("$.system", equalTo("You are a coaching assistant")))
             .withRequestBody(matchingJsonPath("$.messages[0].role", equalTo("user")))
-            .withRequestBody(matchingJsonPath("$.messages[0].content", equalTo("Hola")))
+            .withRequestBody(matchingJsonPath("$.messages[0].content", equalTo("Hello")))
         );
     }
 

@@ -1,6 +1,6 @@
 package com.dadcoach.domain.mission;
 
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
 
 import jakarta.persistence.LockModeType;
 
@@ -42,9 +42,9 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT m FROM Mission m WHERE m.childId = :childId " +
-           "AND m.status IN (com.dadcoach.mission.MissionStatus.ASSIGNED, " +
-           "com.dadcoach.mission.MissionStatus.ACCEPTED, " +
-           "com.dadcoach.mission.MissionStatus.IN_PROGRESS)")
+           "AND m.status IN (com.dadcoach.mission.LegacyMissionStatus.ASSIGNED, " +
+           "com.dadcoach.mission.LegacyMissionStatus.ACCEPTED, " +
+           "com.dadcoach.mission.LegacyMissionStatus.IN_PROGRESS)")
     List<Mission> findActiveMissionsByChildIdForUpdate(@Param("childId") Long childId);
 
     /**
@@ -52,9 +52,9 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
      * Active states: ASSIGNED, ACCEPTED, IN_PROGRESS.
      */
     @Query("SELECT m FROM Mission m WHERE m.childId = :childId " +
-           "AND m.status IN (com.dadcoach.mission.MissionStatus.ASSIGNED, " +
-           "com.dadcoach.mission.MissionStatus.ACCEPTED, " +
-           "com.dadcoach.mission.MissionStatus.IN_PROGRESS)")
+           "AND m.status IN (com.dadcoach.mission.LegacyMissionStatus.ASSIGNED, " +
+           "com.dadcoach.mission.LegacyMissionStatus.ACCEPTED, " +
+           "com.dadcoach.mission.LegacyMissionStatus.IN_PROGRESS)")
     List<Mission> findActiveMissionsByChildId(@Param("childId") Long childId);
 
     /**
@@ -62,9 +62,9 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
      * Used to enforce the single-active-mission-per-child business rule.
      */
     @Query("SELECT COUNT(m) FROM Mission m WHERE m.childId = :childId " +
-           "AND m.status IN (com.dadcoach.mission.MissionStatus.ASSIGNED, " +
-           "com.dadcoach.mission.MissionStatus.ACCEPTED, " +
-           "com.dadcoach.mission.MissionStatus.IN_PROGRESS)")
+           "AND m.status IN (com.dadcoach.mission.LegacyMissionStatus.ASSIGNED, " +
+           "com.dadcoach.mission.LegacyMissionStatus.ACCEPTED, " +
+           "com.dadcoach.mission.LegacyMissionStatus.IN_PROGRESS)")
     long countActiveMissionsByChildId(@Param("childId") Long childId);
 
     // ─── Category Non-Repetition Queries ──────────────────────────────────
@@ -141,7 +141,7 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
      * @param since    the start of the time window
      */
     @Query("SELECT m FROM Mission m WHERE m.fatherId = :fatherId " +
-           "AND m.status = com.dadcoach.mission.MissionStatus.COMPLETED " +
+           "AND m.status = com.dadcoach.mission.LegacyMissionStatus.COMPLETED " +
            "AND m.completedAt >= :since " +
            "ORDER BY m.completedAt DESC")
     List<Mission> findCompletedByFatherIdSince(@Param("fatherId") Long fatherId,
@@ -158,7 +158,7 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
     @Query("SELECT COUNT(m) FROM Mission m WHERE m.fatherId = :fatherId " +
            "AND m.status = :status AND m.assignedAt >= :since")
     long countByFatherIdAndStatusSince(@Param("fatherId") Long fatherId,
-                                      @Param("status") MissionStatus status,
+                                      @Param("status") LegacyMissionStatus status,
                                       @Param("since") Instant since);
 
     // ─── Father Mission History ───────────────────────────────────────────
@@ -188,8 +188,8 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
      * @param limit   max number of results
      */
     @Query("SELECT m FROM Mission m WHERE m.childId = :childId " +
-           "AND m.status IN (com.dadcoach.mission.MissionStatus.COMPLETED, " +
-           "com.dadcoach.mission.MissionStatus.REFLECTED) " +
+           "AND m.status IN (com.dadcoach.mission.LegacyMissionStatus.COMPLETED, " +
+           "com.dadcoach.mission.LegacyMissionStatus.REFLECTED) " +
            "ORDER BY m.completedAt DESC LIMIT :limit")
     List<Mission> findRecentCompletedByChildId(@Param("childId") Long childId,
                                               @Param("limit") int limit);
@@ -199,8 +199,8 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
      * Used for difficulty adaptation: after 3 consecutive skips/expired, difficulty decreases.
      */
     @Query("SELECT m FROM Mission m WHERE m.childId = :childId " +
-           "AND m.status IN (com.dadcoach.mission.MissionStatus.SKIPPED, " +
-           "com.dadcoach.mission.MissionStatus.EXPIRED) " +
+           "AND m.status IN (com.dadcoach.mission.LegacyMissionStatus.SKIPPED, " +
+           "com.dadcoach.mission.LegacyMissionStatus.EXPIRED) " +
            "AND m.assignedAt >= :since " +
            "ORDER BY m.assignedAt DESC")
     List<Mission> findRecentSkippedOrExpiredByChildId(@Param("childId") Long childId,
@@ -213,8 +213,8 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
      * Used by the scheduled expiration job.
      */
     @Query("SELECT m FROM Mission m WHERE m.expiresAt < :now " +
-           "AND m.status IN (com.dadcoach.mission.MissionStatus.ASSIGNED, " +
-           "com.dadcoach.mission.MissionStatus.ACCEPTED)")
+           "AND m.status IN (com.dadcoach.mission.LegacyMissionStatus.ASSIGNED, " +
+           "com.dadcoach.mission.LegacyMissionStatus.ACCEPTED)")
     List<Mission> findExpiredMissions(@Param("now") Instant now);
 
     // ─── Reminder and Scheduling Queries ──────────────────────────────────
@@ -226,7 +226,7 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
      * @param statuses list of statuses to filter by
      */
     @Query("SELECT m FROM Mission m WHERE m.status IN :statuses")
-    List<Mission> findByStatusIn(@Param("statuses") List<MissionStatus> statuses);
+    List<Mission> findByStatusIn(@Param("statuses") List<LegacyMissionStatus> statuses);
 
     /**
      * Find all active missions for a father.
@@ -236,8 +236,8 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
      * @param fatherId the father ID
      */
     @Query("SELECT m FROM Mission m WHERE m.fatherId = :fatherId " +
-           "AND m.status IN (com.dadcoach.mission.MissionStatus.ASSIGNED, " +
-           "com.dadcoach.mission.MissionStatus.ACCEPTED, " +
-           "com.dadcoach.mission.MissionStatus.IN_PROGRESS)")
+           "AND m.status IN (com.dadcoach.mission.LegacyMissionStatus.ASSIGNED, " +
+           "com.dadcoach.mission.LegacyMissionStatus.ACCEPTED, " +
+           "com.dadcoach.mission.LegacyMissionStatus.IN_PROGRESS)")
     List<Mission> findActiveMissionsByFatherId(@Param("fatherId") Long fatherId);
 }

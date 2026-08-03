@@ -219,7 +219,7 @@ The Conversation_Engine owns ONLY: pipeline coordination, conversation state man
    - Step 5: Route to appropriate AI model (per SPEC-003 Requirement 10)
    - Step 6: Receive AI output
    - Step 7: Validate output against the structured schema for the interaction type (per SPEC-003 Requirement 15)
-   - Step 8: Validate output against business rules (language is Spanish, length within bounds, no forbidden patterns, no PII leakage)
+   - Step 8: Validate output against business rules (language matches father's preference (English or Hebrew), length within bounds, no forbidden patterns, no PII leakage)
    - Step 9: If validation passes → accept the response
    - Step 10: If validation fails → retry once with correction instructions appended
    - Step 11: If retry also fails → use Fallback_Response
@@ -232,7 +232,7 @@ The Conversation_Engine owns ONLY: pipeline coordination, conversation state man
 
 3. THE Conversation_Engine SHALL validate every AI-generated coaching response for:
    - Schema compliance: all required fields present per SPEC-003 Requirement 15 output contracts
-   - Language: response text is in Spanish
+   - Language: response text is in the father's preferred language (English or Hebrew, from language_preferences)
    - Length: word count within bounds for the conversation type (per SPEC-003 Requirement 3 criteria 8)
    - Safety: no forbidden patterns detected (per SPEC-003 Requirement 2 criteria 9)
    - Relevance: response references at least one element from the injected context (a memory, mission, or child name)

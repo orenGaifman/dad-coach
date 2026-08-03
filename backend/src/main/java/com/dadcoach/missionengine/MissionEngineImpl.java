@@ -9,7 +9,7 @@ import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.domain.mission.Mission;
 import com.dadcoach.domain.mission.MissionRepository;
 import com.dadcoach.father.CoachingPhase;
-import com.dadcoach.mission.MissionStatus;
+import com.dadcoach.mission.LegacyMissionStatus;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -256,13 +256,13 @@ public class MissionEngineImpl implements MissionEngine {
             // Check if all missions in the window are skipped/expired
             return allRecent.size() >= 3 && allRecent.stream()
                     .limit(3)
-                    .allMatch(m -> m.getStatus() == MissionStatus.SKIPPED || m.getStatus() == MissionStatus.EXPIRED);
+                    .allMatch(m -> m.getStatus() == LegacyMissionStatus.SKIPPED || m.getStatus() == LegacyMissionStatus.EXPIRED);
         }
 
         // Check the 3 most recent missions (by assignedAt desc)
         int consecutiveSkips = 0;
         for (Mission m : allRecent) {
-            if (m.getStatus() == MissionStatus.SKIPPED || m.getStatus() == MissionStatus.EXPIRED) {
+            if (m.getStatus() == LegacyMissionStatus.SKIPPED || m.getStatus() == LegacyMissionStatus.EXPIRED) {
                 consecutiveSkips++;
                 if (consecutiveSkips >= 3) {
                     return true;
