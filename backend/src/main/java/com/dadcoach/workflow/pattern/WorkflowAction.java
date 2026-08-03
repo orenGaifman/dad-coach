@@ -109,5 +109,19 @@ public enum WorkflowAction {
      * Show dashboard summary via WhatsApp.
      * Sends text summary with deep link to web dashboard.
      */
-    SHOW_DASHBOARD_SUMMARY
+    SHOW_DASHBOARD_SUMMARY,
+    
+    /**
+     * Acknowledge schedule confirmation.
+     * Triggered when father sends "ok", "thanks", "אוקי", etc. after scheduling.
+     * Responds with a brief reminder about the scheduled time.
+     */
+    ACKNOWLEDGE_SCHEDULE,
+    
+    /**
+     * Handle "already scheduled" message.
+     * Triggered when father says "כבר קבענו" (already scheduled) or similar.
+     * Shows the current scheduled Quality Time as confirmation.
+     */
+    ALREADY_SCHEDULED
 }

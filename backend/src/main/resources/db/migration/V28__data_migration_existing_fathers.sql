@@ -184,7 +184,7 @@ WHERE f.status = 'ACTIVE'
 -- ============================================================================
 -- STEP 6: Create a log entry for this migration
 -- Helps with debugging and verifies migration ran
--- Note: workflow_state_transition_log uses UUID father_id referencing father(external_id)
+-- Note: workflow_state_transition_log uses BIGINT father_id referencing father(id)
 -- ============================================================================
 
 -- Insert a workflow transition log entry to mark migration completion
@@ -199,21 +199,20 @@ INSERT INTO workflow_state_transition_log (
 )
 SELECT 
     gen_random_uuid(),
-    f.external_id,  -- Use external_id (UUID) not id (BIGINT)
+    f.id,  -- Use id (BIGINT) for FK reference
     'WELCOME',
     'SCHEDULE_QUALITY_TIME',
-    'DATA_MIGRATION_V25',
+    'DATA_MIGRATION_V28',
     NULL,
     NOW()
 FROM father f
 WHERE f.status = 'ACTIVE'
   AND f.welcomed_at IS NOT NULL
-  AND f.external_id IS NOT NULL  -- Ensure external_id exists
   -- Only create log if we don't already have a migration log entry for this father
   AND NOT EXISTS (
       SELECT 1 FROM workflow_state_transition_log wstl 
-      WHERE wstl.father_id = f.external_id 
-        AND wstl.trigger_reason = 'DATA_MIGRATION_V25'
+      WHERE wstl.father_id = f.id 
+        AND wstl.trigger_reason = 'DATA_MIGRATION_V28'
   );
 
 -- ============================================================================
@@ -235,4 +234,4 @@ COMMENT ON TABLE quality_time IS
 --   SELECT COUNT(*) as migrated_quality_times FROM quality_time;
 --
 --   SELECT trigger_reason, COUNT(*) FROM workflow_state_transition_log 
---   WHERE trigger_reason = 'DATA_MIGRATION_V25' GROUP BY 1;
+--   WHERE trigger_reason = 'DATA_MIGRATION_V28' GROUP BY 1;

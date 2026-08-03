@@ -217,6 +217,26 @@ public final class StatePatterns {
             "MORE_SLOTS_HE",
             Pattern.compile(".*(אחר|עוד|אחרים).*"),
             WorkflowAction.SHOW_MORE_SLOTS
+        ),
+        
+        // ----------------------------------------------------------------
+        // ALREADY_SCHEDULED (Hebrew): כבר קבענו|כבר אמרתי|כבר שאלת → ALREADY_SCHEDULED
+        // Handles cases where father says they already scheduled
+        // May need to check if there's actually a scheduled Mission
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "ALREADY_SCHEDULED_HE_SCHEDULE",
+            Pattern.compile(".*(כבר קבענו|כבר אמרתי|כבר שאלת|קבענו כבר).*"),
+            WorkflowAction.ALREADY_SCHEDULED
+        ),
+        
+        // ----------------------------------------------------------------
+        // ALREADY_SCHEDULED (English): already scheduled|we already|you asked → ALREADY_SCHEDULED
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "ALREADY_SCHEDULED_SCHEDULE",
+            Pattern.compile("(?i).*(already scheduled|we already|you asked|already set).*"),
+            WorkflowAction.ALREADY_SCHEDULED
         )
     );
 
@@ -330,6 +350,51 @@ public final class StatePatterns {
             "DASHBOARD_HE",
             Pattern.compile(".*(דשבורד|התקדמות|חגורה|רצף).*"),
             WorkflowAction.SHOW_DASHBOARD_SUMMARY
+        ),
+        
+        // ----------------------------------------------------------------
+        // ACKNOWLEDGE (English): ok|okay|thanks|got it|great|perfect → ACKNOWLEDGE_SCHEDULE
+        // Simple acknowledgments after scheduling confirmation
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "ACKNOWLEDGE",
+            Pattern.compile("(?i)^(ok|okay|alright|thanks|thank you|got it|great|perfect|cool|sounds good|good)$"),
+            WorkflowAction.ACKNOWLEDGE_SCHEDULE
+        ),
+        
+        // ----------------------------------------------------------------
+        // ACKNOWLEDGE (Hebrew): אוקי|טוב|תודה|מעולה|סבבה|יופי → ACKNOWLEDGE_SCHEDULE
+        // אוקי = oki (okay)
+        // טוב = tov (good)
+        // תודה = toda (thanks)
+        // מעולה = me'ule (great)
+        // סבבה = sababa (cool/okay)
+        // יופי = yofi (great)
+        // בסדר = beseder (okay/alright)
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "ACKNOWLEDGE_HE",
+            Pattern.compile("^(אוקי|טוב|תודה|מעולה|סבבה|יופי|בסדר|אחלה|סבבה|מצוין)$"),
+            WorkflowAction.ACKNOWLEDGE_SCHEDULE
+        ),
+        
+        // ----------------------------------------------------------------
+        // ALREADY_SCHEDULED (Hebrew): כבר קבענו|כבר אמרתי|כבר שאלת → ALREADY_SCHEDULED
+        // Handles cases where father reminds bot they already scheduled
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "ALREADY_SCHEDULED_HE",
+            Pattern.compile(".*(כבר קבענו|כבר אמרתי|כבר שאלת|קבענו כבר).*"),
+            WorkflowAction.ALREADY_SCHEDULED
+        ),
+        
+        // ----------------------------------------------------------------
+        // ALREADY_SCHEDULED (English): already scheduled|we already|you asked → ALREADY_SCHEDULED
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "ALREADY_SCHEDULED",
+            Pattern.compile("(?i).*(already scheduled|we already|you asked|already set).*"),
+            WorkflowAction.ALREADY_SCHEDULED
         )
     );
 

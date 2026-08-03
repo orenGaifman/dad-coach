@@ -139,6 +139,7 @@ public class ScheduleStateHandler implements StateHandler {
             case POSTPONE_SCHEDULING -> handlePostponeScheduling(context, exchangeCount);
             case SHOW_MORE_SLOTS -> handleShowMoreSlots(context, exchangeCount);
             case PARSE_TIME -> handleParseTime(context, match, exchangeCount);
+            case ALREADY_SCHEDULED -> handleAlreadyScheduled(context, exchangeCount);
             default -> {
                 log.warn("Unexpected action {} in SCHEDULE_QUALITY_TIME state for father {}",
                         action, context.getFatherId());
@@ -266,6 +267,54 @@ public class ScheduleStateHandler implements StateHandler {
     }
 
     /**
+     * Handles ALREADY_SCHEDULED action.
+     * When father says "כבר קבענו" (already scheduled) while in SCHEDULE state,
+     * check if there's already a scheduled Mission and confirm it,
+     * or continue with scheduling if not.
+     */
+    private StateAction handleAlreadyScheduled(WorkflowContext context, int exchangeCount) {
+        Long fatherId = context.getFatherId().getMostSignificantBits();
+        Father father = loadFather(context);
+        String locale = getLocale(father);
+        String fatherName = getFatherName(father);
+        
+        log.info("Father {} said 'already scheduled' while in SCHEDULE_QUALITY_TIME state", fatherId);
+        
+        // Get the default MissionService (Quality Time for MVP)
+        MissionService missionService = missionServiceFactory.getDefaultService();
+        
+        // Check if there's actually a scheduled Mission
+        java.util.Optional<Mission> upcomingOpt = missionService.getNextScheduled(fatherId);
+        
+        if (upcomingOpt.isPresent()) {
+            Mission upcoming = upcomingOpt.get();
+            
+            // There IS a scheduled Quality Time! Confirm and transition to WAITING
+            log.info("Found scheduled Mission {} for father {}, transitioning to WAITING", upcoming.getId(), fatherId);
+            
+            // Clear cached data for this father
+            exchangeCountByFather.remove(fatherId);
+            slotOffsetByFather.remove(fatherId);
+            presentedSlotsByFather.remove(fatherId);
+            
+            // Get child name
+            SystemState state = systemStateLoader.loadState(context.getFatherId());
+            String childName = state.getDefaultChild() != null ? state.getDefaultChild().name() : "";
+            
+            // Build confirmation message
+            String confirmation = buildAlreadyScheduledConfirmation(locale, fatherName, childName, 
+                    upcoming.getScheduledStart(), father.getTimezone());
+            
+            return StateAction.transition(WorkflowState.WAITING, confirmation);
+        } else {
+            // No Mission scheduled - continue with scheduling
+            log.info("No scheduled Mission found for father {} despite 'already scheduled' message", fatherId);
+            String clarification = buildNoScheduleYetMessage(locale, fatherName);
+            return StateAction.respond(clarification);
+        }
+    }
+
+    /**
      * Handles MORE_SLOTS request (Requirement 5.4).
      * Presents the next batch of available slots.
      */
@@ -297,6 +346,7 @@ public class ScheduleStateHandler implements StateHandler {
     /**
      * Handles time expression parsing (Requirement 5.5).
      * Parses natural language time expressions and proceeds as slot selection.
+     * If user provides only time-of-day (morning/evening), asks for specific time.
      */
     private StateAction handleParseTime(WorkflowContext context, PatternResult match, int exchangeCount) {
         Long fatherId = context.getFatherId().getMostSignificantBits();
@@ -310,7 +360,23 @@ public class ScheduleStateHandler implements StateHandler {
         ZoneId timezone = ZoneId.of(father.getTimezone() != null 
                 ? father.getTimezone() : "Asia/Jerusalem");
         
-        // Parse the time expression
+        // Check if user provided a specific time (HH:MM or am/pm format)
+        LocalTime explicitTime = extractTimeFromMessage(message, locale);
+        
+        // Check for time-of-day expressions (morning, afternoon, evening)
+        LocalTime timeOfDay = parseTimeOfDay(message, locale);
+        
+        // If user said something like "בערב" without specific time, ask for clarification
+        if (timeOfDay == null && explicitTime == null) {
+            // Detect which time period they mentioned for the follow-up question
+            String timeOfDayQuestion = buildTimeOfDayQuestion(message, locale);
+            if (timeOfDayQuestion != null) {
+                log.info("Father {} provided general time-of-day, asking for specific time", fatherId);
+                return StateAction.respond(timeOfDayQuestion);
+            }
+        }
+        
+        // Parse the full time expression
         Instant parsedTime = parseTimeExpression(message, locale, timezone);
         
         if (parsedTime == null) {
@@ -333,6 +399,49 @@ public class ScheduleStateHandler implements StateHandler {
         
         // Schedule the Quality Time
         return scheduleQualityTime(context, father, matchingSlot, exchangeCount);
+    }
+    
+    /**
+     * Builds a question asking for specific time when user provides only time-of-day.
+     * Returns null if the message doesn't contain a recognizable time-of-day expression.
+     */
+    private String buildTimeOfDayQuestion(String message, String locale) {
+        // Check for morning references
+        if (message.contains("morning") || message.contains("בבוקר") || message.contains("בוקר")) {
+            return "he".equals(locale) 
+                ? "מעולה! באיזו שעה בבוקר? (לדוגמה: 8:00, 9:30)" 
+                : "Great! What time in the morning? (e.g., 8:00, 9:30)";
+        }
+        
+        // Check for afternoon references
+        if (message.contains("afternoon") || message.contains("אחר הצהריים") || message.contains("צהריים")) {
+            return "he".equals(locale) 
+                ? "מעולה! באיזו שעה אחרי הצהריים? (לדוגמה: 14:00, 15:30)" 
+                : "Great! What time in the afternoon? (e.g., 2:00 PM, 3:30 PM)";
+        }
+        
+        // Check for evening references
+        if (message.contains("evening") || message.contains("בערב") || message.contains("ערב")) {
+            return "he".equals(locale) 
+                ? "מעולה! באיזו שעה בערב? (לדוגמה: 18:00, 19:30, 20:00)" 
+                : "Great! What time in the evening? (e.g., 6:00 PM, 7:30 PM, 8:00 PM)";
+        }
+        
+        // Check for night references
+        if (message.contains("night") || message.contains("בלילה") || message.contains("לילה")) {
+            return "he".equals(locale) 
+                ? "מעולה! באיזו שעה בלילה? (לדוגמה: 20:00, 21:00)" 
+                : "Great! What time at night? (e.g., 8:00 PM, 9:00 PM)";
+        }
+        
+        // Check for "today" references without specific time
+        if (message.contains("today") || message.contains("היום")) {
+            return "he".equals(locale) 
+                ? "מעולה! באיזו שעה היום? (בוקר/צהריים/ערב או שעה ספציפית)" 
+                : "Great! What time today? (morning/afternoon/evening or a specific time)";
+        }
+        
+        return null;
     }
 
     /**
@@ -615,19 +724,38 @@ public class ScheduleStateHandler implements StateHandler {
 
     /**
      * Parses time of day expressions (morning, afternoon, evening).
+     * Returns null to trigger a follow-up question for specific time.
+     * This allows the user to provide a more precise time slot.
      */
     private LocalTime parseTimeOfDay(String message, String locale) {
-        // Morning (בבוקר / in the morning)
-        if (message.contains("morning") || message.contains("בבוקר")) {
-            return LocalTime.of(9, 0);
+        // Check for exact time patterns first (these are specific enough)
+        // For general time-of-day expressions, return null to ask for specific time
+        
+        // Morning with specific indicator like "early morning" (6-7am) or "late morning" (10-11am)
+        if (message.contains("early morning") || message.contains("בוקר מוקדם")) {
+            return LocalTime.of(7, 0);
         }
-        // Afternoon (אחר הצהריים / in the afternoon)
-        if (message.contains("afternoon") || message.contains("אחר הצהריים")) {
-            return LocalTime.of(14, 0);
+        if (message.contains("late morning") || message.contains("בוקר מאוחר")) {
+            return LocalTime.of(11, 0);
         }
-        // Evening (בערב / in the evening)
-        if (message.contains("evening") || message.contains("בערב")) {
-            return LocalTime.of(18, 0);
+        
+        // General time-of-day without specific hour - return null to trigger follow-up
+        // This fixes the bug where "בערב" sets 18:00 without asking for specific time
+        if (message.contains("morning") || message.contains("בבוקר") || message.contains("בוקר")) {
+            // Return null - will trigger specific time question
+            return null;
+        }
+        if (message.contains("afternoon") || message.contains("אחר הצהריים") || message.contains("צהריים")) {
+            // Return null - will trigger specific time question
+            return null;
+        }
+        if (message.contains("evening") || message.contains("בערב") || message.contains("ערב")) {
+            // Return null - will trigger specific time question
+            return null;
+        }
+        if (message.contains("night") || message.contains("בלילה") || message.contains("לילה")) {
+            // Return null - will trigger specific time question
+            return null;
         }
         return null;
     }
@@ -745,5 +873,59 @@ public class ScheduleStateHandler implements StateHandler {
                     "or type a specific time like 'tomorrow morning'.";
         }
         return originalMessage + summary;
+    }
+    
+    /**
+     * Builds confirmation message when father says "already scheduled" and there IS a scheduled Mission.
+     */
+    private String buildAlreadyScheduledConfirmation(String locale, String fatherName, String childName, 
+                                                     Instant scheduledStart, String timezone) {
+        ZoneId zoneId;
+        try {
+            zoneId = ZoneId.of(timezone != null ? timezone : "Asia/Jerusalem");
+        } catch (Exception e) {
+            zoneId = ZoneId.of("Asia/Jerusalem");
+        }
+        
+        ZonedDateTime zdt = scheduledStart.atZone(zoneId);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(
+                "he".equals(locale) ? "EEEE בשעה H:mm" : "EEEE 'at' h:mm a")
+                .withLocale("he".equals(locale) ? new Locale("he") : Locale.ENGLISH);
+        String formattedTime = zdt.format(formatter);
+        
+        if ("he".equals(locale)) {
+            return String.format(
+                "נכון! 👍 קבענו זמן איכות עם %s ב%s.\n" +
+                "אזכיר לך חצי שעה לפני! 🔔",
+                childName.isEmpty() ? "הילד" : childName,
+                formattedTime
+            );
+        } else {
+            return String.format(
+                "Right! 👍 You have Quality Time with %s scheduled for %s.\n" +
+                "I'll remind you 30 minutes before! 🔔",
+                childName.isEmpty() ? "your child" : childName,
+                formattedTime
+            );
+        }
+    }
+    
+    /**
+     * Builds message when father says "already scheduled" but there's no Mission scheduled.
+     */
+    private String buildNoScheduleYetMessage(String locale, String fatherName) {
+        if ("he".equals(locale)) {
+            return String.format(
+                "היי %s, נראה שעדיין לא קבענו זמן. 📅\n" +
+                "בוא נתאם עכשיו - מתי יש לך 10-15 דקות היום?",
+                fatherName.isEmpty() ? "אבא" : fatherName
+            );
+        } else {
+            return String.format(
+                "Hey %s, it looks like we haven't set a time yet. 📅\n" +
+                "Let's schedule now - when do you have 10-15 minutes today?",
+                fatherName.isEmpty() ? "dad" : fatherName
+            );
+        }
     }
 }

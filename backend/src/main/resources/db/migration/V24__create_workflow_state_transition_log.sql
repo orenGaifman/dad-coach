@@ -1,10 +1,10 @@
--- Migration: V23__create_workflow_state_transition_log.sql
+-- Migration: V24__create_workflow_state_transition_log.sql
 -- Description: Create workflow_state_transition_log table for tracking workflow state transitions
 -- Requirements: 1.4 (state transition logging), 16.1 (audit trail)
 
 CREATE TABLE workflow_state_transition_log (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    father_id           UUID NOT NULL REFERENCES father(id),
+    father_id           BIGINT NOT NULL REFERENCES father(id),
     from_state          VARCHAR(30) NOT NULL,
     to_state            VARCHAR(30) NOT NULL,
     trigger_reason      VARCHAR(50) NOT NULL,

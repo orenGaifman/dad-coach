@@ -10,6 +10,7 @@ import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.systemstate.SystemState;
 import com.dadcoach.systemstate.SystemStateLoader;
 import com.dadcoach.whatsapp.WhatsAppService;
+import com.dadcoach.workflow.idempotency.WorkflowIdempotencyService;
 import com.dadcoach.workflow.logging.WorkflowLoggingContext;
 import com.dadcoach.workflow.message.FallbackMessages;
 import com.dadcoach.workflow.message.MessageContext;
@@ -74,6 +75,7 @@ public class WorkflowEngineImpl implements WorkflowEngine {
     private final WhatsAppService whatsAppService;
     private final FallbackMessages fallbackMessages;
     private final WorkflowMetrics workflowMetrics;
+    private final WorkflowIdempotencyService idempotencyService;
     private final ScheduledExecutorService timeoutScheduler;
     
     /**
@@ -88,6 +90,7 @@ public class WorkflowEngineImpl implements WorkflowEngine {
      * @param whatsAppService the WhatsApp service for sending messages (used for processing timeout)
      * @param fallbackMessages the fallback messages provider
      * @param workflowMetrics the metrics collector for workflow monitoring (Requirement 16.2)
+     * @param idempotencyService the idempotency service for duplicate message detection
      */
     public WorkflowEngineImpl(
             SystemStateLoader systemStateLoader,
@@ -98,7 +101,8 @@ public class WorkflowEngineImpl implements WorkflowEngine {
             WorkflowTransitionLogRepository transitionLogRepository,
             WhatsAppService whatsAppService,
             FallbackMessages fallbackMessages,
-            WorkflowMetrics workflowMetrics) {
+            WorkflowMetrics workflowMetrics,
+            WorkflowIdempotencyService idempotencyService) {
         
         this.systemStateLoader = Objects.requireNonNull(systemStateLoader, "systemStateLoader must not be null");
         this.patternMatcher = Objects.requireNonNull(patternMatcher, "patternMatcher must not be null");
@@ -108,6 +112,7 @@ public class WorkflowEngineImpl implements WorkflowEngine {
         this.whatsAppService = Objects.requireNonNull(whatsAppService, "whatsAppService must not be null");
         this.fallbackMessages = Objects.requireNonNull(fallbackMessages, "fallbackMessages must not be null");
         this.workflowMetrics = Objects.requireNonNull(workflowMetrics, "workflowMetrics must not be null");
+        this.idempotencyService = Objects.requireNonNull(idempotencyService, "idempotencyService must not be null");
         
         // Executor for scheduling timeout tasks
         this.timeoutScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -238,6 +243,17 @@ public class WorkflowEngineImpl implements WorkflowEngine {
     private OutboundMessageDto doProcessMessage(InboundMessageDto message) {
         
         try {
+            // Step 0: Check idempotency — if duplicate, return cached response immediately
+            String idempotencyKey = message.idempotencyKey();
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                Optional<OutboundMessageDto> cached = idempotencyService.checkDuplicate(idempotencyKey);
+                if (cached.isPresent()) {
+                    log.info("Duplicate message detected for idempotency key '{}'. Returning cached response.",
+                            idempotencyKey);
+                    return cached.get();
+                }
+            }
+            
             // Step 1: Parse and validate message (already done by channel layer)
             String messageText = message.textContent();
             if (messageText == null) {
@@ -341,8 +357,16 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                     fatherRepository.save(father);
                 }
                 
-                // Build and return response
-                return buildResponse(fatherUuid, responseMessage);
+                // Build the response
+                OutboundMessageDto response = buildResponse(fatherUuid, responseMessage);
+                
+                // Step 10: Record idempotency key to prevent duplicate processing
+                // (idempotencyKey was already extracted at the start of this method)
+                if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                    idempotencyService.recordProcessed(idempotencyKey, response);
+                }
+                
+                return response;
             }
             
         } catch (ResourceNotFoundException e) {
@@ -578,8 +602,11 @@ public class WorkflowEngineImpl implements WorkflowEngine {
      */
     private void logTransition(UUID fatherId, WorkflowState fromState, WorkflowState toState, 
                                String triggerReason, UUID triggerMessageId) {
+        // Convert UUID to Long: father UUID uses least significant bits for the Long ID
+        Long fatherDomainId = fatherId.getLeastSignificantBits();
+        
         WorkflowTransition transition = WorkflowTransition.builder()
-                .fatherId(fatherId)
+                .fatherId(fatherDomainId)
                 .fromState(fromState)
                 .toState(toState)
                 .triggerReason(triggerReason)

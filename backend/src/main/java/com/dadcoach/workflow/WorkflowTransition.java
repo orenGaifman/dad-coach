@@ -33,11 +33,11 @@ public class WorkflowTransition {
     private UUID id;
 
     /**
-     * The UUID identifier of the father whose workflow state changed.
-     * References the father's external_id.
+     * The BIGINT identifier of the father whose workflow state changed.
+     * References the father's id (primary key).
      */
     @Column(name = "father_id", nullable = false, updatable = false)
-    private UUID fatherId;
+    private Long fatherId;
 
     /**
      * The workflow state the father was in before the transition.
@@ -105,11 +105,11 @@ public class WorkflowTransition {
     }
 
     /**
-     * Returns the UUID of the father whose workflow state changed.
+     * Returns the ID of the father whose workflow state changed.
      *
-     * @return the father's external UUID
+     * @return the father's database ID
      */
-    public UUID getFatherId() {
+    public Long getFatherId() {
         return fatherId;
     }
 
@@ -203,7 +203,7 @@ public class WorkflowTransition {
      */
     public static final class Builder {
         private UUID id;
-        private UUID fatherId;
+        private Long fatherId;
         private WorkflowState fromState;
         private WorkflowState toState;
         private String triggerReason;
@@ -225,12 +225,12 @@ public class WorkflowTransition {
         }
 
         /**
-         * Sets the father's UUID. Required.
+         * Sets the father's ID. Required.
          *
-         * @param fatherId the father's external UUID
+         * @param fatherId the father's database ID
          * @return this builder
          */
-        public Builder fatherId(UUID fatherId) {
+        public Builder fatherId(Long fatherId) {
             this.fatherId = fatherId;
             return this;
         }

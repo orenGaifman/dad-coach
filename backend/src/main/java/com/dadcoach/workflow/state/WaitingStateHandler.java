@@ -117,6 +117,8 @@ public class WaitingStateHandler implements StateHandler {
             case RESCHEDULE -> handleReschedule(context);
             case SHOW_SCHEDULE -> handleShowSchedule(context);
             case SHOW_DASHBOARD_SUMMARY -> handleShowDashboardSummary(context);
+            case ACKNOWLEDGE_SCHEDULE -> handleAcknowledgeSchedule(context);
+            case ALREADY_SCHEDULED -> handleAlreadyScheduled(context);
             default -> {
                 log.warn("Unexpected action {} in WAITING state for father: {}", action, context.getFatherId());
                 yield handleUnmatched(context);
@@ -358,6 +360,84 @@ public class WaitingStateHandler implements StateHandler {
         return StateAction.respond(summaryMessage);
     }
     
+    /**
+     * Handles ACKNOWLEDGE_SCHEDULE action: brief acknowledgment when father says "ok", "thanks", etc.
+     * 
+     * <p>When the father sends a simple acknowledgment like "אוקי" or "ok" after scheduling,
+     * this handler responds with a brief, encouraging message reminding them of the scheduled time.</p>
+     */
+    private StateAction handleAcknowledgeSchedule(WorkflowContext context) {
+        log.debug("Handling acknowledgment in WAITING state for father: {}", context.getFatherId());
+        
+        // Load system state
+        SystemState state = systemStateLoader.loadState(context.getFatherId());
+        String locale = state.fatherProfile().locale();
+        String fatherName = state.fatherProfile().displayName();
+        
+        // Get the default MissionService (Quality Time for MVP)
+        MissionService missionService = missionServiceFactory.getDefaultService();
+        Long fatherId = state.fatherProfile().fatherId();
+        
+        // Get next scheduled Mission for context
+        Optional<Mission> upcomingOpt = missionService.getNextScheduled(fatherId);
+        
+        String acknowledgment;
+        if (upcomingOpt.isPresent()) {
+            Mission upcoming = upcomingOpt.get();
+            String formattedTime = formatScheduledTime(upcoming.getScheduledStart(), upcoming.getScheduledEnd(), 
+                    state.fatherProfile().timezone(), locale);
+            acknowledgment = buildAcknowledgmentWithReminder(locale, fatherName, formattedTime);
+        } else {
+            // No schedule found - just acknowledge
+            acknowledgment = buildSimpleAcknowledgment(locale);
+        }
+        
+        return StateAction.respond(acknowledgment);
+    }
+    
+    /**
+     * Handles ALREADY_SCHEDULED action: confirms the existing schedule when father says "we already scheduled".
+     * 
+     * <p>When the father says "כבר קבענו" (already scheduled) or similar, this handler
+     * confirms by showing the current scheduled Quality Time.</p>
+     */
+    private StateAction handleAlreadyScheduled(WorkflowContext context) {
+        log.debug("Handling 'already scheduled' message in WAITING state for father: {}", context.getFatherId());
+        
+        // Load system state
+        SystemState state = systemStateLoader.loadState(context.getFatherId());
+        String locale = state.fatherProfile().locale();
+        String fatherName = state.fatherProfile().displayName();
+        String timezone = state.fatherProfile().timezone();
+        Long fatherId = state.fatherProfile().fatherId();
+        
+        // Get the default MissionService (Quality Time for MVP)
+        MissionService missionService = missionServiceFactory.getDefaultService();
+        
+        // Get next scheduled Mission
+        Optional<Mission> upcomingOpt = missionService.getNextScheduled(fatherId);
+        
+        if (upcomingOpt.isPresent()) {
+            Mission upcoming = upcomingOpt.get();
+            
+            // Get child name
+            String childName = state.fatherProfile().children().stream()
+                    .filter(child -> child.childId().equals(upcoming.getChildId()))
+                    .map(SystemState.ChildInfo::name)
+                    .findFirst()
+                    .orElse("");
+            
+            String formattedTime = formatScheduledTime(upcoming.getScheduledStart(), upcoming.getScheduledEnd(), timezone, locale);
+            String confirmation = buildAlreadyScheduledConfirmation(locale, fatherName, childName, formattedTime);
+            return StateAction.respond(confirmation);
+        } else {
+            // No schedule found - weird state, offer to schedule
+            log.warn("Father {} said 'already scheduled' but no Mission found in WAITING state", fatherId);
+            String noSchedule = buildNoScheduleMessage(locale, fatherName);
+            return StateAction.respond(noSchedule);
+        }
+    }
+    
     // ─── Private Helper Methods ──────────────────────────────────────────────
     
     /**
@@ -442,5 +522,56 @@ public class WaitingStateHandler implements StateHandler {
         String endTime = timeFormatter.format(end);
         
         return String.format("%s, %s - %s", date, startTime, endTime);
+    }
+    
+    /**
+     * Builds a brief acknowledgment with a schedule reminder.
+     */
+    private String buildAcknowledgmentWithReminder(String locale, String fatherName, String formattedTime) {
+        if ("he".equals(locale)) {
+            return String.format(
+                "מעולה! 👍 זמן האיכות שלך מתוכנן ל%s.\n" +
+                "אזכיר לך חצי שעה לפני! 🔔",
+                formattedTime
+            );
+        } else {
+            return String.format(
+                "Sounds good! 👍 Your Quality Time is set for %s.\n" +
+                "I'll remind you 30 minutes before! 🔔",
+                formattedTime
+            );
+        }
+    }
+    
+    /**
+     * Builds a simple acknowledgment when no schedule info is available.
+     */
+    private String buildSimpleAcknowledgment(String locale) {
+        if ("he".equals(locale)) {
+            return "מעולה! 👍 אני כאן אם תצטרך משהו.";
+        } else {
+            return "Great! 👍 I'm here if you need anything.";
+        }
+    }
+    
+    /**
+     * Builds a confirmation message for "already scheduled" responses.
+     */
+    private String buildAlreadyScheduledConfirmation(String locale, String fatherName, String childName, String formattedTime) {
+        if ("he".equals(locale)) {
+            return String.format(
+                "נכון! 👍 קבענו זמן איכות עם %s ב%s.\n" +
+                "אזכיר לך חצי שעה לפני! 🔔",
+                childName.isEmpty() ? "הילד" : childName,
+                formattedTime
+            );
+        } else {
+            return String.format(
+                "Right! 👍 You have Quality Time with %s scheduled for %s.\n" +
+                "I'll remind you 30 minutes before! 🔔",
+                childName.isEmpty() ? "your child" : childName,
+                formattedTime
+            );
+        }
     }
 }
