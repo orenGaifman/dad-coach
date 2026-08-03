@@ -173,11 +173,11 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
             // Convert UUID to string and try to extract the least significant bits
             // which might represent the father's Long id
             long numericId = fatherId.getLeastSignificantBits();
-            if (numericId > 0) {
-                Optional<Father> father = fatherRepository.findById(numericId);
-                if (father.isPresent()) {
-                    return father.get();
-                }
+            // Note: numericId can be negative for random UUIDs, but Father IDs from BIGSERIAL
+            // are always positive. We still try the lookup for both cases to support test scenarios.
+            Optional<Father> father = fatherRepository.findById(numericId);
+            if (father.isPresent()) {
+                return father.get();
             }
         } catch (Exception e) {
             log.debug("Could not convert UUID to numeric father ID: {}", fatherId);

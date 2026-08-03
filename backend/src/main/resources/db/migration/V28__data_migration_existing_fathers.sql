@@ -221,8 +221,7 @@ WHERE f.status = 'ACTIVE'
 
 -- Add a comment to help with debugging
 COMMENT ON TABLE quality_time IS 
-    'Quality Time events for the deterministic workflow engine. ' ||
-    'Includes records migrated from legacy mission and quality_time_commitment tables via V25.';
+    'Quality Time events for the deterministic workflow engine. Includes records migrated from legacy mission and quality_time_commitment tables via V28.';
 
 -- Note: This migration is idempotent - it can be run multiple times safely.
 -- Each INSERT/UPDATE has guards to prevent duplicate processing.

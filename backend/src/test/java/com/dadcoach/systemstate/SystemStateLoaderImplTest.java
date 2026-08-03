@@ -88,7 +88,6 @@ class SystemStateLoaderImplTest {
         void throwsWhenFatherNotFound() {
             UUID fatherId = UUID.randomUUID();
             when(fatherRepository.findById(anyLong())).thenReturn(Optional.empty());
-            when(fatherRepository.findAll()).thenReturn(List.of());
 
             assertThatThrownBy(() -> systemStateLoader.loadState(fatherId))
                     .isInstanceOf(ResourceNotFoundException.class)
