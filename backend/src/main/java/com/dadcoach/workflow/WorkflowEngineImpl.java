@@ -21,6 +21,8 @@ import com.dadcoach.workflow.pattern.PatternResult;
 import com.dadcoach.workflow.state.StateAction;
 import com.dadcoach.workflow.state.StateHandler;
 import com.dadcoach.workflow.state.WorkflowContext;
+import com.dadcoach.workspace.magiclink.DashboardLinkAppender;
+import com.dadcoach.workspace.magiclink.DashboardLinkAppender.DashboardLinkContext;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,6 +78,7 @@ public class WorkflowEngineImpl implements WorkflowEngine {
     private final FallbackMessages fallbackMessages;
     private final WorkflowMetrics workflowMetrics;
     private final WorkflowIdempotencyService idempotencyService;
+    private final DashboardLinkAppender dashboardLinkAppender;
     private final ScheduledExecutorService timeoutScheduler;
     
     /**
@@ -91,6 +94,7 @@ public class WorkflowEngineImpl implements WorkflowEngine {
      * @param fallbackMessages the fallback messages provider
      * @param workflowMetrics the metrics collector for workflow monitoring (Requirement 16.2)
      * @param idempotencyService the idempotency service for duplicate message detection
+     * @param dashboardLinkAppender the dashboard link appender for adding magic links to messages
      */
     public WorkflowEngineImpl(
             SystemStateLoader systemStateLoader,
@@ -102,7 +106,8 @@ public class WorkflowEngineImpl implements WorkflowEngine {
             WhatsAppService whatsAppService,
             FallbackMessages fallbackMessages,
             WorkflowMetrics workflowMetrics,
-            WorkflowIdempotencyService idempotencyService) {
+            WorkflowIdempotencyService idempotencyService,
+            DashboardLinkAppender dashboardLinkAppender) {
         
         this.systemStateLoader = Objects.requireNonNull(systemStateLoader, "systemStateLoader must not be null");
         this.patternMatcher = Objects.requireNonNull(patternMatcher, "patternMatcher must not be null");
@@ -113,6 +118,7 @@ public class WorkflowEngineImpl implements WorkflowEngine {
         this.fallbackMessages = Objects.requireNonNull(fallbackMessages, "fallbackMessages must not be null");
         this.workflowMetrics = Objects.requireNonNull(workflowMetrics, "workflowMetrics must not be null");
         this.idempotencyService = Objects.requireNonNull(idempotencyService, "idempotencyService must not be null");
+        this.dashboardLinkAppender = Objects.requireNonNull(dashboardLinkAppender, "dashboardLinkAppender must not be null");
         
         // Executor for scheduling timeout tasks
         this.timeoutScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -358,7 +364,23 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 }
                 
                 // Build the response
-                OutboundMessageDto response = buildResponse(fatherUuid, responseMessage);
+                // Append dashboard link for state transitions (especially from WELCOME to SCHEDULE_QUALITY_TIME)
+                String finalResponseMessage = responseMessage;
+                if (action.isTransition()) {
+                    try {
+                        // Add dashboard link when transitioning states
+                        String dashboardLink = dashboardLinkAppender.generateLinkMessage(
+                                father.getId(), 
+                                DashboardLinkContext.WEEKLY_CHECKIN
+                        );
+                        finalResponseMessage = responseMessage + "\n\n" + dashboardLink;
+                        log.debug("Appended dashboard link to response for father {}", fatherUuid);
+                    } catch (Exception e) {
+                        // Non-critical: log and continue without dashboard link
+                        log.warn("Failed to append dashboard link for father {}: {}", fatherUuid, e.getMessage());
+                    }
+                }
+                OutboundMessageDto response = buildResponse(fatherUuid, finalResponseMessage);
                 
                 // Step 10: Record idempotency key to prevent duplicate processing
                 // (idempotencyKey was already extracted at the start of this method)

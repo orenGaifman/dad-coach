@@ -13,6 +13,7 @@ import com.dadcoach.onboarding.provisioning.AiProfileRepository;
 import com.dadcoach.onboarding.provisioning.CommunicationPreferenceRepository;
 import com.dadcoach.onboarding.provisioning.FamilyRepository;
 import com.dadcoach.onboarding.provisioning.LanguagePreferenceRepository;
+import com.dadcoach.workspace.magiclink.MagicLinkService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +44,7 @@ public class AdminFatherServiceImpl implements AdminFatherService {
     private final CommunicationPreferenceRepository communicationPreferenceRepository;
     private final AiProfileRepository aiProfileRepository;
     private final ActivationRecordRepository activationRecordRepository;
+    private final MagicLinkService magicLinkService;
 
     public AdminFatherServiceImpl(
             FatherRepository fatherRepository,
@@ -54,7 +56,8 @@ public class AdminFatherServiceImpl implements AdminFatherService {
             LanguagePreferenceRepository languagePreferenceRepository,
             CommunicationPreferenceRepository communicationPreferenceRepository,
             AiProfileRepository aiProfileRepository,
-            ActivationRecordRepository activationRecordRepository) {
+            ActivationRecordRepository activationRecordRepository,
+            MagicLinkService magicLinkService) {
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.goalRepository = goalRepository;
@@ -65,6 +68,7 @@ public class AdminFatherServiceImpl implements AdminFatherService {
         this.communicationPreferenceRepository = communicationPreferenceRepository;
         this.aiProfileRepository = aiProfileRepository;
         this.activationRecordRepository = activationRecordRepository;
+        this.magicLinkService = magicLinkService;
     }
 
     @Override
@@ -144,6 +148,22 @@ public class AdminFatherServiceImpl implements AdminFatherService {
         dto.setStatus(father.getStatus() != null ? father.getStatus().name() : null);
         dto.setLocale(father.getLocale());
         dto.setCreatedAt(father.getCreatedAt());
+        dto.setCurrentWorkflowState(father.getCurrentWorkflowState() != null 
+            ? father.getCurrentWorkflowState().name() : null);
+        dto.setWorkflowStateEnteredAt(father.getWorkflowStateEnteredAt());
+        
+        // Generate dashboard magic link
+        try {
+            String dashboardUrl = magicLinkService.generateMagicLink(
+                father.getId(), 
+                "/growth", 
+                "admin_dashboard"
+            );
+            dto.setDashboardUrl(dashboardUrl);
+        } catch (Exception e) {
+            log.warn("Failed to generate dashboard URL for father {}: {}", father.getId(), e.getMessage());
+        }
+        
         return dto;
     }
 

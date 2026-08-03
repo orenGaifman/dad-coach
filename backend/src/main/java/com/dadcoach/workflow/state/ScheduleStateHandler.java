@@ -131,7 +131,8 @@ public class ScheduleStateHandler implements StateHandler {
                 action, context.getFatherId(), match.patternName());
         
         // Track exchange count for summary trigger (Requirement 5.6)
-        Long fatherId = context.getFatherId().getMostSignificantBits();
+        // Convert UUID to Long: father UUID uses least significant bits for the Long ID
+        Long fatherId = context.getFatherId().getLeastSignificantBits();
         int exchangeCount = exchangeCountByFather.compute(fatherId, (k, v) -> v == null ? 1 : v + 1);
         
         return switch (action) {
@@ -186,7 +187,8 @@ public class ScheduleStateHandler implements StateHandler {
      * Re-reads calendar before creating event (Read Before Write principle).
      */
     private StateAction handleSelectSlot(WorkflowContext context, PatternResult match, int exchangeCount) {
-        Long fatherId = context.getFatherId().getMostSignificantBits();
+        // Convert UUID to Long: father UUID uses least significant bits for the Long ID
+        Long fatherId = context.getFatherId().getLeastSignificantBits();
         Father father = loadFather(context);
         String locale = getLocale(father);
         String fatherName = getFatherName(father);
@@ -247,7 +249,8 @@ public class ScheduleStateHandler implements StateHandler {
      * Note: 24h reminder is handled by the scheduler, not this handler.
      */
     private StateAction handlePostponeScheduling(WorkflowContext context, int exchangeCount) {
-        Long fatherId = context.getFatherId().getMostSignificantBits();
+        // Convert UUID to Long: father UUID uses least significant bits for the Long ID
+        Long fatherId = context.getFatherId().getLeastSignificantBits();
         Father father = loadFather(context);
         String locale = getLocale(father);
         String fatherName = getFatherName(father);
@@ -273,7 +276,7 @@ public class ScheduleStateHandler implements StateHandler {
      * or continue with scheduling if not.
      */
     private StateAction handleAlreadyScheduled(WorkflowContext context, int exchangeCount) {
-        Long fatherId = context.getFatherId().getMostSignificantBits();
+        Long fatherId = context.getFatherId().getLeastSignificantBits();
         Father father = loadFather(context);
         String locale = getLocale(father);
         String fatherName = getFatherName(father);
@@ -319,7 +322,7 @@ public class ScheduleStateHandler implements StateHandler {
      * Presents the next batch of available slots.
      */
     private StateAction handleShowMoreSlots(WorkflowContext context, int exchangeCount) {
-        Long fatherId = context.getFatherId().getMostSignificantBits();
+        Long fatherId = context.getFatherId().getLeastSignificantBits();
         Father father = loadFather(context);
         
         log.debug("Father {} requested more slots", fatherId);
@@ -349,7 +352,7 @@ public class ScheduleStateHandler implements StateHandler {
      * If user provides only time-of-day (morning/evening), asks for specific time.
      */
     private StateAction handleParseTime(WorkflowContext context, PatternResult match, int exchangeCount) {
-        Long fatherId = context.getFatherId().getMostSignificantBits();
+        Long fatherId = context.getFatherId().getLeastSignificantBits();
         Father father = loadFather(context);
         String locale = getLocale(father);
         String message = context.getInboundMessage().toLowerCase().trim();
@@ -774,7 +777,9 @@ public class ScheduleStateHandler implements StateHandler {
     // ========== Helper Methods ==========
     
     private Father loadFather(WorkflowContext context) {
-        return fatherRepository.findById(context.getFatherId().getMostSignificantBits())
+        // Convert UUID to Long: father UUID uses least significant bits for the Long ID
+        // (UUID is created as new UUID(0L, domainId), so getLeastSignificantBits() returns the domain ID)
+        return fatherRepository.findById(context.getFatherId().getLeastSignificantBits())
                 .orElseThrow(() -> new IllegalStateException(
                         "Father not found: " + context.getFatherId()));
     }

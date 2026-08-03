@@ -38,6 +38,15 @@ public class AdminFatherSummaryDto {
     @JsonProperty("locale")
     private String locale;
 
+    @JsonProperty("current_workflow_state")
+    private String currentWorkflowState;
+
+    @JsonProperty("workflow_state_entered_at")
+    private Instant workflowStateEnteredAt;
+
+    @JsonProperty("dashboard_url")
+    private String dashboardUrl;
+
     public AdminFatherSummaryDto() {
     }
 
@@ -105,5 +114,29 @@ public class AdminFatherSummaryDto {
 
     public void setLocale(String locale) {
         this.locale = locale;
+    }
+
+    public String getCurrentWorkflowState() {
+        return currentWorkflowState;
+    }
+
+    public void setCurrentWorkflowState(String currentWorkflowState) {
+        this.currentWorkflowState = currentWorkflowState;
+    }
+
+    public Instant getWorkflowStateEnteredAt() {
+        return workflowStateEnteredAt;
+    }
+
+    public void setWorkflowStateEnteredAt(Instant workflowStateEnteredAt) {
+        this.workflowStateEnteredAt = workflowStateEnteredAt;
+    }
+
+    public String getDashboardUrl() {
+        return dashboardUrl;
+    }
+
+    public void setDashboardUrl(String dashboardUrl) {
+        this.dashboardUrl = dashboardUrl;
     }
 }
