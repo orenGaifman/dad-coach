@@ -67,6 +67,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/onboarding/**").permitAll()
                         .requestMatchers("/api/v1/invitations/**").permitAll()
                         .requestMatchers("/api/v1/activation/**").permitAll()
+                        // Calendar OAuth endpoints (public - OAuth flow handles auth)
+                        .requestMatchers("/api/v1/calendar/**").permitAll()
                         // Magic link auth (token is the credential)
                         .requestMatchers("/api/v1/auth/magic-link/**").permitAll()
                         // Admin endpoints (for dev invite page - temporarily permitAll until auth is implemented)
