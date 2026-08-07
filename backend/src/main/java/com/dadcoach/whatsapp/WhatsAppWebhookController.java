@@ -3,6 +3,7 @@ package com.dadcoach.whatsapp;
 import com.dadcoach.channel.ChannelRouter;
 import com.dadcoach.channel.ChannelAdapter;
 import com.dadcoach.config.WhatsAppProperties;
+import com.dadcoach.onboarding.activation.ActivationListener;
 import com.dadcoach.workflow.WorkflowEngine;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,17 +34,20 @@ public class WhatsAppWebhookController {
     private final WhatsAppProperties properties;
     private final ChannelRouter channelRouter;
     private final WorkflowEngine workflowEngine;
+    private final ActivationListener activationListener;
     private final ObjectMapper objectMapper;
 
     public WhatsAppWebhookController(WhatsAppSignatureVerifier signatureVerifier,
                                      WhatsAppProperties properties,
                                      ChannelRouter channelRouter,
                                      WorkflowEngine workflowEngine,
+                                     ActivationListener activationListener,
                                      ObjectMapper objectMapper) {
         this.signatureVerifier = signatureVerifier;
         this.properties = properties;
         this.channelRouter = channelRouter;
         this.workflowEngine = workflowEngine;
+        this.activationListener = activationListener;
         this.objectMapper = objectMapper;
     }
 
@@ -103,6 +107,16 @@ public class WhatsAppWebhookController {
 
     private void processMessage(com.dadcoach.channel.dto.InboundMessageDto inbound, ChannelAdapter adapter) {
         try {
+            // Check if this is an ONBOARDING father - intercept for activation flow
+            // This handles the first message after onboarding completion
+            if (activationListener.interceptByPhoneIfOnboarding(
+                    inbound.fatherChannelIdentity(), 
+                    inbound.textContent())) {
+                log.info("Message intercepted by activation flow for: {}", inbound.fatherChannelIdentity());
+                // Activation flow handles sending the welcome message
+                // Now continue to workflow engine for the response
+            }
+            
             com.dadcoach.channel.dto.OutboundMessageDto response = workflowEngine.processMessage(inbound);
             
             if (response != null && response.textContent() != null) {
