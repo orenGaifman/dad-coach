@@ -36,7 +36,7 @@ import java.util.Optional;
 public class MagicLinkService {
 
     private static final Logger log = LoggerFactory.getLogger(MagicLinkService.class);
-    private static final Duration DEFAULT_TOKEN_EXPIRY = Duration.ofDays(7);
+    private static final Duration DEFAULT_TOKEN_EXPIRY = Duration.ofDays(36500); // ~100 years, effectively never expires
     private static final Duration JWT_EXPIRY = Duration.ofDays(7);
 
     private final MagicLinkRepository repository;
