@@ -10,17 +10,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 
 /**
- * Service layer for Goal entity operations: create, update progress, complete, archive.
+ * Service layer for Goal entity operations: create and complete.
  *
  * <p>Business rules enforced:
  * <ul>
  *   <li>Maximum of 5 active goals per Father (Requirement 16.1)</li>
- *   <li>Progress calculation: min(100, (completed_related_missions / estimated_total_missions) × 100)</li>
  *   <li>Completion sets status to COMPLETED and records completedAt timestamp</li>
- *   <li>Archive sets status to ARCHIVED</li>
  * </ul>
  */
 @Service
@@ -68,37 +65,6 @@ public class GoalService {
         return goalRepository.save(goal);
     }
 
-    // ─── Update Progress ─────────────────────────────────────────────────
-
-    /**
-     * Recalculates the progress percentage for a goal.
-     * Formula: min(100, (completed_related_missions / estimated_total_missions) × 100)
-     *
-     * @param goalId the ID of the Goal
-     * @return the updated Goal entity
-     * @throws ResourceNotFoundException if no Goal exists with the given ID
-     */
-    public Goal updateProgress(Long goalId) {
-        Goal goal = getGoal(goalId);
-        goal.recalculateProgress();
-        return goalRepository.save(goal);
-    }
-
-    // ─── Increment Completed Missions ────────────────────────────────────
-
-    /**
-     * Increments the completed_related_missions counter and recalculates progress.
-     *
-     * @param goalId the ID of the Goal
-     * @return the updated Goal entity
-     * @throws ResourceNotFoundException if no Goal exists with the given ID
-     */
-    public Goal incrementCompletedMissions(Long goalId) {
-        Goal goal = getGoal(goalId);
-        goal.incrementCompletedMissions();
-        return goalRepository.save(goal);
-    }
-
     // ─── Complete ────────────────────────────────────────────────────────
 
     /**
@@ -125,42 +91,7 @@ public class GoalService {
         return goalRepository.save(goal);
     }
 
-    // ─── Archive ─────────────────────────────────────────────────────────
-
-    /**
-     * Archives a goal by setting status to ARCHIVED.
-     *
-     * @param goalId the ID of the Goal
-     * @return the updated Goal entity
-     * @throws ResourceNotFoundException      if no Goal exists with the given ID
-     * @throws BusinessRuleViolationException if the goal is already archived
-     */
-    public Goal archiveGoal(Long goalId) {
-        Goal goal = getGoal(goalId);
-
-        if ("ARCHIVED".equals(goal.getStatus())) {
-            throw new BusinessRuleViolationException(
-                    "GOAL_ALREADY_ARCHIVED",
-                    "Goal with ID " + goalId + " is already archived"
-            );
-        }
-
-        goal.setStatus("ARCHIVED");
-        return goalRepository.save(goal);
-    }
-
     // ─── Retrieval ───────────────────────────────────────────────────────
-
-    /**
-     * Retrieves active goals for a father, ordered by priority (ascending = highest priority first).
-     *
-     * @param fatherId the Father ID
-     * @return list of active goals ordered by priority
-     */
-    @Transactional(readOnly = true)
-    public List<Goal> getActiveGoals(Long fatherId) {
-        return goalRepository.findTop5ByFatherIdAndStatusOrderByPriorityAsc(fatherId, "ACTIVE");
-    }
 
     /**
      * Gets a Goal by ID.

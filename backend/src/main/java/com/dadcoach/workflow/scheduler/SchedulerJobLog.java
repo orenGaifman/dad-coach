@@ -1,4 +1,4 @@
-package com.dadcoach.scheduler;
+package com.dadcoach.workflow.scheduler;
 
 import jakarta.persistence.*;
 import java.time.Instant;

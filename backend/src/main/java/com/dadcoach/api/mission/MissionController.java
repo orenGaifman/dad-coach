@@ -5,7 +5,6 @@ import com.dadcoach.api.auth.AuthActor;
 import com.dadcoach.api.error.ResourceNotFoundException;
 import com.dadcoach.domain.mission.Mission;
 import com.dadcoach.domain.mission.MissionRepository;
-import com.dadcoach.domain.mission.MissionService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,11 +39,9 @@ public class MissionController {
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 100;
 
-    private final MissionService missionService;
     private final MissionRepository missionRepository;
 
-    public MissionController(MissionService missionService, MissionRepository missionRepository) {
-        this.missionService = missionService;
+    public MissionController(MissionRepository missionRepository) {
         this.missionRepository = missionRepository;
     }
 

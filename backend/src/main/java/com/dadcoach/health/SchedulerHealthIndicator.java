@@ -1,8 +1,8 @@
 package com.dadcoach.health;
 
-import com.dadcoach.scheduler.SchedulerJobLog;
-import com.dadcoach.scheduler.SchedulerJobLogRepository;
-import com.dadcoach.scheduler.SchedulerJobStatus;
+import com.dadcoach.workflow.scheduler.SchedulerJobLog;
+import com.dadcoach.workflow.scheduler.SchedulerJobLogRepository;
+import com.dadcoach.workflow.scheduler.SchedulerJobStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.actuate.health.Health;

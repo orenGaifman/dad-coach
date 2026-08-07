@@ -1,4 +1,4 @@
-package com.dadcoach.scheduler;
+package com.dadcoach.workflow.scheduler;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

@@ -12,7 +12,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Service layer for Child entity operations: create, update, archive, and retrieval.
@@ -185,22 +184,6 @@ public class ChildService {
     @Transactional(readOnly = true)
     public List<Child> getChildrenByFather(Long fatherId) {
         return childRepository.findByFatherId(fatherId);
-    }
-
-    /**
-     * Finds children of a given father whose birthday (month-day) falls within
-     * the specified number of days from today.
-     *
-     * @param fatherId   the father's ID
-     * @param withinDays the lookahead window in days
-     * @return list of children with upcoming birthdays
-     */
-    @Transactional(readOnly = true)
-    public List<Child> findChildrenWithUpcomingBirthday(Long fatherId, int withinDays) {
-        List<Child> children = childRepository.findByFatherId(fatherId);
-        return children.stream()
-                .filter(child -> child.isBirthdayWithin(withinDays))
-                .collect(Collectors.toList());
     }
 
     // ─── Validation ──────────────────────────────────────────────────────

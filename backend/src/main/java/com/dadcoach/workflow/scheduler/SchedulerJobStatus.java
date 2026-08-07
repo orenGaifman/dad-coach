@@ -1,4 +1,4 @@
-package com.dadcoach.scheduler;
+package com.dadcoach.workflow.scheduler;
 
 /**
  * Status of a scheduler job execution.
