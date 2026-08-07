@@ -113,10 +113,14 @@ public class WhatsAppWebhookController {
                     inbound.fatherChannelIdentity(), 
                     inbound.textContent())) {
                 log.info("Message intercepted by activation flow for: {}", inbound.fatherChannelIdentity());
-                // Activation flow handles sending the welcome message
-                // Now continue to workflow engine for the response
+                // Activation flow handles:
+                // 1. ONBOARDING → ACTIVE status transition
+                // 2. Sending welcome message
+                // DO NOT continue to workflow engine - activation handles the response
+                return;
             }
             
+            // Normal flow: process through state machine
             com.dadcoach.channel.dto.OutboundMessageDto response = workflowEngine.processMessage(inbound);
             
             if (response != null && response.textContent() != null) {
