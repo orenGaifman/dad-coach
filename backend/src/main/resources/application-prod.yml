@@ -2,10 +2,21 @@
 # JSON logging, env-var DB resolution, Swagger disabled
 
 spring:
+  main:
+    # Enable lazy initialization for faster startup on resource-constrained environments
+    lazy-initialization: true
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+    hikari:
+      # Reduce initial pool connections to speed up startup
+      minimum-idle: 1
+      maximum-pool-size: 5
+
+# Explicitly bind to 0.0.0.0 for container/cloud environments
+server:
+  address: 0.0.0.0
 
 management:
   endpoint:

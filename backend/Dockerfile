@@ -26,4 +26,14 @@ COPY --from=builder /workspace/target/*.jar app.jar
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+# JVM options for faster startup on constrained resources:
+# -XX:+UseSerialGC: Lower memory overhead, faster startup than G1
+# -XX:MaxRAMPercentage=75: Use up to 75% of container memory
+# -Dspring.main.lazy-initialization: Delay bean creation until needed
+# -Dspring.jpa.defer-datasource-initialization: Defer DB init
+ENTRYPOINT ["java", \
+    "-XX:+UseSerialGC", \
+    "-XX:MaxRAMPercentage=75.0", \
+    "-Dspring.main.lazy-initialization=true", \
+    "-Dspring.jpa.defer-datasource-initialization=true", \
+    "-jar", "/app/app.jar"]
