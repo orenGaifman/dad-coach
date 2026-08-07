@@ -32,9 +32,21 @@ public class DashboardLinkAppender {
      * 
      * @param fatherId The father to generate the link for
      * @param context The context/reason for the link
-     * @return A formatted message string with emoji and link
+     * @return A formatted message string with emoji and link (Hebrew default)
      */
     public String generateLinkMessage(Long fatherId, DashboardLinkContext context) {
+        return generateLinkMessage(fatherId, context, "he");
+    }
+
+    /**
+     * Generates a WhatsApp-formatted message with a dashboard link in the specified locale.
+     * 
+     * @param fatherId The father to generate the link for
+     * @param context The context/reason for the link
+     * @param locale The father's locale ("en" or "he")
+     * @return A formatted message string with emoji and link
+     */
+    public String generateLinkMessage(Long fatherId, DashboardLinkContext context, String locale) {
         String redirectPath = context.getRedirectPath();
         String magicLink = magicLinkService.generateMagicLink(
                 fatherId, 
@@ -42,7 +54,7 @@ public class DashboardLinkAppender {
                 context.name().toLowerCase()
         );
 
-        return context.formatMessage(magicLink);
+        return context.formatMessage(magicLink, locale);
     }
 
     /**
@@ -79,12 +91,24 @@ public class DashboardLinkAppender {
      */
     public enum DashboardLinkContext {
         /**
+         * Welcome message for new fathers after onboarding.
+         * Links to the dashboard home to explore progress tracking.
+         */
+        WELCOME("/dashboard", """
+            📱 *לוח הבקרה שלך*
+            צפה בהתקדמות שלך כאן: %s
+            """, """
+            📱 *Your Dashboard*
+            Track your progress here: %s
+            """),
+
+        /**
          * After logging quality time with a child.
          */
         QUALITY_TIME_LOGGED("/growth/achievements", """
             📊 *ההתקדמות שלך עודכנה*
             צפה בהישגים שלך בדשבורד: %s
-            """),
+            """, null),
 
         /**
          * After earning an achievement.
@@ -92,7 +116,7 @@ public class DashboardLinkAppender {
         ACHIEVEMENT_EARNED("/growth/achievements", """
             🏆 *הישג חדש!*
             צפה בהישג החדש שלך: %s
-            """),
+            """, null),
 
         /**
          * After leveling up belt.
@@ -100,7 +124,7 @@ public class DashboardLinkAppender {
         BELT_LEVEL_UP("/growth", """
             🥋 *עלית רמה!*
             צפה בחגורה החדשה שלך: %s
-            """),
+            """, null),
 
         /**
          * Streak milestone reached.
@@ -108,7 +132,7 @@ public class DashboardLinkAppender {
         STREAK_MILESTONE("/growth/streak", """
             🔥 *רצף מדהים!*
             צפה ברצף הימים שלך: %s
-            """),
+            """, null),
 
         /**
          * Weekly check-in reminder.
@@ -116,7 +140,7 @@ public class DashboardLinkAppender {
         WEEKLY_CHECKIN("/dashboard", """
             📅 *הסיכום השבועי שלך*
             ראה איך עבר לך השבוע: %s
-            """),
+            """, null),
 
         /**
          * Prompt to log activity.
@@ -124,14 +148,16 @@ public class DashboardLinkAppender {
         LOG_ACTIVITY_PROMPT("/coaching/log", """
             ✍️ *דווח על פעילות*
             לחץ כאן לדיווח: %s
-            """);
+            """, null);
 
         private final String redirectPath;
-        private final String messageTemplate;
+        private final String hebrewTemplate;
+        private final String englishTemplate;
 
-        DashboardLinkContext(String redirectPath, String messageTemplate) {
+        DashboardLinkContext(String redirectPath, String hebrewTemplate, String englishTemplate) {
             this.redirectPath = redirectPath;
-            this.messageTemplate = messageTemplate;
+            this.hebrewTemplate = hebrewTemplate;
+            this.englishTemplate = englishTemplate;
         }
 
         public String getRedirectPath() {
@@ -139,10 +165,24 @@ public class DashboardLinkAppender {
         }
 
         /**
-         * Formats the message with the provided link.
+         * Formats the message with the provided link (Hebrew default).
          */
         public String formatMessage(String link) {
-            return String.format(messageTemplate.trim(), link);
+            return formatMessage(link, "he");
+        }
+
+        /**
+         * Formats the message with the provided link and locale.
+         * 
+         * @param link the dashboard magic link
+         * @param locale the father's locale ("en" or "he")
+         * @return formatted message in the appropriate language
+         */
+        public String formatMessage(String link, String locale) {
+            String template = "en".equals(locale) && englishTemplate != null 
+                    ? englishTemplate 
+                    : hebrewTemplate;
+            return String.format(template.trim(), link);
         }
     }
 }

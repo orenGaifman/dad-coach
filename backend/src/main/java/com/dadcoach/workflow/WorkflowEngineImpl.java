@@ -364,17 +364,29 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 }
                 
                 // Build the response
-                // Append dashboard link for state transitions (especially from WELCOME to SCHEDULE_QUALITY_TIME)
+                // Append dashboard link for:
+                // 1. State transitions (especially from WELCOME to SCHEDULE_QUALITY_TIME)
+                // 2. First message in WELCOME state (so father can see their dashboard)
                 String finalResponseMessage = responseMessage;
-                if (action.isTransition()) {
+                boolean shouldAppendDashboardLink = action.isTransition() || currentState == WorkflowState.WELCOME;
+                
+                if (shouldAppendDashboardLink) {
                     try {
-                        // Add dashboard link when transitioning states
+                        // Determine context based on current state
+                        DashboardLinkContext linkContext = currentState == WorkflowState.WELCOME 
+                                ? DashboardLinkContext.WELCOME 
+                                : DashboardLinkContext.WEEKLY_CHECKIN;
+                        
+                        // Add dashboard link with locale support
+                        String locale = father.getLocale() != null ? father.getLocale() : "en";
                         String dashboardLink = dashboardLinkAppender.generateLinkMessage(
                                 father.getId(), 
-                                DashboardLinkContext.WEEKLY_CHECKIN
+                                linkContext,
+                                locale
                         );
                         finalResponseMessage = responseMessage + "\n\n" + dashboardLink;
-                        log.debug("Appended dashboard link to response for father {}", fatherUuid);
+                        log.debug("Appended dashboard link ({}) to response for father {}", 
+                                linkContext.name(), fatherUuid);
                     } catch (Exception e) {
                         // Non-critical: log and continue without dashboard link
                         log.warn("Failed to append dashboard link for father {}: {}", fatherUuid, e.getMessage());
