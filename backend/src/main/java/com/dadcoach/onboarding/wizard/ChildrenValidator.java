@@ -15,13 +15,14 @@ import java.util.Set;
  *
  * <p>Validation rules:
  * <ul>
- *   <li>0-8 children allowed (min 0, max 8)</li>
+ *   <li>1-8 children required (at least one child is mandatory for the coaching workflow)</li>
  *   <li>Per child: name required (2-30 chars), birth_date required (0-18 years), gender optional enum</li>
  * </ul>
  */
 @Component
 public class ChildrenValidator implements StepValidator {
 
+    static final int MIN_CHILDREN = 1;
     static final int MAX_CHILDREN = 8;
     static final int MIN_NAME_LENGTH = 2;
     static final int MAX_NAME_LENGTH = 30;
@@ -37,13 +38,22 @@ public class ChildrenValidator implements StepValidator {
 
         Object childrenObj = data.get("children");
         if (childrenObj == null) {
-            // No children provided — valid (optional step, min 0)
-            return StepValidationResult.success();
+            // At least one child is required for the coaching workflow
+            errors.add(new FieldError("children", "REQUIRED",
+                    "At least one child is required to use Dad Coach"));
+            return StepValidationResult.failure(errors);
         }
 
         if (!(childrenObj instanceof List<?> childrenList)) {
             errors.add(new FieldError("children", "INVALID_FORMAT",
                     "Children must be provided as a list"));
+            return StepValidationResult.failure(errors);
+        }
+
+        if (childrenList.isEmpty()) {
+            // At least one child is required
+            errors.add(new FieldError("children", "REQUIRED",
+                    "At least one child is required to use Dad Coach"));
             return StepValidationResult.failure(errors);
         }
 
