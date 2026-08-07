@@ -68,10 +68,11 @@ public final class StatePatterns {
         // יאללה = yalla (let's go)
         // בסדר = beseder (ok/alright)
         // התחל = hatchel (start)
+        // Note: Allows optional emoji/whitespace prefix (e.g., "🚀 התחל")
         // ----------------------------------------------------------------
         StatePattern.of(
             "AFFIRMATIVE_HE",
-            Pattern.compile("^(כן|מוכן|יאללה|בסדר|התחל).*"),
+            Pattern.compile("^[\\p{So}\\p{Cn}\\s]*(כן|מוכן|יאללה|בסדר|התחל).*"),
             WorkflowAction.TRANSITION_TO_SCHEDULE
         ),
         
