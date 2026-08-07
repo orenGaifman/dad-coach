@@ -141,6 +141,7 @@ public class ScheduleStateHandler implements StateHandler {
             case SHOW_MORE_SLOTS -> handleShowMoreSlots(context, exchangeCount);
             case PARSE_TIME -> handleParseTime(context, match, exchangeCount);
             case ALREADY_SCHEDULED -> handleAlreadyScheduled(context, exchangeCount);
+            case ACKNOWLEDGE_SCHEDULE -> handleAcknowledgeSchedule(context, exchangeCount);
             default -> {
                 log.warn("Unexpected action {} in SCHEDULE_QUALITY_TIME state for father {}",
                         action, context.getFatherId());
@@ -315,6 +316,51 @@ public class ScheduleStateHandler implements StateHandler {
             String clarification = buildNoScheduleYetMessage(locale, fatherName);
             return StateAction.respond(clarification);
         }
+    }
+
+    /**
+     * Handles ACKNOWLEDGE_SCHEDULE action.
+     * When father says "אוקי" / "ok" / "thanks" while in SCHEDULE state,
+     * re-present the slots since they may not have seen them or want to review.
+     * 
+     * <p>This provides a graceful response instead of the "לא הבנתי" error message.</p>
+     */
+    private StateAction handleAcknowledgeSchedule(WorkflowContext context, int exchangeCount) {
+        Long fatherId = context.getFatherId().getLeastSignificantBits();
+        Father father = loadFather(context);
+        String locale = getLocale(father);
+        
+        log.info("Father {} acknowledged in SCHEDULE_QUALITY_TIME state, re-presenting slots", fatherId);
+        
+        // Reset offset to show first batch of slots again
+        slotOffsetByFather.put(fatherId, 0);
+        
+        // Load fresh slots
+        List<AvailableSlot> freshSlots = systemStateLoader.loadAvailableSlots(context.getFatherId());
+        
+        // Present slots with a gentle prompt
+        String prompt = "he".equals(locale)
+            ? "מעולה! הנה הזמנים הפנויים:"
+            : "Great! Here are the available times:";
+        
+        if (freshSlots.isEmpty()) {
+            MessageContext messageContext = MessageContext.builder()
+                    .messageType(MessageType.SCHEDULE_NO_SLOTS)
+                    .fatherName(getFatherName(father))
+                    .locale(locale)
+                    .timezone(father.getTimezone())
+                    .build();
+            
+            String noSlotsMessage = messageGenerator.generateWithFallback(
+                    MessageType.SCHEDULE_NO_SLOTS,
+                    messageContext,
+                    MessageGenerator.DEFAULT_TIMEOUT_MS
+            );
+            return StateAction.respond(noSlotsMessage);
+        }
+        
+        // Present slots normally
+        return presentSlots(context, father, freshSlots, 0, exchangeCount);
     }
 
     /**

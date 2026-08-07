@@ -238,6 +238,26 @@ public final class StatePatterns {
             "ALREADY_SCHEDULED_SCHEDULE",
             Pattern.compile("(?i).*(already scheduled|we already|you asked|already set).*"),
             WorkflowAction.ALREADY_SCHEDULED
+        ),
+        
+        // ----------------------------------------------------------------
+        // ACKNOWLEDGE (Hebrew): אוקי|טוב|תודה|מעולה|סבבה|יופי|בסדר → ACKNOWLEDGE_SCHEDULE
+        // When user acknowledges seeing the slots but hasn't selected yet,
+        // re-present the slots (they may need to see them again)
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "ACKNOWLEDGE_HE_SCHEDULE",
+            Pattern.compile("^(אוקי|טוב|תודה|מעולה|סבבה|יופי|בסדר)$"),
+            WorkflowAction.ACKNOWLEDGE_SCHEDULE
+        ),
+        
+        // ----------------------------------------------------------------
+        // ACKNOWLEDGE (English): ok|okay|thanks|great|sure|got it → ACKNOWLEDGE_SCHEDULE
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "ACKNOWLEDGE_EN_SCHEDULE",
+            Pattern.compile("(?i)^(ok|okay|thanks|thank you|great|sure|got it|alright)$"),
+            WorkflowAction.ACKNOWLEDGE_SCHEDULE
         )
     );
 

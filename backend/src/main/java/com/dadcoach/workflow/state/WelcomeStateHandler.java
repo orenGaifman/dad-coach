@@ -2,6 +2,9 @@ package com.dadcoach.workflow.state;
 
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
+import com.dadcoach.systemstate.AvailableSlot;
+import com.dadcoach.systemstate.SystemState;
+import com.dadcoach.systemstate.SystemStateLoader;
 import com.dadcoach.workflow.WorkflowState;
 import com.dadcoach.workflow.message.MessageContext;
 import com.dadcoach.workflow.message.MessageGenerator;
@@ -52,19 +55,26 @@ public class WelcomeStateHandler implements StateHandler {
     
     private static final Logger log = LoggerFactory.getLogger(WelcomeStateHandler.class);
     
+    /** Maximum number of slots to present in the initial message */
+    private static final int MAX_SLOTS_TO_SHOW = 5;
+    
     private final MessageGenerator messageGenerator;
     private final FatherRepository fatherRepository;
+    private final SystemStateLoader systemStateLoader;
     
     /**
      * Creates a new WelcomeStateHandler with required dependencies.
      * 
      * @param messageGenerator the message generator for creating response messages
      * @param fatherRepository the repository for updating father entities
+     * @param systemStateLoader for loading system state and available slots
      * @throws NullPointerException if any argument is null
      */
-    public WelcomeStateHandler(MessageGenerator messageGenerator, FatherRepository fatherRepository) {
+    public WelcomeStateHandler(MessageGenerator messageGenerator, FatherRepository fatherRepository,
+            SystemStateLoader systemStateLoader) {
         this.messageGenerator = Objects.requireNonNull(messageGenerator, "messageGenerator must not be null");
         this.fatherRepository = Objects.requireNonNull(fatherRepository, "fatherRepository must not be null");
+        this.systemStateLoader = Objects.requireNonNull(systemStateLoader, "systemStateLoader must not be null");
     }
     
     /**
@@ -197,7 +207,8 @@ public class WelcomeStateHandler implements StateHandler {
      * <ol>
      *   <li>Updates the father's welcomedAt timestamp to the current time</li>
      *   <li>Saves the father entity</li>
-     *   <li>Generates a transition message</li>
+     *   <li>Loads available time slots for scheduling</li>
+     *   <li>Generates a transition message with the slot options</li>
      *   <li>Returns a transition action to SCHEDULE_QUALITY_TIME</li>
      * </ol>
      * 
@@ -226,12 +237,27 @@ public class WelcomeStateHandler implements StateHandler {
         String locale = father.getLocale() != null ? father.getLocale() : "en";
         String fatherName = father.getDisplayName() != null ? father.getDisplayName() : "";
         
-        // Generate schedule slots message for transition
-        // The actual slot generation is handled by ScheduleStateHandler
-        // Here we just send a transition confirmation message
+        // Load available slots for scheduling
+        List<AvailableSlot> availableSlots = systemStateLoader.loadAvailableSlots(context.getFatherId());
+        
+        // Limit to MAX_SLOTS_TO_SHOW
+        List<AvailableSlot> slotsToPresent = availableSlots.size() > MAX_SLOTS_TO_SHOW
+                ? availableSlots.subList(0, MAX_SLOTS_TO_SHOW)
+                : availableSlots;
+        
+        // Get child info for the message
+        SystemState state = systemStateLoader.loadState(context.getFatherId());
+        SystemState.ChildInfo child = state.getDefaultChild();
+        String childName = (child != null && child.name() != null && !child.name().isBlank()) 
+            ? child.name() 
+            : null;
+        
+        // Generate schedule slots message for transition with actual slots
         MessageContext messageContext = MessageContext.builder()
                 .messageType(MessageType.SCHEDULE_SLOTS)
                 .fatherName(fatherName)
+                .childName(childName)
+                .timeSlots(slotsToPresent)
                 .locale(locale)
                 .timezone(father.getTimezone())
                 .build();

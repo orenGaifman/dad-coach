@@ -224,13 +224,70 @@ public class FallbackMessages {
     /**
      * Get the fallback message fully processed with substitutions.
      * 
+     * <p>For SCHEDULE_SLOTS messages, this method appends a numbered list of 
+     * available time slots to the template if slots are provided in the context.</p>
+     * 
      * @param type the message type
      * @param context the message context
      * @return the fully processed message text
      */
     public String getProcessed(MessageType type, MessageContext context) {
         String template = get(type, context.getLocale());
-        return substitute(template, context);
+        String result = substitute(template, context);
+        
+        // For SCHEDULE_SLOTS, append the formatted slot list
+        if (type == MessageType.SCHEDULE_SLOTS && context.hasTimeSlots()) {
+            result = appendSlotList(result, context);
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Appends a numbered list of available slots to the message.
+     * 
+     * <p>Format:</p>
+     * <pre>
+     * בחר זמן לזמן איכות עם הילד:
+     * 
+     * 1️⃣ יום שני, 15 בינואר, 15:30 - 17:30 (שעתיים)
+     * 2️⃣ יום שלישי, 16 בינואר, 10:00 - 11:00 (שעה)
+     * ...
+     * 
+     * הקלד מספר (1-5) לבחירה, 'דלג' לתזמון מאוחר יותר, או 'עוד' לאפשרויות נוספות.
+     * </pre>
+     * 
+     * @param message the base message (header)
+     * @param context the message context with slots
+     * @return the message with appended slot list
+     */
+    private String appendSlotList(String message, MessageContext context) {
+        StringBuilder sb = new StringBuilder(message);
+        sb.append("\n\n");
+        
+        String[] numberEmojis = {"1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"};
+        
+        int index = 0;
+        for (var slot : context.getTimeSlots()) {
+            if (index >= numberEmojis.length) break;
+            
+            String formattedSlot = context.formatSlotInTimezone(slot);
+            sb.append(numberEmojis[index]).append(" ").append(formattedSlot).append("\n");
+            index++;
+        }
+        
+        // Add instructions at the end
+        boolean isHebrew = LOCALE_HEBREW.equals(context.getLocale());
+        int slotCount = context.getTimeSlots().size();
+        
+        sb.append("\n");
+        if (isHebrew) {
+            sb.append("הקלד מספר (1-").append(slotCount).append(") לבחירה, 'דלג' לתזמון מאוחר יותר, או 'עוד' לאפשרויות נוספות.");
+        } else {
+            sb.append("Reply with a number (1-").append(slotCount).append(") to select, 'skip' to schedule later, or 'more' for additional options.");
+        }
+        
+        return sb.toString();
     }
 
     /**
