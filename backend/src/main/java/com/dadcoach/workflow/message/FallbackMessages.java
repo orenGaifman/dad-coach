@@ -177,8 +177,17 @@ public class FallbackMessages {
         if (context.getFatherName() != null) {
             result = result.replace("{fatherName}", context.getFatherName());
         }
-        if (context.getChildName() != null) {
-            result = result.replace("{childName}", context.getChildName());
+        
+        // Always substitute {childName} - use fallback text if null or empty
+        String childName = context.getChildName();
+        if (childName != null && !childName.isBlank()) {
+            result = result.replace("{childName}", childName);
+        } else {
+            // Fallback: use generic text based on locale
+            String fallbackChildName = LOCALE_HEBREW.equals(context.getLocale()) 
+                ? "הילד/ה" 
+                : "your child";
+            result = result.replace("{childName}", fallbackChildName);
         }
         
         // Time formatting: Use pre-formatted time or format using timezone-aware method

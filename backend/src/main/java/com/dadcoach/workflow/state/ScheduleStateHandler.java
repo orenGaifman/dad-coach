@@ -554,7 +554,10 @@ public class ScheduleStateHandler implements StateHandler {
         // Get child info for message
         SystemState state = systemStateLoader.loadState(context.getFatherId());
         SystemState.ChildInfo child = state.getDefaultChild();
-        String childName = child != null ? child.name() : "";
+        // Handle null child or null/empty name - FallbackMessages will provide generic text
+        String childName = (child != null && child.name() != null && !child.name().isBlank()) 
+            ? child.name() 
+            : null;
         
         // Generate slots message
         MessageContext messageContext = MessageContext.builder()
