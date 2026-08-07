@@ -237,6 +237,17 @@ public class WelcomeStateHandler implements StateHandler {
         String locale = father.getLocale() != null ? father.getLocale() : "en";
         String fatherName = father.getDisplayName() != null ? father.getDisplayName() : "";
         
+        // Check if Google Calendar is connected
+        if (!father.hasGoogleCalendarConfigured()) {
+            log.info("Father {} has no Google Calendar connected, prompting for connection", 
+                    context.getFatherId());
+            
+            String calendarConnectMessage = buildCalendarConnectMessage(father, locale);
+            
+            // Still transition to SCHEDULE state - user can connect calendar from there
+            return StateAction.transition(WorkflowState.SCHEDULE_QUALITY_TIME, calendarConnectMessage);
+        }
+        
         // Load available slots for scheduling
         List<AvailableSlot> availableSlots = systemStateLoader.loadAvailableSlots(context.getFatherId());
         
@@ -332,5 +343,40 @@ public class WelcomeStateHandler implements StateHandler {
             return List.of("מוכן לתאם", "ספר לי עוד");
         }
         return List.of("Ready to schedule", "Tell me more");
+    }
+    
+    /**
+     * Builds a message prompting the father to connect their Google Calendar.
+     * 
+     * <p>The message explains why calendar connection is needed and provides
+     * a link to connect. The link uses the backend API which will redirect
+     * to Google's OAuth flow.</p>
+     * 
+     * @param father the father entity
+     * @param locale the father's locale ("en" or "he")
+     * @return the calendar connection prompt message with link
+     */
+    private String buildCalendarConnectMessage(Father father, String locale) {
+        // Build the calendar connect URL - this goes to our backend which redirects to Google OAuth
+        String connectUrl = String.format("https://dad-coach.onrender.com/api/v1/calendar/connect/%d", 
+                father.getId());
+        
+        if ("he".equals(locale)) {
+            return String.format(
+                "🗓️ כדי לתזמן זמן איכות, אני צריך גישה ללוח השנה שלך בגוגל.\n\n" +
+                "זה יעזור לי למצוא זמנים פנויים ולתאם אוטומטית את הזמן עם הילדים.\n\n" +
+                "👉 לחץ כאן לחיבור הלוח: %s\n\n" +
+                "אחרי שתחבר, שלח לי הודעה ואמשיך מאיפה שהפסקנו! 😊",
+                connectUrl
+            );
+        }
+        
+        return String.format(
+            "🗓️ To schedule quality time, I need access to your Google Calendar.\n\n" +
+            "This helps me find available times and automatically coordinate time with your kids.\n\n" +
+            "👉 Click here to connect: %s\n\n" +
+            "Once connected, send me a message and I'll continue from where we left off! 😊",
+            connectUrl
+        );
     }
 }
