@@ -1,10 +1,6 @@
 package com.dadcoach.systemstate;
 
 import com.dadcoach.common.ResourceNotFoundException;
-import com.dadcoach.conversation.entity.Conversation;
-import com.dadcoach.conversation.entity.ConversationMessage;
-import com.dadcoach.conversation.repository.ConversationMessageRepository;
-import com.dadcoach.conversation.repository.ConversationRepository;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.domain.father.Father;
@@ -25,7 +21,6 @@ import org.springframework.web.client.RestTemplate;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.*;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -59,7 +54,6 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
 
     private static final int DEFAULT_DAYS_AHEAD = 7;
     private static final int MAX_DAYS_AHEAD = 14;
-    private static final int CONVERSATION_MESSAGE_LIMIT = 10;
     private static final int MIN_SLOT_DURATION_MINUTES = 30;
     private static final int DEFAULT_ACTIVITY_START_HOUR = 6;  // 6 AM
     private static final int DEFAULT_ACTIVITY_END_HOUR = 22;   // 10 PM
@@ -67,8 +61,6 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
     private final FatherRepository fatherRepository;
     private final ChildRepository childRepository;
     private final QualityTimeRepository qualityTimeRepository;
-    private final ConversationRepository conversationRepository;
-    private final ConversationMessageRepository conversationMessageRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
@@ -81,14 +73,10 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
     public SystemStateLoaderImpl(
             FatherRepository fatherRepository,
             ChildRepository childRepository,
-            QualityTimeRepository qualityTimeRepository,
-            ConversationRepository conversationRepository,
-            ConversationMessageRepository conversationMessageRepository) {
+            QualityTimeRepository qualityTimeRepository) {
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.qualityTimeRepository = qualityTimeRepository;
-        this.conversationRepository = conversationRepository;
-        this.conversationMessageRepository = conversationMessageRepository;
         this.restTemplate = new RestTemplate();
         this.objectMapper = new ObjectMapper();
     }
@@ -114,7 +102,8 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
         List<SystemState.CalendarEvent> calendarEvents = loadCalendarEvents(father, DEFAULT_DAYS_AHEAD);
         List<SystemState.QualityTimeEvent> qualityTimeEvents = loadQualityTimeEvents(father);
         SystemState.DashboardMetrics dashboardMetrics = loadDashboardMetrics(father);
-        List<SystemState.ConversationMessage> conversationContext = loadConversationContext(fatherId);
+        // Conversation context is now managed by workflow engine, return empty list
+        List<SystemState.ConversationMessage> conversationContext = List.of();
 
         log.debug("System state loaded successfully for father: {}", fatherId);
 
@@ -476,42 +465,6 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
         }
 
         return achievements;
-    }
-
-    /**
-     * Loads the last 10 conversation messages for context.
-     */
-    private List<SystemState.ConversationMessage> loadConversationContext(UUID fatherId) {
-        // Find active conversation for the father
-        Optional<Conversation> activeConversation = conversationRepository.findActiveByFatherId(fatherId);
-
-        if (activeConversation.isEmpty()) {
-            log.debug("No active conversation found for father {}", fatherId);
-            return List.of();
-        }
-
-        Conversation conversation = activeConversation.get();
-        List<ConversationMessage> messages = conversationMessageRepository
-                .findByConversationIdOrderBySequenceNumberAsc(conversation.getId());
-
-        // Get last 10 messages
-        int startIndex = Math.max(0, messages.size() - CONVERSATION_MESSAGE_LIMIT);
-        return messages.subList(startIndex, messages.size())
-                .stream()
-                .map(this::mapToConversationMessage)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Maps a ConversationMessage entity to a ConversationMessage record.
-     */
-    private SystemState.ConversationMessage mapToConversationMessage(ConversationMessage msg) {
-        return new SystemState.ConversationMessage(
-                msg.getId(),
-                msg.getDirection(),
-                msg.getContent(),
-                msg.getCreatedAt()
-        );
     }
 
     /**

@@ -20,7 +20,7 @@ import com.dadcoach.ai.routing.FallbackChain;
 import com.dadcoach.ai.routing.ModelRouter;
 import com.dadcoach.ai.safety.SafetyClassification;
 import com.dadcoach.ai.safety.SafetyClassifier;
-import com.dadcoach.conversation.ConversationType;
+import com.dadcoach.domain.conversation.ConversationType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

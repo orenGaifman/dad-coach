@@ -10,7 +10,7 @@ import com.dadcoach.ai.routing.ModelRouter;
 import com.dadcoach.ai.safety.SafetyClassification;
 import com.dadcoach.ai.safety.SafetyClassification.SafetyCategory;
 import com.dadcoach.ai.safety.SafetyClassifier;
-import com.dadcoach.conversation.ConversationType;
+import com.dadcoach.domain.conversation.ConversationType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

@@ -16,7 +16,6 @@ import com.dadcoach.workflow.dto.WorkspaceSummaryDto.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,12 +32,6 @@ import java.util.stream.Collectors;
  * /api/v1/workspace/summary endpoint. This endpoint computes dashboard metrics
  * in real-time from Quality Time completion records.</p>
  * 
- * <p>Implements Requirements 8.2 and 14.1 from the deterministic-workflow-engine spec:</p>
- * <ul>
- *   <li>Requirement 8.2: Dashboard data structure aligned with WEB-SPEC-008</li>
- *   <li>Requirement 14.1: REST API endpoint for workspace summary</li>
- * </ul>
- * 
  * <p>Belt thresholds (SACRED - do NOT modify):</p>
  * <ul>
  *   <li>WHITE: 0-2 Quality Times</li>
@@ -52,8 +45,7 @@ import java.util.stream.Collectors;
  * 
  * @see WorkspaceSummaryDto
  */
-@RestController("workflowWorkspaceController")
-@ConditionalOnProperty(name = "dadcoach.features.deterministic-workflow-engine", havingValue = "true", matchIfMissing = true)
+@RestController
 public class WorkspaceController {
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceController.class);

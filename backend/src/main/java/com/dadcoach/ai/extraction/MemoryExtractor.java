@@ -9,7 +9,7 @@ import com.dadcoach.ai.provider.AiProviderRequest;
 import com.dadcoach.ai.provider.AiProviderResponse;
 import com.dadcoach.ai.routing.FallbackChain;
 import com.dadcoach.ai.routing.ModelRouter;
-import com.dadcoach.conversation.ConversationType;
+import com.dadcoach.domain.conversation.ConversationType;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;

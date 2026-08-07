@@ -10,7 +10,7 @@ import com.dadcoach.channel.dto.MessagePriority;
 import com.dadcoach.channel.dto.MessageType;
 import com.dadcoach.channel.dto.OutboundMessageDto;
 import com.dadcoach.channel.session.SessionWindowService;
-import com.dadcoach.conversation.ConversationType;
+import com.dadcoach.domain.conversation.ConversationType;
 import com.dadcoach.domain.father.FatherService;
 import com.dadcoach.onboarding.provisioning.ActivationRecord;
 import com.dadcoach.onboarding.provisioning.ActivationRecordRepository;

@@ -1,6 +1,6 @@
 package com.dadcoach.domain.conversation;
 
-import com.dadcoach.conversation.ConversationStatus;
+import com.dadcoach.domain.conversation.ConversationStatus;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

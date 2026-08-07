@@ -1,6 +1,6 @@
 package com.dadcoach.domain.conversation;
 
-import com.dadcoach.conversation.CoachingSessionOutcome;
+import com.dadcoach.domain.conversation.CoachingSessionOutcome;
 import com.dadcoach.domain.father.Father;
 
 import jakarta.persistence.*;

@@ -5,7 +5,7 @@ import com.dadcoach.ai.provider.AiProvider;
 import com.dadcoach.ai.provider.AiProviderException;
 import com.dadcoach.ai.provider.AiProviderRequest;
 import com.dadcoach.ai.provider.AiProviderResponse;
-import com.dadcoach.conversation.ConversationType;
+import com.dadcoach.domain.conversation.ConversationType;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.IntRange;
 

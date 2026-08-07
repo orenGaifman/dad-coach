@@ -1,7 +1,7 @@
 package com.dadcoach.ai.output;
 
 import com.dadcoach.ai.AiMessage;
-import com.dadcoach.conversation.ConversationType;
+import com.dadcoach.domain.conversation.ConversationType;
 
 import java.util.List;
 import java.util.UUID;

@@ -1,6 +1,6 @@
 package com.dadcoach.ai;
 
-import com.dadcoach.conversation.ConversationType;
+import com.dadcoach.domain.conversation.ConversationType;
 
 /**
  * AI models available for coaching conversations.

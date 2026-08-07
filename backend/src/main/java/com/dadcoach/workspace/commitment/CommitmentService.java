@@ -1,14 +1,9 @@
 package com.dadcoach.workspace.commitment;
 
-import com.dadcoach.domain.child.Child;
-import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
-import com.dadcoach.workspace.commitment.QualityTimeCommitment.CommitmentStatus;
-import com.dadcoach.workspace.event.QualityTimeReportedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,19 +28,13 @@ public class CommitmentService {
 
     private final QualityTimeCommitmentRepository repository;
     private final FatherRepository fatherRepository;
-    private final ChildRepository childRepository;
-    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public CommitmentService(QualityTimeCommitmentRepository repository,
                              FatherRepository fatherRepository,
-                             ChildRepository childRepository,
-                             ApplicationEventPublisher eventPublisher,
                              Clock clock) {
         this.repository = repository;
         this.fatherRepository = fatherRepository;
-        this.childRepository = childRepository;
-        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
@@ -135,29 +124,13 @@ public class CommitmentService {
         QualityTimeCommitment commitment = repository.findById(commitmentId)
                 .orElseThrow(() -> new IllegalArgumentException("Commitment not found: " + commitmentId));
 
-        if (commitment.getStatus() == CommitmentStatus.COMPLETED) {
+        if (commitment.getStatus() == QualityTimeCommitment.CommitmentStatus.COMPLETED) {
             log.warn("Commitment {} is already completed", commitmentId);
             return commitment;
         }
 
         commitment.markCompleted(completionNote, COMMITMENT_POINTS);
         repository.save(commitment);
-
-        // Publish quality time event to trigger growth signals
-        try {
-            UUID fatherUuid = new UUID(0L, commitment.getFatherId());
-            UUID childUuid = commitment.getChildId() != null ? new UUID(0L, commitment.getChildId()) : null;
-            UUID reportId = UUID.randomUUID();
-            eventPublisher.publishEvent(new QualityTimeReportedEvent(
-                    fatherUuid,
-                    childUuid,
-                    commitment.getDurationMinutes() != null ? commitment.getDurationMinutes() : 30,
-                    commitment.getScheduledDate(),
-                    reportId
-            ));
-        } catch (Exception e) {
-            log.warn("Failed to publish quality time event for commitment {}: {}", commitmentId, e.getMessage());
-        }
 
         log.info("Completed commitment {} for father {}", commitmentId, commitment.getFatherId());
         return commitment;
@@ -201,10 +174,10 @@ public class CommitmentService {
      * Gets commitment statistics for a father.
      */
     public CommitmentStats getStats(Long fatherId) {
-        long completed = repository.countByFatherIdAndStatus(fatherId, CommitmentStatus.COMPLETED);
-        long scheduled = repository.countByFatherIdAndStatus(fatherId, CommitmentStatus.SCHEDULED);
-        long reminded = repository.countByFatherIdAndStatus(fatherId, CommitmentStatus.REMINDED);
-        long missed = repository.countByFatherIdAndStatus(fatherId, CommitmentStatus.MISSED);
+        long completed = repository.countByFatherIdAndStatus(fatherId, QualityTimeCommitment.CommitmentStatus.COMPLETED);
+        long scheduled = repository.countByFatherIdAndStatus(fatherId, QualityTimeCommitment.CommitmentStatus.SCHEDULED);
+        long reminded = repository.countByFatherIdAndStatus(fatherId, QualityTimeCommitment.CommitmentStatus.REMINDED);
+        long missed = repository.countByFatherIdAndStatus(fatherId, QualityTimeCommitment.CommitmentStatus.MISSED);
         
         return new CommitmentStats(completed, scheduled + reminded, missed);
     }

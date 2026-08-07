@@ -2,8 +2,8 @@ package com.dadcoach.domain.conversation;
 
 import com.dadcoach.common.BusinessRuleViolationException;
 import com.dadcoach.common.ResourceNotFoundException;
-import com.dadcoach.conversation.ConversationStatus;
-import com.dadcoach.conversation.ConversationType;
+import com.dadcoach.domain.conversation.ConversationStatus;
+import com.dadcoach.domain.conversation.ConversationType;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.statemachine.StateMachineEngine;

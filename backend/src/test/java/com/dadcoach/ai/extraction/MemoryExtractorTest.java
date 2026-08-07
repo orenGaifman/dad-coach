@@ -9,7 +9,7 @@ import com.dadcoach.ai.provider.AiProviderRequest;
 import com.dadcoach.ai.provider.AiProviderResponse;
 import com.dadcoach.ai.routing.FallbackChain;
 import com.dadcoach.ai.routing.ModelRouter;
-import com.dadcoach.conversation.ConversationType;
+import com.dadcoach.domain.conversation.ConversationType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

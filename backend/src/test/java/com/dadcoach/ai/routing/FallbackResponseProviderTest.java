@@ -1,7 +1,7 @@
 package com.dadcoach.ai.routing;
 
 import com.dadcoach.ai.provider.AiProviderResponse;
-import com.dadcoach.conversation.ConversationType;
+import com.dadcoach.domain.conversation.ConversationType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

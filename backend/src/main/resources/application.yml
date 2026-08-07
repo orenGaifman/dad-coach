@@ -64,17 +64,6 @@ management:
     readinessstate:
       enabled: true
 
-conversation:
-  session-lock:
-    timeout-seconds: 45
-  expiration-windows:
-    ONBOARDING: PT48H
-    DAILY_COACHING: PT24H
-    FOLLOW_UP: PT24H
-    REFLECTION: PT24H
-    INACTIVITY_CHECK: PT48H
-    CELEBRATION: PT24H
-
 dad-coach:
   web:
     base-url: ${WEB_BASE_URL:http://localhost:3000}
@@ -108,7 +97,6 @@ dad-coach:
 
 dadcoach:
   features:
-    deterministic-workflow-engine: true  # Master switch for new workflow engine (vs ConversationOrchestrator)
     ai-message-generation: true          # Toggle AI vs fallback template messages
     morning-reminders: true              # Toggle morning reminder scheduler job for Quality Time
   scheduler:
