@@ -124,6 +124,26 @@ public final class StatePatterns {
      */
     public static final List<StatePattern> SCHEDULE_PATTERNS = List.of(
         // ----------------------------------------------------------------
+        // GREETING (Hebrew): היי|שלום|הי → RESET_TO_WELCOME
+        // When user sends a greeting while in SCHEDULE state, reset to welcome
+        // This handles cases where user wants to start fresh
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "GREETING_HE",
+            Pattern.compile("^[\\p{So}\\p{Cn}\\s]*(היי|שלום|הי|בוקר טוב|ערב טוב).*"),
+            WorkflowAction.RESET_TO_WELCOME
+        ),
+        
+        // ----------------------------------------------------------------
+        // GREETING (English): hi|hello|hey → RESET_TO_WELCOME
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "GREETING_EN",
+            Pattern.compile("(?i)^(hi|hello|hey|good morning|good evening).*"),
+            WorkflowAction.RESET_TO_WELCOME
+        ),
+        
+        // ----------------------------------------------------------------
         // SLOT_NUMBER: ^([1-9])$ → SELECT_SLOT
         // Matches single digits 1-9 for slot selection
         // ----------------------------------------------------------------

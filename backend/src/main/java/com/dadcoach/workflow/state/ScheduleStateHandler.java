@@ -142,6 +142,7 @@ public class ScheduleStateHandler implements StateHandler {
             case PARSE_TIME -> handleParseTime(context, match, exchangeCount);
             case ALREADY_SCHEDULED -> handleAlreadyScheduled(context, exchangeCount);
             case ACKNOWLEDGE_SCHEDULE -> handleAcknowledgeSchedule(context, exchangeCount);
+            case RESET_TO_WELCOME -> handleResetToWelcome(context);
             default -> {
                 log.warn("Unexpected action {} in SCHEDULE_QUALITY_TIME state for father {}",
                         action, context.getFatherId());
@@ -367,6 +368,37 @@ public class ScheduleStateHandler implements StateHandler {
         
         // Present slots normally
         return presentSlots(context, father, freshSlots, 0, exchangeCount);
+    }
+    
+    /**
+     * Handles RESET_TO_WELCOME action - when father sends a greeting like "היי" or "hello".
+     * Transitions back to WELCOME state with a fresh greeting message.
+     */
+    private StateAction handleResetToWelcome(WorkflowContext context) {
+        Long fatherId = context.getFatherId().getLeastSignificantBits();
+        Father father = loadFather(context);
+        String locale = getLocale(father);
+        String fatherName = getFatherName(father);
+        
+        log.info("Father {} sent greeting in SCHEDULE state, resetting to WELCOME", fatherId);
+        
+        // Reset exchange count for this father
+        exchangeCountByFather.remove(fatherId);
+        slotOffsetByFather.remove(fatherId);
+        
+        // Build a fresh welcome message
+        String welcomeMessage = "he".equals(locale)
+            ? String.format("היי %s! 👋\n\nטוב לראות אותך. איך אני יכול לעזור?\n\n" +
+                           "• כתוב 'קבע זמן' כדי לתזמן זמן איכות\n" +
+                           "• כתוב 'רעיונות' לקבלת רעיונות לפעילויות\n" +
+                           "• כתוב 'התקדמות' לראות את הסטטיסטיקות שלך", fatherName)
+            : String.format("Hey %s! 👋\n\nGood to see you. How can I help?\n\n" +
+                           "• Type 'schedule' to plan quality time\n" +
+                           "• Type 'ideas' for activity suggestions\n" +
+                           "• Type 'progress' to see your stats", fatherName);
+        
+        // Transition back to WAITING state (the "home" state)
+        return StateAction.transition(WorkflowState.WAITING, welcomeMessage);
     }
 
     /**

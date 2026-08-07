@@ -123,5 +123,12 @@ public enum WorkflowAction {
      * Triggered when father says "כבר קבענו" (already scheduled) or similar.
      * Shows the current scheduled Quality Time as confirmation.
      */
-    ALREADY_SCHEDULED
+    ALREADY_SCHEDULED,
+    
+    /**
+     * Reset to WELCOME state and send fresh greeting.
+     * Triggered when father sends a greeting (היי, hello) in any state.
+     * Useful when father wants to start fresh.
+     */
+    RESET_TO_WELCOME
 }
