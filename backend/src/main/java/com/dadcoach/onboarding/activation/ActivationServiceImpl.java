@@ -15,6 +15,8 @@ import com.dadcoach.domain.father.FatherService;
 import com.dadcoach.onboarding.provisioning.ActivationRecord;
 import com.dadcoach.onboarding.provisioning.ActivationRecordRepository;
 import com.dadcoach.onboarding.provisioning.ActivationStatus;
+import com.dadcoach.workflow.message.FallbackMessages;
+import com.dadcoach.workflow.message.MessageContext;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,6 +65,7 @@ public class ActivationServiceImpl implements ActivationService {
     private final CommunicationEndpointRepository endpointRepository;
     private final IntelligenceLayer intelligenceLayer;
     private final DeliveryService deliveryService;
+    private final FallbackMessages fallbackMessages;
 
     @Value("${dad-coach.whatsapp.phone-number:+972501234567}")
     private String dadCoachPhoneNumber;
@@ -73,13 +76,15 @@ public class ActivationServiceImpl implements ActivationService {
             SessionWindowService sessionWindowService,
             CommunicationEndpointRepository endpointRepository,
             IntelligenceLayer intelligenceLayer,
-            DeliveryService deliveryService) {
+            DeliveryService deliveryService,
+            FallbackMessages fallbackMessages) {
         this.activationRecordRepository = activationRecordRepository;
         this.fatherService = fatherService;
         this.sessionWindowService = sessionWindowService;
         this.endpointRepository = endpointRepository;
         this.intelligenceLayer = intelligenceLayer;
         this.deliveryService = deliveryService;
+        this.fallbackMessages = fallbackMessages;
     }
 
     @Override
@@ -282,31 +287,34 @@ public class ActivationServiceImpl implements ActivationService {
 
     private void deliverWelcomeConversation(Long fatherId, String messageContent) {
         try {
-            // Build coaching context for welcome message
+            // Get father details for message personalization
             var father = fatherService.getFather(fatherId);
-            String fatherName = father.getDisplayName() != null ? father.getDisplayName() : "Dad";
+            String fatherName = father.getDisplayName() != null ? father.getDisplayName() : "";
+            String locale = father.getLocale() != null ? father.getLocale() : "he";
 
-            CoachingContext context = new CoachingContext(
-                    new UUID(0L, fatherId), // Use derived UUID for the coaching context
-                    ConversationType.ONBOARDING,
-                    messageContent,
-                    List.of(),
-                    buildWelcomeSystemPrompt(fatherName, father.getLocale()),
-                    null,
-                    null,
-                    ""
+            // Build message context for the welcome greeting
+            MessageContext messageContext = MessageContext.builder()
+                    .messageType(com.dadcoach.workflow.message.MessageType.WELCOME_GREETING)
+                    .fatherName(fatherName)
+                    .locale(locale)
+                    .build();
+
+            // Use fallback message for reliability (AI can fail)
+            // The welcome greeting ends with "מוכן להתחיל?" prompting user to respond
+            // Their next message will be handled by WorkflowEngine in WELCOME state
+            String welcomeMessage = fallbackMessages.getProcessed(
+                    com.dadcoach.workflow.message.MessageType.WELCOME_GREETING,
+                    messageContext
             );
-
-            CoachingResponse response = intelligenceLayer.generateCoachingResponse(context);
 
             // Deliver the welcome message
             UUID fatherUuid = new UUID(0L, fatherId);
-            OutboundMessageDto welcomeMessage = new OutboundMessageDto(
+            OutboundMessageDto message = new OutboundMessageDto(
                     UUID.randomUUID(),
                     fatherUuid,
                     null, // Use primary endpoint
                     MessageType.TEXT,
-                    response.message(),
+                    welcomeMessage,
                     null,
                     false,
                     null,
@@ -315,40 +323,12 @@ public class ActivationServiceImpl implements ActivationService {
                     Instant.now()
             );
 
-            deliveryService.deliver(welcomeMessage);
-            log.info("Welcome conversation delivered to father {}", fatherId);
+            deliveryService.deliver(message);
+            log.info("Welcome message delivered to father {}", fatherId);
 
         } catch (Exception e) {
             // Welcome delivery failure should not fail the activation
-            log.error("Failed to deliver welcome conversation to father {}: {}", fatherId, e.getMessage(), e);
-        }
-    }
-
-    private String buildWelcomeSystemPrompt(String fatherName, String locale) {
-        if (locale != null && locale.startsWith("he")) {
-            return String.format("""
-                אתה "מאמן אבא" - מאמן הורות חם ותומך לאבות.
-                צור הודעת פתיחה מותאמת אישית ל%s שזה עתה הפעיל את החשבון שלו.
-                
-                ההודעה צריכה להיות:
-                - חמה ומעודדת
-                - מסבירה שאתה כאן לעזור לו להיות אבא טוב יותר
-                - קצרה (2-3 משפטים)
-                
-                אל תציע עזרה בנושאים שאינם קשורים להורות.
-                """, fatherName);
-        } else {
-            return String.format("""
-                You are "Dad Coach" - a warm and supportive parenting coach for fathers.
-                Generate a personalized welcome message for %s who just activated their account.
-                
-                The message should be:
-                - Warm and encouraging
-                - Explain that you're here to help them be a better dad
-                - Concise (2-3 sentences)
-                
-                Do not offer help with topics unrelated to parenting.
-                """, fatherName);
+            log.error("Failed to deliver welcome message to father {}: {}", fatherId, e.getMessage(), e);
         }
     }
 }
