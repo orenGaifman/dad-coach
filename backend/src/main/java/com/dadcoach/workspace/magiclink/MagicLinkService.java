@@ -102,6 +102,9 @@ public class MagicLinkService {
     /**
      * Validates a magic link token and returns authentication credentials.
      * 
+     * Magic links are REUSABLE - a father can click the same link multiple times.
+     * This is the expected UX since fathers return to their dashboard via WhatsApp links.
+     * 
      * @param token The magic link token
      * @return Validation result with JWT on success, or error details on failure
      */
@@ -117,13 +120,8 @@ public class MagicLinkService {
 
         MagicLink magicLink = optMagicLink.get();
 
-        if (magicLink.isConsumed()) {
-            log.warn("Magic link validation failed: token already used for father {}", 
-                    magicLink.getFatherId());
-            return MagicLinkValidationResult.invalid("TOKEN_USED", 
-                    "This link has already been used. Please request a new one.");
-        }
-
+        // Note: We no longer check isConsumed() - links are reusable
+        
         if (magicLink.isExpired()) {
             log.warn("Magic link validation failed: token expired for father {}", 
                     magicLink.getFatherId());
@@ -131,11 +129,7 @@ public class MagicLinkService {
                     "This link has expired. Please request a new one from your coach.");
         }
 
-        // Token is valid - consume it and generate JWT
-        magicLink.consume();
-        repository.save(magicLink);
-
-        // Generate JWT for the father
+        // Token is valid - generate JWT (don't consume - link is reusable)
         String jwt = generateJwt(magicLink.getFatherId());
 
         log.info("Magic link validated successfully for father {}, context '{}'", 
