@@ -178,9 +178,9 @@ public class ActivationServiceImpl implements ActivationService {
         // 3. Open session window via SessionWindowService
         openSessionWindow(fatherId);
 
-        // 4. DO NOT deliver welcome conversation here - the ConversationOrchestrator
-        //    will handle the response through its normal pipeline, preventing duplicate messages.
-        //    Previously: deliverWelcomeConversation(fatherId, messageContent);
+        // 4. Deliver welcome conversation to the father
+        //    This sends the initial greeting message before the workflow takes over
+        deliverWelcomeConversation(fatherId, messageContent);
 
         // 5. Mark activation as CONVERSATION_STARTED
         record.setStatus(ActivationStatus.CONVERSATION_STARTED);
