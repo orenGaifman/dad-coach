@@ -49,6 +49,15 @@ public interface GoogleCalendarService {
     String getAuthorizationUrl(Long fatherId);
 
     /**
+     * Generates the OAuth authorization URL for a father to connect their calendar.
+     *
+     * @param fatherId the father's ID
+     * @param redirectUrl optional URL to redirect to after OAuth completes
+     * @return the authorization URL to redirect the user to
+     */
+    String getAuthorizationUrl(Long fatherId, String redirectUrl);
+
+    /**
      * Handles the OAuth callback and stores tokens for the father.
      *
      * @param authCode the authorization code from Google

@@ -218,14 +218,24 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
     @Override
     public String getAuthorizationUrl(Long fatherId) {
+        return getAuthorizationUrl(fatherId, null);
+    }
+
+    @Override
+    public String getAuthorizationUrl(Long fatherId, String redirectUrl) {
+        // State format: "fatherId" or "fatherId|redirectUrl"
+        String state = redirectUrl != null && !redirectUrl.isEmpty() 
+            ? fatherId + "|" + redirectUrl
+            : String.valueOf(fatherId);
+            
         return GOOGLE_AUTH_URL + "?" +
             "client_id=" + URLEncoder.encode(clientId, StandardCharsets.UTF_8) +
-            "&redirect_uri=" + URLEncoder.encode(redirectUri, StandardCharsets.UTF_8) +
+            "&redirect_uri=" + URLEncoder.encode(this.redirectUri, StandardCharsets.UTF_8) +
             "&response_type=code" +
             "&scope=" + URLEncoder.encode(CALENDAR_SCOPE, StandardCharsets.UTF_8) +
             "&access_type=offline" +
             "&prompt=consent" +
-            "&state=" + fatherId;
+            "&state=" + URLEncoder.encode(state, StandardCharsets.UTF_8);
     }
 
     @Override

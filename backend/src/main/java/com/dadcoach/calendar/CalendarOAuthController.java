@@ -16,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
 
@@ -56,6 +58,7 @@ public class CalendarOAuthController {
      * Initiates Google Calendar OAuth flow by redirecting to Google's authorization page.
      * 
      * @param fatherId the ID of the father connecting their calendar
+     * @param redirectUrl optional URL to redirect to after OAuth completes (defaults to dashboard)
      * @return redirect to Google OAuth authorization page
      */
     @GetMapping("/connect/{fatherId}")
@@ -66,7 +69,9 @@ public class CalendarOAuthController {
     @ApiResponse(responseCode = "302", description = "Redirect to Google OAuth")
     @ApiResponse(responseCode = "404", description = "Father not found")
     public ResponseEntity<Void> connectCalendar(
-            @Parameter(description = "Father ID") @PathVariable Long fatherId) {
+            @Parameter(description = "Father ID") @PathVariable Long fatherId,
+            @Parameter(description = "URL to redirect after OAuth completes") 
+            @RequestParam(required = false) String redirectUrl) {
         
         log.info("Starting Google Calendar OAuth flow for father {}", fatherId);
         
@@ -77,7 +82,7 @@ public class CalendarOAuthController {
             return ResponseEntity.notFound().build();
         }
         
-        String authUrl = googleCalendarService.getAuthorizationUrl(fatherId);
+        String authUrl = googleCalendarService.getAuthorizationUrl(fatherId, redirectUrl);
         log.debug("Redirecting father {} to Google OAuth: {}", fatherId, authUrl);
         
         return ResponseEntity.status(HttpStatus.FOUND)
@@ -95,10 +100,12 @@ public class CalendarOAuthController {
      * </ul>
      * </p>
      * 
+     * <p>The state parameter contains JSON with fatherId and optional redirectUrl.</p>
+     * 
      * @param code the authorization code from Google (if successful)
-     * @param state the father ID we passed during authorization
+     * @param state JSON containing fatherId and optional redirectUrl
      * @param error the error code if user denied access
-     * @return redirect to dashboard with success/failure message
+     * @return redirect to dashboard or specified redirectUrl with success/failure message
      */
     @GetMapping("/callback")
     @Operation(
@@ -111,33 +118,42 @@ public class CalendarOAuthController {
             @RequestParam(required = false) String state,
             @RequestParam(required = false) String error) {
         
+        // Parse state to get fatherId and redirectUrl
+        Long fatherId = null;
+        String redirectUrl = webBaseUrl + "/workspace"; // Default redirect
+        
+        if (state != null) {
+            try {
+                // State format: "fatherId" or "fatherId|redirectUrl"
+                if (state.contains("|")) {
+                    String[] parts = state.split("\\|", 2);
+                    fatherId = Long.parseLong(parts[0]);
+                    if (parts.length > 1 && !parts[1].isEmpty()) {
+                        redirectUrl = parts[1];
+                    }
+                } else {
+                    fatherId = Long.parseLong(state);
+                }
+            } catch (NumberFormatException e) {
+                log.error("Invalid state parameter: {}", state);
+            }
+        }
+        
         // Handle user denial or errors
         if (error != null) {
             log.warn("Google OAuth error for state {}: {}", state, error);
-            String redirectUrl = webBaseUrl + "/dashboard?calendar_error=" + error;
+            String finalRedirect = appendQueryParam(redirectUrl, "calendar_error", error);
             return ResponseEntity.status(HttpStatus.FOUND)
-                    .location(URI.create(redirectUrl))
+                    .location(URI.create(finalRedirect))
                     .build();
         }
         
         // Validate required params
-        if (code == null || state == null) {
-            log.error("Missing code or state in OAuth callback");
-            String redirectUrl = webBaseUrl + "/dashboard?calendar_error=missing_params";
+        if (code == null || fatherId == null) {
+            log.error("Missing code or fatherId in OAuth callback");
+            String finalRedirect = appendQueryParam(redirectUrl, "calendar_error", "missing_params");
             return ResponseEntity.status(HttpStatus.FOUND)
-                    .location(URI.create(redirectUrl))
-                    .build();
-        }
-        
-        // Parse father ID from state
-        Long fatherId;
-        try {
-            fatherId = Long.parseLong(state);
-        } catch (NumberFormatException e) {
-            log.error("Invalid state parameter: {}", state);
-            String redirectUrl = webBaseUrl + "/dashboard?calendar_error=invalid_state";
-            return ResponseEntity.status(HttpStatus.FOUND)
-                    .location(URI.create(redirectUrl))
+                    .location(URI.create(finalRedirect))
                     .build();
         }
         
@@ -148,17 +164,25 @@ public class CalendarOAuthController {
         
         if (success) {
             log.info("Successfully connected Google Calendar for father {}", fatherId);
-            String redirectUrl = webBaseUrl + "/dashboard?calendar_connected=true";
+            String finalRedirect = appendQueryParam(redirectUrl, "calendar_connected", "true");
             return ResponseEntity.status(HttpStatus.FOUND)
-                    .location(URI.create(redirectUrl))
+                    .location(URI.create(finalRedirect))
                     .build();
         } else {
             log.error("Failed to exchange OAuth code for father {}", fatherId);
-            String redirectUrl = webBaseUrl + "/dashboard?calendar_error=token_exchange_failed";
+            String finalRedirect = appendQueryParam(redirectUrl, "calendar_error", "token_exchange_failed");
             return ResponseEntity.status(HttpStatus.FOUND)
-                    .location(URI.create(redirectUrl))
+                    .location(URI.create(finalRedirect))
                     .build();
         }
+    }
+    
+    /**
+     * Appends a query parameter to a URL.
+     */
+    private String appendQueryParam(String url, String key, String value) {
+        String separator = url.contains("?") ? "&" : "?";
+        return url + separator + key + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     /**
