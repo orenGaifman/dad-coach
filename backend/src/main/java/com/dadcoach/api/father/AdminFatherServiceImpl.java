@@ -143,7 +143,12 @@ public class AdminFatherServiceImpl implements AdminFatherService {
     private AdminFatherSummaryDto toSummaryDto(Father father) {
         AdminFatherSummaryDto dto = new AdminFatherSummaryDto();
         dto.setId(new UUID(0L, father.getId()));
-        dto.setDisplayName(father.getDisplayName());
+        // Use phone as fallback display name if not set
+        String displayName = father.getDisplayName();
+        if (displayName == null || displayName.isBlank()) {
+            displayName = father.getPhone() != null ? maskPhoneForDisplay(father.getPhone()) : "User";
+        }
+        dto.setDisplayName(displayName);
         dto.setPhoneNumber(father.getPhone());
         dto.setStatus(father.getStatus() != null ? father.getStatus().name() : null);
         dto.setLocale(father.getLocale());
@@ -166,7 +171,12 @@ public class AdminFatherServiceImpl implements AdminFatherService {
     private AdminFatherDetailDto toDetailDto(Father father) {
         AdminFatherDetailDto dto = new AdminFatherDetailDto();
         dto.setId(new UUID(0L, father.getId()));
-        dto.setDisplayName(father.getDisplayName());
+        // Use phone as fallback display name if not set
+        String displayName = father.getDisplayName();
+        if (displayName == null || displayName.isBlank()) {
+            displayName = father.getPhone() != null ? maskPhoneForDisplay(father.getPhone()) : "User";
+        }
+        dto.setDisplayName(displayName);
         dto.setPhoneNumber(father.getPhone());
         dto.setStatus(father.getStatus() != null ? father.getStatus().name() : null);
         dto.setLocale(father.getLocale());
@@ -185,5 +195,16 @@ public class AdminFatherServiceImpl implements AdminFatherService {
             return "***";
         }
         return phone.substring(0, 4) + "****" + phone.substring(phone.length() - 2);
+    }
+
+    /**
+     * Creates a display-friendly version of phone for use as fallback name.
+     * Shows last 4 digits only: "User ***1234"
+     */
+    private String maskPhoneForDisplay(String phone) {
+        if (phone == null || phone.length() < 4) {
+            return "User";
+        }
+        return "User ***" + phone.substring(phone.length() - 4);
     }
 }
