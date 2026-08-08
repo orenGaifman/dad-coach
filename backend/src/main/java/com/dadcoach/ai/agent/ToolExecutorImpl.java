@@ -8,6 +8,9 @@ import com.dadcoach.qualitytime.dto.ScheduleQualityTimeResult;
 import com.dadcoach.systemstate.AvailableSlot;
 import com.dadcoach.systemstate.SystemState;
 import com.dadcoach.systemstate.SystemStateLoader;
+import com.dadcoach.weeklygoal.WeeklyGoal;
+import com.dadcoach.weeklygoal.WeeklyGoalService;
+import com.dadcoach.workflow.Belt;
 import com.dadcoach.workflow.WorkflowState;
 import com.dadcoach.workspace.magiclink.MagicLinkService;
 import org.slf4j.Logger;
@@ -19,6 +22,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -43,7 +47,11 @@ public class ToolExecutorImpl implements ToolExecutor {
         "show_progress",
         "greet",
         "show_help",
-        "clarify"
+        "clarify",
+        // Weekly goal tools
+        "show_weekly_summary",
+        "set_weekly_goal",
+        "get_weekly_goal_status"
     );
     
     private static final Duration DEFAULT_QUALITY_TIME_DURATION = Duration.ofMinutes(60);
@@ -53,17 +61,20 @@ public class ToolExecutorImpl implements ToolExecutor {
     private final ChildService childService;
     private final MagicLinkService magicLinkService;
     private final SystemStateLoader systemStateLoader;
+    private final WeeklyGoalService weeklyGoalService;
     
     public ToolExecutorImpl(
             QualityTimeService qualityTimeService,
             ChildService childService,
             MagicLinkService magicLinkService,
-            SystemStateLoader systemStateLoader
+            SystemStateLoader systemStateLoader,
+            WeeklyGoalService weeklyGoalService
     ) {
         this.qualityTimeService = qualityTimeService;
         this.childService = childService;
         this.magicLinkService = magicLinkService;
         this.systemStateLoader = systemStateLoader;
+        this.weeklyGoalService = weeklyGoalService;
     }
     
     @Override
@@ -88,6 +99,9 @@ public class ToolExecutorImpl implements ToolExecutor {
                 case "greet" -> executeGreet(context);
                 case "show_help" -> executeShowHelp(context);
                 case "clarify" -> executeClarify(parameters, context);
+                case "show_weekly_summary" -> executeShowWeeklySummary(context);
+                case "set_weekly_goal" -> executeSetWeeklyGoal(parameters, context);
+                case "get_weekly_goal_status" -> executeGetWeeklyGoalStatus(context);
                 default -> AgentToolResult.failure(toolName, "כלי לא מוכר: " + toolName);
             };
         } catch (Exception e) {
@@ -447,6 +461,192 @@ public class ToolExecutorImpl implements ToolExecutor {
     private AgentToolResult executeClarify(Map<String, Object> params, AgentContext context) {
         String question = getStringParam(params, "question", "לא הבנתי. אפשר להסביר שוב?");
         return AgentToolResult.success("clarify", question, params);
+    }
+    
+    // ─── Weekly Goal Tool Implementations ────────────────────────────────────
+    
+    private AgentToolResult executeShowWeeklySummary(AgentContext context) {
+        Long fatherDbId = getFatherDbId(context);
+        if (fatherDbId == null) {
+            return AgentToolResult.failure("show_weekly_summary", "לא נמצא פרופיל אב.");
+        }
+        
+        try {
+            WeeklyGoalService.WeeklySummary summary = weeklyGoalService.generateWeeklySummary(fatherDbId);
+            
+            StringBuilder sb = new StringBuilder();
+            
+            if (!summary.hasPreviousGoal()) {
+                // First time user
+                sb.append("👋 שלום! זה השבוע הראשון שלך עם מערכת היעדים השבועיים.\n\n");
+                sb.append("🎯 המטרה: לקבוע ולבצע זמני איכות עם הילדים כל שבוע.\n\n");
+                sb.append("💪 מה היעד שלך לשבוע הזה? כמה שעות זמן איכות?\n");
+                sb.append("(לפחות שעה אחת, ועד 5+ שעות לשאפתנים!)");
+            } else {
+                sb.append("📊 סיכום השבוע שעבר:\n\n");
+                sb.append("🎯 יעד: ").append(summary.targetHours()).append(" שעות\n");
+                sb.append("✅ ביצוע: ").append(summary.actualHours()).append(" שעות\n");
+                sb.append("📅 זמני איכות: ").append(summary.completedCount())
+                  .append(" מתוך ").append(summary.scheduledCount()).append(" מתוכננים\n\n");
+                
+                if (summary.goalMet()) {
+                    sb.append("🎉 כל הכבוד! עמדת ביעד!\n");
+                    if (summary.wasPromoted()) {
+                        sb.append("🥋 עלית חגורה! מ").append(summary.startingBelt().getDisplayName("he"))
+                          .append(" ל").append(summary.endingBelt().getDisplayName("he")).append("!\n\n");
+                    }
+                    if (summary.consecutiveWeeks() > 1) {
+                        sb.append("🔥 רצף של ").append(summary.consecutiveWeeks()).append(" שבועות רצופים!\n\n");
+                    }
+                } else {
+                    sb.append("😔 לא הצלחת לעמוד ביעד הפעם.\n");
+                    sb.append("אבל בסדר, שבוע חדש = התחלה חדשה! 💪\n\n");
+                }
+                
+                sb.append("מה היעד שלך לשבוע הזה?");
+            }
+            
+            return AgentToolResult.success(
+                "show_weekly_summary",
+                sb.toString(),
+                WorkflowState.SET_WEEKLY_GOAL,
+                Map.of()
+            );
+        } catch (Exception e) {
+            log.error("Failed to generate weekly summary", e);
+            return AgentToolResult.failure("show_weekly_summary", 
+                "לא הצלחתי לטעון את הסיכום השבועי. אפשר לנסות שוב?");
+        }
+    }
+    
+    private AgentToolResult executeSetWeeklyGoal(Map<String, Object> params, AgentContext context) {
+        Integer targetHours = getIntParam(params, "target_hours", 0);
+        
+        if (targetHours == null || targetHours < 1) {
+            return AgentToolResult.success("set_weekly_goal",
+                "כמה שעות זמן איכות אתה שואף השבוע?\n\n" +
+                "1️⃣ שעה אחת (מינימום)\n" +
+                "2️⃣ שעתיים\n" +
+                "3️⃣ 3 שעות\n" +
+                "4️⃣ 4 שעות\n" +
+                "5️⃣ 5+ שעות (שאפתנים!)",
+                params);
+        }
+        
+        Long fatherDbId = getFatherDbId(context);
+        if (fatherDbId == null) {
+            return AgentToolResult.failure("set_weekly_goal", "לא נמצא פרופיל אב.");
+        }
+        
+        try {
+            // Check if goal already exists for this week
+            Optional<WeeklyGoal> existingGoal = weeklyGoalService.getCurrentWeekGoal(fatherDbId);
+            if (existingGoal.isPresent()) {
+                WeeklyGoal goal = existingGoal.get();
+                return AgentToolResult.success("set_weekly_goal",
+                    String.format("כבר קבעת יעד של %d שעות לשבוע הזה.\n" +
+                        "עד עכשיו ביצעת %d דקות. רוצה לקבוע זמן איכות?",
+                        goal.getTargetHours(), goal.getActualMinutes()),
+                    WorkflowState.SCHEDULE_QUALITY_TIME,
+                    params);
+            }
+            
+            WeeklyGoal newGoal = weeklyGoalService.createWeeklyGoal(fatherDbId, targetHours);
+            
+            // Get the current belt for display
+            Belt currentBelt = newGoal.getStartingBelt();
+            Belt nextBelt = currentBelt.getNextBelt();
+            
+            StringBuilder sb = new StringBuilder();
+            sb.append("🎯 מעולה! קבעתי לך יעד של ").append(targetHours).append(" שעות זמן איכות השבוע.\n\n");
+            sb.append("🥋 החגורה הנוכחית: ").append(currentBelt.getDisplayName("he")).append("\n");
+            
+            if (nextBelt != null) {
+                sb.append("🎖️ אם תעמוד ביעד, תעלה ל").append(nextBelt.getDisplayName("he")).append("!\n\n");
+            }
+            
+            sb.append("בוא נתכנן את זמני האיכות לשבוע. מתי נוח לך?");
+            
+            // Activate the goal
+            weeklyGoalService.activateGoal(newGoal.getId());
+            
+            return AgentToolResult.success(
+                "set_weekly_goal",
+                sb.toString(),
+                WorkflowState.SCHEDULE_QUALITY_TIME,
+                Map.of("weekly_goal_id", newGoal.getId(), "target_hours", targetHours)
+            );
+        } catch (IllegalStateException e) {
+            log.warn("Weekly goal already exists: {}", e.getMessage());
+            return AgentToolResult.success("set_weekly_goal",
+                "כבר יש לך יעד לשבוע הזה. רוצה לקבוע זמן איכות?",
+                WorkflowState.SCHEDULE_QUALITY_TIME,
+                params);
+        } catch (Exception e) {
+            log.error("Failed to set weekly goal", e);
+            return AgentToolResult.failure("set_weekly_goal",
+                "לא הצלחתי לקבוע את היעד. אפשר לנסות שוב?");
+        }
+    }
+    
+    private AgentToolResult executeGetWeeklyGoalStatus(AgentContext context) {
+        Long fatherDbId = getFatherDbId(context);
+        if (fatherDbId == null) {
+            return AgentToolResult.failure("get_weekly_goal_status", "לא נמצא פרופיל אב.");
+        }
+        
+        try {
+            Optional<WeeklyGoal> activeGoal = weeklyGoalService.getActiveGoal(fatherDbId);
+            
+            if (activeGoal.isEmpty()) {
+                return AgentToolResult.success("get_weekly_goal_status",
+                    "אין לך יעד שבועי פעיל. רוצה לקבוע יעד חדש?",
+                    WorkflowState.SET_WEEKLY_GOAL,
+                    Map.of());
+            }
+            
+            WeeklyGoal goal = activeGoal.get();
+            int completedMinutes = goal.getActualMinutes();
+            int targetMinutes = goal.getTargetHours() * 60;
+            int remainingMinutes = Math.max(0, targetMinutes - completedMinutes);
+            int progressPercent = (int) ((completedMinutes * 100.0) / targetMinutes);
+            
+            StringBuilder sb = new StringBuilder();
+            sb.append("📊 סטטוס היעד השבועי:\n\n");
+            sb.append("🎯 יעד: ").append(goal.getTargetHours()).append(" שעות (")
+              .append(targetMinutes).append(" דקות)\n");
+            sb.append("✅ ביצוע: ").append(completedMinutes).append(" דקות (")
+              .append(progressPercent).append("%)\n");
+            sb.append("⏳ נותר: ").append(remainingMinutes / 60).append(" שעות ו")
+              .append(remainingMinutes % 60).append(" דקות\n\n");
+            
+            // Progress bar
+            int filledBlocks = progressPercent / 10;
+            sb.append("📈 ");
+            for (int i = 0; i < 10; i++) {
+                sb.append(i < filledBlocks ? "🟩" : "⬜");
+            }
+            sb.append(" ").append(progressPercent).append("%\n\n");
+            
+            if (goal.isGoalMet()) {
+                sb.append("🎉 כבר עמדת ביעד! כל הכבוד!");
+            } else if (remainingMinutes <= 60) {
+                sb.append("🔥 עוד קצת והגעת! רוצה לקבוע עוד זמן איכות?");
+            } else {
+                sb.append("💪 בוא נמשיך! רוצה לקבוע זמן איכות?");
+            }
+            
+            return AgentToolResult.success("get_weekly_goal_status", sb.toString(), Map.of(
+                "target_hours", goal.getTargetHours(),
+                "actual_minutes", completedMinutes,
+                "progress_percent", progressPercent,
+                "goal_met", goal.isGoalMet()
+            ));
+        } catch (Exception e) {
+            log.error("Failed to get weekly goal status", e);
+            return AgentToolResult.failure("get_weekly_goal_status",
+                "לא הצלחתי לטעון את סטטוס היעד. אפשר לנסות שוב?");
+        }
     }
     
     // ─── Helper Methods ────────────────────────────────────────────────

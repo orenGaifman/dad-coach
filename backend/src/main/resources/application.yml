@@ -137,3 +137,18 @@ api:
       FATHER: 60
       ADMIN: 300
       SERVICE: 1000
+
+# Belt images for promotion notifications
+# URLs can be full URLs or relative paths from base-url
+belt:
+  images:
+    # Base URL for belt images (e.g., CDN or S3 bucket)
+    base-url: ${BELT_IMAGES_BASE_URL:}
+    # Individual belt image paths (can be full URLs or relative to base-url)
+    white: ${BELT_IMAGE_WHITE:}
+    yellow: ${BELT_IMAGE_YELLOW:}
+    orange: ${BELT_IMAGE_ORANGE:}
+    green: ${BELT_IMAGE_GREEN:}
+    blue: ${BELT_IMAGE_BLUE:}
+    brown: ${BELT_IMAGE_BROWN:}
+    black: ${BELT_IMAGE_BLACK:}

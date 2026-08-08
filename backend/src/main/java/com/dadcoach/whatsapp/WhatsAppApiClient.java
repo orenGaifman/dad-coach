@@ -12,6 +12,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -56,6 +57,65 @@ public class WhatsAppApiClient {
                 .bodyValue(payload)
                 .exchangeToMono(this::handleResponse)
                 .block(REQUEST_TIMEOUT);
+    }
+
+    /**
+     * Sends an interactive button message.
+     *
+     * @param recipientPhone the recipient's phone number
+     * @param bodyText the message body
+     * @param buttons the buttons to display
+     * @return the send response
+     */
+    public SendResponse sendButtonMessage(
+            String recipientPhone,
+            String bodyText,
+            java.util.List<WhatsAppMessageFormatter.InteractiveButton> buttons,
+            WhatsAppMessageFormatter formatter) {
+        
+        Map<String, Object> payload = formatter.formatButtonMessage(recipientPhone, bodyText, buttons);
+        return sendMessage(payload);
+    }
+
+    /**
+     * Sends an interactive list message.
+     *
+     * @param recipientPhone the recipient's phone number
+     * @param headerText optional header text
+     * @param bodyText the message body
+     * @param buttonText the list button text
+     * @param sections the list sections
+     * @return the send response
+     */
+    public SendResponse sendListMessage(
+            String recipientPhone,
+            String headerText,
+            String bodyText,
+            String buttonText,
+            java.util.List<WhatsAppMessageFormatter.InteractiveSection> sections,
+            WhatsAppMessageFormatter formatter) {
+        
+        Map<String, Object> payload = formatter.formatListMessage(
+            recipientPhone, headerText, bodyText, buttonText, sections);
+        return sendMessage(payload);
+    }
+
+    /**
+     * Sends an image message with URL.
+     *
+     * @param recipientPhone the recipient's phone number
+     * @param imageUrl the URL of the image to send
+     * @param caption optional caption for the image
+     * @return the send response
+     */
+    public SendResponse sendImageMessage(
+            String recipientPhone,
+            String imageUrl,
+            String caption,
+            WhatsAppMessageFormatter formatter) {
+        
+        Map<String, Object> payload = formatter.formatImageMessage(recipientPhone, imageUrl, caption);
+        return sendMessage(payload);
     }
 
     private Mono<SendResponse> handleResponse(ClientResponse response) {

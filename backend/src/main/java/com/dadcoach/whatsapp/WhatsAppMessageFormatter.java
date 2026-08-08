@@ -6,15 +6,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
 /**
  * Translates OutboundMessageDto into WhatsApp Cloud API request format.
  * Handles text messages, template messages with variable substitution,
- * and media messages. Applies WhatsApp markdown formatting and enforces
- * character limits.
+ * media messages, and interactive messages (buttons and lists).
+ * Applies WhatsApp markdown formatting and enforces character limits.
  */
 @Component
 public class WhatsAppMessageFormatter {
@@ -25,6 +27,31 @@ public class WhatsAppMessageFormatter {
      * WhatsApp text message character limit.
      */
     public static final int TEXT_CHARACTER_LIMIT = 4096;
+
+    /**
+     * WhatsApp interactive button text limit.
+     */
+    public static final int BUTTON_TEXT_LIMIT = 20;
+
+    /**
+     * WhatsApp interactive list row title limit.
+     */
+    public static final int LIST_ROW_TITLE_LIMIT = 24;
+
+    /**
+     * Maximum number of buttons allowed.
+     */
+    public static final int MAX_BUTTONS = 3;
+
+    /**
+     * Maximum number of list sections allowed.
+     */
+    public static final int MAX_LIST_SECTIONS = 10;
+
+    /**
+     * Maximum number of rows per section.
+     */
+    public static final int MAX_ROWS_PER_SECTION = 10;
 
     /**
      * Formats an OutboundMessageDto into a WhatsApp Cloud API request payload.
@@ -199,5 +226,268 @@ public class WhatsAppMessageFormatter {
         log.warn("Text message exceeds WhatsApp character limit ({}). Truncating.", TEXT_CHARACTER_LIMIT);
         // Truncate and add ellipsis, accounting for the ellipsis length
         return text.substring(0, TEXT_CHARACTER_LIMIT - 3) + "...";
+    }
+
+    // ─── Interactive Message Formatting ─────────────────────────────────────────
+
+    /**
+     * Formats a button message with quick reply buttons.
+     *
+     * @param recipientPhone the recipient's phone number in E.164 format
+     * @param bodyText the message body text
+     * @param buttons list of buttons, each with "id" and "title"
+     * @return a map representing the WhatsApp API JSON payload
+     */
+    public Map<String, Object> formatButtonMessage(
+            String recipientPhone,
+            String bodyText,
+            List<InteractiveButton> buttons) {
+        
+        if (buttons == null || buttons.isEmpty()) {
+            throw new IllegalArgumentException("At least one button is required");
+        }
+        if (buttons.size() > MAX_BUTTONS) {
+            throw new IllegalArgumentException("Maximum " + MAX_BUTTONS + " buttons allowed");
+        }
+
+        String normalizedPhone = normalizePhone(recipientPhone);
+        
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("messaging_product", "whatsapp");
+        payload.put("recipient_type", "individual");
+        payload.put("to", normalizedPhone);
+        payload.put("type", "interactive");
+
+        Map<String, Object> interactive = new LinkedHashMap<>();
+        interactive.put("type", "button");
+
+        // Body
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("text", enforceCharacterLimit(applyWhatsAppMarkdown(bodyText)));
+        interactive.put("body", body);
+
+        // Action with buttons
+        Map<String, Object> action = new LinkedHashMap<>();
+        List<Map<String, Object>> buttonsList = new ArrayList<>();
+        
+        for (InteractiveButton button : buttons) {
+            Map<String, Object> buttonMap = new LinkedHashMap<>();
+            buttonMap.put("type", "reply");
+            
+            Map<String, Object> reply = new LinkedHashMap<>();
+            reply.put("id", button.id());
+            reply.put("title", truncateText(button.title(), BUTTON_TEXT_LIMIT));
+            buttonMap.put("reply", reply);
+            
+            buttonsList.add(buttonMap);
+        }
+        action.put("buttons", buttonsList);
+        interactive.put("action", action);
+
+        payload.put("interactive", interactive);
+        return payload;
+    }
+
+    /**
+     * Formats a list message with selectable options.
+     *
+     * @param recipientPhone the recipient's phone number in E.164 format
+     * @param headerText optional header text
+     * @param bodyText the message body text
+     * @param buttonText the text displayed on the list button
+     * @param sections list of sections, each containing rows
+     * @return a map representing the WhatsApp API JSON payload
+     */
+    public Map<String, Object> formatListMessage(
+            String recipientPhone,
+            String headerText,
+            String bodyText,
+            String buttonText,
+            List<InteractiveSection> sections) {
+        
+        if (sections == null || sections.isEmpty()) {
+            throw new IllegalArgumentException("At least one section is required");
+        }
+        if (sections.size() > MAX_LIST_SECTIONS) {
+            throw new IllegalArgumentException("Maximum " + MAX_LIST_SECTIONS + " sections allowed");
+        }
+
+        String normalizedPhone = normalizePhone(recipientPhone);
+        
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("messaging_product", "whatsapp");
+        payload.put("recipient_type", "individual");
+        payload.put("to", normalizedPhone);
+        payload.put("type", "interactive");
+
+        Map<String, Object> interactive = new LinkedHashMap<>();
+        interactive.put("type", "list");
+
+        // Header (optional)
+        if (headerText != null && !headerText.isBlank()) {
+            Map<String, Object> header = new LinkedHashMap<>();
+            header.put("type", "text");
+            header.put("text", truncateText(headerText, 60));
+            interactive.put("header", header);
+        }
+
+        // Body
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("text", enforceCharacterLimit(applyWhatsAppMarkdown(bodyText)));
+        interactive.put("body", body);
+
+        // Action
+        Map<String, Object> action = new LinkedHashMap<>();
+        action.put("button", truncateText(buttonText, BUTTON_TEXT_LIMIT));
+
+        List<Map<String, Object>> sectionsList = new ArrayList<>();
+        for (InteractiveSection section : sections) {
+            Map<String, Object> sectionMap = new LinkedHashMap<>();
+            
+            if (section.title() != null && !section.title().isBlank()) {
+                sectionMap.put("title", truncateText(section.title(), LIST_ROW_TITLE_LIMIT));
+            }
+
+            List<Map<String, Object>> rowsList = new ArrayList<>();
+            List<InteractiveRow> rows = section.rows();
+            if (rows.size() > MAX_ROWS_PER_SECTION) {
+                rows = rows.subList(0, MAX_ROWS_PER_SECTION);
+                log.warn("Section has more than {} rows, truncating", MAX_ROWS_PER_SECTION);
+            }
+
+            for (InteractiveRow row : rows) {
+                Map<String, Object> rowMap = new LinkedHashMap<>();
+                rowMap.put("id", row.id());
+                rowMap.put("title", truncateText(row.title(), LIST_ROW_TITLE_LIMIT));
+                if (row.description() != null && !row.description().isBlank()) {
+                    rowMap.put("description", truncateText(row.description(), 72));
+                }
+                rowsList.add(rowMap);
+            }
+            sectionMap.put("rows", rowsList);
+            sectionsList.add(sectionMap);
+        }
+        action.put("sections", sectionsList);
+        interactive.put("action", action);
+
+        payload.put("interactive", interactive);
+        return payload;
+    }
+
+    /**
+     * Convenience method to format a simple list with a single section.
+     *
+     * @param recipientPhone the recipient's phone number
+     * @param bodyText the message body
+     * @param buttonText the list button text
+     * @param rows the list rows
+     * @return formatted payload
+     */
+    public Map<String, Object> formatSimpleList(
+            String recipientPhone,
+            String bodyText,
+            String buttonText,
+            List<InteractiveRow> rows) {
+        
+        InteractiveSection section = new InteractiveSection(null, rows);
+        return formatListMessage(recipientPhone, null, bodyText, buttonText, List.of(section));
+    }
+
+    // ─── Image Message Formatting ───────────────────────────────────────────────
+
+    /**
+     * Formats an image message with URL.
+     *
+     * @param recipientPhone the recipient's phone number in E.164 format
+     * @param imageUrl the URL of the image
+     * @param caption optional caption for the image
+     * @return a map representing the WhatsApp API JSON payload
+     */
+    public Map<String, Object> formatImageMessage(String recipientPhone, String imageUrl, String caption) {
+        if (imageUrl == null || imageUrl.isBlank()) {
+            throw new IllegalArgumentException("Image URL must not be empty");
+        }
+
+        String normalizedPhone = normalizePhone(recipientPhone);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("messaging_product", "whatsapp");
+        payload.put("recipient_type", "individual");
+        payload.put("to", normalizedPhone);
+        payload.put("type", "image");
+
+        Map<String, Object> image = new LinkedHashMap<>();
+        image.put("link", imageUrl);
+        
+        if (caption != null && !caption.isBlank()) {
+            image.put("caption", enforceCharacterLimit(applyWhatsAppMarkdown(caption)));
+        }
+
+        payload.put("image", image);
+        return payload;
+    }
+
+    // ─── Helper Methods ─────────────────────────────────────────────────────────
+
+    private String normalizePhone(String phone) {
+        if (phone == null || phone.isBlank()) {
+            throw new IllegalArgumentException("Phone number must not be empty");
+        }
+        return phone.startsWith("+") ? phone.substring(1) : phone;
+    }
+
+    private String truncateText(String text, int maxLength) {
+        if (text == null) {
+            return null;
+        }
+        if (text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength - 1) + "…";
+    }
+
+    // ─── DTOs for Interactive Messages ──────────────────────────────────────────
+
+    /**
+     * Represents a button in an interactive button message.
+     */
+    public record InteractiveButton(String id, String title) {
+        public InteractiveButton {
+            if (id == null || id.isBlank()) {
+                throw new IllegalArgumentException("Button id must not be empty");
+            }
+            if (title == null || title.isBlank()) {
+                throw new IllegalArgumentException("Button title must not be empty");
+            }
+        }
+    }
+
+    /**
+     * Represents a section in an interactive list message.
+     */
+    public record InteractiveSection(String title, List<InteractiveRow> rows) {
+        public InteractiveSection {
+            if (rows == null || rows.isEmpty()) {
+                throw new IllegalArgumentException("Section must have at least one row");
+            }
+        }
+    }
+
+    /**
+     * Represents a row in an interactive list section.
+     */
+    public record InteractiveRow(String id, String title, String description) {
+        public InteractiveRow(String id, String title) {
+            this(id, title, null);
+        }
+
+        public InteractiveRow {
+            if (id == null || id.isBlank()) {
+                throw new IllegalArgumentException("Row id must not be empty");
+            }
+            if (title == null || title.isBlank()) {
+                throw new IllegalArgumentException("Row title must not be empty");
+            }
+        }
     }
 }
