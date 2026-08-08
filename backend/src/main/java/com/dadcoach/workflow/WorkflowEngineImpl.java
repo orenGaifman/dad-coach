@@ -781,12 +781,15 @@ public class WorkflowEngineImpl implements WorkflowEngine {
         messageText = messageText.trim();
         
         try {
+            // Build conversation history from system state
+            List<AgentContext.ConversationTurn> conversationHistory = buildConversationHistory(systemState);
+            
             // Call the CoachingAgent
             CoachingAgent.AgentResponse agentResponse = coachingAgent.processMessage(
                 fatherUuid,
                 messageText,
                 currentState,
-                List.of() // TODO: Load conversation history from recent messages
+                conversationHistory
             );
             
             log.info("AI Agent response: tool={}, success={}, hasTransition={}",
@@ -891,6 +894,23 @@ public class WorkflowEngineImpl implements WorkflowEngine {
     }
     
     // ─── End AI Agent Processing ────────────────────────────────────────────────
+    
+    /**
+     * Builds conversation history from system state for the AI Agent.
+     * Converts SystemState.ConversationMessage to AgentContext.ConversationTurn.
+     */
+    private List<AgentContext.ConversationTurn> buildConversationHistory(SystemState systemState) {
+        if (systemState == null || systemState.conversationContext() == null) {
+            return List.of();
+        }
+        
+        return systemState.conversationContext().stream()
+            .map(msg -> new AgentContext.ConversationTurn(
+                "INBOUND".equals(msg.direction()) ? "user" : "assistant",
+                msg.content()
+            ))
+            .toList();
+    }
     
     /**
      * Truncates a message for logging purposes.
