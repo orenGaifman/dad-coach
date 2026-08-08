@@ -166,17 +166,22 @@ public class WeeklyGoalService {
      */
     @Transactional
     public BeltPromotionResult completeGoal(WeeklyGoal goal) {
+        boolean goalMet = goal.isGoalMet();
         boolean promoted = goal.complete();
         weeklyGoalRepository.save(goal);
 
+        Father father = goal.getFather();
+        
+        // Update streak
+        updateStreak(father, goalMet);
+
         if (promoted) {
             // Update father's belt
-            Father father = goal.getFather();
             updateFatherBelt(father, goal.getEndingBelt());
 
-            log.info("Father {} promoted from {} to {} (goal met: {} of {} hours)", 
+            log.info("Father {} promoted from {} to {} (goal met: {} of {} hours, streak: {} weeks)", 
                      goal.getFatherId(), goal.getStartingBelt(), goal.getEndingBelt(),
-                     goal.getActualHours(), goal.getTargetHours());
+                     goal.getActualHours(), goal.getTargetHours(), father.getCurrentStreakWeeks());
 
             return new BeltPromotionResult(
                 goal.getFatherId(),
@@ -184,11 +189,13 @@ public class WeeklyGoalService {
                 goal.getStartingBelt(),
                 goal.getEndingBelt(),
                 goal.getActualMinutes(),
-                goal.getTargetHours() * 60
+                goal.getTargetHours() * 60,
+                father.getCurrentStreakWeeks(),
+                hasProgramCompleted(father)
             );
         }
 
-        log.info("Father {} did not meet goal: {} of {} hours (belt unchanged: {})", 
+        log.info("Father {} did not meet goal: {} of {} hours (belt unchanged: {}, streak reset)", 
                  goal.getFatherId(), goal.getActualHours(), goal.getTargetHours(), goal.getStartingBelt());
 
         return new BeltPromotionResult(
@@ -197,7 +204,9 @@ public class WeeklyGoalService {
             goal.getStartingBelt(),
             goal.getStartingBelt(),
             goal.getActualMinutes(),
-            goal.getTargetHours() * 60
+            goal.getTargetHours() * 60,
+            0,
+            false
         );
     }
 
@@ -285,19 +294,69 @@ public class WeeklyGoalService {
      * Gets the current belt for a father.
      */
     private Belt getCurrentBelt(Father father) {
-        // This would typically come from the father's dashboard metrics
-        // For now, default to WHITE if not set
-        // TODO: Integrate with MetricsService to get actual belt
-        return Belt.WHITE;
+        return father.getCurrentBelt() != null ? father.getCurrentBelt() : Belt.WHITE;
     }
 
     /**
-     * Updates the father's belt level.
+     * Updates the father's belt level and streak stats.
      */
     private void updateFatherBelt(Father father, Belt newBelt) {
-        // TODO: Update father entity with new belt
-        // This would update a belt field on the Father entity or in metrics
-        log.info("Updating father {} belt to {}", father.getId(), newBelt);
+        father.setCurrentBelt(newBelt);
+        fatherRepository.save(father);
+        log.info("Updated father {} belt to {}", father.getId(), newBelt);
+    }
+
+    /**
+     * Updates the father's streak when they complete (or miss) a weekly goal.
+     * 
+     * @param father the father entity
+     * @param goalMet true if the weekly goal was met
+     */
+    @Transactional
+    public void updateStreak(Father father, boolean goalMet) {
+        if (goalMet) {
+            // Increment streak
+            int newStreak = father.getCurrentStreakWeeks() + 1;
+            father.setCurrentStreakWeeks(newStreak);
+            
+            // Update longest streak if needed
+            if (newStreak > father.getLongestStreakWeeks()) {
+                father.setLongestStreakWeeks(newStreak);
+            }
+            
+            log.info("Father {} streak increased to {} weeks (longest: {})", 
+                     father.getId(), newStreak, father.getLongestStreakWeeks());
+        } else {
+            // Reset streak on miss
+            int previousStreak = father.getCurrentStreakWeeks();
+            father.setCurrentStreakWeeks(0);
+            
+            log.info("Father {} streak reset from {} to 0 (goal missed)", 
+                     father.getId(), previousStreak);
+        }
+        
+        fatherRepository.save(father);
+    }
+
+    /**
+     * Checks if the father has completed the 7-week program (reached BLACK belt).
+     */
+    public boolean hasProgramCompleted(Father father) {
+        return father.getCurrentBelt() == Belt.BLACK;
+    }
+
+    /**
+     * Gets the number of weeks until BLACK belt (program completion).
+     */
+    public int getWeeksUntilBlackBelt(Father father) {
+        Belt current = father.getCurrentBelt();
+        int weeksRemaining = 0;
+        Belt belt = current;
+        while (belt != null && belt != Belt.BLACK) {
+            belt = belt.getNextBelt();
+            weeksRemaining++;
+        }
+        return weeksRemaining;
     }
 
     // ─── Result Records ─────────────────────────────────────────────────────────
@@ -311,7 +370,9 @@ public class WeeklyGoalService {
         Belt previousBelt,
         Belt newBelt,
         int actualMinutes,
-        int targetMinutes
+        int targetMinutes,
+        int currentStreak,
+        boolean programCompleted
     ) {}
 
     /**

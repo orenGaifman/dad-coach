@@ -144,45 +144,97 @@ public class BeltPromotionNotifier {
         Belt previousBelt = result.previousBelt();
         int actualMinutes = result.actualMinutes();
         int targetMinutes = result.targetMinutes();
+        int streak = result.currentStreak();
+        boolean programCompleted = result.programCompleted();
 
         StringBuilder sb = new StringBuilder();
         
-        sb.append("🏆 כל הכבוד! עמדת ביעד השבועי!\n\n");
+        // Special header for program completion (BLACK belt)
+        if (programCompleted) {
+            sb.append("🎊🏆🎊 מזל טוב ענק! סיימת את התוכנית! 🎊🏆🎊\n\n");
+        } else {
+            sb.append("🏆 כל הכבוד! עמדת ביעד השבועי!\n\n");
+        }
         
         sb.append("📊 סיכום השבוע:\n");
         sb.append("🎯 יעד: ").append(targetMinutes / 60).append(" שעות\n");
-        sb.append("✅ ביצוע: ").append(actualMinutes / 60);
-        if (actualMinutes % 60 > 0) {
-            sb.append(" שעות ו-").append(actualMinutes % 60).append(" דקות");
-        } else {
-            sb.append(" שעות");
+        sb.append("✅ ביצוע: ").append(formatMinutesAsTime(actualMinutes)).append("\n");
+        
+        // Show streak
+        if (streak > 1) {
+            sb.append("🔥 רצף: ").append(streak).append(" שבועות רצופים!\n");
         }
-        sb.append("\n\n");
+        sb.append("\n");
         
         sb.append("🥋 עלית חגורה!\n");
         sb.append("מ").append(previousBelt.getDisplayName("he"));
         sb.append(" ל").append(newBelt.getDisplayName("he")).append("!\n\n");
         
-        // Add encouragement based on the new belt
-        sb.append(getBeltEncouragement(newBelt));
+        // Add encouragement based on the new belt and context
+        if (programCompleted) {
+            sb.append(getProgramCompletionMessage());
+        } else {
+            sb.append(getBeltEncouragement(newBelt, streak));
+        }
         
-        sb.append("\n\n📅 רוצה לקבוע יעד לשבוע הבא?");
+        if (!programCompleted) {
+            sb.append("\n\n📅 רוצה לקבוע יעד לשבוע הבא?");
+        }
         
         return sb.toString();
     }
 
     /**
-     * Returns an encouraging message based on the new belt level.
+     * Formats minutes as hours and minutes string.
      */
-    private String getBeltEncouragement(Belt belt) {
-        return switch (belt) {
+    private String formatMinutesAsTime(int totalMinutes) {
+        int hours = totalMinutes / 60;
+        int minutes = totalMinutes % 60;
+        
+        if (minutes > 0) {
+            return hours + " שעות ו-" + minutes + " דקות";
+        } else {
+            return hours + " שעות";
+        }
+    }
+
+    /**
+     * Returns an encouraging message based on the new belt level and streak.
+     */
+    private String getBeltEncouragement(Belt belt, int streak) {
+        // Add streak bonus message
+        String streakBonus = "";
+        if (streak >= 3) {
+            streakBonus = "\n🔥 " + streak + " שבועות ברצף! אתה על גלגל!";
+        }
+        
+        String beltMessage = switch (belt) {
             case YELLOW -> "💛 התחלת את המסע! כל חגורה מקרבת אותך לאבא מעולה יותר.";
-            case ORANGE -> "🧡 יופי! אתה בדרך הנכונה. המשך כך!";
-            case GREEN -> "💚 מרשים! אתה מתמיד יפה. הילדים מרגישים את זה.";
-            case BLUE -> "💙 מדהים! אתה אבא מסור. החגורה הכחולה מסמנת מחויבות אמיתית.";
-            case BROWN -> "🤎 וואו! אתה כמעט בפסגה. הילדים שלך בטוח גאים בך!";
+            case ORANGE -> "🧡 יופי! אתה בדרך הנכונה. עוד 5 שבועות לחגורה שחורה!";
+            case GREEN -> "💚 מרשים! חצי דרך לפסגה! הילדים מרגישים את זה.";
+            case BLUE -> "💙 מדהים! אתה אבא מסור. עוד 3 שבועות לסיום!";
+            case BROWN -> "🤎 וואו! אתה כמעט שם! עוד שבוע אחד לחגורה שחורה! 💪";
             case BLACK -> "🖤 השגת את הפסגה! חגורה שחורה - אבא אלוף! 🏆";
             default -> "👏 כל הכבוד על ההתקדמות!";
         };
+        
+        return beltMessage + streakBonus;
+    }
+
+    /**
+     * Returns the special message for completing the 7-week program.
+     */
+    private String getProgramCompletionMessage() {
+        return """
+            🏆 הגעת לחגורה שחורה! 🏆
+            
+            אתה הוכחת מחויבות אמיתית לילדים שלך.
+            7 שבועות של זמן איכות, קשר, ובניית יחסים.
+            
+            הילדים שלך יזכרו את הרגעים האלה לתמיד.
+            אתה אבא מדהים! 💪❤️
+            
+            המסע לא נגמר כאן - תמשיך להיות נוכח!
+            אני כאן תמיד לעזור.""";
     }
 }
