@@ -1,5 +1,7 @@
 package com.dadcoach.workflow;
 
+import com.dadcoach.ai.agent.AgentContext;
+import com.dadcoach.ai.agent.CoachingAgent;
 import com.dadcoach.channel.dto.InboundMessageDto;
 import com.dadcoach.channel.dto.MessagePriority;
 import com.dadcoach.channel.dto.MessageType;
@@ -10,6 +12,7 @@ import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.systemstate.SystemState;
 import com.dadcoach.systemstate.SystemStateLoader;
 import com.dadcoach.whatsapp.WhatsAppService;
+import com.dadcoach.workflow.config.FeatureFlagsConfig;
 import com.dadcoach.workflow.idempotency.WorkflowIdempotencyService;
 import com.dadcoach.workflow.logging.WorkflowLoggingContext;
 import com.dadcoach.workflow.message.FallbackMessages;
@@ -81,6 +84,10 @@ public class WorkflowEngineImpl implements WorkflowEngine {
     private final DashboardLinkAppender dashboardLinkAppender;
     private final ScheduledExecutorService timeoutScheduler;
     
+    // Optional: AI Agent for natural language understanding (injected via setter)
+    private CoachingAgent coachingAgent;
+    private FeatureFlagsConfig featureFlagsConfig;
+    
     /**
      * Creates a new WorkflowEngineImpl with all required dependencies.
      * 
@@ -136,6 +143,43 @@ public class WorkflowEngineImpl implements WorkflowEngine {
         }
         
         log.info("WorkflowEngineImpl initialized with {} state handlers", this.stateHandlers.size());
+    }
+    
+    /**
+     * Sets the CoachingAgent for AI-powered message processing.
+     * Injected via setter to avoid circular dependency and keep constructor clean.
+     * 
+     * @param coachingAgent the AI coaching agent (optional)
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCoachingAgent(CoachingAgent coachingAgent) {
+        this.coachingAgent = coachingAgent;
+        if (coachingAgent != null) {
+            log.info("CoachingAgent injected into WorkflowEngine");
+        }
+    }
+    
+    /**
+     * Sets the feature flags configuration.
+     * 
+     * @param featureFlagsConfig the feature flags config
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setFeatureFlagsConfig(FeatureFlagsConfig featureFlagsConfig) {
+        this.featureFlagsConfig = featureFlagsConfig;
+        if (featureFlagsConfig != null) {
+            log.info("FeatureFlagsConfig injected: aiAgentEnabled={}", featureFlagsConfig.isAiAgentEnabled());
+        }
+    }
+    
+    /**
+     * Check if AI Agent mode is enabled.
+     */
+    private boolean isAiAgentEnabled() {
+        return featureFlagsConfig != null && 
+               featureFlagsConfig.isAiAgentEnabled() && 
+               coachingAgent != null && 
+               coachingAgent.isEnabled();
     }
     
     /**
@@ -293,6 +337,15 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 }
                 
                 ctx.setState(currentState);
+                
+                // ─── AI Agent Mode ───────────────────────────────────────────────────
+                // If AI Agent is enabled, use CoachingAgent for natural language processing
+                // instead of the pattern-matching approach below.
+                if (isAiAgentEnabled()) {
+                    log.info("Processing message with AI Agent for father: {}", fatherUuid);
+                    return processMessageWithAiAgent(message, father, fatherUuid, currentState, systemState, ctx);
+                }
+                // ─── End AI Agent Mode ────────────────────────────────────────────────
                 
                 // Step 5: Get appropriate StateHandler and match patterns
                 StateHandler handler = stateHandlers.get(currentState);
@@ -696,6 +749,148 @@ public class WorkflowEngineImpl implements WorkflowEngine {
         }
         return new UUID(0L, domainId);
     }
+    
+    // ─── AI Agent Processing ────────────────────────────────────────────────────
+    
+    /**
+     * Process a message using the AI CoachingAgent instead of pattern matching.
+     * 
+     * <p>This method is called when the AI Agent feature flag is enabled.
+     * It uses Claude to understand user intent and select appropriate tools.</p>
+     * 
+     * @param message the inbound message
+     * @param father the father entity
+     * @param fatherUuid the father's UUID
+     * @param currentState the current workflow state
+     * @param systemState the loaded system state
+     * @param ctx the logging context
+     * @return the outbound message response
+     */
+    private OutboundMessageDto processMessageWithAiAgent(
+            InboundMessageDto message,
+            Father father,
+            UUID fatherUuid,
+            WorkflowState currentState,
+            SystemState systemState,
+            WorkflowLoggingContext ctx) {
+        
+        String messageText = message.textContent();
+        if (messageText == null) {
+            messageText = "";
+        }
+        messageText = messageText.trim();
+        
+        try {
+            // Call the CoachingAgent
+            CoachingAgent.AgentResponse agentResponse = coachingAgent.processMessage(
+                fatherUuid,
+                messageText,
+                currentState,
+                List.of() // TODO: Load conversation history from recent messages
+            );
+            
+            log.info("AI Agent response: tool={}, success={}, hasTransition={}",
+                    agentResponse.toolUsed(), agentResponse.success(), agentResponse.hasStateTransition());
+            
+            // Handle state transition if needed
+            if (agentResponse.hasStateTransition()) {
+                WorkflowState newState = agentResponse.newState();
+                
+                // Update father's workflow state
+                father.setPreviousWorkflowState(currentState);
+                father.setCurrentWorkflowState(newState);
+                father.setWorkflowStateEnteredAt(Instant.now());
+                father.setLastInteractionAt(Instant.now());
+                fatherRepository.save(father);
+                
+                // Log transition
+                ctx.setTransition(currentState, newState, "AI_AGENT_" + agentResponse.toolUsed());
+                log.info("AI Agent state transition: {} -> {} (tool: {})",
+                        currentState, newState, agentResponse.toolUsed());
+                
+                // Log transition to database
+                Long fatherDomainId = fatherUuid.getLeastSignificantBits();
+                WorkflowTransition transition = WorkflowTransition.builder()
+                        .fatherId(fatherDomainId)
+                        .fromState(currentState)
+                        .toState(newState)
+                        .triggerReason("AI_AGENT_" + agentResponse.toolUsed())
+                        .triggerMessageId(message.messageId())
+                        .createdAt(Instant.now())
+                        .build();
+                transitionLogRepository.save(transition);
+            } else {
+                // Just update last interaction time
+                father.setLastInteractionAt(Instant.now());
+                fatherRepository.save(father);
+            }
+            
+            // Create response DTO
+            String responseMessage = agentResponse.message();
+            if (responseMessage == null || responseMessage.isEmpty()) {
+                responseMessage = fallbackMessages.getProcessed(
+                    com.dadcoach.workflow.message.MessageType.ERROR_GENERIC,
+                    MessageContext.builder()
+                        .fatherName(father.getDisplayName())
+                        .locale(father.getLocale())
+                        .build()
+                );
+            }
+            
+            // Add dashboard link if appropriate (when showing progress)
+            if (responseMessage.contains("התקדמות") || responseMessage.contains("📊")) {
+                // Generate a dashboard link for the father
+                String linkMessage = dashboardLinkAppender.generateLinkMessage(
+                    father.getId(),
+                    com.dadcoach.workspace.magiclink.DashboardLinkAppender.DashboardLinkContext.QUALITY_TIME_LOGGED,
+                    father.getLocale()
+                );
+                responseMessage = responseMessage + "\n\n" + linkMessage;
+            }
+            
+            return new OutboundMessageDto(
+                UUID.randomUUID(),  // Generate new message ID
+                fatherUuid,
+                "WHATSAPP",
+                MessageType.TEXT,
+                responseMessage,
+                null,
+                false,
+                null,
+                null,
+                MessagePriority.IMMEDIATE,
+                Instant.now()
+            );
+            
+        } catch (Exception e) {
+            log.error("AI Agent processing failed for father {}: {}", fatherUuid, e.getMessage(), e);
+            
+            // Fall back to error message
+            String errorMessage = fallbackMessages.getProcessed(
+                com.dadcoach.workflow.message.MessageType.ERROR_GENERIC,
+                MessageContext.builder()
+                    .fatherName(father.getDisplayName())
+                    .locale(father.getLocale())
+                    .build()
+            );
+            
+            return new OutboundMessageDto(
+                UUID.randomUUID(),
+                fatherUuid,
+                "WHATSAPP",
+                MessageType.TEXT,
+                errorMessage,
+                null,
+                false,
+                null,
+                null,
+                MessagePriority.IMMEDIATE,
+                Instant.now()
+            );
+        }
+    }
+    
+    // ─── End AI Agent Processing ────────────────────────────────────────────────
     
     /**
      * Truncates a message for logging purposes.
