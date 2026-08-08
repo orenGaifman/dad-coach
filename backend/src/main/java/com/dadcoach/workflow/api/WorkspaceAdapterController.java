@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.*;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -248,6 +249,13 @@ public class WorkspaceAdapterController {
             progressPercent = 100;
         }
         
+        // Calculate weeks to BLACK belt for 7-week program
+        Belt[] beltOrder = Belt.values();
+        int currentIndex = Arrays.asList(beltOrder).indexOf(currentBelt);
+        int blackIndex = Arrays.asList(beltOrder).indexOf(Belt.BLACK);
+        int weeksToBlackBelt = Math.max(0, blackIndex - currentIndex);
+        boolean programCompleted = currentBelt == Belt.BLACK;
+        
         return ResponseEntity.ok(new BeltProgressionResponse(
                 currentBelt.name(),
                 currentBelt.getDisplayName(),
@@ -255,7 +263,9 @@ public class WorkspaceAdapterController {
                 nextBelt != null ? nextBelt.getDisplayName() : null,
                 progressPercent,
                 qualityTimesToNext,
-                totalCompleted
+                totalCompleted,
+                weeksToBlackBelt,
+                programCompleted
         ));
     }
 
@@ -267,8 +277,10 @@ public class WorkspaceAdapterController {
         Father father = findFatherByActorId(actor.getActorId());
         
         return ResponseEntity.ok(new StreakResponse(
-                father.getCoachingStreak(),
-                father.getLongestStreak(),
+                father.getCurrentStreakWeeks(),
+                father.getLongestStreakWeeks(),
+                father.getCoachingStreak(),  // Legacy daily streak
+                father.getLongestStreak(),   // Legacy longest daily streak
                 father.getLastInteractionAt()
         ));
     }
@@ -324,8 +336,12 @@ public class WorkspaceAdapterController {
      */
     @GetMapping("/growth/celebrations")
     public ResponseEntity<CelebrationsResponse> getCelebrations(@AuthActor ActorContext actor) {
+        Father father = findFatherByActorId(actor.getActorId());
+        Belt currentBelt = father.getCurrentBelt() != null ? father.getCurrentBelt() : Belt.WHITE;
+        boolean programCompleted = currentBelt == Belt.BLACK;
+        
         // Return empty list - celebrations are now part of the workflow engine
-        return ResponseEntity.ok(new CelebrationsResponse(List.of()));
+        return ResponseEntity.ok(new CelebrationsResponse(List.of(), false, programCompleted));
     }
 
     /**
@@ -517,16 +533,19 @@ public class WorkspaceAdapterController {
     public record BeltProgressionResponse(String currentBelt, String currentBeltName,
                                            String nextBelt, String nextBeltName,
                                            int progressPercent, int qualityTimesToNext,
-                                           int totalCompleted) {}
+                                           int totalCompleted, int weeksToBlackBelt,
+                                           boolean programCompleted) {}
 
-    public record StreakResponse(int currentStreak, int longestStreak, Instant lastInteractionAt) {}
+    public record StreakResponse(int currentStreakWeeks, int longestStreakWeeks,
+                                  int currentStreakDays, int longestStreakDays,
+                                  Instant lastInteractionAt) {}
 
     public record AchievementsResponse(List<AchievementItem> achievements) {}
     public record AchievementItem(String id, String title, String description, Instant earnedAt) {}
 
     public record GrowthScoreResponse(int totalScore, int baseScore, int streakBonus) {}
 
-    public record CelebrationsResponse(List<Object> celebrations) {}
+    public record CelebrationsResponse(List<Object> celebrations, boolean hasUndisplayed, boolean programCompleted) {}
     public record MarkCelebrationsDisplayedRequest(List<Long> celebrationIds) {}
 
     public record NotificationsResponse(List<Object> notifications, int unreadCount) {}
