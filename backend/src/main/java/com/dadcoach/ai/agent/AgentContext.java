@@ -65,20 +65,66 @@ public record AgentContext(
             // Next scheduled quality time
             var nextQT = systemState.getNextScheduledQualityTime();
             if (nextQT != null) {
-                sb.append("זמן איכות הבא: ").append(nextQT.scheduledStart()).append(" עם ").append(nextQT.childName()).append("\n");
+                sb.append("זמן איכות קרוב: ").append(formatInstant(nextQT.scheduledStart()))
+                  .append(" עם ").append(nextQT.childName()).append("\n");
             } else {
-                sb.append("אין זמן איכות מתוכנן\n");
+                sb.append("אין זמן איכות מתוכנן כרגע\n");
+            }
+            
+            // Recent quality times history
+            if (systemState.qualityTimeEvents() != null && !systemState.qualityTimeEvents().isEmpty()) {
+                var recentCompleted = systemState.qualityTimeEvents().stream()
+                    .filter(qt -> "COMPLETED".equals(qt.status()))
+                    .sorted((a, b) -> b.completedAt() != null && a.completedAt() != null 
+                        ? b.completedAt().compareTo(a.completedAt()) : 0)
+                    .limit(3)
+                    .toList();
+                
+                if (!recentCompleted.isEmpty()) {
+                    sb.append("זמני איכות אחרונים שהושלמו:\n");
+                    for (var qt : recentCompleted) {
+                        sb.append("  - ").append(qt.childName());
+                        if (qt.completedAt() != null) {
+                            sb.append(" (").append(formatInstant(qt.completedAt())).append(")");
+                        }
+                        if (qt.completionNotes() != null && !qt.completionNotes().isEmpty()) {
+                            sb.append(" - ").append(truncateNotes(qt.completionNotes(), 50));
+                        }
+                        sb.append("\n");
+                    }
+                }
             }
             
             // Dashboard metrics
             if (systemState.dashboardMetrics() != null) {
                 var metrics = systemState.dashboardMetrics();
-                sb.append("חגורה: ").append(metrics.currentBelt()).append("\n");
-                sb.append("רצף: ").append(metrics.currentStreak()).append(" זמני איכות רצופים\n");
+                sb.append("\nהתקדמות:\n");
+                sb.append("  חגורה: ").append(metrics.currentBelt()).append("\n");
+                sb.append("  רצף נוכחי: ").append(metrics.currentStreak()).append(" זמני איכות רצופים\n");
+                sb.append("  סה\"כ זמני איכות: ").append(metrics.totalCompleted()).append("\n");
             }
         }
         
         return sb.toString();
+    }
+    
+    /**
+     * Format an Instant to a readable Hebrew date/time string.
+     */
+    private String formatInstant(java.time.Instant instant) {
+        if (instant == null) return "לא ידוע";
+        var zoned = instant.atZone(java.time.ZoneId.of("Asia/Jerusalem"));
+        var formatter = java.time.format.DateTimeFormatter.ofPattern("dd/MM בשעה HH:mm");
+        return zoned.format(formatter);
+    }
+    
+    /**
+     * Truncate notes to a maximum length.
+     */
+    private String truncateNotes(String notes, int maxLength) {
+        if (notes == null) return "";
+        if (notes.length() <= maxLength) return notes;
+        return notes.substring(0, maxLength) + "...";
     }
     
     /**

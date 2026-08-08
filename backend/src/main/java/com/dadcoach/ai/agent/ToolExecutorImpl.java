@@ -154,12 +154,20 @@ public class ToolExecutorImpl implements ToolExecutor {
                 DEFAULT_QUALITY_TIME_DURATION
             );
             
+            // Generate dashboard link for the father
+            String dashboardUrl = magicLinkService.generateMagicLink(
+                fatherDbId,
+                "/dashboard",
+                "schedule_quality_time"
+            );
+            
             String dayName = formatDayName(targetDate);
             String response = String.format(
-                "מעולה! 🎯 קבעתי זמן איכות עם %s ל%s ב-%s.\nתזכורת תגיע אליך שעה לפני. תהנו! ❤️",
+                "מעולה! 🎯 קבעתי זמן איכות עם %s ל%s ב-%s.\nתזכורת תגיע שעה לפני.\n\n📊 לצפייה בדשבורד: %s",
                 child.getName(),
                 dayName,
-                time.format(DateTimeFormatter.ofPattern("HH:mm"))
+                time.format(DateTimeFormatter.ofPattern("HH:mm")),
+                dashboardUrl
             );
             
             return AgentToolResult.success(
