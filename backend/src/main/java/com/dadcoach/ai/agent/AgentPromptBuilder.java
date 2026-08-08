@@ -233,6 +233,9 @@ public class AgentPromptBuilder {
             AgentTool.GET_ACTIVITY_IDEAS,
             AgentTool.COMPLETE_QUALITY_TIME,
             AgentTool.SHOW_PROGRESS,
+            AgentTool.SHOW_WEEKLY_SUMMARY,
+            AgentTool.SET_WEEKLY_GOAL,
+            AgentTool.GET_WEEKLY_GOAL_STATUS,
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
             AgentTool.CLARIFY
@@ -247,6 +250,8 @@ public class AgentPromptBuilder {
             AgentTool.SCHEDULE_QUALITY_TIME,
             AgentTool.SHOW_AVAILABLE_SLOTS,
             AgentTool.GET_ACTIVITY_IDEAS,
+            AgentTool.SET_WEEKLY_GOAL,
+            AgentTool.GET_WEEKLY_GOAL_STATUS,
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
             AgentTool.CLARIFY
@@ -263,6 +268,23 @@ public class AgentPromptBuilder {
             AgentTool.COMPLETE_QUALITY_TIME,
             AgentTool.GET_ACTIVITY_IDEAS,
             AgentTool.SHOW_PROGRESS,
+            AgentTool.GET_WEEKLY_GOAL_STATUS,
+            AgentTool.GREET,
+            AgentTool.SHOW_HELP,
+            AgentTool.CLARIFY
+        );
+    }
+    
+    /**
+     * Get tools available for the weekly goal states.
+     */
+    public static List<AgentTool> getWeeklyGoalTools() {
+        return List.of(
+            AgentTool.SHOW_WEEKLY_SUMMARY,
+            AgentTool.SET_WEEKLY_GOAL,
+            AgentTool.GET_WEEKLY_GOAL_STATUS,
+            AgentTool.SCHEDULE_QUALITY_TIME,
+            AgentTool.SHOW_AVAILABLE_SLOTS,
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
             AgentTool.CLARIFY

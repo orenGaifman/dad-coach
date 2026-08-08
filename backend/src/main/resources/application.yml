@@ -112,6 +112,8 @@ dadcoach:
     follow-up-interval-ms: 900000
     # Stale state detection job - checks for fathers stuck in follow-up state (every 1 hour)
     stale-detection-interval-ms: 3600000
+    # Weekly goal completion job - runs every Sunday at 6 AM Israel time
+    weekly-goal-completion-cron: "0 0 6 * * SUN"
     # Batch size for processing fathers to avoid overwhelming WhatsApp rate limits
     batch-size: 100
   workflow:

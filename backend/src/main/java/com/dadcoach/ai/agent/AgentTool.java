@@ -205,4 +205,55 @@ public record AgentTool(
         }
         """
     );
+    
+    // ─── Weekly Goal Tools ────────────────────────────────────────────────
+    
+    /**
+     * Show weekly summary and results from last week.
+     */
+    public static final AgentTool SHOW_WEEKLY_SUMMARY = new AgentTool(
+        "show_weekly_summary",
+        "הצג סיכום שבועי - תוצאות השבוע הקודם וקידום חגורה. השתמש בתחילת שבוע חדש או כשהאב מבקש לראות את הסיכום.",
+        """
+        {
+          "type": "object",
+          "properties": {}
+        }
+        """
+    );
+    
+    /**
+     * Set weekly quality time goal (1-5+ hours).
+     */
+    public static final AgentTool SET_WEEKLY_GOAL = new AgentTool(
+        "set_weekly_goal",
+        "קבע יעד שבועי לזמני איכות. השתמש כאשר האב רוצה לקבוע יעד לשבוע או אחרי סיכום שבועי.",
+        """
+        {
+          "type": "object",
+          "properties": {
+            "target_hours": {
+              "type": "integer",
+              "description": "מספר שעות היעד לשבוע (1-5+). 1=שעה אחת, 2=שעתיים, וכו'.",
+              "minimum": 1
+            }
+          },
+          "required": ["target_hours"]
+        }
+        """
+    );
+    
+    /**
+     * Get current weekly goal status and progress.
+     */
+    public static final AgentTool GET_WEEKLY_GOAL_STATUS = new AgentTool(
+        "get_weekly_goal_status",
+        "הצג את הסטטוס של היעד השבועי הנוכחי - כמה ביצעת וכמה נותר. השתמש כאשר האב שואל על ההתקדמות או היעד.",
+        """
+        {
+          "type": "object",
+          "properties": {}
+        }
+        """
+    );
 }

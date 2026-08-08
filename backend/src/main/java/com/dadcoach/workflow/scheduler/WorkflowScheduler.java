@@ -8,6 +8,8 @@ import com.dadcoach.qualitytime.QualityTimeRepository;
 import com.dadcoach.qualitytime.QualityTimeStatus;
 import com.dadcoach.workflow.scheduler.SchedulerJobLog;
 import com.dadcoach.workflow.scheduler.SchedulerJobLogRepository;
+import com.dadcoach.weeklygoal.BeltPromotionNotifier;
+import com.dadcoach.weeklygoal.WeeklyGoalService;
 import com.dadcoach.whatsapp.WhatsAppService;
 import com.dadcoach.workflow.WorkflowEngine;
 import com.dadcoach.workflow.WorkflowState;
@@ -85,6 +87,8 @@ public class WorkflowScheduler {
     private final SchedulerJobLogRepository jobLogRepository;
     private final FallbackMessages fallbackMessages;
     private final SchedulerConfig schedulerConfig;
+    private final WeeklyGoalService weeklyGoalService;
+    private final BeltPromotionNotifier beltPromotionNotifier;
 
     /**
      * Constructs a new WorkflowScheduler with required dependencies.
@@ -96,6 +100,8 @@ public class WorkflowScheduler {
      * @param jobLogRepository repository for logging scheduler job executions
      * @param fallbackMessages fallback message templates for reminder messages
      * @param schedulerConfig configuration properties for scheduler timing and batching
+     * @param weeklyGoalService service for weekly goal management
+     * @param beltPromotionNotifier notifier for belt promotion messages
      */
     public WorkflowScheduler(
             QualityTimeRepository qualityTimeRepository,
@@ -104,7 +110,9 @@ public class WorkflowScheduler {
             WhatsAppService whatsAppService,
             SchedulerJobLogRepository jobLogRepository,
             FallbackMessages fallbackMessages,
-            SchedulerConfig schedulerConfig) {
+            SchedulerConfig schedulerConfig,
+            WeeklyGoalService weeklyGoalService,
+            BeltPromotionNotifier beltPromotionNotifier) {
         this.qualityTimeRepository = qualityTimeRepository;
         this.fatherRepository = fatherRepository;
         this.workflowEngine = workflowEngine;
@@ -112,6 +120,8 @@ public class WorkflowScheduler {
         this.jobLogRepository = jobLogRepository;
         this.fallbackMessages = fallbackMessages;
         this.schedulerConfig = schedulerConfig;
+        this.weeklyGoalService = weeklyGoalService;
+        this.beltPromotionNotifier = beltPromotionNotifier;
         
         log.info("WorkflowScheduler initialized with config: morningReminderCron={}, followUpIntervalMs={}, " +
                 "staleDetectionIntervalMs={}, batchSize={}",
@@ -719,6 +729,56 @@ public class WorkflowScheduler {
             return "Hey " + fatherName + "! 👋 We didn't hear back about your Quality Time. " +
                    "That's totally okay - let's schedule the next one! ✨ " +
                    "When would be a good time for Quality Time with your kids?";
+        }
+    }
+
+    // ─── Weekly Goal Jobs ────────────────────────────────────────────────────
+
+    /**
+     * Weekly goal completion job that runs every Sunday at 6 AM Israel time.
+     * 
+     * <p>This job:
+     * <ol>
+     *   <li>Completes all active weekly goals from the previous week</li>
+     *   <li>Sends belt promotion notifications to fathers who earned promotions</li>
+     * </ol>
+     * </p>
+     * 
+     * <p>The cron expression "0 0 6 * * SUN" runs at 6:00 AM every Sunday.</p>
+     */
+    @Scheduled(cron = "${dadcoach.scheduler.weekly-goal-completion-cron:0 0 6 * * SUN}")
+    @Transactional
+    public void processWeeklyGoalCompletions() {
+        try (WorkflowLoggingContext ctx = WorkflowLoggingContext.forJob("weekly_goal_completion")) {
+            log.info("Starting weekly goal completion job");
+            SchedulerJobLog jobLog = new SchedulerJobLog("weekly_goal_completion");
+            jobLogRepository.save(jobLog);
+            
+            int processedCount = 0;
+            int errorCount = 0;
+            
+            try {
+                // Complete all weekly goals and get promotions
+                List<WeeklyGoalService.BeltPromotionResult> promotions = 
+                    weeklyGoalService.completeWeeklyGoals();
+                
+                processedCount = promotions.size();
+                log.info("Completed weekly goals, {} fathers were promoted", promotions.size());
+                
+                // Send promotion notifications
+                if (!promotions.isEmpty()) {
+                    beltPromotionNotifier.sendBatchPromotionNotifications(promotions);
+                }
+                
+                jobLog.markCompleted(processedCount, errorCount);
+                log.info("Weekly goal completion job completed: {} promotions", processedCount);
+                
+            } catch (Exception e) {
+                log.error("Weekly goal completion job failed: {}", e.getMessage(), e);
+                jobLog.markFailed(processedCount, errorCount + 1);
+            }
+            
+            jobLogRepository.save(jobLog);
         }
     }
 
