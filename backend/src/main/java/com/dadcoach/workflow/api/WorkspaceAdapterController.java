@@ -533,13 +533,26 @@ public class WorkspaceAdapterController {
     }
 
     private ChildSummary toChildSummary(Child child) {
+        // Check if birthday is within next 30 days
+        boolean birthdayUpcoming = false;
+        if (child.getBirthDate() != null) {
+            LocalDate today = LocalDate.now();
+            LocalDate thisYearBirthday = child.getBirthDate().withYear(today.getYear());
+            if (thisYearBirthday.isBefore(today)) {
+                thisYearBirthday = thisYearBirthday.plusYears(1);
+            }
+            long daysUntilBirthday = java.time.temporal.ChronoUnit.DAYS.between(today, thisYearBirthday);
+            birthdayUpcoming = daysUntilBirthday >= 0 && daysUntilBirthday <= 30;
+        }
+        
         return new ChildSummary(
                 child.getId(),
                 child.getName(),
                 child.getBirthDate(),
                 child.getAge(),
                 child.getGender(),
-                child.getInterests()
+                child.getInterests(),
+                birthdayUpcoming
         );
     }
 
@@ -635,10 +648,24 @@ public class WorkspaceAdapterController {
             @JsonProperty("days_since_activation") int daysSinceActivation) {}
 
     public record ChildrenResponse(List<ChildSummary> children) {}
-    public record ChildSummary(Long id, String name, LocalDate birthDate, 
-                                Integer age, String gender, List<String> interests) {}
-    public record ChildDetailResponse(Long id, String name, LocalDate birthDate,
-                                       Integer age, String gender, List<String> interests, Instant createdAt) {}
+    public record ChildSummary(
+        @JsonProperty("child_id") Long id, 
+        String name, 
+        @JsonProperty("birth_date") LocalDate birthDate, 
+        Integer age, 
+        String gender, 
+        List<String> interests,
+        @JsonProperty("birthday_upcoming") boolean birthdayUpcoming
+    ) {}
+    public record ChildDetailResponse(
+        @JsonProperty("child_id") Long id, 
+        String name, 
+        @JsonProperty("birth_date") LocalDate birthDate,
+        Integer age, 
+        String gender, 
+        List<String> interests, 
+        @JsonProperty("created_at") Instant createdAt
+    ) {}
 
     public record GoalsResponse(List<GoalSummary> goals) {}
     public record GoalSummary(Long id, String title, String description, String status,
