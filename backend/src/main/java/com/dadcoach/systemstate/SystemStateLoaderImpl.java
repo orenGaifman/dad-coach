@@ -9,6 +9,9 @@ import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.qualitytime.QualityTime;
 import com.dadcoach.qualitytime.QualityTimeRepository;
+import com.dadcoach.weeklygoal.WeeklyGoal;
+import com.dadcoach.weeklygoal.WeeklyGoalRepository;
+import com.dadcoach.weeklygoal.WeeklyGoalStatus;
 import com.dadcoach.workflow.Belt;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -65,6 +68,7 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
     private final ChildRepository childRepository;
     private final QualityTimeRepository qualityTimeRepository;
     private final MessageLogRepository messageLogRepository;
+    private final WeeklyGoalRepository weeklyGoalRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
@@ -78,11 +82,13 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
             FatherRepository fatherRepository,
             ChildRepository childRepository,
             QualityTimeRepository qualityTimeRepository,
-            MessageLogRepository messageLogRepository) {
+            MessageLogRepository messageLogRepository,
+            WeeklyGoalRepository weeklyGoalRepository) {
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.qualityTimeRepository = qualityTimeRepository;
         this.messageLogRepository = messageLogRepository;
+        this.weeklyGoalRepository = weeklyGoalRepository;
         this.restTemplate = new RestTemplate();
         this.objectMapper = new ObjectMapper();
     }
@@ -109,6 +115,7 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
         List<SystemState.QualityTimeEvent> qualityTimeEvents = loadQualityTimeEvents(father);
         SystemState.DashboardMetrics dashboardMetrics = loadDashboardMetrics(father);
         List<SystemState.ConversationMessage> conversationContext = loadConversationContext(father);
+        SystemState.WeeklyGoalInfo weeklyGoalInfo = loadWeeklyGoalInfo(father);
 
         log.debug("System state loaded successfully for father: {}", fatherId);
 
@@ -118,7 +125,8 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
                 calendarEvents,
                 qualityTimeEvents,
                 dashboardMetrics,
-                conversationContext
+                conversationContext,
+                weeklyGoalInfo
         );
     }
 
@@ -191,6 +199,46 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
         }
         
         return null;
+    }
+
+    /**
+     * Loads the current weekly goal information for the father.
+     * 
+     * @param father the father whose weekly goal to load
+     * @return WeeklyGoalInfo, or noGoal() if no goal is set for this week
+     */
+    private SystemState.WeeklyGoalInfo loadWeeklyGoalInfo(Father father) {
+        try {
+            // Get current week's start date (Sunday)
+            LocalDate today = LocalDate.now();
+            LocalDate weekStart = today.minusDays(today.getDayOfWeek().getValue() % 7);
+            
+            // Find active weekly goal for current week
+            Optional<WeeklyGoal> activeGoal = weeklyGoalRepository.findByFatherIdAndStatus(
+                    father.getId(), WeeklyGoalStatus.ACTIVE);
+            
+            if (activeGoal.isEmpty()) {
+                // Also check for the current week's goal even if not ACTIVE
+                activeGoal = weeklyGoalRepository.findByFatherIdAndWeekStartDate(
+                        father.getId(), weekStart);
+            }
+            
+            if (activeGoal.isPresent()) {
+                WeeklyGoal goal = activeGoal.get();
+                return new SystemState.WeeklyGoalInfo(
+                        true,
+                        goal.getTargetHours(),  // Using targetHours as number of quality times
+                        goal.getCompletedCount(),
+                        goal.getScheduledCount(),
+                        goal.getWeekStartDate()
+                );
+            }
+            
+            return SystemState.WeeklyGoalInfo.noGoal();
+        } catch (Exception e) {
+            log.warn("Failed to load weekly goal info for father {}: {}", father.getId(), e.getMessage());
+            return SystemState.WeeklyGoalInfo.noGoal();
+        }
     }
 
     /**

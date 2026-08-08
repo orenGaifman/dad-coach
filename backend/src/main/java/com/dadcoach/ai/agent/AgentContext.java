@@ -53,9 +53,21 @@ public record AgentContext(
             boolean calendarConnected = systemState.hasGoogleCalendarConnected();
             sb.append("יומן גוגל: ").append(calendarConnected ? "מחובר ✓" : "לא מחובר ❌").append("\n");
             
+            // Weekly goal - IMPORTANT for guiding the conversation!
+            if (systemState.weeklyGoalInfo() != null && systemState.weeklyGoalInfo().hasGoal()) {
+                var goal = systemState.weeklyGoalInfo();
+                sb.append("\n📎 יעד שבועי:\n");
+                sb.append("  יעד: ").append(goal.targetQualityTimes()).append(" זמני איכות\n");
+                sb.append("  הושלמו: ").append(goal.completedQualityTimes()).append("\n");
+                sb.append("  מתוכננים: ").append(goal.scheduledQualityTimes()).append("\n");
+                sb.append("  נשארו להשלמת היעד: ").append(goal.remainingToGoal()).append("\n");
+            } else {
+                sb.append("\n⚠️ אין יעד שבועי מוגדר - הצע לאב לקבוע יעד!\n");
+            }
+            
             // Children info
             if (systemState.fatherProfile() != null && systemState.fatherProfile().children() != null) {
-                sb.append("ילדים: ");
+                sb.append("\nילדים: ");
                 var children = systemState.fatherProfile().children();
                 for (int i = 0; i < children.size(); i++) {
                     var child = children.get(i);

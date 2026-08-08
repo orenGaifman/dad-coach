@@ -40,7 +40,8 @@ public record SystemState(
     List<CalendarEvent> calendarEvents,
     List<QualityTimeEvent> qualityTimeEvents,
     DashboardMetrics dashboardMetrics,
-    List<ConversationMessage> conversationContext
+    List<ConversationMessage> conversationContext,
+    WeeklyGoalInfo weeklyGoalInfo
 ) {
     
     /**
@@ -208,6 +209,37 @@ public record SystemState(
         Instant createdAt
     ) {}
     
+    /**
+     * Weekly goal information for the current week.
+     * 
+     * @param hasGoal whether a weekly goal is set for this week
+     * @param targetQualityTimes target number of quality times for the week
+     * @param completedQualityTimes number of quality times completed this week
+     * @param scheduledQualityTimes number of quality times scheduled this week
+     * @param weekStartDate the start date of the current week (Sunday)
+     */
+    public record WeeklyGoalInfo(
+        boolean hasGoal,
+        int targetQualityTimes,
+        int completedQualityTimes,
+        int scheduledQualityTimes,
+        LocalDate weekStartDate
+    ) {
+        /**
+         * Creates a WeeklyGoalInfo indicating no goal is set.
+         */
+        public static WeeklyGoalInfo noGoal() {
+            return new WeeklyGoalInfo(false, 0, 0, 0, null);
+        }
+        
+        /**
+         * Returns remaining quality times to reach the goal.
+         */
+        public int remainingToGoal() {
+            return Math.max(0, targetQualityTimes - completedQualityTimes);
+        }
+    }
+    
     // ─── Convenience Methods ─────────────────────────────────────────────
     
     /**
@@ -217,6 +249,15 @@ public record SystemState(
      */
     public boolean hasGoogleCalendarConnected() {
         return fatherProfile != null && fatherProfile.googleCalendarConnected();
+    }
+    
+    /**
+     * Checks if the father has a weekly goal set for the current week.
+     * 
+     * @return true if a weekly goal is set
+     */
+    public boolean hasWeeklyGoal() {
+        return weeklyGoalInfo != null && weeklyGoalInfo.hasGoal();
     }
     
     /**
