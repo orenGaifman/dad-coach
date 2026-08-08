@@ -131,12 +131,23 @@ public class CoachingAgent {
             // 8. Execute tool
             AgentToolResult toolResult = toolExecutor.execute(decision.tool(), decision.parameters(), context);
             
-            // 9. Determine response message - prefer AI's natural response if available
-            String responseMessage = decision.response();
-            if (responseMessage == null || responseMessage.isEmpty()) {
+            // 9. Determine response message
+            // For tools that generate URLs/links, ALWAYS use tool result (AI can't know the URL)
+            String responseMessage;
+            boolean useToolResponse = Set.of(
+                "connect_calendar", 
+                "get_dashboard_link", 
+                "show_progress",
+                "schedule_quality_time"
+            ).contains(decision.tool());
+            
+            if (useToolResponse && toolResult.responseMessage() != null && !toolResult.responseMessage().isEmpty()) {
                 responseMessage = toolResult.responseMessage();
-            }
-            if (responseMessage == null || responseMessage.isEmpty()) {
+            } else if (decision.response() != null && !decision.response().isEmpty()) {
+                responseMessage = decision.response();
+            } else if (toolResult.responseMessage() != null && !toolResult.responseMessage().isEmpty()) {
+                responseMessage = toolResult.responseMessage();
+            } else {
                 responseMessage = "לא הבנתי. אפשר לנסות שוב?";
             }
             
