@@ -7,6 +7,7 @@ import com.dadcoach.channel.dto.MessagePriority;
 import com.dadcoach.channel.dto.MessageType;
 import com.dadcoach.channel.dto.OutboundMessageDto;
 import com.dadcoach.common.ResourceNotFoundException;
+import com.dadcoach.domain.conversation.MessageLogService;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.systemstate.SystemState;
@@ -87,6 +88,7 @@ public class WorkflowEngineImpl implements WorkflowEngine {
     // Optional: AI Agent for natural language understanding (injected via setter)
     private CoachingAgent coachingAgent;
     private FeatureFlagsConfig featureFlagsConfig;
+    private MessageLogService messageLogService;
     
     /**
      * Creates a new WorkflowEngineImpl with all required dependencies.
@@ -169,6 +171,19 @@ public class WorkflowEngineImpl implements WorkflowEngine {
         this.featureFlagsConfig = featureFlagsConfig;
         if (featureFlagsConfig != null) {
             log.info("FeatureFlagsConfig injected: aiAgentEnabled={}", featureFlagsConfig.isAiAgentEnabled());
+        }
+    }
+    
+    /**
+     * Sets the message log service for conversation history tracking.
+     * 
+     * @param messageLogService the message log service
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setMessageLogService(MessageLogService messageLogService) {
+        this.messageLogService = messageLogService;
+        if (messageLogService != null) {
+            log.info("MessageLogService injected into WorkflowEngine");
         }
     }
     
@@ -780,6 +795,11 @@ public class WorkflowEngineImpl implements WorkflowEngine {
         }
         messageText = messageText.trim();
         
+        // Log inbound message for conversation history
+        if (messageLogService != null && !messageText.isEmpty()) {
+            messageLogService.logInbound(father.getId(), messageText);
+        }
+        
         try {
             // Build conversation history from system state
             List<AgentContext.ConversationTurn> conversationHistory = buildConversationHistory(systemState);
@@ -849,6 +869,11 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                     father.getLocale()
                 );
                 responseMessage = responseMessage + "\n\n" + linkMessage;
+            }
+            
+            // Log outbound message for conversation history
+            if (messageLogService != null && !responseMessage.isEmpty()) {
+                messageLogService.logOutbound(father.getId(), responseMessage);
             }
             
             return new OutboundMessageDto(

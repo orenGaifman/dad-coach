@@ -3,6 +3,8 @@ package com.dadcoach.systemstate;
 import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
+import com.dadcoach.domain.conversation.MessageLog;
+import com.dadcoach.domain.conversation.MessageLogRepository;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.qualitytime.QualityTime;
@@ -57,10 +59,12 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
     private static final int MIN_SLOT_DURATION_MINUTES = 30;
     private static final int DEFAULT_ACTIVITY_START_HOUR = 6;  // 6 AM
     private static final int DEFAULT_ACTIVITY_END_HOUR = 22;   // 10 PM
+    private static final int RECENT_MESSAGES_LIMIT = 10;        // Load last 10 messages for context
 
     private final FatherRepository fatherRepository;
     private final ChildRepository childRepository;
     private final QualityTimeRepository qualityTimeRepository;
+    private final MessageLogRepository messageLogRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
@@ -73,10 +77,12 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
     public SystemStateLoaderImpl(
             FatherRepository fatherRepository,
             ChildRepository childRepository,
-            QualityTimeRepository qualityTimeRepository) {
+            QualityTimeRepository qualityTimeRepository,
+            MessageLogRepository messageLogRepository) {
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.qualityTimeRepository = qualityTimeRepository;
+        this.messageLogRepository = messageLogRepository;
         this.restTemplate = new RestTemplate();
         this.objectMapper = new ObjectMapper();
     }
@@ -102,8 +108,7 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
         List<SystemState.CalendarEvent> calendarEvents = loadCalendarEvents(father, DEFAULT_DAYS_AHEAD);
         List<SystemState.QualityTimeEvent> qualityTimeEvents = loadQualityTimeEvents(father);
         SystemState.DashboardMetrics dashboardMetrics = loadDashboardMetrics(father);
-        // Conversation context is now managed by workflow engine, return empty list
-        List<SystemState.ConversationMessage> conversationContext = List.of();
+        List<SystemState.ConversationMessage> conversationContext = loadConversationContext(father);
 
         log.debug("System state loaded successfully for father: {}", fatherId);
 
@@ -186,6 +191,33 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
         }
         
         return null;
+    }
+
+    /**
+     * Loads recent conversation messages for the father from the message log.
+     * Messages are returned in chronological order (oldest first) for AI context.
+     */
+    private List<SystemState.ConversationMessage> loadConversationContext(Father father) {
+        try {
+            // Load recent messages from DB (returns newest first)
+            List<MessageLog> recentMessages = messageLogRepository.findRecentByFatherId(
+                    father.getId(), RECENT_MESSAGES_LIMIT);
+
+            // Reverse to get chronological order (oldest first) for AI context
+            Collections.reverse(recentMessages);
+
+            return recentMessages.stream()
+                    .map(msg -> new SystemState.ConversationMessage(
+                            UUID.randomUUID(),  // Generate a UUID for the message
+                            msg.getDirection() == MessageLog.Direction.INBOUND ? "FATHER" : "COACH",
+                            msg.getContent(),
+                            msg.getCreatedAt()
+                    ))
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.warn("Failed to load conversation context for father {}: {}", father.getId(), e.getMessage());
+            return List.of();
+        }
     }
 
     /**
