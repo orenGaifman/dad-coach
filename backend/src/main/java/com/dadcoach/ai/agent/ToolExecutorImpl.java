@@ -699,10 +699,10 @@ public class ToolExecutorImpl implements ToolExecutor {
         }
         
         try {
-            // Generate a magic link to the calendar connection page
+            // Generate a magic link to the profile page (calendar settings are there)
             String connectUrl = magicLinkService.generateMagicLink(
                 fatherDbId,
-                "/profile/calendar",
+                "/profile",
                 "connect_calendar"
             );
             
