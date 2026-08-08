@@ -141,16 +141,16 @@ api:
       SERVICE: 1000
 
 # Belt images for promotion notifications
-# URLs can be full URLs or relative paths from base-url
+# Default URLs point to the dad-coach-web Vercel deployment
 belt:
   images:
-    # Base URL for belt images (e.g., CDN or S3 bucket)
-    base-url: ${BELT_IMAGES_BASE_URL:}
-    # Individual belt image paths (can be full URLs or relative to base-url)
-    white: ${BELT_IMAGE_WHITE:}
-    yellow: ${BELT_IMAGE_YELLOW:}
-    orange: ${BELT_IMAGE_ORANGE:}
-    green: ${BELT_IMAGE_GREEN:}
-    blue: ${BELT_IMAGE_BLUE:}
-    brown: ${BELT_IMAGE_BROWN:}
-    black: ${BELT_IMAGE_BLACK:}
+    # Base URL for belt images (defaults to Vercel frontend)
+    base-url: ${BELT_IMAGES_BASE_URL:https://dad-coach-web.vercel.app/belts}
+    # Individual belt image paths (relative to base-url)
+    white: ${BELT_IMAGE_WHITE:white-belt.webp}
+    yellow: ${BELT_IMAGE_YELLOW:yellow-belt.webp}
+    orange: ${BELT_IMAGE_ORANGE:orange-belt.webp}
+    green: ${BELT_IMAGE_GREEN:green-belt.webp}
+    blue: ${BELT_IMAGE_BLUE:blue-belt.webp}
+    brown: ${BELT_IMAGE_BROWN:brown-belt.webp}
+    black: ${BELT_IMAGE_BLACK:black-belt.webp}
