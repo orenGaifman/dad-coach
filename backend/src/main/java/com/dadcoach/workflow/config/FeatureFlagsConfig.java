@@ -12,10 +12,12 @@ import org.springframework.context.annotation.Configuration;
  *   features:
  *     ai-message-generation: true          # Toggle AI vs fallback messages
  *     morning-reminders: true              # Toggle morning reminder scheduler job
+ *     ai-agent-enabled: true               # Toggle AI Agent vs pattern-based routing
  * </pre>
  * 
  * @see com.dadcoach.workflow.message.MessageGenerator
  * @see com.dadcoach.workflow.scheduler.WorkflowScheduler
+ * @see com.dadcoach.ai.agent.CoachingAgent
  */
 @Configuration
 @ConfigurationProperties(prefix = "dadcoach.features")
@@ -34,6 +36,16 @@ public class FeatureFlagsConfig {
      * When disabled, no morning reminders are sent.
      */
     private boolean morningReminders = true;
+    
+    /**
+     * Toggle for AI Agent-based message routing.
+     * When enabled, the CoachingAgent uses Claude to understand user intent and select tools.
+     * When disabled (default: false), the traditional pattern matching approach is used.
+     * 
+     * <p>When enabled, this bypasses the regex-based state machine in favor of
+     * natural language understanding via the AI Agent with Tools architecture.</p>
+     */
+    private boolean aiAgentEnabled = false;
 
     public boolean isAiMessageGeneration() {
         return aiMessageGeneration;
@@ -50,12 +62,21 @@ public class FeatureFlagsConfig {
     public void setMorningReminders(boolean morningReminders) {
         this.morningReminders = morningReminders;
     }
+    
+    public boolean isAiAgentEnabled() {
+        return aiAgentEnabled;
+    }
+    
+    public void setAiAgentEnabled(boolean aiAgentEnabled) {
+        this.aiAgentEnabled = aiAgentEnabled;
+    }
 
     @Override
     public String toString() {
         return "FeatureFlagsConfig{" +
                 "aiMessageGeneration=" + aiMessageGeneration +
                 ", morningReminders=" + morningReminders +
+                ", aiAgentEnabled=" + aiAgentEnabled +
                 '}';
     }
 }
