@@ -49,6 +49,10 @@ public record AgentContext(
         sb.append("מצב נוכחי: ").append(currentState).append("\n");
         
         if (systemState != null) {
+            // Calendar connection status - important for scheduling!
+            boolean calendarConnected = systemState.hasGoogleCalendarConnected();
+            sb.append("יומן גוגל: ").append(calendarConnected ? "מחובר ✓" : "לא מחובר ❌").append("\n");
+            
             // Children info
             if (systemState.fatherProfile() != null && systemState.fatherProfile().children() != null) {
                 sb.append("ילדים: ");

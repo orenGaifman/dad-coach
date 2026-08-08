@@ -39,6 +39,14 @@ public class AgentPromptBuilder {
         
         ## כללים קריטיים לשיחה
         
+        ### 0. בדיקת חיבור יומן גוגל - עדיפות עליונה!
+        - בתחילת כל שיחה, בדוק אם "יומן גוגל: לא מחובר ❌" מופיע בהקשר
+        - אם היומן לא מחובר, הצע קישור לחיבור בהודעה הראשונה!
+        - השתמש ב-connect_calendar כדי לשלוח קישור לחיבור
+        - הסבר בקצרה למה זה חשוב (תזכורות, תיאום אוטומטי)
+        - אם האב שואל על קביעת זמן איכות והיומן לא מחובר - הצע לחבר קודם
+        - אם האב כבר חיבר (יומן גוגל: מחובר ✓) - אל תציע לחבר שוב
+        
         ### 1. הבן את ההקשר - אל תשאל שאלות מיותרות!
         - קרא את היסטוריית השיחה האחרונה לפני שאתה עונה
         - אם שאלת משהו והאב ענה "כן" או "לא" - זו תשובה! אל תשאל שוב
@@ -80,7 +88,17 @@ public class AgentPromptBuilder {
         
         ## דוגמאות
         
-        הודעה: "בוקר טוב"
+        הודעה: "בוקר טוב" (כאשר היומן לא מחובר)
+        תשובה:
+        ```json
+        {
+          "tool": "connect_calendar",
+          "parameters": {},
+          "response": "בוקר טוב! 🌅 לפני שנתחיל, אשמח אם תחבר את יומן גוגל כדי שאוכל לשלוח לך תזכורות ולתאם זמנים."
+        }
+        ```
+        
+        הודעה: "בוקר טוב" (כאשר היומן מחובר)
         תשובה:
         ```json
         {
@@ -136,10 +154,21 @@ public class AgentPromptBuilder {
         }
         ```
         
+        הודעה: "חבר לי את היומן" או "תזכורות"
+        תשובה:
+        ```json
+        {
+          "tool": "connect_calendar",
+          "parameters": {},
+          "response": "בוא נחבר את יומן גוגל שלך!"
+        }
+        ```
+        
         ## חשוב
         - תמיד החזר JSON תקין בלבד - ללא טקסט נוסף
         - העדף פעולה על פני שאלות - אם יש לך מספיק מידע, בצע את הפעולה
         - השתמש ב-clarify רק כמוצא אחרון
+        - אם היומן לא מחובר, הזכר את זה בהודעה הראשונה!
         """;
     
     /**
@@ -237,6 +266,7 @@ public class AgentPromptBuilder {
             AgentTool.SHOW_WEEKLY_SUMMARY,
             AgentTool.SET_WEEKLY_GOAL,
             AgentTool.GET_WEEKLY_GOAL_STATUS,
+            AgentTool.CONNECT_CALENDAR,
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
             AgentTool.CLARIFY
@@ -254,6 +284,7 @@ public class AgentPromptBuilder {
             AgentTool.SET_WEEKLY_GOAL,
             AgentTool.GET_WEEKLY_GOAL_STATUS,
             AgentTool.GET_DASHBOARD_LINK,
+            AgentTool.CONNECT_CALENDAR,
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
             AgentTool.CLARIFY
@@ -272,6 +303,7 @@ public class AgentPromptBuilder {
             AgentTool.SHOW_PROGRESS,
             AgentTool.GET_DASHBOARD_LINK,
             AgentTool.GET_WEEKLY_GOAL_STATUS,
+            AgentTool.CONNECT_CALENDAR,
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
             AgentTool.CLARIFY
@@ -289,6 +321,7 @@ public class AgentPromptBuilder {
             AgentTool.SCHEDULE_QUALITY_TIME,
             AgentTool.SHOW_AVAILABLE_SLOTS,
             AgentTool.GET_DASHBOARD_LINK,
+            AgentTool.CONNECT_CALENDAR,
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
             AgentTool.CLARIFY

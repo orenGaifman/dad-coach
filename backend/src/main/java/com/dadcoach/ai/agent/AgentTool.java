@@ -270,4 +270,20 @@ public record AgentTool(
         }
         """
     );
+    
+    // ─── Calendar Tools ────────────────────────────────────────────────
+    
+    /**
+     * Get link to connect Google Calendar.
+     */
+    public static final AgentTool CONNECT_CALENDAR = new AgentTool(
+        "connect_calendar",
+        "שלח קישור לחיבור יומן גוגל. השתמש כאשר האב מבקש לחבר את היומן או כאשר היומן לא מחובר והאב רוצה תזכורות.",
+        """
+        {
+          "type": "object",
+          "properties": {}
+        }
+        """
+    );
 }

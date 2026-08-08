@@ -52,7 +52,9 @@ public class ToolExecutorImpl implements ToolExecutor {
         // Weekly goal tools
         "show_weekly_summary",
         "set_weekly_goal",
-        "get_weekly_goal_status"
+        "get_weekly_goal_status",
+        // Calendar tools
+        "connect_calendar"
     );
     
     private static final Duration DEFAULT_QUALITY_TIME_DURATION = Duration.ofMinutes(60);
@@ -104,6 +106,7 @@ public class ToolExecutorImpl implements ToolExecutor {
                 case "show_weekly_summary" -> executeShowWeeklySummary(context);
                 case "set_weekly_goal" -> executeSetWeeklyGoal(parameters, context);
                 case "get_weekly_goal_status" -> executeGetWeeklyGoalStatus(context);
+                case "connect_calendar" -> executeConnectCalendar(context);
                 default -> AgentToolResult.failure(toolName, "כלי לא מוכר: " + toolName);
             };
         } catch (Exception e) {
@@ -674,6 +677,42 @@ public class ToolExecutorImpl implements ToolExecutor {
             return AgentToolResult.failure("get_weekly_goal_status",
                 "לא הצלחתי לטעון את סטטוס היעד. אפשר לנסות שוב?");
         }
+    }
+    
+    // ─── Calendar Tool Implementations ────────────────────────────────────
+    
+    private AgentToolResult executeConnectCalendar(AgentContext context) {
+        Long fatherDbId = getFatherDbId(context);
+        if (fatherDbId == null) {
+            return AgentToolResult.failure("connect_calendar", "לא נמצא פרופיל אב.");
+        }
+        
+        // Check if already connected
+        boolean isConnected = context.systemState() != null && 
+                              context.systemState().hasGoogleCalendarConnected();
+        
+        if (isConnected) {
+            return AgentToolResult.success("connect_calendar",
+                "✅ יומן גוגל כבר מחובר! אני יכול לתזמן זמני איכות ולשלוח לך תזכורות.\n\n" +
+                "רוצה לקבוע זמן איכות?",
+                Map.of("already_connected", true));
+        }
+        
+        // Build the calendar connect URL
+        String connectUrl = String.format("https://dad-coach.onrender.com/api/v1/calendar/connect/%d", 
+                fatherDbId);
+        
+        String response = String.format(
+            "🗓️ כדי שאוכל לשלוח לך תזכורות ולתאם את זמני האיכות עם היומן שלך, אני צריך גישה ליומן גוגל.\n\n" +
+            "👉 לחץ כאן לחיבור: %s\n\n" +
+            "אחרי החיבור, שלח לי הודעה ונמשיך! 😊",
+            connectUrl
+        );
+        
+        return AgentToolResult.success("connect_calendar", response, Map.of(
+            "connect_url", connectUrl,
+            "already_connected", false
+        ));
     }
     
     // ─── Helper Methods ────────────────────────────────────────────────
