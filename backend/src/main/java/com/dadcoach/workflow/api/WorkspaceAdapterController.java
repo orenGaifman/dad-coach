@@ -14,6 +14,7 @@ import com.dadcoach.domain.goal.GoalRepository;
 import com.dadcoach.domain.mission.Mission;
 import com.dadcoach.domain.mission.MissionRepository;
 import com.dadcoach.workflow.Belt;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +24,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -286,34 +286,117 @@ public class WorkspaceAdapterController {
     }
 
     /**
-     * GET /api/v1/workspace/growth/achievements - Get achievements (simplified).
+     * GET /api/v1/workspace/growth/achievements - Get achievements.
      */
     @GetMapping("/growth/achievements")
     public ResponseEntity<AchievementsResponse> getAchievements(@AuthActor ActorContext actor) {
         Father father = findFatherByActorId(actor.getActorId());
         List<AchievementItem> achievements = new ArrayList<>();
+        int totalEarned = 0;
         
-        // Generate achievements based on father's progress
+        // Define all available achievements
+        int totalAvailable = 10; // We have 10 possible achievements
+        
+        // First Quality Time achievement
         if (father.getTotalQualityTimesCompleted() > 0) {
-            achievements.add(new AchievementItem("first-quality-time", "First Step", 
-                    "Completed your first Quality Time", father.getCreatedAt()));
+            achievements.add(new AchievementItem(
+                "first-quality-time", 
+                "צעד ראשון", 
+                "סיימת את זמן האיכות הראשון שלך",
+                "CONSISTENCY",
+                "first-step",
+                father.getCreatedAt(),
+                100
+            ));
+            totalEarned++;
+        } else {
+            achievements.add(new AchievementItem(
+                "first-quality-time", 
+                "צעד ראשון", 
+                "סיים את זמן האיכות הראשון שלך",
+                "CONSISTENCY",
+                "first-step",
+                null,
+                0
+            ));
         }
         
+        // Belt achievements
         Belt currentBelt = father.getCurrentBelt();
-        if (currentBelt != null && currentBelt != Belt.WHITE) {
-            achievements.add(new AchievementItem("belt-" + currentBelt.name().toLowerCase(),
-                    currentBelt.getDisplayName() + " Belt", 
-                    "Reached " + currentBelt.getDisplayName() + " belt level",
-                    father.getCreatedAt()));
+        Belt[] belts = {Belt.YELLOW, Belt.ORANGE, Belt.GREEN, Belt.BLUE, Belt.BROWN, Belt.BLACK};
+        for (Belt belt : belts) {
+            boolean earned = currentBelt != null && currentBelt.ordinal() >= belt.ordinal();
+            achievements.add(new AchievementItem(
+                "belt-" + belt.name().toLowerCase(),
+                "חגורת " + belt.getDisplayName(),
+                "הגעת לדרגת " + belt.getDisplayName(),
+                "GROWTH",
+                "belt-" + belt.name().toLowerCase(),
+                earned ? father.getCreatedAt() : null,
+                earned ? 100 : calculateBeltProgress(father, belt)
+            ));
+            if (earned) totalEarned++;
         }
         
+        // Streak achievements
         int streak = father.getLongestStreak();
-        if (streak >= 5) {
-            achievements.add(new AchievementItem("streak-5", "5 Day Streak",
-                    "Maintained a 5-day quality time streak", father.getCreatedAt()));
+        int[] streakMilestones = {5, 10};
+        for (int milestone : streakMilestones) {
+            boolean earned = streak >= milestone;
+            achievements.add(new AchievementItem(
+                "streak-" + milestone,
+                "רצף של " + milestone + " ימים",
+                "שמרת על רצף של " + milestone + " ימים",
+                "CONSISTENCY",
+                "streak-" + milestone,
+                earned ? father.getCreatedAt() : null,
+                earned ? 100 : Math.min(100, (streak * 100) / milestone)
+            ));
+            if (earned) totalEarned++;
         }
         
-        return ResponseEntity.ok(new AchievementsResponse(achievements));
+        // Find next achievable
+        NextAchievableItem nextAchievable = null;
+        for (AchievementItem ach : achievements) {
+            if (ach.earnedAt() == null && ach.progressPercentage() != null && ach.progressPercentage() > 0) {
+                nextAchievable = new NextAchievableItem(
+                    ach.achievementId(),
+                    ach.name(),
+                    ach.description(),
+                    ach.iconKey(),
+                    ach.progressPercentage(),
+                    "המשך להתקדם!"
+                );
+                break;
+            }
+        }
+        
+        // If no progress yet, suggest first quality time
+        if (nextAchievable == null && father.getTotalQualityTimesCompleted() == 0) {
+            nextAchievable = new NextAchievableItem(
+                "first-quality-time",
+                "צעד ראשון",
+                "סיים את זמן האיכות הראשון שלך",
+                "first-step",
+                0,
+                "קבע זמן איכות!"
+            );
+        }
+        
+        return ResponseEntity.ok(new AchievementsResponse(totalAvailable, totalEarned, achievements, nextAchievable));
+    }
+    
+    private int calculateBeltProgress(Father father, Belt targetBelt) {
+        Belt currentBelt = father.getCurrentBelt();
+        if (currentBelt == null) currentBelt = Belt.WHITE;
+        
+        int currentCompletions = father.getTotalQualityTimesCompleted();
+        int targetCompletions = targetBelt.getMinCompletions();
+        
+        if (currentCompletions >= targetCompletions) return 100;
+        if (targetCompletions == 0) return 0;
+        
+        return Math.min(99, (currentCompletions * 100) / targetCompletions);
     }
 
     /**
@@ -540,8 +623,31 @@ public class WorkspaceAdapterController {
                                   int currentStreakDays, int longestStreakDays,
                                   Instant lastInteractionAt) {}
 
-    public record AchievementsResponse(List<AchievementItem> achievements) {}
-    public record AchievementItem(String id, String title, String description, Instant earnedAt) {}
+    public record AchievementsResponse(
+        @JsonProperty("total_available") int totalAvailable,
+        @JsonProperty("total_earned") int totalEarned,
+        List<AchievementItem> achievements,
+        @JsonProperty("next_achievable") NextAchievableItem nextAchievable
+    ) {}
+    
+    public record AchievementItem(
+        @JsonProperty("achievement_id") String achievementId, 
+        String name, 
+        String description, 
+        String category,
+        @JsonProperty("icon_key") String iconKey,
+        @JsonProperty("earned_at") Instant earnedAt,
+        @JsonProperty("progress_percentage") Integer progressPercentage
+    ) {}
+    
+    public record NextAchievableItem(
+        @JsonProperty("achievement_id") String achievementId,
+        String name,
+        String description,
+        @JsonProperty("icon_key") String iconKey,
+        @JsonProperty("progress_percentage") int progressPercentage,
+        @JsonProperty("remaining_requirement") String remainingRequirement
+    ) {}
 
     public record GrowthScoreResponse(int totalScore, int baseScore, int streakBonus) {}
 
