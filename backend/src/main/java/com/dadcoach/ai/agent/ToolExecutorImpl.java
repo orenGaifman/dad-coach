@@ -118,6 +118,23 @@ public class ToolExecutorImpl implements ToolExecutor {
     // ─── Tool Implementations ────────────────────────────────────────────────
     
     private AgentToolResult executeScheduleQualityTime(Map<String, Object> params, AgentContext context) {
+        // MUST have Google Calendar connected before scheduling
+        boolean isCalendarConnected = context.systemState() != null && 
+                                      context.systemState().hasGoogleCalendarConnected();
+        
+        if (!isCalendarConnected) {
+            Long fatherDbId = getFatherDbId(context);
+            String connectUrl = fatherDbId != null 
+                ? String.format("https://dad-coach.onrender.com/api/v1/calendar/connect/%d", fatherDbId)
+                : "https://dad-coach.onrender.com";
+            
+            return AgentToolResult.success("schedule_quality_time",
+                String.format("🗓️ לפני שנקבע זמן איכות, צריך לחבר את יומן גוגל כדי שאוכל לשלוח תזכורות ולסנכרן את הלוח שלך.\n\n" +
+                    "👉 לחץ כאן לחיבור: %s\n\n" +
+                    "אחרי החיבור, שלח לי הודעה ונקבע את הזמן! 😊", connectUrl),
+                params);
+        }
+        
         // Extract parameters
         Integer daySelection = getIntParam(params, "day_selection", 0);
         String timeStr = getStringParam(params, "time", "");
