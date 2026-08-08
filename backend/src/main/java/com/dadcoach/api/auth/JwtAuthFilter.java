@@ -21,7 +21,6 @@ import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * JWT authentication filter that validates tokens on every authenticated request.
@@ -75,13 +74,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
 
             String subject = claims.getSubject();
-            UUID actorId = null;
+            Long actorId = null;
 
-            // Extract father_id from Father tokens
+            // Extract father_id from Father tokens (stored as Long, not UUID)
             if ("FATHER".equalsIgnoreCase(role)) {
                 String fatherId = claims.get("father_id", String.class);
                 if (fatherId != null) {
-                    actorId = UUID.fromString(fatherId);
+                    try {
+                        actorId = Long.parseLong(fatherId);
+                    } catch (NumberFormatException e) {
+                        log.warn("Invalid father_id in token: {}", fatherId);
+                    }
                 }
             }
 
@@ -129,6 +132,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     /**
      * Principal object carrying JWT claims for the authenticated actor.
      */
-    public record JwtPrincipal(String subject, UUID fatherId, String role) {
+    public record JwtPrincipal(String subject, Long fatherId, String role) {
     }
 }

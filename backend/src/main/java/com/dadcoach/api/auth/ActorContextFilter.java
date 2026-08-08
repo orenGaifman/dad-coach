@@ -70,7 +70,9 @@ public class ActorContextFilter extends OncePerRequestFilter {
             return;
         }
 
-        ActorContext.set(new ActorContext(actorType, actorId));
+        // For FATHER actors, pass the direct fatherId
+        Long fatherId = (actorType == ActorType.FATHER) ? jwtPrincipal.fatherId() : null;
+        ActorContext.set(new ActorContext(actorType, actorId, fatherId));
     }
 
     private ActorType mapRole(String role) {
@@ -86,9 +88,12 @@ public class ActorContextFilter extends OncePerRequestFilter {
     }
 
     private UUID resolveActorId(JwtAuthFilter.JwtPrincipal principal, ActorType actorType) {
-        // For Father actors, use the father_id from the JWT
+        // For Father actors, create a UUID where getLeastSignificantBits() returns the father_id
+        // This maintains compatibility with existing code that uses actorId.getLeastSignificantBits()
         if (actorType == ActorType.FATHER && principal.fatherId() != null) {
-            return principal.fatherId();
+            // Create UUID with fatherId in the least significant bits
+            // Most significant bits are 0 (or could be a marker)
+            return new UUID(0L, principal.fatherId());
         }
 
         // For Admin and Service actors, derive ID from the subject claim

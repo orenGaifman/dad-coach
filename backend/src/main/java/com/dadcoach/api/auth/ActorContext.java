@@ -17,8 +17,13 @@ public final class ActorContext {
 
     private final ActorType actorType;
     private final UUID actorId;
+    private final Long fatherId;  // Direct father ID for FATHER actors
 
     public ActorContext(ActorType actorType, UUID actorId) {
+        this(actorType, actorId, null);
+    }
+
+    public ActorContext(ActorType actorType, UUID actorId, Long fatherId) {
         if (actorType == null) {
             throw new IllegalArgumentException("actorType must not be null");
         }
@@ -27,6 +32,7 @@ public final class ActorContext {
         }
         this.actorType = actorType;
         this.actorId = actorId;
+        this.fatherId = fatherId;
     }
 
     /**
@@ -63,6 +69,15 @@ public final class ActorContext {
     }
 
     /**
+     * Returns the father ID for FATHER actors.
+     * This is the direct database ID, not derived from UUID.
+     * Returns null for non-FATHER actors.
+     */
+    public Long getFatherId() {
+        return fatherId;
+    }
+
+    /**
      * Convenience method to check if the current actor is a Father.
      */
     public boolean isFather() {
@@ -85,6 +100,6 @@ public final class ActorContext {
 
     @Override
     public String toString() {
-        return "ActorContext{actorType=" + actorType + ", actorId=" + actorId + "}";
+        return "ActorContext{actorType=" + actorType + ", actorId=" + actorId + ", fatherId=" + fatherId + "}";
     }
 }
