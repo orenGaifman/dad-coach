@@ -698,30 +698,22 @@ public class ToolExecutorImpl implements ToolExecutor {
                 Map.of("already_connected", true));
         }
         
-        try {
-            // Generate a magic link to the profile page (calendar settings are there)
-            String connectUrl = magicLinkService.generateMagicLink(
-                fatherDbId,
-                "/profile",
-                "connect_calendar"
-            );
-            
-            String response = String.format(
-                "🗓️ כדי שאוכל לשלוח לך תזכורות ולתאם את זמני האיכות עם היומן שלך, אני צריך גישה ליומן גוגל.\n\n" +
-                "👉 לחץ כאן לחיבור: %s\n\n" +
-                "אחרי החיבור, שלח לי הודעה ונמשיך! 😊",
-                connectUrl
-            );
-            
-            return AgentToolResult.success("connect_calendar", response, Map.of(
-                "connect_url", connectUrl,
-                "already_connected", false
-            ));
-        } catch (Exception e) {
-            log.error("Failed to generate calendar connect link", e);
-            return AgentToolResult.failure("connect_calendar",
-                "לא הצלחתי ליצור קישור לחיבור היומן. אפשר לנסות שוב?");
-        }
+        // Build direct URL to the OAuth endpoint (not magic link)
+        // The OAuth endpoint will redirect to Google, then back to the dashboard
+        String connectUrl = String.format("https://dad-coach.onrender.com/api/v1/calendar/connect/%d", 
+                fatherDbId);
+        
+        String response = String.format(
+            "🗓️ כדי שאוכל לשלוח לך תזכורות ולתאם את זמני האיכות עם היומן שלך, אני צריך גישה ליומן גוגל.\n\n" +
+            "👉 לחץ כאן לחיבור: %s\n\n" +
+            "אחרי החיבור תועבר לאפליקציה, ואז שלח לי הודעה ונמשיך! 😊",
+            connectUrl
+        );
+        
+        return AgentToolResult.success("connect_calendar", response, Map.of(
+            "connect_url", connectUrl,
+            "already_connected", false
+        ));
     }
     
     // ─── Helper Methods ────────────────────────────────────────────────
