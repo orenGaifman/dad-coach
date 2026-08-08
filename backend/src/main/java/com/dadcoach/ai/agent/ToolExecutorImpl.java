@@ -45,6 +45,7 @@ public class ToolExecutorImpl implements ToolExecutor {
         "get_activity_ideas",
         "complete_quality_time",
         "show_progress",
+        "get_dashboard_link",
         "greet",
         "show_help",
         "clarify",
@@ -96,6 +97,7 @@ public class ToolExecutorImpl implements ToolExecutor {
                 case "get_activity_ideas" -> executeGetActivityIdeas(parameters, context);
                 case "complete_quality_time" -> executeCompleteQualityTime(parameters, context);
                 case "show_progress" -> executeShowProgress(context);
+                case "get_dashboard_link" -> executeGetDashboardLink(context);
                 case "greet" -> executeGreet(context);
                 case "show_help" -> executeShowHelp(context);
                 case "clarify" -> executeClarify(parameters, context);
@@ -399,6 +401,31 @@ public class ToolExecutorImpl implements ToolExecutor {
             return AgentToolResult.success("show_progress",
                 "לא הצלחתי ליצור קישור לדשבורד. אפשר לנסות שוב מאוחר יותר.",
                 Map.of());
+        }
+    }
+    
+    private AgentToolResult executeGetDashboardLink(AgentContext context) {
+        try {
+            // Get fatherId from systemState (as Long)
+            Long fatherIdLong = context.systemState() != null && 
+                                context.systemState().fatherProfile() != null 
+                ? context.systemState().fatherProfile().fatherId() 
+                : context.fatherId().getLeastSignificantBits();
+            
+            String dashboardUrl = magicLinkService.generateMagicLink(
+                fatherIdLong, 
+                "/dashboard", 
+                "get_dashboard_link"
+            );
+            
+            String response = "🔗 הנה הקישור לדשבורד שלך:\n" + dashboardUrl + "\n\n" +
+                             "שם תוכל לראות את ההתקדמות, החגורה, והיסטוריית זמני האיכות שלך 📊";
+            
+            return AgentToolResult.success("get_dashboard_link", response, Map.of());
+        } catch (Exception e) {
+            log.error("Failed to create dashboard link", e);
+            return AgentToolResult.failure("get_dashboard_link",
+                "לא הצלחתי ליצור קישור לדשבורד כרגע. אפשר לנסות שוב?");
         }
     }
     

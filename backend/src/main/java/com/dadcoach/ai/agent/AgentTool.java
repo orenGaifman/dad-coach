@@ -150,7 +150,21 @@ public record AgentTool(
      */
     public static final AgentTool SHOW_PROGRESS = new AgentTool(
         "show_progress",
-        "הצג סיכום התקדמות והישגים. השתמש כאשר האב שואל על ההתקדמות שלו.",
+        "הצג סיכום התקדמות, הישגים וקישור לדשבורד. השתמש כאשר האב שואל על ההתקדמות, החגורה, הסטטוס, או מבקש לראות את הדשבורד.",
+        """
+        {
+          "type": "object",
+          "properties": {}
+        }
+        """
+    );
+    
+    /**
+     * Get dashboard link - dedicated tool for when user asks for dashboard/link.
+     */
+    public static final AgentTool GET_DASHBOARD_LINK = new AgentTool(
+        "get_dashboard_link",
+        "שלח קישור לדשבורד. השתמש כאשר האב מבקש לינק, קישור, או גישה לדשבורד.",
         """
         {
           "type": "object",

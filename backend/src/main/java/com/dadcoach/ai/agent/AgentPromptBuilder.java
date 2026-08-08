@@ -233,6 +233,7 @@ public class AgentPromptBuilder {
             AgentTool.GET_ACTIVITY_IDEAS,
             AgentTool.COMPLETE_QUALITY_TIME,
             AgentTool.SHOW_PROGRESS,
+            AgentTool.GET_DASHBOARD_LINK,
             AgentTool.SHOW_WEEKLY_SUMMARY,
             AgentTool.SET_WEEKLY_GOAL,
             AgentTool.GET_WEEKLY_GOAL_STATUS,
@@ -252,6 +253,7 @@ public class AgentPromptBuilder {
             AgentTool.GET_ACTIVITY_IDEAS,
             AgentTool.SET_WEEKLY_GOAL,
             AgentTool.GET_WEEKLY_GOAL_STATUS,
+            AgentTool.GET_DASHBOARD_LINK,
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
             AgentTool.CLARIFY
@@ -268,6 +270,7 @@ public class AgentPromptBuilder {
             AgentTool.COMPLETE_QUALITY_TIME,
             AgentTool.GET_ACTIVITY_IDEAS,
             AgentTool.SHOW_PROGRESS,
+            AgentTool.GET_DASHBOARD_LINK,
             AgentTool.GET_WEEKLY_GOAL_STATUS,
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
@@ -285,6 +288,7 @@ public class AgentPromptBuilder {
             AgentTool.GET_WEEKLY_GOAL_STATUS,
             AgentTool.SCHEDULE_QUALITY_TIME,
             AgentTool.SHOW_AVAILABLE_SLOTS,
+            AgentTool.GET_DASHBOARD_LINK,
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
             AgentTool.CLARIFY
