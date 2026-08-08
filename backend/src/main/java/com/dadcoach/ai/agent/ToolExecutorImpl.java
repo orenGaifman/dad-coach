@@ -698,21 +698,30 @@ public class ToolExecutorImpl implements ToolExecutor {
                 Map.of("already_connected", true));
         }
         
-        // Build the calendar connect URL
-        String connectUrl = String.format("https://dad-coach.onrender.com/api/v1/calendar/connect/%d", 
-                fatherDbId);
-        
-        String response = String.format(
-            "🗓️ כדי שאוכל לשלוח לך תזכורות ולתאם את זמני האיכות עם היומן שלך, אני צריך גישה ליומן גוגל.\n\n" +
-            "👉 לחץ כאן לחיבור: %s\n\n" +
-            "אחרי החיבור, שלח לי הודעה ונמשיך! 😊",
-            connectUrl
-        );
-        
-        return AgentToolResult.success("connect_calendar", response, Map.of(
-            "connect_url", connectUrl,
-            "already_connected", false
-        ));
+        try {
+            // Generate a magic link to the calendar connection page
+            String connectUrl = magicLinkService.generateMagicLink(
+                fatherDbId,
+                "/profile/calendar",
+                "connect_calendar"
+            );
+            
+            String response = String.format(
+                "🗓️ כדי שאוכל לשלוח לך תזכורות ולתאם את זמני האיכות עם היומן שלך, אני צריך גישה ליומן גוגל.\n\n" +
+                "👉 לחץ כאן לחיבור: %s\n\n" +
+                "אחרי החיבור, שלח לי הודעה ונמשיך! 😊",
+                connectUrl
+            );
+            
+            return AgentToolResult.success("connect_calendar", response, Map.of(
+                "connect_url", connectUrl,
+                "already_connected", false
+            ));
+        } catch (Exception e) {
+            log.error("Failed to generate calendar connect link", e);
+            return AgentToolResult.failure("connect_calendar",
+                "לא הצלחתי ליצור קישור לחיבור היומן. אפשר לנסות שוב?");
+        }
     }
     
     // ─── Helper Methods ────────────────────────────────────────────────
