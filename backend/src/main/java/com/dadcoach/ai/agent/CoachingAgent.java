@@ -47,7 +47,7 @@ public class CoachingAgent {
     private final SystemStateLoader systemStateLoader;
     private final ObjectMapper objectMapper;
     
-    @Value("${ai.agent.model:claude-3-5-sonnet-20241022}")
+    @Value("${ai.agent.model:claude-sonnet-5}")
     private String modelName;
     
     @Value("${ai.agent.enabled:true}")
