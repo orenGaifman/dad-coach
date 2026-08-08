@@ -93,7 +93,31 @@ public record WorkspaceSummaryDto(
          * The next milestone the father is working toward.
          */
         @JsonProperty("next_milestone")
-        MilestoneDto nextMilestone
+        MilestoneDto nextMilestone,
+
+        /**
+         * Current streak of consecutive weeks meeting the weekly goal.
+         */
+        @JsonProperty("current_streak_weeks")
+        int currentStreakWeeks,
+
+        /**
+         * Longest streak of consecutive weeks ever achieved.
+         */
+        @JsonProperty("longest_streak_weeks")
+        int longestStreakWeeks,
+
+        /**
+         * Weeks remaining until BLACK belt (program completion).
+         */
+        @JsonProperty("weeks_to_black_belt")
+        int weeksToBlackBelt,
+
+        /**
+         * Whether the 7-week program is complete (BLACK belt achieved).
+         */
+        @JsonProperty("program_completed")
+        boolean programCompleted
 ) {
 
     /**
@@ -338,6 +362,10 @@ public record WorkspaceSummaryDto(
         private List<RecentQualityTimeDto> recentQualityTimes;
         private List<AchievementDto> recentAchievements;
         private MilestoneDto nextMilestone;
+        private int currentStreakWeeks;
+        private int longestStreakWeeks;
+        private int weeksToBlackBelt;
+        private boolean programCompleted;
 
         public Builder fatherDisplayName(String fatherDisplayName) {
             this.fatherDisplayName = fatherDisplayName;
@@ -399,6 +427,26 @@ public record WorkspaceSummaryDto(
             return this;
         }
 
+        public Builder currentStreakWeeks(int currentStreakWeeks) {
+            this.currentStreakWeeks = currentStreakWeeks;
+            return this;
+        }
+
+        public Builder longestStreakWeeks(int longestStreakWeeks) {
+            this.longestStreakWeeks = longestStreakWeeks;
+            return this;
+        }
+
+        public Builder weeksToBlackBelt(int weeksToBlackBelt) {
+            this.weeksToBlackBelt = weeksToBlackBelt;
+            return this;
+        }
+
+        public Builder programCompleted(boolean programCompleted) {
+            this.programCompleted = programCompleted;
+            return this;
+        }
+
         public WorkspaceSummaryDto build() {
             return new WorkspaceSummaryDto(
                     fatherDisplayName,
@@ -412,7 +460,11 @@ public record WorkspaceSummaryDto(
                     nextQualityTime,
                     recentQualityTimes,
                     recentAchievements,
-                    nextMilestone
+                    nextMilestone,
+                    currentStreakWeeks,
+                    longestStreakWeeks,
+                    weeksToBlackBelt,
+                    programCompleted
             );
         }
     }

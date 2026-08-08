@@ -126,6 +126,12 @@ public class WorkspaceController {
         // Compute next milestone
         MilestoneDto nextMilestone = MilestoneDto.forNextBelt(currentBelt, totalCompleted);
         
+        // Weekly streak info
+        int currentStreakWeeks = father.getCurrentStreakWeeks() != null ? father.getCurrentStreakWeeks() : 0;
+        int longestStreakWeeks = father.getLongestStreakWeeks() != null ? father.getLongestStreakWeeks() : 0;
+        int weeksToBlackBelt = calculateWeeksToBlackBelt(currentBelt);
+        boolean programCompleted = currentBelt == Belt.BLACK;
+        
         return WorkspaceSummaryDto.builder()
                 .fatherDisplayName(father.getDisplayName())
                 .currentWorkflowState(father.getCurrentWorkflowState())
@@ -139,7 +145,24 @@ public class WorkspaceController {
                 .recentQualityTimes(recentQualityTimes)
                 .recentAchievements(recentAchievements)
                 .nextMilestone(nextMilestone)
+                .currentStreakWeeks(currentStreakWeeks)
+                .longestStreakWeeks(longestStreakWeeks)
+                .weeksToBlackBelt(weeksToBlackBelt)
+                .programCompleted(programCompleted)
                 .build();
+    }
+
+    /**
+     * Calculates weeks remaining to BLACK belt.
+     */
+    private int calculateWeeksToBlackBelt(Belt currentBelt) {
+        int weeks = 0;
+        Belt belt = currentBelt;
+        while (belt != null && belt != Belt.BLACK) {
+            belt = belt.getNextBelt();
+            weeks++;
+        }
+        return weeks;
     }
 
     /**
