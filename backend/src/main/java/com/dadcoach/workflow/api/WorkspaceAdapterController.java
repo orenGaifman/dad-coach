@@ -68,16 +68,36 @@ public class WorkspaceAdapterController {
     public ResponseEntity<ProfileResponse> getProfile(@AuthActor ActorContext actor) {
         Father father = findFatherByActorId(actor.getActorId());
         LocalTime coachingTime = father.getPreferredCoachingTime();
+        LocalDate activationDate = father.getActivationDate();
+        
+        // Calculate days since activation
+        int daysSinceActivation = 0;
+        Instant activatedAt = father.getCreatedAt();
+        if (activationDate != null) {
+            activatedAt = activationDate.atStartOfDay(java.time.ZoneId.of(father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem")).toInstant();
+            daysSinceActivation = (int) java.time.temporal.ChronoUnit.DAYS.between(activationDate, LocalDate.now());
+        } else if (father.getCreatedAt() != null) {
+            daysSinceActivation = (int) java.time.temporal.ChronoUnit.DAYS.between(
+                father.getCreatedAt().atZone(java.time.ZoneId.of("Asia/Jerusalem")).toLocalDate(), 
+                LocalDate.now());
+        }
         
         ProfileResponse response = new ProfileResponse(
                 father.getId(),
                 father.getDisplayName(),
                 father.getPhone(),
-                father.getLocale() != null ? father.getLocale() : "he",
+                null, // email - not stored yet
                 father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem",
+                father.getLocale() != null ? father.getLocale() : "he",
+                father.getCoachingStyle() != null ? father.getCoachingStyle().name() : "BALANCED",
                 coachingTime != null ? coachingTime.toString() : "08:00",
+                "DAILY", // notification_frequency - default for now
+                "22:00", // quiet_hours_start - default
+                "07:00", // quiet_hours_end - default
+                father.getCoachingPhase() != null ? father.getCoachingPhase().name() : "ONBOARDING",
                 father.hasGoogleCalendarConfigured(),
-                father.getCreatedAt()
+                activatedAt,
+                daysSinceActivation
         );
         
         return ResponseEntity.ok(response);
@@ -304,7 +324,7 @@ public class WorkspaceAdapterController {
                 "צעד ראשון", 
                 "סיימת את זמן האיכות הראשון שלך",
                 "CONSISTENCY",
-                "first-step",
+                "first-mission",
                 father.getCreatedAt(),
                 100
             ));
@@ -315,13 +335,13 @@ public class WorkspaceAdapterController {
                 "צעד ראשון", 
                 "סיים את זמן האיכות הראשון שלך",
                 "CONSISTENCY",
-                "first-step",
+                "first-mission",
                 null,
                 0
             ));
         }
         
-        // Belt achievements
+        // Belt achievements - use growth-milestone icon for all
         Belt currentBelt = father.getCurrentBelt();
         Belt[] belts = {Belt.YELLOW, Belt.ORANGE, Belt.GREEN, Belt.BLUE, Belt.BROWN, Belt.BLACK};
         for (Belt belt : belts) {
@@ -331,29 +351,42 @@ public class WorkspaceAdapterController {
                 "חגורת " + belt.getDisplayName(),
                 "הגעת לדרגת " + belt.getDisplayName(),
                 "GROWTH",
-                "belt-" + belt.name().toLowerCase(),
+                "growth-milestone",
                 earned ? father.getCreatedAt() : null,
                 earned ? 100 : calculateBeltProgress(father, belt)
             ));
             if (earned) totalEarned++;
         }
         
-        // Streak achievements
-        int streak = father.getLongestStreak();
-        int[] streakMilestones = {5, 10};
-        for (int milestone : streakMilestones) {
-            boolean earned = streak >= milestone;
-            achievements.add(new AchievementItem(
-                "streak-" + milestone,
-                "רצף של " + milestone + " ימים",
-                "שמרת על רצף של " + milestone + " ימים",
-                "CONSISTENCY",
-                "streak-" + milestone,
-                earned ? father.getCreatedAt() : null,
-                earned ? 100 : Math.min(100, (streak * 100) / milestone)
-            ));
-            if (earned) totalEarned++;
-        }
+        // Streak achievements - use existing streak images
+        int streak = father.getQualityTimeStreak();
+        int longestStreak = father.getQualityTimeLongestStreak();
+        
+        // 7-day streak
+        boolean earned7 = longestStreak >= 7;
+        achievements.add(new AchievementItem(
+            "streak-7",
+            "רצף של 7 ימים",
+            "שמרת על רצף של 7 ימים",
+            "CONSISTENCY",
+            "streak-7-days",
+            earned7 ? father.getCreatedAt() : null,
+            earned7 ? 100 : Math.min(100, (streak * 100) / 7)
+        ));
+        if (earned7) totalEarned++;
+        
+        // 30-day streak
+        boolean earned30 = longestStreak >= 30;
+        achievements.add(new AchievementItem(
+            "streak-30",
+            "רצף של 30 ימים",
+            "שמרת על רצף של 30 ימים",
+            "CONSISTENCY",
+            "streak-30-days",
+            earned30 ? father.getCreatedAt() : null,
+            earned30 ? 100 : Math.min(100, (longestStreak * 100) / 30)
+        ));
+        if (earned30) totalEarned++;
         
         // Find next achievable
         NextAchievableItem nextAchievable = null;
@@ -377,7 +410,7 @@ public class WorkspaceAdapterController {
                 "first-quality-time",
                 "צעד ראשון",
                 "סיים את זמן האיכות הראשון שלך",
-                "first-step",
+                "first-mission",
                 0,
                 "קבע זמן איכות!"
             );
@@ -584,9 +617,22 @@ public class WorkspaceAdapterController {
 
     // ─── DTOs ─────────────────────────────────────────────────────────────
 
-    public record ProfileResponse(Long id, String displayName, String phone, String locale,
-                                   String timezone, String preferredCoachingTime,
-                                   boolean googleCalendarConnected, Instant createdAt) {}
+    public record ProfileResponse(
+            @JsonProperty("father_id") Long fatherId, 
+            @JsonProperty("display_name") String displayName, 
+            @JsonProperty("phone_number") String phoneNumber, 
+            @JsonProperty("email") String email,
+            @JsonProperty("timezone") String timezone, 
+            @JsonProperty("language") String language,
+            @JsonProperty("coaching_style") String coachingStyle,
+            @JsonProperty("preferred_coaching_time") String preferredCoachingTime,
+            @JsonProperty("notification_frequency") String notificationFrequency,
+            @JsonProperty("quiet_hours_start") String quietHoursStart,
+            @JsonProperty("quiet_hours_end") String quietHoursEnd,
+            @JsonProperty("coaching_phase") String coachingPhase,
+            @JsonProperty("google_calendar_connected") boolean googleCalendarConnected, 
+            @JsonProperty("activated_at") Instant activatedAt,
+            @JsonProperty("days_since_activation") int daysSinceActivation) {}
 
     public record ChildrenResponse(List<ChildSummary> children) {}
     public record ChildSummary(Long id, String name, LocalDate birthDate, 
