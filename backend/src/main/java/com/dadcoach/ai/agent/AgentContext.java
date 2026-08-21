@@ -1,5 +1,6 @@
 package com.dadcoach.ai.agent;
 
+import com.dadcoach.systemstate.AvailableSlot;
 import com.dadcoach.systemstate.SystemState;
 import com.dadcoach.workflow.WorkflowState;
 
@@ -19,6 +20,7 @@ import java.util.UUID;
  * @param systemState the complete system state (can be null)
  * @param conversationHistory recent messages for context
  * @param availableTools list of tools the AI can use in this state
+ * @param availableSlots list of free time slots from Google Calendar (can be null/empty)
  */
 public record AgentContext(
     UUID fatherId,
@@ -27,7 +29,8 @@ public record AgentContext(
     String inboundMessage,
     SystemState systemState,
     List<ConversationTurn> conversationHistory,
-    List<AgentTool> availableTools
+    List<AgentTool> availableTools,
+    List<AvailableSlot> availableSlots
 ) {
     
     /**
@@ -165,15 +168,52 @@ public record AgentContext(
     
     /**
      * Get available time slots description for the AI.
+     * Uses real calendar data when available, otherwise returns generic options.
      */
     public String getAvailableSlotsDescription() {
-        StringBuilder sb = new StringBuilder("הימים הזמינים:\n");
-        // This will be populated from the actual available slots
-        sb.append("1. היום\n");
-        sb.append("2. מחר\n");
-        sb.append("3. מחרתיים\n");
-        sb.append("4. עוד 3 ימים\n");
-        sb.append("5. עוד 4 ימים\n");
+        StringBuilder sb = new StringBuilder();
+        
+        // Check if we have real calendar slots
+        if (availableSlots != null && !availableSlots.isEmpty()) {
+            sb.append("📅 **זמנים פנויים ביומן שלך:**\n\n");
+            
+            java.time.ZoneId israelZone = java.time.ZoneId.of("Asia/Jerusalem");
+            java.time.LocalDate lastDate = null;
+            int slotNum = 0;
+            
+            for (AvailableSlot slot : availableSlots) {
+                java.time.ZonedDateTime start = slot.startTime().atZone(israelZone);
+                java.time.ZonedDateTime end = slot.endTime().atZone(israelZone);
+                java.time.LocalDate slotDate = start.toLocalDate();
+                
+                // Add day header if new day
+                if (!slotDate.equals(lastDate)) {
+                    slotNum++;
+                    lastDate = slotDate;
+                    String hebrewDay = getHebrewDayName(slotDate.getDayOfWeek());
+                    String dateStr = slotDate.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM"));
+                    sb.append(String.format("\n**%d. %s (%s)**\n", slotNum, hebrewDay, dateStr));
+                }
+                
+                // Add time slot
+                String startTime = start.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+                String endTime = end.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+                sb.append(String.format("   ⏰ %s - %s (פנוי)\n", startTime, endTime));
+            }
+            
+            sb.append("\n**טיפ:** כשהאב אומר יום, השתמש במספר היום (day_selection) מהרשימה למעלה.");
+            
+        } else {
+            // Fallback - no calendar data
+            sb.append("הימים הזמינים:\n");
+            sb.append("1. היום\n");
+            sb.append("2. מחר\n");
+            sb.append("3. מחרתיים\n");
+            sb.append("4. עוד 3 ימים\n");
+            sb.append("5. עוד 4 ימים\n");
+            sb.append("\n⚠️ לא נטענו זמנים מהיומן - ודא שיומן גוגל מחובר");
+        }
+        
         return sb.toString();
     }
     
@@ -208,6 +248,7 @@ public record AgentContext(
         private SystemState systemState;
         private List<ConversationTurn> conversationHistory = List.of();
         private List<AgentTool> availableTools = List.of();
+        private List<AvailableSlot> availableSlots = List.of();
         
         public Builder fatherId(UUID fatherId) {
             this.fatherId = fatherId;
@@ -244,9 +285,14 @@ public record AgentContext(
             return this;
         }
         
+        public Builder availableSlots(List<AvailableSlot> availableSlots) {
+            this.availableSlots = availableSlots;
+            return this;
+        }
+        
         public AgentContext build() {
             return new AgentContext(fatherId, fatherName, currentState, inboundMessage, 
-                                    systemState, conversationHistory, availableTools);
+                                    systemState, conversationHistory, availableTools, availableSlots);
         }
     }
 }

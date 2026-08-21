@@ -150,7 +150,10 @@ public class CoachingAgent {
             }
             // ═══════════════════════════════════════════════════════════════════════
             
-            // 4. Build context
+            // 4. Load available calendar slots (for smarter scheduling suggestions)
+            List<com.dadcoach.systemstate.AvailableSlot> availableSlots = loadAvailableSlots(fatherId);
+            
+            // 5. Build context
             List<AgentTool> availableTools = getToolsForState(state, systemState);
             AgentContext context = AgentContext.builder()
                 .fatherId(fatherId)
@@ -160,16 +163,17 @@ public class CoachingAgent {
                 .systemState(systemState)
                 .conversationHistory(limitHistory(conversationHistory))
                 .availableTools(availableTools)
+                .availableSlots(availableSlots)
                 .build();
             
-            // 5. Build prompts
+            // 6. Build prompts
             String systemPrompt = promptBuilder.buildSystemPrompt(context);
             String userPrompt = promptBuilder.buildUserPrompt(context);
             
-            // 6. Call AI
+            // 7. Call AI
             AiProviderResponse aiResponse = callAiProvider(systemPrompt, userPrompt, fatherId);
             
-            // 7. Parse AI response
+            // 8. Parse AI response
             AiDecision decision = parseAiResponse(aiResponse.content());
             log.info("AI decision: tool={}, params={}", decision.tool(), decision.parameters());
             
@@ -250,6 +254,19 @@ public class CoachingAgent {
         } catch (Exception e) {
             log.warn("Failed to load system state for father: {}", fatherId, e);
             return null;
+        }
+    }
+    
+    /**
+     * Load available calendar slots for scheduling suggestions.
+     * Returns empty list if calendar is not connected or loading fails.
+     */
+    private List<com.dadcoach.systemstate.AvailableSlot> loadAvailableSlots(UUID fatherId) {
+        try {
+            return systemStateLoader.loadAvailableSlots(fatherId, 7);
+        } catch (Exception e) {
+            log.debug("Could not load available slots for father {}: {}", fatherId, e.getMessage());
+            return List.of();
         }
     }
     
