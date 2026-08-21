@@ -843,7 +843,9 @@ interface ScheduleQualityTimeProps {
 
 ## 7. Database Schema
 
-**Total: 31 application tables** (aligned with Flyway migrations V1-V3 and JPA entities)
+**Total: 30 application tables** (consolidated into single Flyway migration `V1__consolidated_schema.sql`)
+
+> **Note**: As of August 2026, all migrations were consolidated into a single V1 file for clean deployments. The redundant `state_transition_log` table was removed (workflow transitions are logged in `workflow_state_transition_log`).
 
 ### 7.1 Table Overview
 
@@ -1631,16 +1633,16 @@ public ResponseEntity<?> handleRequest() {
 │                                 │ API Proxy (rewrites)                     │
 │                                 ▼                                          │
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │                     RAILWAY (Backend + DB)                          │  │
+│  │                     RENDER (Backend) + SUPABASE (DB)                │  │
 │  │                                                                     │  │
 │  │  ┌─────────────────┐          ┌─────────────────────────────────┐  │  │
-│  │  │   Spring Boot   │          │         PostgreSQL 17           │  │  │
-│  │  │   (Java 21)     │ ◄──────► │                                 │  │  │
+│  │  │   Spring Boot   │          │         Supabase                │  │  │
+│  │  │   (Java 21)     │ ◄──────► │         PostgreSQL 17           │  │  │
 │  │  │                 │          │  30 Tables                      │  │  │
 │  │  │   Port: 8080    │          │  Flyway Migrations              │  │  │
 │  │  └────────┬────────┘          └─────────────────────────────────┘  │  │
 │  │           │                                                         │  │
-│  │           │  https://dad-coach-api.railway.app                      │  │
+│  │           │  https://dad-coach.onrender.com                         │  │
 │  └───────────┼─────────────────────────────────────────────────────────┘  │
 │              │                                                             │
 │              ▼                                                             │
@@ -1662,8 +1664,8 @@ public ResponseEntity<?> handleRequest() {
 | Platform | Components | Responsibilities |
 |----------|------------|------------------|
 | **Vercel** | Next.js Frontend | SSR, static assets, API proxying, edge caching |
-| **Railway** | Spring Boot Backend | REST API, business logic, webhooks, scheduled jobs |
-| **Railway** | PostgreSQL 17 | Data persistence, Flyway migrations |
+| **Render** | Spring Boot Backend | REST API, business logic, webhooks, scheduled jobs |
+| **Supabase** | PostgreSQL 17 | Data persistence, Flyway migrations |
 
 ### 12.2 API Proxy Configuration
 
@@ -1688,13 +1690,14 @@ const nextConfig: NextConfig = {
 **Vercel (Frontend)**:
 | Variable | Description |
 |----------|-------------|
-| `BACKEND_URL` | Railway backend URL (https://dad-coach-api.railway.app) |
+| `BACKEND_URL` | Render backend URL (https://dad-coach.onrender.com) |
 | `NEXT_PUBLIC_APP_URL` | Public app URL |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 
-**Railway (Backend)**:
+**Render (Backend)**:
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string |
+| `DATABASE_URL` | Supabase PostgreSQL connection string |
 | `WHATSAPP_ACCESS_TOKEN` | Meta Graph API token |
 | `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp business phone ID |
 | `WHATSAPP_VERIFY_TOKEN` | Webhook verification token |
