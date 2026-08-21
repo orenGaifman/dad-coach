@@ -1611,46 +1611,87 @@ public ResponseEntity<?> handleRequest() {
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│                         RAILWAY DEPLOYMENT                                  │
+│                        MULTI-PLATFORM DEPLOYMENT                            │
 ├────────────────────────────────────────────────────────────────────────────┤
 │                                                                            │
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │                        RAILWAY PROJECT                              │  │
+│  │                     VERCEL (Frontend)                               │  │
 │  │                                                                     │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────────┐ │  │
-│  │  │   Backend   │  │  Frontend   │  │       PostgreSQL            │ │  │
-│  │  │ (Spring)    │  │  (Next.js)  │  │       (Railway)             │ │  │
-│  │  │             │  │             │  │                             │ │  │
-│  │  │ Port: 8080  │  │ Port: 3000  │  │ Port: 5432                  │ │  │
-│  │  └──────┬──────┘  └──────┬──────┘  └─────────────────────────────┘ │  │
-│  │         │                │                       ▲                  │  │
-│  │         │                │                       │                  │  │
-│  │         └────────────────┼───────────────────────┘                  │  │
-│  │                          │                                          │  │
-│  └──────────────────────────┼──────────────────────────────────────────┘  │
-│                             │                                              │
-│  ┌──────────────────────────┼──────────────────────────────────────────┐  │
-│  │               RAILWAY EDGE (HTTPS, SSL)                             │  │
-│  │                          │                                          │  │
-│  │    dad-coach-api.railway.app    dad-coach.railway.app               │  │
-│  └──────────────────────────┼──────────────────────────────────────────┘  │
-│                             │                                              │
-│                             ▼                                              │
-│                        INTERNET                                            │
-│                             │                                              │
-│          ┌──────────────────┼──────────────────┐                          │
-│          │                  │                  │                          │
-│          ▼                  ▼                  ▼                          │
-│    ┌──────────┐      ┌──────────┐      ┌──────────┐                       │
-│    │ WhatsApp │      │  Google  │      │   Web    │                       │
-│    │ Webhooks │      │ Calendar │      │ Browsers │                       │
-│    └──────────┘      └──────────┘      └──────────┘                       │
+│  │  ┌───────────────────────────────────────────────────────────────┐ │  │
+│  │  │                    Next.js 14 App                              │ │  │
+│  │  │  • Server-side rendering (SSR)                                 │ │  │
+│  │  │  • API routes proxy to backend                                 │ │  │
+│  │  │  • Edge functions for optimal performance                      │ │  │
+│  │  │  • Automatic SSL/HTTPS                                         │ │  │
+│  │  └───────────────────────────────────────────────────────────────┘ │  │
+│  │                                                                     │  │
+│  │            https://dad-coach-web.vercel.app                         │  │
+│  └──────────────────────────────┬──────────────────────────────────────┘  │
+│                                 │                                          │
+│                                 │ API Proxy (rewrites)                     │
+│                                 ▼                                          │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │                     RAILWAY (Backend + DB)                          │  │
+│  │                                                                     │  │
+│  │  ┌─────────────────┐          ┌─────────────────────────────────┐  │  │
+│  │  │   Spring Boot   │          │         PostgreSQL 17           │  │  │
+│  │  │   (Java 21)     │ ◄──────► │                                 │  │  │
+│  │  │                 │          │  30 Tables                      │  │  │
+│  │  │   Port: 8080    │          │  Flyway Migrations              │  │  │
+│  │  └────────┬────────┘          └─────────────────────────────────┘  │  │
+│  │           │                                                         │  │
+│  │           │  https://dad-coach-api.railway.app                      │  │
+│  └───────────┼─────────────────────────────────────────────────────────┘  │
+│              │                                                             │
+│              ▼                                                             │
+│         INTERNET                                                           │
+│              │                                                             │
+│   ┌──────────┼──────────────────┬──────────────────┐                      │
+│   │          │                  │                  │                      │
+│   ▼          ▼                  ▼                  ▼                      │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐      ┌──────────┐                  │
+│ │ WhatsApp │ │  Google  │ │ OpenAI/  │      │   Web    │                  │
+│ │ Cloud API│ │ Calendar │ │ Anthropic│      │ Browsers │                  │
+│ └──────────┘ └──────────┘ └──────────┘      └──────────┘                  │
 │                                                                            │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 12.1 Environment Variables
+### 12.1 Platform Responsibilities
 
+| Platform | Components | Responsibilities |
+|----------|------------|------------------|
+| **Vercel** | Next.js Frontend | SSR, static assets, API proxying, edge caching |
+| **Railway** | Spring Boot Backend | REST API, business logic, webhooks, scheduled jobs |
+| **Railway** | PostgreSQL 17 | Data persistence, Flyway migrations |
+
+### 12.2 API Proxy Configuration
+
+The frontend proxies API requests to the backend via Next.js rewrites:
+
+```typescript
+// next.config.ts
+const nextConfig: NextConfig = {
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${process.env.BACKEND_URL}/api/:path*`,
+      },
+    ];
+  },
+};
+```
+
+### 12.3 Environment Variables
+
+**Vercel (Frontend)**:
+| Variable | Description |
+|----------|-------------|
+| `BACKEND_URL` | Railway backend URL (https://dad-coach-api.railway.app) |
+| `NEXT_PUBLIC_APP_URL` | Public app URL |
+
+**Railway (Backend)**:
 | Variable | Description |
 |----------|-------------|
 | `DATABASE_URL` | PostgreSQL connection string |
