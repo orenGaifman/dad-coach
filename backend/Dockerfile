@@ -1,4 +1,5 @@
 # Stage 1: Build with Maven wrapper
+# Build version: 2026-08-21-v2 (force rebuild after StateTransitionLog removal)
 FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /workspace
 
