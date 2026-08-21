@@ -73,6 +73,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/magic-link/**").permitAll()
                         // Admin endpoints (for dev invite page - temporarily permitAll until auth is implemented)
                         .requestMatchers("/api/v1/admin/**").permitAll()
+                        // Dev endpoints (protected by DevEnvironmentGuard - blocks in production)
+                        .requestMatchers("/api/v1/dev/**").permitAll()
                         // All other requests require authentication
                         .anyRequest().authenticated()
                 )
