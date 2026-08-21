@@ -846,6 +846,26 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 // Just update last interaction time
                 father.setLastInteractionAt(Instant.now());
                 fatherRepository.save(father);
+                
+                // ═══════════════════════════════════════════════════════════════════════
+                // LOG AI INVOCATION EVEN WITHOUT STATE CHANGE
+                // This allows the dashboard to show 🧠 AI indicator for all AI responses,
+                // not just those that cause state transitions.
+                // ═══════════════════════════════════════════════════════════════════════
+                if (agentResponse.toolUsed() != null && !agentResponse.toolUsed().isEmpty()) {
+                    Long fatherDomainId = fatherUuid.getLeastSignificantBits();
+                    WorkflowTransition aiInvocationLog = WorkflowTransition.builder()
+                            .fatherId(fatherDomainId)
+                            .fromState(currentState)
+                            .toState(currentState)  // Same state - no actual transition
+                            .triggerReason("AI_AGENT_" + agentResponse.toolUsed())
+                            .triggerMessageId(message.messageId())
+                            .createdAt(Instant.now())
+                            .build();
+                    transitionLogRepository.save(aiInvocationLog);
+                    log.info("AI Agent invocation logged (no state change): {} -> {} (tool: {})",
+                            currentState, currentState, agentResponse.toolUsed());
+                }
             }
             
             // Create response DTO
