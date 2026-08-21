@@ -120,7 +120,7 @@ public class CalendarOAuthController {
         
         // Parse state to get fatherId and redirectUrl
         Long fatherId = null;
-        String redirectUrl = webBaseUrl + "/workspace"; // Default redirect
+        String redirectUrl = webBaseUrl + "/dashboard"; // Default redirect
         
         if (state != null) {
             try {
