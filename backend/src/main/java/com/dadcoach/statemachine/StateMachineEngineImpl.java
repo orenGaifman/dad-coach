@@ -14,18 +14,16 @@ import java.util.Set;
  * Implementation of the state machine engine that uses reflection to call
  * {@code canTransitionTo()} on any enum implementing the state machine pattern.
  *
- * <p>Every transition attempt (valid or invalid) is logged to the
- * state_transition_log table for audit purposes.</p>
+ * <p>Transition attempts are logged via SLF4J. Workflow-specific transitions
+ * use workflow_state_transition_log for detailed audit trails.</p>
  */
 @Service
 public class StateMachineEngineImpl implements StateMachineEngine {
 
     private static final Logger log = LoggerFactory.getLogger(StateMachineEngineImpl.class);
 
-    private final StateTransitionLogRepository transitionLogRepository;
-
-    public StateMachineEngineImpl(StateTransitionLogRepository transitionLogRepository) {
-        this.transitionLogRepository = transitionLogRepository;
+    public StateMachineEngineImpl() {
+        // No-arg constructor - logging via SLF4J only
     }
 
     @Override
@@ -33,16 +31,6 @@ public class StateMachineEngineImpl implements StateMachineEngine {
             String entityType, Long entityId, S currentState, S targetState, String triggerReason) {
 
         boolean isValid = canTransition(currentState, targetState);
-
-        // Log the transition attempt (both valid and invalid)
-        StateTransitionLog logEntry = new StateTransitionLog(
-                entityType,
-                entityId,
-                currentState.name(),
-                targetState.name(),
-                triggerReason
-        );
-        transitionLogRepository.save(logEntry);
 
         if (!isValid) {
             log.warn("Invalid state transition rejected: {}[id={}] {} → {} (reason: {})",
