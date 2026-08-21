@@ -1,5 +1,6 @@
 # Stage 1: Build with Maven wrapper
-# Build version: 2026-08-21-v2 (force rebuild after StateTransitionLog removal)
+# Build version: 2026-08-21-v3 (force rebuild - entity removal verification)
+# StateTransitionLog.java MUST NOT exist in this build
 FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /workspace
 
@@ -10,6 +11,9 @@ COPY pom.xml .
 
 # Make mvnw executable (in case permissions aren't preserved)
 RUN chmod +x mvnw
+
+# Force fresh dependency download (no cache)
+RUN rm -rf ~/.m2/repository || true
 
 # Download dependencies (cached unless pom.xml changes)
 RUN ./mvnw dependency:go-offline -B
