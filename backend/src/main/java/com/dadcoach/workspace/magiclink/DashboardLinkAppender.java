@@ -190,7 +190,8 @@ public class DashboardLinkAppender {
             String template = "en".equals(locale) && englishTemplate != null 
                     ? englishTemplate 
                     : hebrewTemplate;
-            return String.format(template.trim(), link);
+            // Strip leading whitespace but keep structure - templates have proper line breaks
+            return String.format(template.stripLeading(), link);
         }
     }
 }
