@@ -1,10 +1,10 @@
 -- =============================================================================
 -- Dad Coach Consolidated Schema
--- Version: 1.0
--- Date: 2026-08-07
+-- Version: 1.0 (Fresh Start)
+-- Date: 2025-01-XX
 -- 
 -- This is a clean, consolidated schema for fresh deployments.
--- Contains all 29 tables required by the application.
+-- Contains all required tables. NO state_transition_log (redundant with workflow_state_transition_log).
 -- =============================================================================
 
 -- =============================================================================
@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS father (
 
 CREATE INDEX IF NOT EXISTS idx_father_phone ON father(phone);
 CREATE INDEX IF NOT EXISTS idx_father_status ON father(status);
+
 
 -- Child - Children associated with fathers
 CREATE TABLE IF NOT EXISTS child (
@@ -117,6 +118,7 @@ CREATE TABLE IF NOT EXISTS language_preferences (
 
 CREATE INDEX IF NOT EXISTS idx_lang_prefs_father_id ON language_preferences(father_id);
 
+
 -- =============================================================================
 -- ONBOARDING & INVITATIONS
 -- =============================================================================
@@ -172,6 +174,7 @@ CREATE TABLE IF NOT EXISTS onboarding_sessions (
 CREATE INDEX IF NOT EXISTS idx_onboarding_sessions_invitation_id ON onboarding_sessions(invitation_id);
 CREATE INDEX IF NOT EXISTS idx_onboarding_sessions_father_id ON onboarding_sessions(father_id);
 
+
 -- Activation Records
 CREATE TABLE IF NOT EXISTS activation_records (
     activation_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -222,6 +225,7 @@ CREATE TABLE IF NOT EXISTS ai_profiles (
 
 CREATE INDEX IF NOT EXISTS idx_ai_profiles_father_id ON ai_profiles(father_id);
 
+
 -- AI Telemetry
 CREATE TABLE IF NOT EXISTS ai_telemetry (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -271,6 +275,7 @@ CREATE TABLE IF NOT EXISTS communication_endpoints (
 CREATE INDEX IF NOT EXISTS idx_comm_endpoints_father_id ON communication_endpoints(father_id);
 CREATE INDEX IF NOT EXISTS idx_comm_endpoints_channel_identity ON communication_endpoints(channel_identity);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_endpoints_unique ON communication_endpoints(channel, channel_identity);
+
 
 -- Delivery Records
 CREATE TABLE IF NOT EXISTS delivery_records (
@@ -323,6 +328,7 @@ CREATE TABLE IF NOT EXISTS media_assets (
 CREATE INDEX IF NOT EXISTS idx_media_assets_father_id ON media_assets(father_id);
 CREATE INDEX IF NOT EXISTS idx_media_assets_message_id ON media_assets(message_id);
 
+
 -- =============================================================================
 -- CONVERSATIONS & MEMORY
 -- =============================================================================
@@ -363,6 +369,18 @@ CREATE TABLE IF NOT EXISTS memory (
 
 CREATE INDEX IF NOT EXISTS idx_memory_father_id ON memory(father_id);
 CREATE INDEX IF NOT EXISTS idx_memory_category ON memory(category);
+
+-- Message Log (for conversation history and AI context)
+CREATE TABLE IF NOT EXISTS message_log (
+    id BIGSERIAL PRIMARY KEY,
+    father_id BIGINT NOT NULL REFERENCES father(id) ON DELETE CASCADE,
+    direction VARCHAR(10) NOT NULL CHECK (direction IN ('INBOUND', 'OUTBOUND')),
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_log_father_created ON message_log(father_id, created_at DESC);
+
 
 -- =============================================================================
 -- GOALS & MISSIONS
@@ -418,6 +436,32 @@ CREATE INDEX IF NOT EXISTS idx_mission_father_id ON mission(father_id);
 CREATE INDEX IF NOT EXISTS idx_mission_child_id ON mission(child_id);
 CREATE INDEX IF NOT EXISTS idx_mission_status ON mission(status);
 
+
+-- Weekly Goal (for belt system tracking)
+CREATE TABLE IF NOT EXISTS weekly_goal (
+    id BIGSERIAL PRIMARY KEY,
+    father_id BIGINT NOT NULL REFERENCES father(id) ON DELETE CASCADE,
+    week_start_date DATE NOT NULL,
+    target_hours INTEGER NOT NULL CHECK (target_hours >= 1),
+    actual_minutes INTEGER NOT NULL DEFAULT 0 CHECK (actual_minutes >= 0),
+    scheduled_count INTEGER NOT NULL DEFAULT 0 CHECK (scheduled_count >= 0),
+    completed_count INTEGER NOT NULL DEFAULT 0 CHECK (completed_count >= 0),
+    starting_belt VARCHAR(20) NOT NULL,
+    ending_belt VARCHAR(20),
+    belt_promoted BOOLEAN NOT NULL DEFAULT FALSE,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
+    CONSTRAINT uk_weekly_goal_father_week UNIQUE (father_id, week_start_date),
+    CONSTRAINT ck_weekly_goal_status CHECK (status IN ('PENDING', 'ACTIVE', 'COMPLETED', 'MISSED', 'CANCELLED')),
+    CONSTRAINT ck_weekly_goal_belt CHECK (starting_belt IN ('WHITE', 'YELLOW', 'ORANGE', 'GREEN', 'BLUE', 'BROWN', 'BLACK')),
+    CONSTRAINT ck_weekly_goal_ending_belt CHECK (ending_belt IS NULL OR ending_belt IN ('WHITE', 'YELLOW', 'ORANGE', 'GREEN', 'BLUE', 'BROWN', 'BLACK'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_weekly_goal_father_status ON weekly_goal(father_id, status);
+CREATE INDEX IF NOT EXISTS idx_weekly_goal_status ON weekly_goal(status);
+CREATE INDEX IF NOT EXISTS idx_weekly_goal_week ON weekly_goal(week_start_date, status);
+
 -- =============================================================================
 -- QUALITY TIME & COMMITMENTS
 -- =============================================================================
@@ -443,6 +487,7 @@ CREATE INDEX IF NOT EXISTS idx_quality_time_father_id ON quality_time(father_id)
 CREATE INDEX IF NOT EXISTS idx_quality_time_child_id ON quality_time(child_id);
 CREATE INDEX IF NOT EXISTS idx_quality_time_status ON quality_time(status);
 CREATE INDEX IF NOT EXISTS idx_quality_time_scheduled_start ON quality_time(scheduled_start);
+
 
 -- Quality Time Commitment
 CREATE TABLE IF NOT EXISTS quality_time_commitment (
@@ -488,19 +533,21 @@ CREATE TABLE IF NOT EXISTS calendar_sync_log (
 
 CREATE INDEX IF NOT EXISTS idx_calendar_sync_father_id ON calendar_sync_log(father_id);
 
+
 -- =============================================================================
 -- WORKFLOW & STATE MANAGEMENT
 -- =============================================================================
 
--- Message Templates (for workflow engine)
+-- Message Templates (for workflow engine) - with correct unique constraint
 CREATE TABLE IF NOT EXISTS message_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    message_type VARCHAR(50) NOT NULL UNIQUE,
+    message_type VARCHAR(50) NOT NULL,
     template_text TEXT NOT NULL,
     language VARCHAR(10) NOT NULL,
     active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    CONSTRAINT message_templates_type_lang_key UNIQUE (message_type, language)
 );
 
 CREATE INDEX IF NOT EXISTS idx_message_templates_type ON message_templates(message_type);
@@ -519,19 +566,7 @@ CREATE TABLE IF NOT EXISTS workflow_state_transition_log (
 CREATE INDEX IF NOT EXISTS idx_wstl_father_id ON workflow_state_transition_log(father_id);
 CREATE INDEX IF NOT EXISTS idx_wstl_created_at ON workflow_state_transition_log(created_at);
 
--- State Transition Log (for state machine)
-CREATE TABLE IF NOT EXISTS state_transition_log (
-    id BIGSERIAL PRIMARY KEY,
-    entity_type VARCHAR(30) NOT NULL,
-    entity_id BIGINT NOT NULL,
-    from_state VARCHAR(30) NOT NULL,
-    to_state VARCHAR(30) NOT NULL,
-    trigger_reason VARCHAR(200),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_stl_entity ON state_transition_log(entity_type, entity_id);
-CREATE INDEX IF NOT EXISTS idx_stl_created_at ON state_transition_log(created_at);
+-- NOTE: state_transition_log table REMOVED - it was redundant with workflow_state_transition_log
 
 -- Magic Link (for passwordless authentication)
 CREATE TABLE IF NOT EXISTS magic_link (
@@ -548,6 +583,7 @@ CREATE TABLE IF NOT EXISTS magic_link (
 CREATE INDEX IF NOT EXISTS idx_magic_link_token ON magic_link(token);
 CREATE INDEX IF NOT EXISTS idx_magic_link_father_id ON magic_link(father_id);
 CREATE INDEX IF NOT EXISTS idx_magic_link_expires_at ON magic_link(expires_at);
+
 
 -- =============================================================================
 -- AUDIT & LOGGING
@@ -585,3 +621,95 @@ CREATE TABLE IF NOT EXISTS scheduler_job_log (
 
 CREATE INDEX IF NOT EXISTS idx_scheduler_job_name ON scheduler_job_log(job_name);
 CREATE INDEX IF NOT EXISTS idx_scheduler_job_started_at ON scheduler_job_log(started_at);
+
+
+-- =============================================================================
+-- SEED DATA: Message Templates
+-- =============================================================================
+
+-- WELCOME_GREETING
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'welcome_greeting', 'שלום {fatherName}! ברוך הבא ל-Dad Coach. אני כאן לעזור לך לבנות הרגל של זמן איכות עם הילדים שלך. 👨‍👧 מוכן להתחיל?', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'welcome_greeting', 'Hi {fatherName}! Welcome to Dad Coach. I''m here to help you build a habit of quality time with your kids. 👨‍👧 Ready to get started?', 'en', true, NOW(), NOW());
+
+-- WELCOME_EXPLAIN
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'welcome_explain', 'Dad Coach עוזר לך לתכנן ולעקוב אחרי זמן איכות עם הילדים שלך. תזמן מפגשים, השלם אותם, וצבור התקדמות במערכת החגורות שלנו. פשוט וקל! מוכן לתאם את המפגש הראשון שלך?', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'welcome_explain', 'Dad Coach helps you plan and track quality time with your kids. Schedule sessions, complete them, and earn progress in our belt system. Simple and easy! Ready to schedule your first session?', 'en', true, NOW(), NOW());
+
+-- SCHEDULE_SLOTS
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'schedule_slots', 'בחר זמן לזמן איכות עם {childName}:', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'schedule_slots', 'Choose a time for Quality Time with {childName}:', 'en', true, NOW(), NOW());
+
+-- SCHEDULE_CONFIRM
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'schedule_confirm', 'מעולה! זמן איכות עם {childName} נקבע ל-{time}. תהנו! 💪', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'schedule_confirm', 'Great! Quality Time with {childName} is scheduled for {time}. Enjoy! 💪', 'en', true, NOW(), NOW());
+
+-- SCHEDULE_NO_SLOTS
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'schedule_no_slots', 'לא מצאתי זמנים פנויים ביומן שלך לשבוע הקרוב. אנא בדוק את היומן שלך או נסה שוב מאוחר יותר.', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'schedule_no_slots', 'I couldn''t find any available slots in your calendar for the next week. Please check your calendar or try again later.', 'en', true, NOW(), NOW());
+
+
+-- WAITING_REMINDER
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'waiting_reminder', 'בוקר טוב {fatherName}! זמן איכות עם {childName} היום ב-{time}. תהנו! 💪', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'waiting_reminder', 'Good morning {fatherName}! Quality Time with {childName} today at {time}. Have a great time! 💪', 'en', true, NOW(), NOW());
+
+-- WAITING_SCHEDULE_INFO
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'waiting_schedule_info', 'זמן האיכות הבא שלך עם {childName} הוא ב-{time}.', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'waiting_schedule_info', 'Your next Quality Time with {childName} is at {time}.', 'en', true, NOW(), NOW());
+
+-- FOLLOW_UP_QUESTION
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'follow_up_question', 'השלמת את זמן האיכות עם {childName}?', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'follow_up_question', 'Did you complete your Quality Time with {childName}?', 'en', true, NOW(), NOW());
+
+-- FOLLOW_UP_COMPLETED
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'follow_up_completed', 'כל הכבוד {fatherName}! 🎉 הרצף שלך עכשיו {streak}. המשך כך!', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'follow_up_completed', 'Awesome {fatherName}! 🎉 Your streak is now {streak}. Keep it up!', 'en', true, NOW(), NOW());
+
+-- FOLLOW_UP_MISSED
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'follow_up_missed', 'לא נורא {fatherName}, יש עוד הזדמנויות. בוא נתאם זמן איכות חדש.', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'follow_up_missed', 'No worries {fatherName}, there will be more opportunities. Let''s schedule another Quality Time.', 'en', true, NOW(), NOW());
+
+-- ACTIVITY_IDEAS
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'activity_ideas', 'הנה כמה רעיונות לזמן איכות עם {childName}:', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'activity_ideas', 'Here are some ideas for Quality Time with {childName}:', 'en', true, NOW(), NOW());
+
+
+-- DASHBOARD_SUMMARY
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'dashboard_summary', '📊 ההתקדמות שלך:
+🥋 חגורה: {belt}
+🔥 רצף: {streak}
+✅ סה"כ מפגשים: {qualityTimeCount}
+
+לצפייה בדשבורד המלא: {dashboardUrl}', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'dashboard_summary', '📊 Your progress:
+🥋 Belt: {belt}
+🔥 Streak: {streak}
+✅ Total sessions: {qualityTimeCount}
+
+View full dashboard: {dashboardUrl}', 'en', true, NOW(), NOW());
+
+-- CLARIFICATION
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'clarification', 'לא הבנתי את התשובה. אנא בחר אחת מהאפשרויות.', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'clarification', 'I didn''t understand that. Please choose one of the options.', 'en', true, NOW(), NOW());
+
+-- ERROR_GENERIC
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'error_generic', 'מצטער, משהו השתבש. אנא נסה שוב.', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'error_generic', 'Sorry, something went wrong. Please try again.', 'en', true, NOW(), NOW());
+
+-- PROCESSING
+INSERT INTO message_templates (id, message_type, template_text, language, active, created_at, updated_at) VALUES
+(gen_random_uuid(), 'processing', 'רגע {fatherName}, אני מעבד את הבקשה שלך... 🔄', 'he', true, NOW(), NOW()),
+(gen_random_uuid(), 'processing', 'One moment {fatherName}, I''m processing your request... 🔄', 'en', true, NOW(), NOW());
