@@ -1,6 +1,6 @@
 # Stage 1: Build with Maven wrapper
-# Build version: 2026-08-21-v3 (force rebuild - entity removal verification)
-# StateTransitionLog.java MUST NOT exist in this build
+# Build version: 2026-08-21-v4 (CRITICAL: Only V1 migration exists - consolidated schema)
+# Old V2-V5 migrations DELETED - Supabase DB must be wiped first
 FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /workspace
 
