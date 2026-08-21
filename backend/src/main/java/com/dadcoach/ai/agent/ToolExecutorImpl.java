@@ -438,7 +438,7 @@ public class ToolExecutorImpl implements ToolExecutor {
                 "get_dashboard_link"
             );
             
-            String response = "🔗 הנה הקישור לדשבורד שלך:\n" + dashboardUrl + "\n\n" +
+            String response = "🔗 הנה הקישור לדשבורד שלך:\n\n" + dashboardUrl + "\n\n" +
                              "שם תוכל לראות את ההתקדמות, החגורה, והיסטוריית זמני האיכות שלך 📊";
             
             return AgentToolResult.success("get_dashboard_link", response, Map.of());

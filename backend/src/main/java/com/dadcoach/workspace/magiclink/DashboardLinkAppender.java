@@ -96,10 +96,12 @@ public class DashboardLinkAppender {
          */
         WELCOME("/dashboard", """
             📱 *לוח הבקרה שלך*
-            צפה בהתקדמות שלך כאן: %s
+            צפה בהתקדמות שלך כאן:
+            %s
             """, """
             📱 *Your Dashboard*
-            Track your progress here: %s
+            Track your progress here:
+            %s
             """),
 
         /**
@@ -107,7 +109,8 @@ public class DashboardLinkAppender {
          */
         QUALITY_TIME_LOGGED("/growth/achievements", """
             📊 *ההתקדמות שלך עודכנה*
-            צפה בהישגים שלך בדשבורד: %s
+            צפה בהישגים שלך בדשבורד:
+            %s
             """, null),
 
         /**
@@ -115,7 +118,8 @@ public class DashboardLinkAppender {
          */
         ACHIEVEMENT_EARNED("/growth/achievements", """
             🏆 *הישג חדש!*
-            צפה בהישג החדש שלך: %s
+            צפה בהישג החדש שלך:
+            %s
             """, null),
 
         /**
@@ -123,7 +127,8 @@ public class DashboardLinkAppender {
          */
         BELT_LEVEL_UP("/growth", """
             🥋 *עלית רמה!*
-            צפה בחגורה החדשה שלך: %s
+            צפה בחגורה החדשה שלך:
+            %s
             """, null),
 
         /**
@@ -131,7 +136,8 @@ public class DashboardLinkAppender {
          */
         STREAK_MILESTONE("/growth/streak", """
             🔥 *רצף מדהים!*
-            צפה ברצף הימים שלך: %s
+            צפה ברצף הימים שלך:
+            %s
             """, null),
 
         /**
@@ -139,7 +145,8 @@ public class DashboardLinkAppender {
          */
         WEEKLY_CHECKIN("/dashboard", """
             📅 *הסיכום השבועי שלך*
-            ראה איך עבר לך השבוע: %s
+            ראה איך עבר לך השבוע:
+            %s
             """, null),
 
         /**
@@ -147,7 +154,8 @@ public class DashboardLinkAppender {
          */
         LOG_ACTIVITY_PROMPT("/coaching/log", """
             ✍️ *דווח על פעילות*
-            לחץ כאן לדיווח: %s
+            לחץ כאן לדיווח:
+            %s
             """, null);
 
         private final String redirectPath;

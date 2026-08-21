@@ -78,12 +78,11 @@ public class MagicLinkService {
         Father father = fatherRepository.findById(fatherId)
                 .orElseThrow(() -> new IllegalArgumentException("Father not found: " + fatherId));
 
-        // Invalidate any existing tokens for this father
         Instant now = Instant.now(clock);
-        int invalidated = repository.invalidateAllForFather(fatherId, now);
-        if (invalidated > 0) {
-            log.debug("Invalidated {} existing magic link tokens for father {}", invalidated, fatherId);
-        }
+        
+        // NOTE: We no longer invalidate existing tokens. Multiple links can be active
+        // simultaneously since fathers may have several WhatsApp messages with links.
+        // Old links will eventually be cleaned up by the MagicLinkCleanupJob.
 
         // Generate new token
         String token = tokenGenerator.generateToken();
