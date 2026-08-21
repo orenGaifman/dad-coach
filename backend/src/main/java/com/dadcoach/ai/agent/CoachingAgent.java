@@ -40,6 +40,7 @@ public class CoachingAgent {
     private static final double TEMPERATURE = 0.3; // Low temperature for consistent behavior
     private static final int MAX_TOKENS = 500;     // Keep responses short for WhatsApp
     private static final int MAX_CONVERSATION_HISTORY = 5; // Last 5 turns
+    private static final int MAX_CLARIFY_RETRIES = 1; // Max retries when AI wants to clarify
     
     private final AiProvider aiProvider;
     private final AgentPromptBuilder promptBuilder;
@@ -105,6 +106,50 @@ public class CoachingAgent {
             // 3. Get father name
             String fatherName = getFatherName(systemState);
             
+            // ═══════════════════════════════════════════════════════════════════════
+            // FEATURE 1: PRE-CHECK GOOGLE CALENDAR CONNECTION
+            // Before any conversation about scheduling, check if calendar is connected.
+            // If not, prompt the user to connect it first.
+            // ═══════════════════════════════════════════════════════════════════════
+            if (!hasGoogleCalendarConnected(systemState)) {
+                log.info("Father {} has no Google Calendar connected, prompting for connection", fatherId);
+                
+                // Check if the user is asking about non-scheduling topics (status, help, etc.)
+                // For scheduling-related states or messages, always require calendar first
+                boolean isSchedulingContext = isSchedulingRelatedContext(state, inboundMessage);
+                
+                if (isSchedulingContext) {
+                    // Build context to get the calendar connection prompt
+                    List<AgentTool> tools = List.of(AgentTool.CONNECT_CALENDAR, AgentTool.SHOW_HELP);
+                    AgentContext context = AgentContext.builder()
+                        .fatherId(fatherId)
+                        .fatherName(fatherName)
+                        .currentState(state)
+                        .inboundMessage(inboundMessage)
+                        .systemState(systemState)
+                        .conversationHistory(limitHistory(conversationHistory))
+                        .availableTools(tools)
+                        .build();
+                    
+                    // Execute calendar connection tool
+                    AgentToolResult calendarResult = toolExecutor.execute("connect_calendar", Map.of(), context);
+                    
+                    String calendarMessage = calendarResult.responseMessage() != null 
+                        ? calendarResult.responseMessage()
+                        : buildCalendarConnectionMessage(fatherName);
+                    
+                    return new AgentResponse(
+                        calendarMessage,
+                        null,
+                        "connect_calendar",
+                        Map.of("reason", "pre_check"),
+                        true,
+                        null
+                    );
+                }
+            }
+            // ═══════════════════════════════════════════════════════════════════════
+            
             // 4. Build context
             List<AgentTool> availableTools = getToolsForState(state, systemState);
             AgentContext context = AgentContext.builder()
@@ -127,6 +172,29 @@ public class CoachingAgent {
             // 7. Parse AI response
             AiDecision decision = parseAiResponse(aiResponse.content());
             log.info("AI decision: tool={}, params={}", decision.tool(), decision.parameters());
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // FEATURE 2: SMART FALLBACK WHEN AI CHOOSES "CLARIFY"
+            // Instead of immediately saying "I don't understand", try a second AI call
+            // with enhanced context to actually understand the user's intent.
+            // ═══════════════════════════════════════════════════════════════════════
+            if ("clarify".equals(decision.tool())) {
+                log.info("AI chose clarify tool, attempting smart fallback for father: {}", fatherId);
+                
+                AiDecision smartDecision = attemptSmartFallback(context, fatherId);
+                if (smartDecision != null && !"clarify".equals(smartDecision.tool())) {
+                    log.info("Smart fallback succeeded: new tool={}", smartDecision.tool());
+                    decision = smartDecision;
+                } else {
+                    log.info("Smart fallback still chose clarify, using intelligent acknowledgment");
+                    // Try to give a more helpful response based on context
+                    String intelligentResponse = buildIntelligentClarifyResponse(context);
+                    if (intelligentResponse != null) {
+                        decision = new AiDecision("acknowledge", Map.of(), intelligentResponse);
+                    }
+                }
+            }
+            // ═══════════════════════════════════════════════════════════════════════
             
             // 8. Execute tool
             AgentToolResult toolResult = toolExecutor.execute(decision.tool(), decision.parameters(), context);
@@ -296,6 +364,233 @@ public class CoachingAgent {
         if (text == null) return "";
         if (text.length() <= maxLength) return text;
         return text.substring(0, maxLength) + "...";
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FEATURE 1: Calendar Pre-Check Helpers
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    /**
+     * Check if Google Calendar is connected for this father.
+     */
+    private boolean hasGoogleCalendarConnected(SystemState systemState) {
+        return systemState != null && systemState.hasGoogleCalendarConnected();
+    }
+    
+    /**
+     * Check if the current context is scheduling-related.
+     * Returns true if we should require calendar connection before proceeding.
+     */
+    private boolean isSchedulingRelatedContext(WorkflowState state, String message) {
+        // States that definitely require calendar
+        if (state == WorkflowState.SCHEDULE_QUALITY_TIME) {
+            return true;
+        }
+        
+        // Check if message contains scheduling-related keywords (Hebrew)
+        String lowerMessage = message.toLowerCase();
+        Set<String> schedulingKeywords = Set.of(
+            "קבע", "קביעה", "לקבוע",        // schedule
+            "זמן איכות", "זמן-איכות",       // quality time
+            "יומן", "לוח שנה",              // calendar
+            "מתי", "באיזה יום",             // when
+            "מחר", "היום", "השבוע",         // tomorrow, today, this week
+            "שעה", "בשעה"                   // hour, at hour
+        );
+        
+        for (String keyword : schedulingKeywords) {
+            if (lowerMessage.contains(keyword)) {
+                return true;
+            }
+        }
+        
+        // WELCOME state - let the user greet first, don't immediately ask for calendar
+        // unless they're specifically asking to schedule
+        if (state == WorkflowState.WELCOME) {
+            return false;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Build a message prompting the user to connect their Google Calendar.
+     */
+    private String buildCalendarConnectionMessage(String fatherName) {
+        String greeting = fatherName != null && !fatherName.isEmpty() 
+            ? "היי " + fatherName + "! 👋\n\n"
+            : "היי! 👋\n\n";
+        
+        return greeting + 
+            "לפני שנמשיך, בוא נחבר את יומן גוגל שלך 📅\n" +
+            "ככה אוכל:\n" +
+            "✓ לסנכרן זמני איכות עם היומן שלך\n" +
+            "✓ לשלוח תזכורות אוטומטיות\n" +
+            "✓ למצוא זמנים פנויים\n\n" +
+            "לחץ על הקישור למטה כדי לחבר:";
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FEATURE 2: Smart Fallback Helpers
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    /**
+     * Attempt a smarter fallback when the AI initially chose "clarify".
+     * This makes a second AI call with enhanced context to better understand intent.
+     */
+    private AiDecision attemptSmartFallback(AgentContext context, UUID fatherId) {
+        try {
+            // Build an enhanced prompt that asks AI to reconsider with explicit guidance
+            String enhancedSystemPrompt = buildSmartFallbackSystemPrompt(context);
+            String enhancedUserPrompt = buildSmartFallbackUserPrompt(context);
+            
+            // Make the second AI call
+            AiProviderResponse retryResponse = callAiProvider(enhancedSystemPrompt, enhancedUserPrompt, fatherId);
+            
+            return parseAiResponse(retryResponse.content());
+            
+        } catch (Exception e) {
+            log.warn("Smart fallback failed for father {}: {}", fatherId, e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Build the system prompt for the smart fallback attempt.
+     */
+    private String buildSmartFallbackSystemPrompt(AgentContext context) {
+        return """
+            אתה מאמן הורות חכם. המשימה שלך היא להבין מה המשתמש באמת רוצה, גם כשההודעה קצרה או לא ברורה.
+            
+            ## הקשר נוכחי
+            %s
+            
+            ## כללים חשובים
+            1. **הודעות קצרות כמו "כן", "אוקי", "סבבה", "בסדר", "יאללה", "טוב" = הסכמה/אישור**
+               - אם ההודעה האחרונה שלך שאלה משהו - המשתמש מסכים
+               - אם קבעת זמן איכות - המשתמש מאשר
+            
+            2. **הודעות שמתייחסות להקשר**
+               - "מה להסביר?" = בלבול, תן סיכום ברור של המצב
+               - "מה קורה?" = רוצה לראות התקדמות
+               
+            3. **לעולם אל תשתמש ב-clarify אלא אם באמת אין דרך להבין**
+            
+            ## מה לעשות
+            בחר את הכלי המתאים ביותר. אם המשתמש אישר משהו, השתמש ב-acknowledge.
+            אם רוצה לראות מצב, השתמש ב-show_progress.
+            
+            ## פורמט התשובה
+            ```json
+            {
+              "tool": "שם_הכלי",
+              "parameters": {},
+              "response": "תשובה חמה ומועילה"
+            }
+            ```
+            """.formatted(context.buildContextSummary());
+    }
+    
+    /**
+     * Build the user prompt for the smart fallback attempt.
+     */
+    private String buildSmartFallbackUserPrompt(AgentContext context) {
+        StringBuilder sb = new StringBuilder();
+        
+        // Add recent conversation for context
+        String history = context.buildConversationHistory();
+        if (!history.isEmpty()) {
+            sb.append("היסטוריית שיחה אחרונה:\n").append(history).append("\n\n");
+        }
+        
+        sb.append("הודעה שצריך להבין: \"").append(context.inboundMessage()).append("\"\n\n");
+        sb.append("ניסיון ראשון בחר clarify. נסה להבין מה המשתמש באמת רוצה ותבחר כלי מתאים.");
+        
+        return sb.toString();
+    }
+    
+    /**
+     * Build an intelligent response when we still can't understand,
+     * instead of generic "I don't understand".
+     */
+    private String buildIntelligentClarifyResponse(AgentContext context) {
+        // Check conversation history to understand context
+        List<AgentContext.ConversationTurn> history = context.conversationHistory();
+        String message = context.inboundMessage().toLowerCase();
+        
+        // Common acknowledgment patterns
+        Set<String> acknowledgments = Set.of(
+            "כן", "אוקי", "סבבה", "בסדר", "יאללה", "טוב", "נשמע טוב", 
+            "מעולה", "סבבה", "אחלה", "תודה", "תנקס", "ok", "yes", "sure"
+        );
+        
+        // Check if it's an acknowledgment
+        for (String ack : acknowledgments) {
+            if (message.contains(ack)) {
+                // This is an acknowledgment - respond positively
+                return buildAcknowledgmentResponse(context);
+            }
+        }
+        
+        // Check if asking for clarification about something bot said
+        if (message.contains("מה") && (message.contains("להסביר") || message.contains("זה"))) {
+            return buildStatusSummary(context);
+        }
+        
+        // Default - give a status summary and ask what they want to do
+        return null; // Let the original clarify flow handle it
+    }
+    
+    /**
+     * Build a positive response for acknowledgment messages.
+     */
+    private String buildAcknowledgmentResponse(AgentContext context) {
+        SystemState state = context.systemState();
+        
+        // Check what's scheduled
+        if (state != null && state.getNextScheduledQualityTime() != null) {
+            var qt = state.getNextScheduledQualityTime();
+            return "מעולה! 👍\n\n" +
+                   "📅 הזמן איכות הבא שלך מתוכנן.\n" +
+                   "תקבל תזכורת שעה לפני.\n\n" +
+                   "רוצה לקבוע עוד זמן איכות השבוע? 🎯";
+        }
+        
+        // No scheduled quality time
+        return "מעולה! 👍\n\n" +
+               "אז מה נעשה עכשיו?\n" +
+               "🎯 לקבוע זמן איכות?\n" +
+               "📊 לראות התקדמות?\n" +
+               "💡 לקבל רעיונות לפעילויות?";
+    }
+    
+    /**
+     * Build a status summary when user seems confused.
+     */
+    private String buildStatusSummary(AgentContext context) {
+        SystemState state = context.systemState();
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("סליחה על הבלבול! 😅 בוא נסכם את המצב:\n\n");
+        
+        // Weekly goal status
+        if (state != null && state.weeklyGoalInfo() != null && state.weeklyGoalInfo().hasGoal()) {
+            var goal = state.weeklyGoalInfo();
+            sb.append("🎯 יעד השבוע: ").append(goal.targetQualityTimes()).append(" זמני איכות\n");
+            sb.append("✅ הושלמו: ").append(goal.completedQualityTimes()).append("\n\n");
+        }
+        
+        // Next scheduled quality time
+        if (state != null && state.getNextScheduledQualityTime() != null) {
+            var qt = state.getNextScheduledQualityTime();
+            sb.append("📅 מתוכנן: זמן איכות עם ").append(qt.childName()).append("\n\n");
+        } else {
+            sb.append("📅 אין זמני איכות מתוכננים כרגע\n\n");
+        }
+        
+        sb.append("הכל מסודר מהצד שלי - אין צורך לעשות כלום עכשיו, פשוט תיהנה מהזמן עם הילדים! 💙");
+        
+        return sb.toString();
     }
     
     // ─── Inner Classes ────────────────────────────────────────────────────

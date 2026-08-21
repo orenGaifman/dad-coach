@@ -49,6 +49,7 @@ public class ToolExecutorImpl implements ToolExecutor {
         "greet",
         "show_help",
         "clarify",
+        "acknowledge",  // NEW: for acknowledging user messages intelligently
         // Weekly goal tools
         "show_weekly_summary",
         "set_weekly_goal",
@@ -103,6 +104,7 @@ public class ToolExecutorImpl implements ToolExecutor {
                 case "greet" -> executeGreet(context);
                 case "show_help" -> executeShowHelp(context);
                 case "clarify" -> executeClarify(parameters, context);
+                case "acknowledge" -> executeAcknowledge(parameters, context);
                 case "show_weekly_summary" -> executeShowWeeklySummary(context);
                 case "set_weekly_goal" -> executeSetWeeklyGoal(parameters, context);
                 case "get_weekly_goal_status" -> executeGetWeeklyGoalStatus(context);
@@ -508,6 +510,42 @@ public class ToolExecutorImpl implements ToolExecutor {
     private AgentToolResult executeClarify(Map<String, Object> params, AgentContext context) {
         String question = getStringParam(params, "question", "לא הבנתי. אפשר להסביר שוב?");
         return AgentToolResult.success("clarify", question, params);
+    }
+    
+    /**
+     * Handle acknowledgment messages (like "ok", "sounds good", etc.).
+     * Returns a friendly response based on context instead of asking for clarification.
+     */
+    private AgentToolResult executeAcknowledge(Map<String, Object> params, AgentContext context) {
+        // If we have a pre-built response, use it
+        String response = getStringParam(params, "response", null);
+        if (response != null && !response.isEmpty()) {
+            return AgentToolResult.success("acknowledge", response, params);
+        }
+        
+        // Build context-aware response
+        SystemState state = context.systemState();
+        
+        if (state != null && state.getNextScheduledQualityTime() != null) {
+            // Has scheduled quality time
+            var qt = state.getNextScheduledQualityTime();
+            String message = String.format(
+                "מעולה! 👍\n\n" +
+                "📅 יש לך זמן איכות מתוכנן עם %s.\n" +
+                "תקבל תזכורת שעה לפני.\n\n" +
+                "רוצה לקבוע עוד זמן איכות? 🎯",
+                qt.childName()
+            );
+            return AgentToolResult.success("acknowledge", message, params);
+        }
+        
+        // No scheduled quality time - offer to schedule
+        String message = "מעולה! 👍\n\n" +
+               "אז מה נעשה עכשיו?\n" +
+               "🎯 לקבוע זמן איכות?\n" +
+               "📊 לראות התקדמות?\n" +
+               "💡 לקבל רעיונות לפעילויות?";
+        return AgentToolResult.success("acknowledge", message, params);
     }
     
     // ─── Weekly Goal Tool Implementations ────────────────────────────────────
