@@ -44,6 +44,11 @@ public record AgentContext(
     public String buildContextSummary() {
         StringBuilder sb = new StringBuilder();
         
+        // Current date and day of week - CRITICAL for day_selection calculation
+        var now = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Jerusalem"));
+        var hebrewDayName = getHebrewDayName(now.getDayOfWeek());
+        sb.append("📅 היום: ").append(hebrewDayName).append(" (").append(now.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM"))).append(")\n");
+        
         // Father info
         sb.append("שם האב: ").append(fatherName != null ? fatherName : "לא ידוע").append("\n");
         sb.append("מצב נוכחי: ").append(currentState).append("\n");
@@ -132,6 +137,21 @@ public record AgentContext(
         var zoned = instant.atZone(java.time.ZoneId.of("Asia/Jerusalem"));
         var formatter = java.time.format.DateTimeFormatter.ofPattern("dd/MM בשעה HH:mm");
         return zoned.format(formatter);
+    }
+    
+    /**
+     * Get Hebrew name for day of week.
+     */
+    private String getHebrewDayName(java.time.DayOfWeek dayOfWeek) {
+        return switch (dayOfWeek) {
+            case SUNDAY -> "יום ראשון";
+            case MONDAY -> "יום שני";
+            case TUESDAY -> "יום שלישי";
+            case WEDNESDAY -> "יום רביעי";
+            case THURSDAY -> "יום חמישי";
+            case FRIDAY -> "יום שישי";
+            case SATURDAY -> "יום שבת";
+        };
     }
     
     /**
