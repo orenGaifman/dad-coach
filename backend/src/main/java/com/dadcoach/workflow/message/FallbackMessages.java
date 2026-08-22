@@ -5,7 +5,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -162,6 +167,11 @@ public class FallbackMessages {
      * via {@link MessageContext#formatTimeInTimezone} to ensure all times
      * are displayed in the father's configured timezone (Requirement 5.7).</p>
      * 
+     * <p>For date placeholders ({tomorrow}, {today}), this method uses timezone-aware
+     * date calculation via {@link MessageContext#getTomorrowInTimezone()} and
+     * {@link MessageContext#getTodayInTimezone()} to ensure dates are correctly
+     * computed in the father's timezone (Requirements 2.7, 2.8).</p>
+     * 
      * @param template the template text with placeholders
      * @param context the message context with values
      * @return the template with placeholders replaced
@@ -197,6 +207,35 @@ public class FallbackMessages {
             // Fallback: format using the timezone-aware utility method (Requirement 5.7)
             String formattedTime = context.formatTimeInTimezone(context.getScheduledStart());
             result = result.replace("{time}", formattedTime);
+        }
+        
+        // Timezone-aware date placeholders (Requirements 2.7, 2.8)
+        // {tomorrow} - tomorrow's date formatted for locale
+        if (result.contains("{tomorrow}")) {
+            LocalDate tomorrow = context.getTomorrowInTimezone();
+            String formattedTomorrow = formatDateForLocale(tomorrow, context);
+            
+            // Validate day-of-week matches (Requirement 2.9)
+            if (!context.validateDayOfWeek(tomorrow, formattedTomorrow)) {
+                log.warn("Day-of-week validation failed for tomorrow: date={}, formatted={}", 
+                    tomorrow, formattedTomorrow);
+            }
+            
+            result = result.replace("{tomorrow}", formattedTomorrow);
+        }
+        
+        // {today} - today's date formatted for locale
+        if (result.contains("{today}")) {
+            LocalDate today = context.getTodayInTimezone();
+            String formattedToday = formatDateForLocale(today, context);
+            
+            // Validate day-of-week matches (Requirement 2.9)
+            if (!context.validateDayOfWeek(today, formattedToday)) {
+                log.warn("Day-of-week validation failed for today: date={}, formatted={}", 
+                    today, formattedToday);
+            }
+            
+            result = result.replace("{today}", formattedToday);
         }
         
         if (context.getStreakCount() != null) {
@@ -374,6 +413,18 @@ public class FallbackMessages {
                 ? "מצטער, משהו השתבש. אנא נסה שוב."
                 : "Sorry, something went wrong. Please try again.";
                 
+            case ERROR_SCHEDULE_QUALITY_TIME -> isHebrew
+                ? "מצטער, יש לי בעיה למצוא זמנים פנויים. אפשר לנסות שוב?"
+                : "Sorry, I'm having trouble finding available slots. Can you try again?";
+                
+            case ERROR_QUALITY_TIME_FOLLOW_UP -> isHebrew
+                ? "מצטער, משהו השתבש. ספר לי - האם השלמת את זמן האיכות עם {childName}?"
+                : "Sorry, something went wrong. Tell me - did you complete your Quality Time with {childName}?";
+                
+            case ERROR_WAITING -> isHebrew
+                ? "מצטער, לא הצלחתי לעבד את ההודעה. מה תרצה לעשות? אפשר לבדוק את הלו\"ז, לקבל רעיונות לפעילויות, או לתזמן זמן איכות חדש."
+                : "Sorry, I couldn't process that. What would you like to do? You can check your schedule, get activity ideas, or schedule new Quality Time.";
+                
             case PROCESSING -> isHebrew
                 ? "רגע {fatherName}, אני מעבד את הבקשה שלך... 🔄"
                 : "One moment {fatherName}, I'm processing your request... 🔄";
@@ -388,5 +439,69 @@ public class FallbackMessages {
             return "";
         }
         return beltName.charAt(0) + beltName.substring(1).toLowerCase() + " Belt";
+    }
+    
+    /**
+     * Formats a date for display according to the locale and timezone.
+     * 
+     * <p>This method addresses Bug 3: Date Calculation Error by ensuring dates
+     * are formatted with the correct day-of-week in the father's timezone
+     * (Requirements 2.7, 2.8).</p>
+     * 
+     * <p>Format examples:</p>
+     * <ul>
+     *   <li>Hebrew: "יום שישי, 22/08"</li>
+     *   <li>English: "Friday, August 22"</li>
+     * </ul>
+     * 
+     * @param date the date to format
+     * @param context the message context containing locale and timezone
+     * @return the formatted date string with day-of-week
+     */
+    private String formatDateForLocale(LocalDate date, MessageContext context) {
+        if (date == null) {
+            return "";
+        }
+        
+        Locale displayLocale = context.getDisplayLocale();
+        boolean isHebrew = LOCALE_HEBREW.equals(context.getLocale());
+        
+        // Get the day-of-week name
+        String dayOfWeekName = date.getDayOfWeek().getDisplayName(TextStyle.FULL, displayLocale);
+        
+        // Format the date part
+        if (isHebrew) {
+            // Hebrew format: "יום שישי, 22/08"
+            // Hebrew day names are prefixed with "יום " (day) for full names
+            String hebrewDayName = getHebrewDayName(date);
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM");
+            String datePart = date.format(dateFormatter);
+            return hebrewDayName + ", " + datePart;
+        } else {
+            // English format: "Friday, August 22"
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEEE, MMMM d", displayLocale);
+            return date.format(formatter);
+        }
+    }
+    
+    /**
+     * Gets the Hebrew day name with proper formatting.
+     * 
+     * <p>In Hebrew, day names are typically written as "יום + day name" (e.g., "יום שישי").
+     * The standard Java DayOfWeek.getDisplayName() returns only the day name without "יום".</p>
+     * 
+     * @param date the date to get the Hebrew day name for
+     * @return the Hebrew day name (e.g., "יום שישי" for Friday)
+     */
+    private String getHebrewDayName(LocalDate date) {
+        return switch (date.getDayOfWeek()) {
+            case SUNDAY -> "יום ראשון";
+            case MONDAY -> "יום שני";
+            case TUESDAY -> "יום שלישי";
+            case WEDNESDAY -> "יום רביעי";
+            case THURSDAY -> "יום חמישי";
+            case FRIDAY -> "יום שישי";
+            case SATURDAY -> "יום שבת";
+        };
     }
 }

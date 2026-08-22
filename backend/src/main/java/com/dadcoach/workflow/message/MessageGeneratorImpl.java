@@ -386,6 +386,15 @@ public class MessageGeneratorImpl implements MessageGenerator {
             case ERROR_GENERIC -> "Apologize for an error and ask them to try again. " +
                 "Be brief and reassuring.";
                 
+            case ERROR_SCHEDULE_QUALITY_TIME -> "Apologize for having trouble finding available time slots. " +
+                "Ask them to try again. Be understanding and helpful.";
+                
+            case ERROR_QUALITY_TIME_FOLLOW_UP -> "Apologize for the error and ask about their Quality Time completion. " +
+                "Ask if they completed their session with their child. Be understanding.";
+                
+            case ERROR_WAITING -> "Apologize for the processing error and present available options. " +
+                "Suggest checking schedule, getting activity ideas, or scheduling new Quality Time.";
+                
             case PROCESSING -> "Let the father know you're still working on their request. " +
                 "Be brief and reassuring that you'll get back to them shortly.";
         };

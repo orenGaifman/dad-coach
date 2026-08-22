@@ -307,16 +307,27 @@ public class WorkflowEngineImpl implements WorkflowEngine {
      */
     private OutboundMessageDto doProcessMessage(InboundMessageDto message) {
         
+        // Context holders for enhanced error handling (Bug 2 fix)
+        // These are populated as we progress through processing, enabling state-specific error responses
+        UUID fatherUuidHolder = null;
+        String fatherLocaleHolder = "en";
+        WorkflowState currentStateHolder = null;
+        String messageTextHolder = null;
+        
         try {
             // Step 0: Check idempotency — if duplicate, return cached response immediately
+            // Uses enhanced duplicate detection that checks both idempotency key AND content fingerprint
+            // to catch WhatsApp webhook retries with different delivery IDs but identical content
             String idempotencyKey = message.idempotencyKey();
-            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                Optional<OutboundMessageDto> cached = idempotencyService.checkDuplicate(idempotencyKey);
-                if (cached.isPresent()) {
-                    log.info("Duplicate message detected for idempotency key '{}'. Returning cached response.",
-                            idempotencyKey);
-                    return cached.get();
-                }
+            Optional<OutboundMessageDto> cached = idempotencyService.checkDuplicate(
+                    idempotencyKey, 
+                    message.fatherChannelIdentity(), 
+                    message.textContent()
+            );
+            if (cached.isPresent()) {
+                log.info("Duplicate message detected for idempotency key '{}'. Returning cached response.",
+                        idempotencyKey);
+                return cached.get();
             }
             
             // Step 1: Parse and validate message (already done by channel layer)
@@ -325,6 +336,7 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 messageText = "";
             }
             messageText = messageText.trim();
+            messageTextHolder = messageText; // Capture for error handling
             
             // Step 2: Identify father from phone number
             String phoneNumber = message.fatherChannelIdentity();
@@ -332,6 +344,10 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                     .orElseThrow(() -> new ResourceNotFoundException("Father", phoneNumber));
             
             UUID fatherUuid = deriveUuid(father.getId());
+            
+            // Capture context for error handling
+            fatherUuidHolder = fatherUuid;
+            fatherLocaleHolder = father.getLocale() != null ? father.getLocale() : "en";
             
             // Set up structured logging context with father_id
             // Implements Requirement 16.6: ALL logs SHALL include father_id
@@ -350,6 +366,8 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                     currentState = WorkflowState.WELCOME;
                     log.warn("Father has null workflow state, defaulting to WELCOME");
                 }
+                
+                currentStateHolder = currentState; // Capture for error handling
                 
                 ctx.setState(currentState);
                 
@@ -463,10 +481,14 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 OutboundMessageDto response = buildResponse(fatherUuid, finalResponseMessage);
                 
                 // Step 10: Record idempotency key to prevent duplicate processing
+                // Records both idempotency key AND content fingerprint for enhanced duplicate detection
                 // (idempotencyKey was already extracted at the start of this method)
-                if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                    idempotencyService.recordProcessed(idempotencyKey, response);
-                }
+                idempotencyService.recordProcessed(
+                        idempotencyKey,
+                        message.fatherChannelIdentity(),
+                        message.textContent(),
+                        response
+                );
                 
                 return response;
             }
@@ -481,12 +503,23 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                     "I don't recognize this number. Please complete onboarding first."
             );
         } catch (Exception e) {
-            log.error("Error processing message {} for father {}: {}", 
-                    message.messageId(), message.fatherChannelIdentity(), e.getMessage(), e);
+            // Enhanced error logging with full context (Bug 2 fix - Requirement 2.4, 2.5, 2.6)
+            // Log comprehensive error context including: father_id, current_workflow_state, message, error_type
+            log.error("Error processing message: father_id={}, state={}, message={}, error_type={}", 
+                    fatherUuidHolder, 
+                    currentStateHolder, 
+                    truncateForLog(messageTextHolder), 
+                    e.getClass().getSimpleName(), 
+                    e);
+            
+            // Attempt state-specific fallback before generic error
+            // If we have state context, use state-specific error message; otherwise fall back to generic
+            String errorResponse = getStateSpecificErrorResponse(currentStateHolder, fatherLocaleHolder);
+            
             return createErrorResponse(
-                    UUID.randomUUID(),
-                    "en",
-                    "Something went wrong. Please try again."
+                    fatherUuidHolder != null ? fatherUuidHolder : UUID.randomUUID(),
+                    fatherLocaleHolder,
+                    errorResponse
             );
         }
     }
@@ -747,13 +780,58 @@ public class WorkflowEngineImpl implements WorkflowEngine {
     private OutboundMessageDto createErrorResponse(UUID fatherId, String locale, String message) {
         String errorMessage;
         if ("he".equals(locale)) {
-            errorMessage = "משהו השתבש. אנא נסה שוב.";
+            // For Hebrew locale, use the provided message if it's already in Hebrew,
+            // otherwise use a generic Hebrew error
+            if (message != null && (message.contains("מצטער") || message.contains("משהו"))) {
+                errorMessage = message;
+            } else {
+                errorMessage = "משהו השתבש. אנא נסה שוב.";
+            }
         } else {
             errorMessage = message != null ? message : "Something went wrong. Please try again.";
         }
         return buildResponse(fatherId, errorMessage);
     }
     
+    /**
+     * Returns a state-specific error message, falling back to generic if none exists.
+     * 
+     * <p>This method provides contextual error messages based on the father's current
+     * workflow state, giving them actionable guidance instead of a generic error.</p>
+     * 
+     * <p>Implements Requirements 2.4, 2.5, 2.6 from the chatbot-conversation-bugs spec:
+     * - 2.4: Log comprehensive error context
+     * - 2.5: Attempt state-specific fallback templates before generic error
+     * - 2.6: Preserve conversation context with state-specific recovery options</p>
+     * 
+     * @param state the current workflow state (may be null if not yet determined)
+     * @param locale the father's preferred locale ("he" for Hebrew, "en" for English)
+     * @return a state-specific error message, or generic error if no specific fallback exists
+     */
+    private String getStateSpecificErrorResponse(WorkflowState state, String locale) {
+        // If state is null (error occurred before state was determined), use generic error
+        if (state == null) {
+            return "he".equals(locale)
+                ? "מצטער, משהו השתבש. אפשר לנסות שוב?"
+                : "Sorry, something went wrong. Please try again.";
+        }
+        
+        return switch (state) {
+            case SCHEDULE_QUALITY_TIME -> "he".equals(locale) 
+                ? "מצטער, יש לי בעיה למצוא זמנים פנויים. אפשר לנסות שוב?"
+                : "Sorry, I'm having trouble finding available slots. Can you try again?";
+            case QUALITY_TIME_FOLLOW_UP -> "he".equals(locale)
+                ? "מצטער, משהו השתבש. ספר לי - האם השלמת את זמן האיכות?"
+                : "Sorry, something went wrong. Tell me - did you complete your Quality Time?";
+            case WAITING -> "he".equals(locale)
+                ? "מצטער, לא הצלחתי לעבד את ההודעה. מה תרצה לעשות?"
+                : "Sorry, I couldn't process that. What would you like to do?";
+            default -> "he".equals(locale)
+                ? "מצטער, משהו השתבש. אפשר לנסות שוב?"
+                : "Sorry, something went wrong. Please try again.";
+        };
+    }
+
     /**
      * Derives a stable UUID from the domain Long ID.
      * Uses a deterministic mapping: MSB=0, LSB=domainId.

@@ -130,5 +130,15 @@ public enum WorkflowAction {
      * Triggered when father sends a greeting (היי, hello) in any state.
      * Useful when father wants to start fresh.
      */
-    RESET_TO_WELCOME
+    RESET_TO_WELCOME,
+
+    // ===== Global Actions (Cross-State) =====
+    
+    /**
+     * Acknowledge user frustration with empathetic response.
+     * Triggered when father expresses frustration (e.g., "why again", "already said", "כבר אמרתי").
+     * Responds with empathy before continuing with the appropriate workflow action.
+     * Implements Requirement 2.13, 2.14 - Frustration detection and empathetic response.
+     */
+    ACKNOWLEDGE_FRUSTRATION
 }

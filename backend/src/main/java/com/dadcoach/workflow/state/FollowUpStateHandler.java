@@ -21,6 +21,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -182,7 +184,7 @@ public class FollowUpStateHandler implements StateHandler {
      * <p>This method:</p>
      * <ol>
      *   <li>Loads the system state for the father</li>
-     *   <li>Gets the Mission that needs follow-up from the state</li>
+     *   <li>Gets the Mission that needs follow-up from the state (COMPLETED/ENDED QT, not upcoming)</li>
      *   <li>Extracts any notes from the message beyond simple yes/done</li>
      *   <li>Calls complete() on MissionService which updates streak, belt, etc.</li>
      *   <li>Checks if a new belt was earned</li>
@@ -198,15 +200,12 @@ public class FollowUpStateHandler implements StateHandler {
     private StateAction handleMarkCompleted(WorkflowContext context) {
         SystemState state = systemStateLoader.loadState(context.getFatherId());
         
-        // Get the Mission that needs follow-up (most recent ended one)
-        QualityTimeEvent qualityTimeEvent = state.getNextScheduledQualityTime();
-        if (qualityTimeEvent == null) {
-            // Fallback: check for any scheduled quality time in the state
-            qualityTimeEvent = findQualityTimeForFollowUp(state);
-        }
+        // Get the Mission that needs follow-up - must be a COMPLETED/ENDED QT (end_time < now)
+        // DO NOT use getNextScheduledQualityTime() as that returns UPCOMING events
+        QualityTimeEvent qualityTimeEvent = findQualityTimeForFollowUp(state);
 
         if (qualityTimeEvent == null) {
-            log.warn("No Mission found for follow-up, father: {}", context.getFatherId());
+            log.warn("No completed Quality Time found for follow-up, father: {}", context.getFatherId());
             // Transition to schedule even if no Mission found
             return transitionToScheduleWithGenericMessage(state);
         }
@@ -273,7 +272,7 @@ public class FollowUpStateHandler implements StateHandler {
      * <p>This method:</p>
      * <ol>
      *   <li>Loads the system state for the father</li>
-     *   <li>Gets the Quality Time that needs follow-up</li>
+     *   <li>Gets the Quality Time that needs follow-up (ENDED, not upcoming)</li>
      *   <li>Marks the Quality Time as missed (no streak/belt update)</li>
      *   <li>Generates encouraging message</li>
      *   <li>Returns transition to SCHEDULE_QUALITY_TIME</li>
@@ -285,14 +284,12 @@ public class FollowUpStateHandler implements StateHandler {
     private StateAction handleMarkMissed(WorkflowContext context) {
         SystemState state = systemStateLoader.loadState(context.getFatherId());
         
-        // Get the Quality Time that needs follow-up
-        QualityTimeEvent qualityTimeEvent = state.getNextScheduledQualityTime();
-        if (qualityTimeEvent == null) {
-            qualityTimeEvent = findQualityTimeForFollowUp(state);
-        }
+        // Get the Quality Time that needs follow-up - must be ENDED (end_time < now)
+        // DO NOT use getNextScheduledQualityTime() as that returns UPCOMING events
+        QualityTimeEvent qualityTimeEvent = findQualityTimeForFollowUp(state);
 
         if (qualityTimeEvent == null) {
-            log.warn("No Quality Time found for marking missed, father: {}", context.getFatherId());
+            log.warn("No completed Quality Time found for marking missed, father: {}", context.getFatherId());
             return transitionToScheduleWithGenericMessage(state);
         }
 
@@ -363,21 +360,41 @@ public class FollowUpStateHandler implements StateHandler {
 
     /**
      * Finds the Quality Time event that should be followed up on.
-     * This looks for SCHEDULED quality time events that have ended.
+     * This looks for Quality Time events that have ENDED (scheduledEnd < now).
+     * 
+     * <p>For follow-up, we need to find QT events that have completed their time slot,
+     * not upcoming scheduled ones. The QT may still have status "SCHEDULED" since 
+     * it's pending follow-up confirmation from the father.</p>
      *
      * @param state the system state
      * @return the quality time event to follow up on, or null if none found
      */
     private QualityTimeEvent findQualityTimeForFollowUp(SystemState state) {
         if (state.qualityTimeEvents() == null || state.qualityTimeEvents().isEmpty()) {
+            log.debug("No quality time events found for follow-up");
             return null;
         }
 
-        // Find the most recent scheduled quality time (the one we're following up on)
-        return state.qualityTimeEvents().stream()
-                .filter(qt -> "SCHEDULED".equals(qt.status()))
-                .findFirst()
+        Instant now = Instant.now();
+
+        // Find the most recent Quality Time that has ENDED (scheduledEnd < now)
+        // This is the one we're following up on
+        // Still filter by SCHEDULED status - means not yet processed/confirmed
+        QualityTimeEvent result = state.qualityTimeEvents().stream()
+                .filter(qt -> qt.scheduledEnd() != null && qt.scheduledEnd().isBefore(now))
+                .filter(qt -> "SCHEDULED".equals(qt.status())) // Still SCHEDULED means not yet processed
+                .max(Comparator.comparing(QualityTimeEvent::scheduledEnd))
                 .orElse(null);
+        
+        if (result == null) {
+            log.warn("No completed Quality Time found for follow-up. Events: {}, now: {}", 
+                    state.qualityTimeEvents().size(), now);
+        } else {
+            log.debug("Found Quality Time for follow-up: id={}, scheduledEnd={}", 
+                    result.qualityTimeId(), result.scheduledEnd());
+        }
+        
+        return result;
     }
 
     /**

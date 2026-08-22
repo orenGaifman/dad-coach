@@ -32,6 +32,50 @@ public final class StatePatterns {
     }
 
     // ========================================================================
+    // GLOBAL Frustration Patterns (Requirements 2.13, 2.14)
+    // ========================================================================
+    
+    /**
+     * Global frustration patterns that can match in any state.
+     * Should be checked FIRST before state-specific patterns.
+     * 
+     * <p>Frustration indicators include:</p>
+     * <ul>
+     *   <li><b>FRUSTRATION_EN</b> (English): why again|repeat|already said|already told|you asked|asked before → ACKNOWLEDGE_FRUSTRATION</li>
+     *   <li><b>FRUSTRATION_HE</b> (Hebrew): למה שוב|כבר אמרתי|שאלת כבר|אתה שואל שוב|חוזר על → ACKNOWLEDGE_FRUSTRATION</li>
+     * </ul>
+     * 
+     * <p><b>Validates: Requirements 2.13, 2.14</b> - Detect frustration pattern and respond with empathy.</p>
+     */
+    public static final List<StatePattern> FRUSTRATION_PATTERNS = List.of(
+        // ----------------------------------------------------------------
+        // FRUSTRATION_EN (English): why again|repeat|already said|already told|you asked|asked before → ACKNOWLEDGE_FRUSTRATION
+        // Matches English frustration expressions indicating the user feels
+        // they are being asked to repeat themselves or the bot is repeating
+        // Case-insensitive matching with (?i) flag
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "FRUSTRATION_EN",
+            Pattern.compile("(?i).*(why again|repeat|already said|already told|you asked|asked before).*"),
+            WorkflowAction.ACKNOWLEDGE_FRUSTRATION
+        ),
+        
+        // ----------------------------------------------------------------
+        // FRUSTRATION_HE (Hebrew): למה שוב|כבר אמרתי|שאלת כבר|אתה שואל שוב|חוזר על → ACKNOWLEDGE_FRUSTRATION
+        // למה שוב = lama shuv (why again)
+        // כבר אמרתי = kvar amarti (I already said)
+        // שאלת כבר = sha'alta kvar (you already asked)
+        // אתה שואל שוב = ata sho'el shuv (you're asking again)
+        // חוזר על = chozer al (repeating)
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "FRUSTRATION_HE",
+            Pattern.compile(".*(למה שוב|כבר אמרתי|שאלת כבר|אתה שואל שוב|חוזר על).*"),
+            WorkflowAction.ACKNOWLEDGE_FRUSTRATION
+        )
+    );
+
+    // ========================================================================
     // WELCOME State Patterns (Requirement 4.2)
     // ========================================================================
     

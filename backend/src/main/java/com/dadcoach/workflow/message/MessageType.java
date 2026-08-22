@@ -170,6 +170,47 @@ public enum MessageType {
      */
     ERROR_GENERIC("error_generic"),
     
+    // ─── State-Specific Error Messages ──────────────────────────────────────
+    
+    /**
+     * Error message specific to SCHEDULE_QUALITY_TIME state.
+     * Provides context about slot finding issues and actionable guidance.
+     * 
+     * <p>Used when an error occurs during the scheduling flow, such as
+     * calendar API timeouts or slot generation failures.</p>
+     * 
+     * <p>Context required: fatherName</p>
+     * 
+     * @see WorkflowState#SCHEDULE_QUALITY_TIME
+     */
+    ERROR_SCHEDULE_QUALITY_TIME("error_schedule_quality_time"),
+    
+    /**
+     * Error message specific to QUALITY_TIME_FOLLOW_UP state.
+     * Provides context about follow-up issues and prompts for QT completion status.
+     * 
+     * <p>Used when an error occurs during follow-up processing, such as
+     * database errors when recording completion status.</p>
+     * 
+     * <p>Context required: fatherName, childName</p>
+     * 
+     * @see WorkflowState#QUALITY_TIME_FOLLOW_UP
+     */
+    ERROR_QUALITY_TIME_FOLLOW_UP("error_quality_time_follow_up"),
+    
+    /**
+     * Error message specific to WAITING state.
+     * Provides context about the waiting state and available actions.
+     * 
+     * <p>Used when an error occurs while processing messages in the WAITING
+     * state, guiding the user on what they can do next.</p>
+     * 
+     * <p>Context required: fatherName</p>
+     * 
+     * @see WorkflowState#WAITING
+     */
+    ERROR_WAITING("error_waiting"),
+    
     /**
      * Processing message sent when response takes longer than 30 seconds.
      * Lets the father know the system is still working on their request.

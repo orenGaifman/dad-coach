@@ -3,10 +3,13 @@ package com.dadcoach.workflow.message;
 import com.dadcoach.systemstate.AvailableSlot;
 import com.dadcoach.workflow.Belt;
 
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -686,6 +689,72 @@ public final class MessageContext {
         return LOCALE_HEBREW.equals(this.locale) 
             ? Locale.forLanguageTag("he-IL") 
             : Locale.ENGLISH;
+    }
+    
+    // ─── Timezone-Aware Date Calculation Methods ─────────────────────────────
+    
+    /**
+     * Calculates "tomorrow" in the father's timezone.
+     * 
+     * <p>This method addresses Bug 3: Date Calculation Error, ensuring that
+     * "tomorrow" is always computed correctly relative to the father's configured
+     * timezone, not the server's timezone.</p>
+     * 
+     * <p>Example: If it's 11:00 PM on Friday in Asia/Jerusalem but 8:00 PM on Friday
+     * in UTC, calling this method with timezone "Asia/Jerusalem" will correctly
+     * return Saturday, not Friday.</p>
+     * 
+     * @return LocalDate representing tomorrow in the context's timezone
+     * @see #getTodayInTimezone()
+     * @see #validateDayOfWeek(LocalDate, String)
+     */
+    public LocalDate getTomorrowInTimezone() {
+        ZoneId zone = getTimezoneAsZoneId();
+        return LocalDate.now(zone).plusDays(1);
+    }
+    
+    /**
+     * Calculates "today" in the father's timezone.
+     * 
+     * <p>This method addresses Bug 3: Date Calculation Error, ensuring that
+     * "today" is always computed correctly relative to the father's configured
+     * timezone, not the server's timezone.</p>
+     * 
+     * <p>Example: If it's 1:00 AM on Saturday in Asia/Jerusalem but 10:00 PM on Friday
+     * in UTC, calling this method with timezone "Asia/Jerusalem" will correctly
+     * return Saturday, not Friday.</p>
+     * 
+     * @return LocalDate representing today in the context's timezone
+     * @see #getTomorrowInTimezone()
+     */
+    public LocalDate getTodayInTimezone() {
+        ZoneId zone = getTimezoneAsZoneId();
+        return LocalDate.now(zone);
+    }
+    
+    /**
+     * Validates that the day-of-week in a formatted string matches the actual date.
+     * 
+     * <p>This method is used to verify date formatting correctness before sending
+     * messages to users. It ensures the displayed day name (e.g., "Friday", "שישי")
+     * actually corresponds to the calendar date being displayed.</p>
+     * 
+     * <p>This validation helps catch bugs where timezone mismatches cause the
+     * wrong day-of-week to be displayed for a date.</p>
+     * 
+     * @param date the date to validate
+     * @param formattedString the formatted string containing the day name
+     * @return true if the formatted string contains the correct day name for the date
+     */
+    public boolean validateDayOfWeek(LocalDate date, String formattedString) {
+        if (date == null || formattedString == null || formattedString.isEmpty()) {
+            return false;
+        }
+        
+        DayOfWeek actualDay = date.getDayOfWeek();
+        // Check if formatted string contains correct day name for locale
+        String expectedDayName = actualDay.getDisplayName(TextStyle.FULL, getDisplayLocale());
+        return formattedString.contains(expectedDayName);
     }
     
     // ─── Object Methods ──────────────────────────────────────────────────────
