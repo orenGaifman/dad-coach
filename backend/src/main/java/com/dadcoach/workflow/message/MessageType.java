@@ -221,7 +221,65 @@ public enum MessageType {
      * 
      * <p>Context required: fatherName</p>
      */
-    PROCESSING("processing");
+    PROCESSING("processing"),
+    
+    // ─── Frustration Acknowledgment Messages ────────────────────────────────────
+    
+    /**
+     * Empathetic acknowledgment message when user frustration is detected.
+     * Prepended to the normal workflow response when frustration patterns match.
+     * 
+     * <p>Implements Requirements 2.13, 2.14, 2.15 from chatbot-conversation-bugs spec:
+     * Detects frustration indicators like "why again", "already said", "כבר אמרתי"
+     * and responds with empathy before continuing with normal workflow.</p>
+     * 
+     * <p>Context required: none (standalone empathy prefix)</p>
+     * 
+     * @see WorkflowAction#ACKNOWLEDGE_FRUSTRATION
+     */
+    FRUSTRATION_ACKNOWLEDGMENT("frustration_acknowledgment"),
+    
+    // ─── Belt Promotion Messages ────────────────────────────────────────────
+    
+    /**
+     * Celebration message when father earns a new belt.
+     * Sent after Quality Time completion when progress threshold is reached.
+     * 
+     * <p>Context required: fatherName, beltEarned, currentBelt</p>
+     */
+    BELT_PROMOTION("belt_promotion"),
+    
+    // ─── Pre-QT Reminder State Messages ─────────────────────────────────────
+    
+    /**
+     * Reminder message sent approximately 1 hour before scheduled Quality Time.
+     * Includes activity suggestions and confirmation of the upcoming event.
+     * 
+     * <p>Context required: fatherName, childName, scheduledStart</p>
+     * 
+     * @see WorkflowState#QUALITY_TIME_REMINDER
+     */
+    QUALITY_TIME_REMINDER("quality_time_reminder"),
+    
+    // ─── Inactivity Messages ────────────────────────────────────────────────
+    
+    /**
+     * Gentle re-engagement message sent after 3 days of inactivity.
+     * Supportive tone, reminds about any scheduled Quality Time.
+     * 
+     * <p>Context required: fatherName, childName (optional), scheduledStart (optional)</p>
+     * 
+     * @see WorkflowState#INACTIVITY_NUDGE
+     */
+    INACTIVITY_NUDGE("inactivity_nudge"),
+    
+    /**
+     * Message sent when father has been inactive for 7+ days and coaching is paused.
+     * Supportive tone, leaves door open for return.
+     * 
+     * <p>Context required: fatherName</p>
+     */
+    COACHING_PAUSED("coaching_paused");
     
     private final String templateKey;
     

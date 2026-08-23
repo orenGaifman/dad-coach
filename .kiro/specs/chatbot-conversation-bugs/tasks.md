@@ -342,9 +342,9 @@ Each bug follows the exploratory bugfix workflow: write exploration tests to con
   - Verify test passes on UNFIXED code
   - _Requirements: 3.9, 3.10_
 
-- [ ] 19. Implement frustration handler fix
+- [x] 19. Implement frustration handler fix
 
-  - [-] 19.1 Add frustration patterns to StatePatterns
+  - [x] 19.1 Add frustration patterns to StatePatterns
     - Add `FRUSTRATION_PATTERNS` list with English patterns ("why again", "repeat", "already said")
     - Add Hebrew patterns ("למה שוב", "כבר אמרתי", "שאלת כבר", "אתה שואל שוב")
     - Map to new `WorkflowAction.ACKNOWLEDGE_FRUSTRATION` action
@@ -353,34 +353,34 @@ Each bug follows the exploratory bugfix workflow: write exploration tests to con
     - _Preservation: Non-frustration messages use standard pattern matching_
     - _Requirements: 2.13, 2.14, 2.15_
 
-  - [~] 19.2 Add ACKNOWLEDGE_FRUSTRATION to WorkflowAction enum
+  - [x] 19.2 Add ACKNOWLEDGE_FRUSTRATION to WorkflowAction enum
     - Add new enum value for frustration acknowledgment
     - _Requirements: 2.13_
 
-  - [~] 19.3 Add frustration handling to WorkflowEngineImpl
+  - [x] 19.3 Add frustration handling to WorkflowEngineImpl
     - Check for frustration patterns FIRST before state-specific patterns
     - Add `getEmpathyMessage(locale)` method for Hebrew/English empathy prefixes
     - Prepend empathy message to normal workflow response
     - _Requirements: 2.13, 2.14, 2.15_
 
-  - [~] 19.4 Add FRUSTRATION_ACKNOWLEDGMENT templates to FallbackMessages
+  - [x] 19.4 Add FRUSTRATION_ACKNOWLEDGMENT templates to FallbackMessages
     - Add empathy message templates in Hebrew and English
     - _Requirements: 2.14_
 
-  - [~] 19.5 Verify bug condition exploration test now passes
+  - [x] 19.5 Verify bug condition exploration test now passes
     - **Property 1: Expected Behavior** - Empathetic Response to Frustration
     - **IMPORTANT**: Re-run the SAME test from task 17 - do NOT write a new test
     - Run bug condition exploration test from step 17
     - **EXPECTED OUTCOME**: Test PASSES (empathy acknowledgment in response)
     - _Requirements: 2.13, 2.14, 2.15_
 
-  - [~] 19.6 Verify preservation tests still pass
+  - [x] 19.6 Verify preservation tests still pass
     - **Property 2: Preservation** - Non-Frustration Messages Unchanged
     - **IMPORTANT**: Re-run the SAME tests from task 18 - do NOT write new tests
     - Run preservation property tests from step 18
     - **EXPECTED OUTCOME**: Tests PASS (no regressions for standard messages)
 
-- [~] 20. Write unit tests for Bug 5
+- [x] 20. Write unit tests for Bug 5
   - Test frustration pattern detection in English
   - Test frustration pattern detection in Hebrew
   - Test empathy prefix is added to response in correct locale
@@ -391,7 +391,7 @@ Each bug follows the exploratory bugfix workflow: write exploration tests to con
 
 ### Bug 6: Status Dictionary Dashboard
 
-- [~] 21. Write bug condition exploration test for dashboard status display
+- [x] 21. Write bug condition exploration test for dashboard status display
   - **Property 1: Bug Condition** - Vague WAITING Status Without Context
   - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
   - **GOAL**: Surface counterexamples that demonstrate WAITING shows only state name
@@ -403,7 +403,7 @@ Each bug follows the exploratory bugfix workflow: write exploration tests to con
   - Document counterexamples found
   - _Requirements: 1.16, 1.17, 1.18_
 
-- [~] 22. Write preservation property tests for existing dashboard functionality (BEFORE implementing fix)
+- [x] 22. Write preservation property tests for existing dashboard functionality (BEFORE implementing fix)
   - **Property 2: Preservation** - Existing Dashboard Functionality Unchanged
   - **IMPORTANT**: Follow observation-first methodology
   - Observe: Father selection works on unfixed dashboard
@@ -413,9 +413,9 @@ Each bug follows the exploratory bugfix workflow: write exploration tests to con
   - Verify test passes on UNFIXED code
   - _Requirements: 3.11, 3.12_
 
-- [ ] 23. Implement status dictionary dashboard fix
+- [x] 23. Implement status dictionary dashboard fix
 
-  - [~] 23.1 Create StatusDictionaryPanel component
+  - [x] 23.1 Create StatusDictionaryPanel component
     - Create new file `dad-coach-web/app/dev/dashboard/components/StatusDictionaryPanel.tsx`
     - Define `STATUS_DEFINITIONS` array with all workflow states (WELCOME, SCHEDULE_QUALITY_TIME, WAITING, QUALITY_TIME_FOLLOW_UP, ACTIVITY_IDEAS)
     - Include displayName, description, type, and possibleActions for each state
@@ -425,31 +425,31 @@ Each bug follows the exploratory bugfix workflow: write exploration tests to con
     - _Preservation: Existing dashboard functionality unchanged_
     - _Requirements: 2.16, 2.17, 2.18_
 
-  - [~] 23.2 Add StatusDictionaryPanel to dashboard page
+  - [x] 23.2 Add StatusDictionaryPanel to dashboard page
     - Import StatusDictionaryPanel in `dad-coach-web/app/dev/dashboard/page.tsx`
     - Add component to dashboard layout after existing panels
     - _Requirements: 2.16_
 
-  - [~] 23.3 Add contextual status description to FatherStatePanel
+  - [x] 23.3 Add contextual status description to FatherStatePanel
     - Add `getStatusContext(state, nextQTTime)` function
     - Return contextual descriptions: "Waiting - QT scheduled for {time}", "Following up on completed Quality Time", etc.
     - Update status display to show context alongside state name
     - _Requirements: 2.17, 2.18_
 
-  - [~] 23.4 Verify bug condition exploration test now passes
+  - [x] 23.4 Verify bug condition exploration test now passes
     - **Property 1: Expected Behavior** - Contextual Status With Dictionary
     - **IMPORTANT**: Re-run the SAME test from task 21 - do NOT write a new test
     - Run bug condition exploration test from step 21
     - **EXPECTED OUTCOME**: Test PASSES (status dictionary present, contextual descriptions shown)
     - _Requirements: 2.16, 2.17, 2.18_
 
-  - [~] 23.5 Verify preservation tests still pass
+  - [x] 23.5 Verify preservation tests still pass
     - **Property 2: Preservation** - Existing Dashboard Functionality Unchanged
     - **IMPORTANT**: Re-run the SAME tests from task 22 - do NOT write new tests
     - Run preservation property tests from step 22
     - **EXPECTED OUTCOME**: Tests PASS (no regressions for existing functionality)
 
-- [~] 24. Write unit tests for Bug 6
+- [x] 24. Write unit tests for Bug 6
   - Test StatusDictionaryPanel renders all workflow states
   - Test contextual description generation for each state
   - Test dashboard integration with new component
@@ -460,7 +460,7 @@ Each bug follows the exploratory bugfix workflow: write exploration tests to con
 
 ### Integration Tests
 
-- [~] 25. Write integration tests for all bug fixes
+- [x] 25. Write integration tests for all bug fixes
   - Test full flow: duplicate message handling end-to-end (send duplicate, verify single processing)
   - Test full flow: error handling with state recovery (inject error, verify state-specific response)
   - Test full flow: date display across timezone boundaries (verify correct tomorrow in father's TZ)
@@ -473,7 +473,7 @@ Each bug follows the exploratory bugfix workflow: write exploration tests to con
 
 ### Final Checkpoint
 
-- [~] 26. Checkpoint - Ensure all tests pass
+- [x] 26. Checkpoint - Ensure all tests pass
   - Run all unit tests for all 6 bug fixes
   - Run all property-based tests (exploration and preservation)
   - Run all integration tests

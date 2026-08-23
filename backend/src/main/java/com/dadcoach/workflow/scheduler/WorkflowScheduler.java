@@ -337,6 +337,184 @@ public class WorkflowScheduler {
         }
     }
     
+    // ─── Pre-QT Reminder Job (1 hour before QT) ────────────────────────────────
+    
+    /**
+     * Pre-Quality Time reminder job that runs every 15 minutes.
+     * 
+     * <p>This job handles the transition from WAITING to QUALITY_TIME_REMINDER
+     * approximately 1 hour before a scheduled Quality Time starts.</p>
+     * 
+     * <p>Key differences from morning reminder:
+     * <ul>
+     *   <li>Morning reminder: Sent at 8 AM local time, just sends a message</li>
+     *   <li>Pre-QT reminder: Sent 1 hour before QT, transitions state to QUALITY_TIME_REMINDER</li>
+     * </ul>
+     * </p>
+     * 
+     * <p>The job is idempotent — it uses the {@code pre_qt_reminder_sent} flag to ensure
+     * that each Quality Time only triggers one pre-QT reminder.</p>
+     * 
+     * <p>Implements workflow architecture analysis: QUALITY_TIME_REMINDER state.</p>
+     */
+    @Scheduled(fixedRateString = "${dadcoach.scheduler.pre-qt-reminder-interval-ms:900000}") // Every 15 minutes
+    @Transactional
+    public void processPreQtReminders() {
+        try (WorkflowLoggingContext ctx = WorkflowLoggingContext.forJob("pre_qt_reminder")) {
+            log.info("Starting pre-QT reminder job");
+            
+            SchedulerJobLog jobLog = new SchedulerJobLog("pre_qt_reminder");
+            jobLogRepository.save(jobLog);
+            
+            int processedCount = 0;
+            int errorCount = 0;
+            int batchSize = getBatchSize();
+            
+            try {
+                // Find Quality Times starting within the next 30-90 minutes
+                // (window allows for 15-minute job interval margin)
+                Instant now = Instant.now();
+                Instant windowStart = now.plus(30, java.time.temporal.ChronoUnit.MINUTES);
+                Instant windowEnd = now.plus(90, java.time.temporal.ChronoUnit.MINUTES);
+                
+                List<QualityTime> approachingQualityTimes = qualityTimeRepository
+                        .findApproachingWithoutPreQtReminder(windowStart, windowEnd);
+                
+                log.info("Found {} Quality Times approaching that need pre-QT reminder", 
+                        approachingQualityTimes.size());
+                
+                // Process in batches
+                for (int i = 0; i < approachingQualityTimes.size(); i += batchSize) {
+                    int batchEnd = Math.min(i + batchSize, approachingQualityTimes.size());
+                    List<QualityTime> batch = approachingQualityTimes.subList(i, batchEnd);
+                    
+                    for (QualityTime qualityTime : batch) {
+                        try {
+                            processPreQtReminderForQualityTime(qualityTime);
+                            processedCount++;
+                            jobLog.incrementProcessed();
+                        } catch (Exception e) {
+                            errorCount++;
+                            jobLog.incrementErrors();
+                            log.error("Error processing pre-QT reminder for Quality Time {}: {}", 
+                                    qualityTime.getId(), e.getMessage(), e);
+                        }
+                    }
+                    
+                    log.debug("Processed batch {}-{} of {} pre-QT reminders", 
+                            i + 1, batchEnd, approachingQualityTimes.size());
+                }
+                
+                jobLog.markCompleted(processedCount, errorCount);
+                log.info("Pre-QT reminder job completed: processed={}, errors={}", 
+                        processedCount, errorCount);
+                
+            } catch (Exception e) {
+                jobLog.markFailed(processedCount, errorCount + 1);
+                log.error("Pre-QT reminder job failed: {}", e.getMessage(), e);
+                throw e;
+            } finally {
+                jobLogRepository.save(jobLog);
+            }
+        }
+    }
+    
+    /**
+     * Process a single Quality Time for pre-QT reminder transition.
+     * 
+     * <p>This method:
+     * <ol>
+     *   <li>Verifies the father is in WAITING state</li>
+     *   <li>Transitions the father to QUALITY_TIME_REMINDER state</li>
+     *   <li>Sends activity ideas and reminder message</li>
+     *   <li>Marks the Quality Time's pre_qt_reminder_sent flag as true</li>
+     * </ol>
+     * </p>
+     * 
+     * @param qualityTime the Quality Time approaching
+     */
+    private void processPreQtReminderForQualityTime(QualityTime qualityTime) {
+        Father father = qualityTime.getFather();
+        if (father == null) {
+            father = fatherRepository.findById(qualityTime.getFatherId())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Father not found for Quality Time: " + qualityTime.getId()));
+        }
+        
+        // Only process if father is in WAITING state
+        if (father.getCurrentWorkflowState() != WorkflowState.WAITING) {
+            log.debug("Father {} not in WAITING state (currently {}), skipping pre-QT reminder",
+                    father.getId(), father.getCurrentWorkflowState());
+            // Still mark as sent to avoid re-processing
+            qualityTime.setPreQtReminderSent(true);
+            qualityTimeRepository.save(qualityTime);
+            return;
+        }
+        
+        UUID fatherUuid = deriveUuid(father.getId());
+        
+        try (WorkflowLoggingContext ctx = WorkflowLoggingContext.forFather(fatherUuid)) {
+            log.info("Processing pre-QT reminder for Quality Time {} (starts at {})", 
+                    qualityTime.getId(), qualityTime.getScheduledStart());
+            
+            // Transition father from WAITING to QUALITY_TIME_REMINDER
+            WorkflowState fromState = father.getCurrentWorkflowState();
+            father.setPreviousWorkflowState(fromState);
+            father.setCurrentWorkflowState(WorkflowState.QUALITY_TIME_REMINDER);
+            father.setWorkflowStateEnteredAt(Instant.now());
+            fatherRepository.save(father);
+            
+            // Log state transition
+            ctx.setTransition(fromState, WorkflowState.QUALITY_TIME_REMINDER, "QUALITY_TIME_APPROACHING");
+            log.info("State transition: {} -> QUALITY_TIME_REMINDER (trigger: QUALITY_TIME_APPROACHING)", 
+                    fromState);
+            ctx.clearTransition();
+            
+            // Send pre-QT reminder message with activity ideas
+            sendPreQtReminderMessage(qualityTime, father);
+            
+            // Mark pre_qt_reminder_sent=true (idempotency)
+            qualityTime.setPreQtReminderSent(true);
+            qualityTimeRepository.save(qualityTime);
+            
+            log.info("Successfully processed pre-QT reminder for Quality Time {}", qualityTime.getId());
+        }
+    }
+    
+    /**
+     * Sends the pre-QT reminder message with activity ideas.
+     * 
+     * @param qualityTime the upcoming Quality Time
+     * @param father the father to send the message to
+     */
+    private void sendPreQtReminderMessage(QualityTime qualityTime, Father father) {
+        String locale = father.getLocale() != null ? father.getLocale() : "en";
+        String timezone = father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem";
+        String childName = qualityTime.getChild() != null ? qualityTime.getChild().getName() : "your child";
+        String fatherName = father.getDisplayName() != null ? father.getDisplayName() : "";
+        
+        // Build message context
+        MessageContext context = MessageContext.builder()
+                .messageType(MessageType.QUALITY_TIME_REMINDER)
+                .fatherName(fatherName)
+                .childName(childName)
+                .locale(locale)
+                .timezone(timezone)
+                .scheduledStart(qualityTime.getScheduledStart())
+                .build();
+        
+        // Generate message using fallback templates
+        String message = fallbackMessages.getProcessed(MessageType.QUALITY_TIME_REMINDER, context);
+        
+        try {
+            whatsAppService.sendText(father.getPhone(), message);
+            log.debug("Sent pre-QT reminder message to father {}", father.getId());
+        } catch (Exception e) {
+            log.error("Failed to send pre-QT reminder message: {}", e.getMessage(), e);
+            // Don't rethrow - the state transition is already done
+        }
+    }
+    
     /**
      * Follow-up transition job that runs every 15 minutes.
      * 
@@ -733,6 +911,162 @@ public class WorkflowScheduler {
     }
 
     // ─── Weekly Goal Jobs ────────────────────────────────────────────────────
+
+    /**
+     * Inactivity nudge job that runs daily to detect inactive fathers.
+     * 
+     * <p>This job detects fathers who haven't interacted for 3+ days and:
+     * <ol>
+     *   <li>Transitions them to INACTIVITY_NUDGE state</li>
+     *   <li>Sends a gentle re-engagement message</li>
+     * </ol>
+     * </p>
+     * 
+     * <p>Fathers in INACTIVITY_NUDGE state who remain inactive for 7+ total days
+     * will have their status changed to PAUSED (handled separately).</p>
+     * 
+     * <p>Implements LLD Section 9.1: Inactivity detection and re-engagement.</p>
+     */
+    @Scheduled(cron = "${dadcoach.scheduler.inactivity-nudge-cron:0 0 10 * * *}") // Daily at 10 AM
+    @Transactional
+    public void processInactivityNudges() {
+        try (WorkflowLoggingContext ctx = WorkflowLoggingContext.forJob("inactivity_nudge")) {
+            log.info("Starting inactivity nudge job");
+            
+            SchedulerJobLog jobLog = new SchedulerJobLog("inactivity_nudge");
+            jobLogRepository.save(jobLog);
+            
+            int processedCount = 0;
+            int errorCount = 0;
+            int batchSize = getBatchSize();
+            
+            try {
+                // Calculate the cutoff time: 3 days ago
+                Instant cutoffTime = Instant.now().minus(INACTIVITY_NUDGE_THRESHOLD_DAYS, java.time.temporal.ChronoUnit.DAYS);
+                
+                // Find fathers who:
+                // - Are in active states (WAITING, SCHEDULE_QUALITY_TIME, etc.)
+                // - Haven't interacted in 3+ days
+                // - Are NOT already in INACTIVITY_NUDGE state
+                List<Father> inactiveFathers = fatherRepository.findInactiveFathersForNudge(cutoffTime);
+                
+                log.info("Found {} inactive fathers to nudge", inactiveFathers.size());
+                
+                // Process in batches
+                for (int i = 0; i < inactiveFathers.size(); i += batchSize) {
+                    int batchEnd = Math.min(i + batchSize, inactiveFathers.size());
+                    List<Father> batch = inactiveFathers.subList(i, batchEnd);
+                    
+                    for (Father father : batch) {
+                        try {
+                            processInactivityNudgeForFather(father);
+                            processedCount++;
+                            jobLog.incrementProcessed();
+                        } catch (Exception e) {
+                            errorCount++;
+                            jobLog.incrementErrors();
+                            log.error("Error processing inactivity nudge for father {}: {}", 
+                                    father.getId(), e.getMessage(), e);
+                        }
+                    }
+                    
+                    log.debug("Processed batch {}-{} of {} inactive fathers", 
+                            i + 1, batchEnd, inactiveFathers.size());
+                }
+                
+                jobLog.markCompleted(processedCount, errorCount);
+                log.info("Inactivity nudge job completed: processed={}, errors={}", 
+                        processedCount, errorCount);
+                
+            } catch (Exception e) {
+                jobLog.markFailed(processedCount, errorCount + 1);
+                log.error("Inactivity nudge job failed: {}", e.getMessage(), e);
+                throw e;
+            } finally {
+                jobLogRepository.save(jobLog);
+            }
+        }
+    }
+    
+    /**
+     * Inactivity threshold: 3 days of no interaction.
+     */
+    static final long INACTIVITY_NUDGE_THRESHOLD_DAYS = 3;
+    
+    /**
+     * Process a single father who needs an inactivity nudge.
+     * 
+     * @param father the father to process
+     */
+    private void processInactivityNudgeForFather(Father father) {
+        // Don't nudge if already in INACTIVITY_NUDGE state
+        if (father.getCurrentWorkflowState() == WorkflowState.INACTIVITY_NUDGE) {
+            log.debug("Father {} already in INACTIVITY_NUDGE state, skipping", father.getId());
+            return;
+        }
+        
+        try (WorkflowLoggingContext ctx = WorkflowLoggingContext.forFather(father.getId())) {
+            ctx.setState(father.getCurrentWorkflowState());
+            
+            log.info("Processing inactivity nudge (last interaction: {})", father.getLastInteractionAt());
+            
+            // Store previous state
+            WorkflowState fromState = father.getCurrentWorkflowState();
+            
+            // Transition to INACTIVITY_NUDGE
+            father.setPreviousWorkflowState(fromState);
+            father.setCurrentWorkflowState(WorkflowState.INACTIVITY_NUDGE);
+            father.setWorkflowStateEnteredAt(Instant.now());
+            fatherRepository.save(father);
+            
+            // Log state transition
+            ctx.setTransition(fromState, WorkflowState.INACTIVITY_NUDGE, "INACTIVITY_THRESHOLD");
+            log.info("State transition: {} -> INACTIVITY_NUDGE (trigger: INACTIVITY_THRESHOLD)", fromState);
+            ctx.clearTransition();
+            
+            // Send nudge message
+            sendInactivityNudgeMessage(father);
+            
+            log.info("Successfully processed inactivity nudge for father {}", father.getId());
+        }
+    }
+    
+    /**
+     * Sends an inactivity nudge message to the father.
+     * 
+     * @param father the father to send the message to
+     */
+    private void sendInactivityNudgeMessage(Father father) {
+        String message = buildInactivityNudgeMessage(father);
+        
+        try {
+            whatsAppService.sendText(father.getPhone(), message);
+            log.debug("Sent inactivity nudge message to phone {}", maskPhone(father.getPhone()));
+        } catch (Exception e) {
+            log.error("Failed to send inactivity nudge message: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Builds an inactivity nudge message in the father's preferred language.
+     * 
+     * @param father the father to build the message for
+     * @return the localized nudge message
+     */
+    private String buildInactivityNudgeMessage(Father father) {
+        String fatherName = father.getDisplayName() != null ? father.getDisplayName() : "";
+        String locale = father.getLocale() != null ? father.getLocale() : "en";
+        
+        // Build context for fallback message
+        MessageContext context = MessageContext.builder()
+                .messageType(MessageType.INACTIVITY_NUDGE)
+                .fatherName(fatherName)
+                .locale(locale)
+                .timezone(father.getTimezone())
+                .build();
+        
+        return fallbackMessages.getProcessed(MessageType.INACTIVITY_NUDGE, context);
+    }
 
     /**
      * Weekly goal completion job that runs every Sunday at 6 AM Israel time.

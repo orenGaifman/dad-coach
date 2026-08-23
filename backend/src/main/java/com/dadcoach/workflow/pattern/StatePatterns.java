@@ -601,4 +601,148 @@ public final class StatePatterns {
             WorkflowAction.MARK_MISSED
         )
     );
+
+    // ========================================================================
+    // QUALITY_TIME_REMINDER State Patterns
+    // ========================================================================
+    
+    /**
+     * Patterns for the QUALITY_TIME_REMINDER workflow state.
+     * 
+     * <p>Expected patterns when father receives a pre-QT reminder:</p>
+     * <ul>
+     *   <li><b>CANCEL</b>: cancel|ביטול → CANCEL_QUALITY_TIME</li>
+     *   <li><b>REQUEST_IDEAS</b>: ideas|רעיונות → TRANSITION_TO_ACTIVITY_IDEAS</li>
+     *   <li><b>ACKNOWLEDGE</b>: ok|אוקי|thanks → ACKNOWLEDGE_REMINDER</li>
+     * </ul>
+     */
+    public static final List<StatePattern> REMINDER_PATTERNS = List.of(
+        // ----------------------------------------------------------------
+        // CANCEL (English): cancel|can't make it|won't be able → CANCEL_QUALITY_TIME
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "CANCEL",
+            Pattern.compile("(?i).*(cancel|can't make it|won't be able|can not make|cannot make).*"),
+            WorkflowAction.CANCEL_QUALITY_TIME
+        ),
+        
+        // ----------------------------------------------------------------
+        // CANCEL (Hebrew): ביטול|לא יכול|לא אוכל → CANCEL_QUALITY_TIME
+        // ביטול = bitul (cancel)
+        // לא יכול = lo yachol (can't)
+        // לא אוכל = lo uchal (won't be able)
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "CANCEL_HE",
+            Pattern.compile(".*(ביטול|לא יכול|לא אוכל|בטל).*"),
+            WorkflowAction.CANCEL_QUALITY_TIME
+        ),
+        
+        // ----------------------------------------------------------------
+        // REQUEST_IDEAS (English): ideas|activity|suggestions → TRANSITION_TO_ACTIVITY_IDEAS
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "REQUEST_IDEAS_REMINDER",
+            Pattern.compile("(?i).*(ideas|activity|suggestions|what can i do).*"),
+            WorkflowAction.TRANSITION_TO_ACTIVITY_IDEAS
+        ),
+        
+        // ----------------------------------------------------------------
+        // REQUEST_IDEAS (Hebrew): רעיונות|פעילות|הצעות → TRANSITION_TO_ACTIVITY_IDEAS
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "REQUEST_IDEAS_REMINDER_HE",
+            Pattern.compile(".*(רעיונות|פעילות|הצעות|מה אפשר לעשות).*"),
+            WorkflowAction.TRANSITION_TO_ACTIVITY_IDEAS
+        ),
+        
+        // ----------------------------------------------------------------
+        // ACKNOWLEDGE (English): ok|thanks|got it|great → ACKNOWLEDGE_REMINDER
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "ACKNOWLEDGE_REMINDER",
+            Pattern.compile("(?i)^(ok|okay|thanks|thank you|got it|great|perfect|awesome|cool).*"),
+            WorkflowAction.ACKNOWLEDGE_REMINDER
+        ),
+        
+        // ----------------------------------------------------------------
+        // ACKNOWLEDGE (Hebrew): אוקי|טוב|תודה|מעולה → ACKNOWLEDGE_REMINDER
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "ACKNOWLEDGE_REMINDER_HE",
+            Pattern.compile("^(אוקי|טוב|תודה|מעולה|סבבה|יופי|בסדר|אחלה|מצוין).*"),
+            WorkflowAction.ACKNOWLEDGE_REMINDER
+        )
+    );
+
+    // ========================================================================
+    // INACTIVITY_NUDGE State Patterns
+    // ========================================================================
+    
+    /**
+     * Patterns for the INACTIVITY_NUDGE workflow state.
+     * 
+     * <p>Expected patterns when father responds to inactivity nudge:</p>
+     * <ul>
+     *   <li><b>SCHEDULE_NOW</b>: schedule|let's do it|קבע → SCHEDULE_NOW</li>
+     *   <li><b>PAUSE</b>: pause|break|need time → PAUSE_COACHING</li>
+     *   <li>Any other response: re-engagement → ACKNOWLEDGE_REMINDER</li>
+     * </ul>
+     */
+    public static final List<StatePattern> INACTIVITY_PATTERNS = List.of(
+        // ----------------------------------------------------------------
+        // SCHEDULE_NOW (English): schedule|let's do it|let's go|ready → SCHEDULE_NOW
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "SCHEDULE_NOW",
+            Pattern.compile("(?i).*(schedule|let's do it|let's go|ready|yes|let's schedule).*"),
+            WorkflowAction.SCHEDULE_NOW
+        ),
+        
+        // ----------------------------------------------------------------
+        // SCHEDULE_NOW (Hebrew): קבע|בוא נקבע|מוכן|יאללה → SCHEDULE_NOW
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "SCHEDULE_NOW_HE",
+            Pattern.compile(".*(קבע|בוא נקבע|מוכן|יאללה|כן).*"),
+            WorkflowAction.SCHEDULE_NOW
+        ),
+        
+        // ----------------------------------------------------------------
+        // PAUSE (English): pause|break|need time|stop → PAUSE_COACHING
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "PAUSE",
+            Pattern.compile("(?i).*(pause|break|need time|stop|not now|later|busy).*"),
+            WorkflowAction.PAUSE_COACHING
+        ),
+        
+        // ----------------------------------------------------------------
+        // PAUSE (Hebrew): הפסקה|צריך זמן|עצור|לא עכשיו → PAUSE_COACHING
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "PAUSE_HE",
+            Pattern.compile(".*(הפסקה|צריך זמן|עצור|לא עכשיו|אחר כך|עסוק).*"),
+            WorkflowAction.PAUSE_COACHING
+        ),
+        
+        // ----------------------------------------------------------------
+        // ACKNOWLEDGE (English): ok|hi|hello → ACKNOWLEDGE_REMINDER (re-engagement)
+        // Any positive response is treated as re-engagement
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "ACKNOWLEDGE_INACTIVITY",
+            Pattern.compile("(?i)^(ok|okay|hi|hello|hey|thanks|good|fine|alright).*"),
+            WorkflowAction.ACKNOWLEDGE_REMINDER
+        ),
+        
+        // ----------------------------------------------------------------
+        // ACKNOWLEDGE (Hebrew): אוקי|היי|שלום → ACKNOWLEDGE_REMINDER (re-engagement)
+        // ----------------------------------------------------------------
+        StatePattern.of(
+            "ACKNOWLEDGE_INACTIVITY_HE",
+            Pattern.compile("^(אוקי|היי|שלום|טוב|בסדר|מה קורה).*"),
+            WorkflowAction.ACKNOWLEDGE_REMINDER
+        )
+    );
 }

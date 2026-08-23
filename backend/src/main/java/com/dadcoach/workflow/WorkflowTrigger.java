@@ -36,5 +36,12 @@ public enum WorkflowTrigger {
      * Triggered by the scheduler for morning reminders on Quality Time day.
      * Sent at 8 AM in the father's local timezone.
      */
-    SCHEDULER_REMINDER
+    SCHEDULER_REMINDER,
+    
+    /**
+     * Triggered by the scheduler approximately 1 hour before Quality Time starts.
+     * Causes transition from WAITING to QUALITY_TIME_REMINDER state.
+     * Sends activity ideas and reminder about the upcoming event.
+     */
+    QUALITY_TIME_APPROACHING
 }

@@ -428,6 +428,26 @@ public class FallbackMessages {
             case PROCESSING -> isHebrew
                 ? "רגע {fatherName}, אני מעבד את הבקשה שלך... 🔄"
                 : "One moment {fatherName}, I'm processing your request... 🔄";
+                
+            case FRUSTRATION_ACKNOWLEDGMENT -> isHebrew
+                ? "מצטער אם זה מרגיש חוזר על עצמו - אני כאן לעזור. "
+                : "Sorry if this feels repetitive - I'm here to help. ";
+                
+            case BELT_PROMOTION -> isHebrew
+                ? "🎉🥋 מזל טוב {fatherName}! הרווחת חגורה חדשה: {newBelt}! 🎉\n\nההתמדה שלך משתלמת. המשך כך! 💪"
+                : "🎉🥋 Congratulations {fatherName}! You've earned a new belt: {newBelt}! 🎉\n\nYour consistency is paying off. Keep it up! 💪";
+                
+            case QUALITY_TIME_REMINDER -> isHebrew
+                ? "היי {fatherName}! ⏰\n\nעוד שעה יש לך זמן איכות עם {childName}.\n\nתהנו מהזמן ביחד! 💪"
+                : "Hey {fatherName}! ⏰\n\nYour Quality Time with {childName} starts in about an hour.\n\nEnjoy your time together! 💪";
+                
+            case INACTIVITY_NUDGE -> isHebrew
+                ? "היי {fatherName}! 👋\n\nהכל בסדר? לא שמעתי ממך כמה ימים.\n\nאני כאן כשתרצה לחזור לתכנן זמן איכות עם הילדים. 💪"
+                : "Hey {fatherName}! 👋\n\nEverything okay? I haven't heard from you in a few days.\n\nI'm here when you're ready to plan some quality time with your kids. 💪";
+                
+            case COACHING_PAUSED -> isHebrew
+                ? "{fatherName}, אני כאן כשתרצה לחזור. 🤗\n\nפשוט שלח הודעה ונמשיך מאיפה שהפסקנו!"
+                : "{fatherName}, I'm here when you're ready to continue. 🤗\n\nJust send a message and we'll pick up where we left off!";
         };
     }
     

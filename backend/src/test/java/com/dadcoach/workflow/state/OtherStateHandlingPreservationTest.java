@@ -284,9 +284,10 @@ class OtherStateHandlingPreservationTest {
                 .isEqualTo(StateAction.ActionType.TRANSITION);
         
         assertThat(action.getNextState())
-                .as("After feedback completion, system should transition to SCHEDULE_QUALITY_TIME. " +
-                    "This behavior must remain unchanged after the FOLLOW_UP fix.")
-                .contains(WorkflowState.SCHEDULE_QUALITY_TIME);
+                .as("After feedback completion, system should transition to UPDATE_PROGRESS " +
+                    "(which then silently transitions to SCHEDULE_QUALITY_TIME). " +
+                    "This follows the workflow architecture pattern of separating progress update logic.")
+                .contains(WorkflowState.UPDATE_PROGRESS);
     }
 
     /**
@@ -364,8 +365,9 @@ class OtherStateHandlingPreservationTest {
                 .isEqualTo(StateAction.ActionType.TRANSITION);
         
         assertThat(action.getNextState())
-                .as("After missed feedback, system should transition to SCHEDULE_QUALITY_TIME")
-                .contains(WorkflowState.SCHEDULE_QUALITY_TIME);
+                .as("After missed feedback, system should transition to UPDATE_PROGRESS " +
+                    "(which then silently transitions to SCHEDULE_QUALITY_TIME)")
+                .contains(WorkflowState.UPDATE_PROGRESS);
     }
 
     // ============== Property: Non-Follow-Up States QT Selection Unchanged ==============
@@ -577,9 +579,9 @@ class OtherStateHandlingPreservationTest {
         
         // ASSERT
         assertThat(action.getNextState())
-                .as("After completing feedback, should transition to SCHEDULE_QUALITY_TIME " +
-                    "so father can schedule their next session")
-                .contains(WorkflowState.SCHEDULE_QUALITY_TIME);
+                .as("After completing feedback, should transition to UPDATE_PROGRESS " +
+                    "(which then silently transitions to SCHEDULE_QUALITY_TIME for scheduling the next session)")
+                .contains(WorkflowState.UPDATE_PROGRESS);
         
         assertThat(action.getResponseMessage())
                 .as("Should have a response message for the completion")

@@ -70,6 +70,13 @@ public class QualityTime {
     @Column(name = "follow_up_sent", nullable = false)
     private boolean followUpSent = false;
 
+    /**
+     * Flag indicating if the 1-hour pre-QT reminder has been sent.
+     * This transitions the father to QUALITY_TIME_REMINDER state.
+     */
+    @Column(name = "pre_qt_reminder_sent", nullable = false)
+    private boolean preQtReminderSent = false;
+
     protected QualityTime() {
         // JPA requires a no-arg constructor
     }
@@ -252,5 +259,13 @@ public class QualityTime {
 
     public void setFollowUpSent(boolean followUpSent) {
         this.followUpSent = followUpSent;
+    }
+
+    public boolean isPreQtReminderSent() {
+        return preQtReminderSent;
+    }
+
+    public void setPreQtReminderSent(boolean preQtReminderSent) {
+        this.preQtReminderSent = preQtReminderSent;
     }
 }

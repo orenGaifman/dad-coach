@@ -75,4 +75,27 @@ public interface FatherRepository extends JpaRepository<Father, Long> {
      * @return count of fathers in the state
      */
     long countByCurrentWorkflowState(WorkflowState state);
+
+    /**
+     * Find inactive fathers who need an inactivity nudge.
+     * 
+     * <p>Finds fathers who:
+     * <ul>
+     *   <li>Have status ACTIVE</li>
+     *   <li>Haven't interacted since the given cutoff time</li>
+     *   <li>Are NOT already in INACTIVITY_NUDGE state</li>
+     *   <li>Are in an "active" workflow state (WAITING, SCHEDULE_QUALITY_TIME, etc.)</li>
+     * </ul>
+     * </p>
+     * 
+     * <p>Implements LLD Section 9.1: Inactivity detection for re-engagement.</p>
+     * 
+     * @param lastInteractionBefore the cutoff timestamp for last interaction
+     * @return list of fathers who need an inactivity nudge
+     */
+    @Query("SELECT f FROM Father f WHERE f.status = 'ACTIVE' " +
+           "AND f.lastInteractionAt < :cutoffTime " +
+           "AND f.currentWorkflowState != 'INACTIVITY_NUDGE' " +
+           "AND f.currentWorkflowState IN ('WAITING', 'SCHEDULE_QUALITY_TIME', 'QUALITY_TIME_FOLLOW_UP', 'SET_WEEKLY_GOAL')")
+    List<Father> findInactiveFathersForNudge(@Param("cutoffTime") Instant lastInteractionBefore);
 }

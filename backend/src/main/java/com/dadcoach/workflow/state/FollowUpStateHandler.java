@@ -263,7 +263,9 @@ public class FollowUpStateHandler implements StateHandler {
                 MessageGenerator.DEFAULT_TIMEOUT_MS
         );
 
-        return StateAction.transition(WorkflowState.SCHEDULE_QUALITY_TIME, completionMessage);
+        // Transition to UPDATE_PROGRESS for internal progress update
+        // UPDATE_PROGRESS will then silently transition to SCHEDULE_QUALITY_TIME or WAITING
+        return StateAction.transition(WorkflowState.UPDATE_PROGRESS, completionMessage);
     }
 
     /**
@@ -319,7 +321,9 @@ public class FollowUpStateHandler implements StateHandler {
                 MessageGenerator.DEFAULT_TIMEOUT_MS
         );
 
-        return StateAction.transition(WorkflowState.SCHEDULE_QUALITY_TIME, encouragingMessage);
+        // Transition to UPDATE_PROGRESS for internal progress update (even for missed QT)
+        // UPDATE_PROGRESS will then silently transition to SCHEDULE_QUALITY_TIME
+        return StateAction.transition(WorkflowState.UPDATE_PROGRESS, encouragingMessage);
     }
 
     /**

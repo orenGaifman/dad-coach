@@ -397,6 +397,24 @@ public class MessageGeneratorImpl implements MessageGenerator {
                 
             case PROCESSING -> "Let the father know you're still working on their request. " +
                 "Be brief and reassuring that you'll get back to them shortly.";
+                
+            case FRUSTRATION_ACKNOWLEDGMENT -> "Acknowledge the user's frustration with empathy. " +
+                "Apologize if things feel repetitive. Be understanding and supportive. " +
+                "Keep it brief - this will be prepended to a normal workflow response.";
+                
+            case BELT_PROMOTION -> "Celebrate the new belt achievement! " +
+                "This is a major milestone. Be enthusiastic and congratulate them. " +
+                "Mention the new belt level and encourage them to keep going.";
+                
+            case QUALITY_TIME_REMINDER -> "Send a reminder about the upcoming quality time. " +
+                "Include the child's name and time. Suggest activity ideas. Be encouraging and excited.";
+                
+            case INACTIVITY_NUDGE -> "Send a gentle check-in message. " +
+                "It's been a few days since we heard from them. Be warm and non-judgmental. " +
+                "Offer to help schedule quality time when they're ready.";
+                
+            case COACHING_PAUSED -> "Let them know we're here when they're ready to continue. " +
+                "Be supportive and understanding. Leave the door open for their return.";
         };
     }
 

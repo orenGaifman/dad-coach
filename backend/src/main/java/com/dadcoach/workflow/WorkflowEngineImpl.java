@@ -22,6 +22,7 @@ import com.dadcoach.workflow.message.MessageGenerator;
 import com.dadcoach.workflow.metrics.WorkflowMetrics;
 import com.dadcoach.workflow.pattern.PatternMatcher;
 import com.dadcoach.workflow.pattern.PatternResult;
+import com.dadcoach.workflow.pattern.StatePatterns;
 import com.dadcoach.workflow.state.StateAction;
 import com.dadcoach.workflow.state.StateHandler;
 import com.dadcoach.workflow.state.WorkflowContext;
@@ -396,6 +397,22 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                         .inboundMessage(messageText)
                         .build();
                 
+                // ─── Frustration Detection (Bug 5 fix) ─────────────────────────────────
+                // Check for frustration patterns FIRST before state-specific patterns
+                // Implements Requirements 2.13, 2.14, 2.15 - Detect frustration and respond with empathy
+                String empathyPrefix = "";
+                Optional<PatternResult> frustrationMatch = patternMatcher.match(
+                        messageText, StatePatterns.FRUSTRATION_PATTERNS);
+                
+                if (frustrationMatch.isPresent() && frustrationMatch.get().isMatched()) {
+                    log.info("Frustration detected for father {}: pattern={}", 
+                            fatherUuid, frustrationMatch.get().patternName());
+                    // Get empathy message that will be prepended to normal workflow response
+                    empathyPrefix = getEmpathyMessage(father.getLocale());
+                    // Continue with normal workflow processing - empathyPrefix will be prepended to response
+                }
+                // ─── End Frustration Detection ─────────────────────────────────────────
+                
                 // Match message against state patterns
                 Optional<PatternResult> matchResult = patternMatcher.match(
                         messageText, 
@@ -417,6 +434,15 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 
                 // Step 7: Generate response message (AI or fallback) - handled by StateHandler
                 String responseMessage = action.getResponseMessage().orElse("");
+                
+                // ─── Prepend Empathy Message (Bug 5 fix) ───────────────────────────────
+                // If frustration was detected, prepend the empathy message to the response
+                // Implements Requirements 2.13, 2.14, 2.15
+                if (!empathyPrefix.isEmpty()) {
+                    responseMessage = empathyPrefix + responseMessage;
+                    log.debug("Prepended empathy message to response for frustrated user");
+                }
+                // ─── End Prepend Empathy Message ────────────────────────────────────────
                 
                 // Step 8: Persist state changes
                 if (action.isTransition()) {
@@ -563,6 +589,7 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                     case QUALITY_TIME_ENDED -> handleQualityTimeEnded(father, fatherId, currentState, systemState, ctx);
                     case FOLLOW_UP_TIMEOUT -> handleFollowUpTimeout(father, fatherId, currentState, systemState, ctx);
                     case SCHEDULER_REMINDER -> handleSchedulerReminder(father, fatherId, currentState, systemState, ctx);
+                    case QUALITY_TIME_APPROACHING -> handleQualityTimeApproaching(father, fatherId, currentState, systemState, ctx);
                     case USER_MESSAGE -> {
                         log.warn("USER_MESSAGE trigger should not be used with triggerTransition(), use processMessage() instead");
                         yield Optional.empty();
@@ -733,6 +760,67 @@ public class WorkflowEngineImpl implements WorkflowEngine {
     }
     
     /**
+     * Handles the QUALITY_TIME_APPROACHING trigger.
+     * Transitions from WAITING to QUALITY_TIME_REMINDER and sends pre-QT reminder.
+     * 
+     * <p>This is triggered approximately 1 hour before a scheduled Quality Time starts.
+     * The state transition allows the system to track that the father is in the
+     * pre-QT context and should receive activity ideas.</p>
+     */
+    private Optional<OutboundMessageDto> handleQualityTimeApproaching(
+            Father father, UUID fatherId, WorkflowState currentState, SystemState systemState,
+            WorkflowLoggingContext ctx) {
+        
+        if (currentState != WorkflowState.WAITING) {
+            log.debug("Not in WAITING state (current: {}), skipping QUALITY_TIME_APPROACHING", currentState);
+            return Optional.empty();
+        }
+        
+        // Get next scheduled Quality Time
+        SystemState.QualityTimeEvent nextQT = systemState.getNextScheduledQualityTime();
+        if (nextQT == null) {
+            log.debug("No scheduled Quality Time found, skipping pre-QT reminder");
+            return Optional.empty();
+        }
+        
+        WorkflowState newState = WorkflowState.QUALITY_TIME_REMINDER;
+        
+        // Update father's workflow state
+        father.setPreviousWorkflowState(currentState);
+        father.setCurrentWorkflowState(newState);
+        father.setWorkflowStateEnteredAt(Instant.now());
+        fatherRepository.save(father);
+        
+        // Log the transition
+        ctx.setTransition(currentState, newState, "QUALITY_TIME_APPROACHING");
+        log.info("State transition: {} -> {} (trigger: QUALITY_TIME_APPROACHING)", currentState, newState);
+        ctx.clearTransition();
+        
+        logTransition(fatherId, currentState, newState, "QUALITY_TIME_APPROACHING", null);
+        
+        // Generate pre-QT reminder message with activity ideas
+        MessageContext msgContext = MessageContext.builder()
+                .messageType(com.dadcoach.workflow.message.MessageType.QUALITY_TIME_REMINDER)
+                .fatherName(father.getDisplayName())
+                .childName(nextQT.childName())
+                .scheduledStart(nextQT.scheduledStart())
+                .locale(father.getLocale())
+                .timezone(father.getTimezone())
+                .build();
+        
+        String responseMessage = messageGenerator.generateWithFallback(
+                com.dadcoach.workflow.message.MessageType.QUALITY_TIME_REMINDER,
+                msgContext,
+                MessageGenerator.DEFAULT_TIMEOUT_MS
+        );
+        
+        log.info("Transitioned to QUALITY_TIME_REMINDER and sent pre-QT reminder for Quality Time with {}", 
+                nextQT.childName());
+        
+        return Optional.of(buildResponse(fatherId, responseMessage));
+    }
+    
+    /**
      * Logs a workflow state transition to the audit log.
      */
     private void logTransition(UUID fatherId, WorkflowState fromState, WorkflowState toState, 
@@ -830,6 +918,26 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 ? "מצטער, משהו השתבש. אפשר לנסות שוב?"
                 : "Sorry, something went wrong. Please try again.";
         };
+    }
+    
+    /**
+     * Returns an empathy message for frustrated users based on locale.
+     * 
+     * <p>This method provides locale-specific empathy messages that are prepended
+     * to normal workflow responses when frustration is detected in the user's message.</p>
+     * 
+     * <p>Implements Requirements 2.13, 2.14, 2.15 from the chatbot-conversation-bugs spec:
+     * - 2.13: Detect frustration patterns in user messages
+     * - 2.14: Respond with empathetic acknowledgment
+     * - 2.15: Continue with normal workflow flow after empathy</p>
+     * 
+     * @param locale the father's preferred locale ("he" for Hebrew, "en" for English)
+     * @return an empathy message to prepend to the response
+     */
+    private String getEmpathyMessage(String locale) {
+        return "he".equals(locale)
+            ? "מצטער אם זה מרגיש חוזר על עצמו - אני כאן לעזור. "
+            : "Sorry if this feels repetitive - I'm here to help. ";
     }
 
     /**

@@ -132,4 +132,22 @@ public interface QualityTimeRepository extends JpaRepository<QualityTime, UUID> 
            "AND qt.status = 'SCHEDULED' " +
            "AND qt.googleCalendarEventId IS NOT NULL")
     List<QualityTime> findScheduledWithCalendarEventByFatherId(@Param("fatherId") Long fatherId);
+
+    /**
+     * Find scheduled Quality Time events starting within the given time window
+     * that haven't received the pre-QT reminder yet.
+     * Used by the pre-QT reminder scheduler job to transition fathers to QUALITY_TIME_REMINDER state.
+     * 
+     * <p>This is for the 1-hour pre-QT reminder that triggers state transition to QUALITY_TIME_REMINDER.</p>
+     * 
+     * @param windowStart the start of the reminder window (typically ~1 hour before QT)
+     * @param windowEnd the end of the reminder window (QT start time)
+     * @return list of Quality Time events approaching that need pre-QT reminders
+     */
+    @Query("SELECT qt FROM QualityTime qt WHERE qt.status = 'SCHEDULED' " +
+           "AND qt.scheduledStart >= :windowStart AND qt.scheduledStart <= :windowEnd " +
+           "AND qt.preQtReminderSent = false")
+    List<QualityTime> findApproachingWithoutPreQtReminder(
+            @Param("windowStart") Instant windowStart,
+            @Param("windowEnd") Instant windowEnd);
 }

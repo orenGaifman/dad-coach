@@ -47,10 +47,34 @@ public enum WorkflowState {
     WAITING,
     
     /**
+     * Pre-event reminder state. Entered 1 hour before Quality Time starts.
+     * Sends activity ideas and reminder. Automatically transitions to QUALITY_TIME_FOLLOW_UP
+     * when the scheduled end time passes.
+     * Valid transitions: QUALITY_TIME_FOLLOW_UP, WAITING (if QT cancelled)
+     */
+    QUALITY_TIME_REMINDER,
+    
+    /**
      * Post-event state. Asks if father completed Quality Time, updates dashboard.
-     * Valid transitions: SCHEDULE_QUALITY_TIME, WEEKLY_SUMMARY
+     * Valid transitions: UPDATE_PROGRESS, SCHEDULE_QUALITY_TIME, WEEKLY_SUMMARY
      */
     QUALITY_TIME_FOLLOW_UP,
+    
+    /**
+     * Internal state for updating progress after follow-up.
+     * Updates WeeklyGoal, checks belt promotion, then transitions silently.
+     * This is typically a silent transition - no message sent unless belt promotion.
+     * Valid transitions: SCHEDULE_QUALITY_TIME, WAITING
+     */
+    UPDATE_PROGRESS,
+    
+    /**
+     * Inactivity nudge state. Entered after 3 days of no interaction.
+     * Sends a gentle re-engagement message.
+     * Valid transitions: WAITING, SCHEDULE_QUALITY_TIME (if father responds)
+     * After 7 days total inactivity, father status changes to PAUSED.
+     */
+    INACTIVITY_NUDGE,
     
     /**
      * On-demand state. Triggered only when father explicitly asks for ideas.
@@ -109,13 +133,23 @@ public enum WorkflowState {
                 EnumSet.of(WAITING, ACTIVITY_IDEAS)
             );
             case WAITING -> Collections.unmodifiableSet(
-                EnumSet.of(QUALITY_TIME_FOLLOW_UP, SCHEDULE_QUALITY_TIME, ACTIVITY_IDEAS, WEEKLY_SUMMARY)
+                EnumSet.of(QUALITY_TIME_REMINDER, QUALITY_TIME_FOLLOW_UP, SCHEDULE_QUALITY_TIME, 
+                           ACTIVITY_IDEAS, WEEKLY_SUMMARY, INACTIVITY_NUDGE)
+            );
+            case QUALITY_TIME_REMINDER -> Collections.unmodifiableSet(
+                EnumSet.of(QUALITY_TIME_FOLLOW_UP, WAITING)
             );
             case QUALITY_TIME_FOLLOW_UP -> Collections.unmodifiableSet(
-                EnumSet.of(SCHEDULE_QUALITY_TIME, WEEKLY_SUMMARY)
+                EnumSet.of(UPDATE_PROGRESS, SCHEDULE_QUALITY_TIME, WEEKLY_SUMMARY)
+            );
+            case UPDATE_PROGRESS -> Collections.unmodifiableSet(
+                EnumSet.of(SCHEDULE_QUALITY_TIME, WAITING)
+            );
+            case INACTIVITY_NUDGE -> Collections.unmodifiableSet(
+                EnumSet.of(WAITING, SCHEDULE_QUALITY_TIME)
             );
             case ACTIVITY_IDEAS -> Collections.unmodifiableSet(
-                EnumSet.of(WELCOME, SCHEDULE_QUALITY_TIME, WAITING, QUALITY_TIME_FOLLOW_UP)
+                EnumSet.of(WELCOME, SCHEDULE_QUALITY_TIME, WAITING, QUALITY_TIME_FOLLOW_UP, QUALITY_TIME_REMINDER)
             );
             case DASHBOARD -> Collections.emptySet();
             
@@ -153,5 +187,26 @@ public enum WorkflowState {
     public boolean isWeeklyGoalState() {
         return this == WEEKLY_SUMMARY || this == SET_WEEKLY_GOAL || 
                this == DISTRIBUTE_GOAL || this == SCHEDULE_WEEK;
+    }
+    
+    /**
+     * Returns true if transitions to this state should be silent (no message sent).
+     * Silent states are internal processing states that don't require user communication.
+     * 
+     * @return true if entering this state should not send a message
+     */
+    public boolean isSilentTransition() {
+        return this == UPDATE_PROGRESS;
+    }
+    
+    /**
+     * Returns true if this state should stop conversation after entering.
+     * When the bot transitions to these states, it should not continue asking questions
+     * or offering suggestions - the conversation pauses until the next event.
+     * 
+     * @return true if the conversation should stop after entering this state
+     */
+    public boolean isConversationPausingState() {
+        return this == WAITING || this == QUALITY_TIME_REMINDER;
     }
 }

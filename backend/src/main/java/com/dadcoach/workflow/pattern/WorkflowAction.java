@@ -140,5 +140,37 @@ public enum WorkflowAction {
      * Responds with empathy before continuing with the appropriate workflow action.
      * Implements Requirement 2.13, 2.14 - Frustration detection and empathetic response.
      */
-    ACKNOWLEDGE_FRUSTRATION
+    ACKNOWLEDGE_FRUSTRATION,
+
+    // ===== QUALITY_TIME_REMINDER State Actions =====
+    
+    /**
+     * Cancel the upcoming Quality Time from reminder state.
+     * Triggered when father says "cancel", "ביטול", etc. while in reminder state.
+     * Cancels the event and transitions back to WAITING.
+     */
+    CANCEL_QUALITY_TIME,
+    
+    /**
+     * Acknowledge the reminder.
+     * Triggered when father sends "ok", "thanks", etc. in response to reminder.
+     * Sends an encouraging message and stays in state.
+     */
+    ACKNOWLEDGE_REMINDER,
+
+    // ===== INACTIVITY_NUDGE State Actions =====
+    
+    /**
+     * Father wants to schedule Quality Time now.
+     * Triggered when responding to inactivity nudge with scheduling intent.
+     * Transitions to SCHEDULE_QUALITY_TIME.
+     */
+    SCHEDULE_NOW,
+    
+    /**
+     * Father requests to pause coaching.
+     * Triggered when father indicates they want to take a break.
+     * Transitions to a paused state with a supportive message.
+     */
+    PAUSE_COACHING
 }
