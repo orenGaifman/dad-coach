@@ -32,13 +32,13 @@ graph TD
   - `backend/src/main/java/com/dadcoach/memory/dto/MemoryDto.java`
   - `backend/src/main/java/com/dadcoach/memory/mapper/MemoryMapper.java`
 - **Acceptance criteria**:
-  - [ ] Memory entity maps to `memories` table with all columns
-  - [ ] Content field limited to 500 characters (CHECK constraint)
-  - [ ] importance_score between 1-10, confidence_score between 0.0-1.0
-  - [ ] State field with allowed values: ACTIVE, CONFIRMED, SUPERSEDED, ARCHIVED, EXPIRED, DELETED
-  - [ ] Embedding stored as vector(1536) type
-  - [ ] Repository supports findByFatherId, findByCategory, findByState queries
-  - [ ] MapStruct mapper for entity↔DTO conversion
+  - [x] Memory entity maps to `memories` table with all columns
+  - [x] Content field limited to 500 characters (CHECK constraint)
+  - [x] importance_score between 1-10, confidence_score between 0.0-1.0
+  - [x] State field with allowed values: ACTIVE, CONFIRMED, SUPERSEDED, ARCHIVED, EXPIRED, DELETED
+  - [x] Embedding stored as vector(1536) type
+  - [x] Repository supports findByFatherId, findByCategory, findByState queries
+  - [x] MapStruct mapper for entity↔DTO conversion
 - **Dependencies**: None
 
 ### Task 2: Memory Retrieval & Composite Scoring
@@ -49,13 +49,13 @@ graph TD
   - `backend/src/main/java/com/dadcoach/memory/retrieval/RetrievalMetadata.java`
   - `backend/src/main/java/com/dadcoach/memory/dto/RetrievalResultDto.java`
 - **Acceptance criteria**:
-  - [ ] Composite score formula: (importance/10 × 0.5) + (recency_factor × 0.3) + (relevance × 0.2)
-  - [ ] Recency factor: max(0, 1.0 - (days_since_last_access × 0.05))
-  - [ ] Results ordered by descending composite score
-  - [ ] No single category appears more than 5 times
-  - [ ] Memories with confidence < 0.3 excluded
-  - [ ] Top-scoring memory always included if token budget allows
-  - [ ] access_count and last_accessed_at updated on retrieval
+  - [x] Composite score formula: (importance/10 × 0.5) + (recency_factor × 0.3) + (relevance × 0.2)
+  - [x] Recency factor: max(0, 1.0 - (days_since_last_access × 0.05))
+  - [x] Results ordered by descending composite score
+  - [x] No single category appears more than 5 times
+  - [x] Memories with confidence < 0.3 excluded
+  - [x] Top-scoring memory always included if token budget allows
+  - [x] access_count and last_accessed_at updated on retrieval
 - **Dependencies**: Task 1
 
 ### Task 3: Duplicate Detection with pgvector
