@@ -295,9 +295,28 @@ public class MemoryRetriever {
 
     /**
      * Updates access tracking for retrieved memories.
+     *
+     * <p><b>IMPORTANT DESIGN DECISION (SPEC-004 Requirement 5 Criteria 2):</b>
+     * This method updates ONLY access-related fields (access_count, last_accessed_at).
+     * It MUST NOT modify confidence_score.
+     *
+     * <p>Confidence score can ONLY increase through explicit user evidence:
+     * <ul>
+     *   <li>User confirmation via {@link com.dadcoach.memory.lifecycle.MemoryLifecycleService#confirmMemory(UUID)}</li>
+     *   <li>User correction via {@link com.dadcoach.memory.lifecycle.MemoryLifecycleService#supersedeMemory(UUID, String, java.math.BigDecimal)}</li>
+     *   <li>Father repeats information in a later conversation (new user evidence)</li>
+     *   <li>Deterministic domain event validation (e.g., mission completion)</li>
+     * </ul>
+     *
+     * <p>System usage (retrieval, prompt injection, access counts) NEVER increases confidence.
+     * This ensures confidence reflects actual certainty about accuracy, not popularity.
+     *
+     * @param memories the memories that were retrieved and should have access tracking updated
      */
     private void updateAccessTracking(List<Memory> memories) {
         for (Memory memory : memories) {
+            // recordAccess() only updates access_count and last_accessed_at
+            // It does NOT modify confidence_score (by design per SPEC-004 Req 5)
             memory.recordAccess();
         }
         memoryRepository.saveAll(memories);

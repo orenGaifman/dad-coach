@@ -178,6 +178,13 @@ public class Memory {
     private UUID conflictGroupId;
 
     /**
+     * Flag indicating this memory needs user confirmation due to a conflict with similar confidence.
+     * Set when two conflicting memories have similar confidence and need user input to resolve.
+     */
+    @Column(name = "needs_user_confirmation", nullable = false)
+    private Boolean needsUserConfirmation = false;
+
+    /**
      * Reference to an associated goal (for GOAL category memories).
      */
     @Column(name = "goal_id")
@@ -351,6 +358,21 @@ public class Memory {
     /**
      * Increases confidence score by the given amount (max 1.0).
      *
+     * <p><b>IMPORTANT (SPEC-004 Requirement 5 Criteria 2):</b>
+     * This method should ONLY be called in response to explicit user evidence:
+     * <ul>
+     *   <li>Father repeats the same information in a later conversation (+0.2)</li>
+     *   <li>Deterministic domain event validates the memory (+0.1)</li>
+     * </ul>
+     *
+     * <p>This method should NEVER be called as a side effect of:
+     * <ul>
+     *   <li>Memory retrieval</li>
+     *   <li>Prompt injection</li>
+     *   <li>Access count updates</li>
+     *   <li>Any system usage without new user evidence</li>
+     * </ul>
+     *
      * @param amount the amount to increase confidence by
      */
     public void increaseConfidence(BigDecimal amount) {
@@ -366,10 +388,24 @@ public class Memory {
     /**
      * Records an access to this memory (Requirement 16).
      * Increments access_count and updates last_accessed_at.
+     *
+     * <p><b>IMPORTANT DESIGN DECISION (SPEC-004 Requirement 5 Criteria 2):</b>
+     * This method intentionally does NOT modify confidence_score.
+     * Confidence can ONLY increase through explicit user evidence:
+     * <ul>
+     *   <li>User confirmation ({@link #confirm()})</li>
+     *   <li>User correction via supersession</li>
+     *   <li>User repeats information (new evidence)</li>
+     *   <li>Deterministic domain event validation</li>
+     * </ul>
+     *
+     * <p>System usage (retrieval, prompt injection) NEVER increases confidence.
+     * This ensures confidence reflects actual certainty, not usage frequency.
      */
     public void recordAccess() {
         this.accessCount++;
         this.lastAccessedAt = Instant.now();
+        // NOTE: confidence_score is NOT modified here (by design per SPEC-004 Req 5 criteria 2)
     }
 
     // ─── State Transitions ───────────────────────────────────────────────
@@ -591,6 +627,30 @@ public class Memory {
 
     public void setConflictGroupId(UUID conflictGroupId) {
         this.conflictGroupId = conflictGroupId;
+    }
+
+    public Boolean getNeedsUserConfirmation() {
+        return needsUserConfirmation;
+    }
+
+    public void setNeedsUserConfirmation(Boolean needsUserConfirmation) {
+        this.needsUserConfirmation = needsUserConfirmation;
+    }
+
+    /**
+     * Flags this memory as needing user confirmation due to a conflict with similar confidence.
+     */
+    public void flagForUserConfirmation() {
+        this.needsUserConfirmation = true;
+        this.lastUpdatedAt = Instant.now();
+    }
+
+    /**
+     * Clears the user confirmation flag.
+     */
+    public void clearUserConfirmationFlag() {
+        this.needsUserConfirmation = false;
+        this.lastUpdatedAt = Instant.now();
     }
 
     public UUID getGoalId() {

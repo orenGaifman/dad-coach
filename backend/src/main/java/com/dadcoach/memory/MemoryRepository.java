@@ -283,6 +283,34 @@ public interface MemoryRepository extends JpaRepository<Memory, UUID> {
             @Param("fatherId") UUID fatherId,
             @Param("states") Collection<MemoryState> states);
 
+    /**
+     * Find all memories that need user confirmation for a father.
+     *
+     * @param fatherId the father's ID
+     * @param states   states to include (typically ACTIVE, CONFIRMED)
+     * @return list of memories flagged for user confirmation
+     */
+    @Query("SELECT m FROM Memory m WHERE m.fatherId = :fatherId " +
+           "AND m.state IN :states " +
+           "AND m.needsUserConfirmation = true")
+    List<Memory> findMemoriesNeedingConfirmation(
+            @Param("fatherId") UUID fatherId,
+            @Param("states") Collection<MemoryState> states);
+
+    /**
+     * Count memories that need user confirmation for a father.
+     *
+     * @param fatherId the father's ID
+     * @param states   states to include (typically ACTIVE, CONFIRMED)
+     * @return count of memories flagged for user confirmation
+     */
+    @Query("SELECT COUNT(m) FROM Memory m WHERE m.fatherId = :fatherId " +
+           "AND m.state IN :states " +
+           "AND m.needsUserConfirmation = true")
+    long countMemoriesNeedingConfirmation(
+            @Param("fatherId") UUID fatherId,
+            @Param("states") Collection<MemoryState> states);
+
     // ─── Cleanup Queries ──────────────────────────────────────────────────
 
     /**

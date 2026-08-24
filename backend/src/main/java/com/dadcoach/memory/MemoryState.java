@@ -64,14 +64,36 @@ public enum MemoryState {
 
     /**
      * Returns the set of valid states this state can transition to.
+     *
+     * <p>Valid transitions per design (SPEC-004):
+     * <ul>
+     *   <li>ACTIVE → CONFIRMED (on user approval via correction interface)</li>
+     *   <li>ACTIVE → SUPERSEDED (when new memory replaces it)</li>
+     *   <li>ACTIVE → ARCHIVED (capacity management or admin action)</li>
+     *   <li>ACTIVE → EXPIRED (TTL reached, typically 2 years since last_accessed_at)</li>
+     *   <li>ACTIVE → DELETED (user deletion request)</li>
+     *   <li>CONFIRMED → SUPERSEDED (when explicitly contradicted by new info)</li>
+     *   <li>CONFIRMED → ARCHIVED (by admin, unusual)</li>
+     *   <li>CONFIRMED → DELETED (user deletion request)</li>
+     *   <li>SUPERSEDED → ARCHIVED (cleanup job)</li>
+     *   <li>SUPERSEDED → DELETED (user deletion request)</li>
+     *   <li>ARCHIVED → DELETED (explicit cleanup)</li>
+     *   <li>EXPIRED → ARCHIVED (preservation)</li>
+     *   <li>EXPIRED → DELETED (cleanup job)</li>
+     * </ul>
+     *
+     * <p>Note: ARCHIVED and EXPIRED can also transition back to ACTIVE when
+     * father re-references the information (reactivation).
+     *
+     * @return the set of valid target states for this state
      */
     public Set<MemoryState> getValidTransitions() {
         return switch (this) {
             case ACTIVE -> EnumSet.of(CONFIRMED, SUPERSEDED, ARCHIVED, EXPIRED, DELETED);
             case CONFIRMED -> EnumSet.of(SUPERSEDED, ARCHIVED, DELETED);
-            case SUPERSEDED -> EnumSet.of(DELETED);
+            case SUPERSEDED -> EnumSet.of(ARCHIVED, DELETED);
             case ARCHIVED -> EnumSet.of(ACTIVE, DELETED);
-            case EXPIRED -> EnumSet.of(ACTIVE, DELETED);
+            case EXPIRED -> EnumSet.of(ACTIVE, ARCHIVED, DELETED);
             case DELETED -> Collections.emptySet();
         };
     }

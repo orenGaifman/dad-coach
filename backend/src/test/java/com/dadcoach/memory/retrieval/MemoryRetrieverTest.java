@@ -902,6 +902,178 @@ class MemoryRetrieverTest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // Test: Confidence Score Immutability During Retrieval
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Tests verifying that confidence_score is NEVER modified during retrieval operations.
+     *
+     * <p><b>Validates: SPEC-004 Requirement 5 Criteria 2</b>
+     * Confidence score can ONLY increase through explicit user evidence:
+     * - User confirmation
+     * - User correction (supersession)
+     * - Father repeats information
+     * - Deterministic domain event validation
+     *
+     * <p>System usage (retrieval, access counts) MUST NOT increase confidence.
+     */
+    @Nested
+    @DisplayName("Confidence Score Immutability Tests (SPEC-004 Req 5.2)")
+    class ConfidenceImmutabilityTests {
+
+        @Test
+        @DisplayName("Should NOT modify confidence score when memory is retrieved")
+        void shouldNotModifyConfidenceScoreOnRetrieval() {
+            // Given: Memory with specific confidence score
+            BigDecimal originalConfidence = new BigDecimal("0.65");
+            Memory memory = createMemory(UUID.randomUUID(), 7, FIXED_NOW, originalConfidence);
+            
+            when(memoryRepository.findRetrievableMemories(eq(TEST_FATHER_ID), anyCollection(), any(BigDecimal.class)))
+                    .thenReturn(Collections.singletonList(memory));
+            
+            when(memoryMapper.toDto(any(Memory.class))).thenAnswer(invocation -> {
+                Memory m = invocation.getArgument(0);
+                MemoryDto dto = new MemoryDto();
+                dto.setId(m.getId());
+                dto.setConfidenceScore(m.getConfidenceScore());
+                return dto;
+            });
+
+            // When: Memory is retrieved
+            memoryRetriever.retrieveRanked(TEST_FATHER_ID, "test topic", null, 10);
+
+            // Then: Confidence score must remain unchanged
+            assertThat(memory.getConfidenceScore())
+                    .as("Confidence score should not change during retrieval (SPEC-004 Req 5.2)")
+                    .isEqualByComparingTo(originalConfidence);
+        }
+
+        @Test
+        @DisplayName("Should update access_count but NOT confidence_score on retrieval")
+        void shouldUpdateAccessCountButNotConfidenceOnRetrieval() {
+            // Given: Memory with known initial values
+            BigDecimal originalConfidence = new BigDecimal("0.50");
+            Memory memory = createMemory(UUID.randomUUID(), 5, FIXED_NOW, originalConfidence);
+            int initialAccessCount = memory.getAccessCount();
+            
+            when(memoryRepository.findRetrievableMemories(eq(TEST_FATHER_ID), anyCollection(), any(BigDecimal.class)))
+                    .thenReturn(Collections.singletonList(memory));
+            
+            when(memoryMapper.toDto(any(Memory.class))).thenAnswer(invocation -> {
+                Memory m = invocation.getArgument(0);
+                MemoryDto dto = new MemoryDto();
+                dto.setId(m.getId());
+                return dto;
+            });
+
+            // When: Memory is retrieved
+            memoryRetriever.retrieveRanked(TEST_FATHER_ID, null, null, 10);
+
+            // Then: Access count should increase but confidence should NOT
+            assertThat(memory.getAccessCount())
+                    .as("Access count should be incremented on retrieval")
+                    .isEqualTo(initialAccessCount + 1);
+            
+            assertThat(memory.getConfidenceScore())
+                    .as("Confidence score MUST NOT change from system usage (SPEC-004 Req 5.2)")
+                    .isEqualByComparingTo(originalConfidence);
+        }
+
+        @Test
+        @DisplayName("Should preserve confidence score across multiple retrievals")
+        void shouldPreserveConfidenceScoreAcrossMultipleRetrievals() {
+            // Given: Memory with specific confidence
+            BigDecimal originalConfidence = new BigDecimal("0.75");
+            Memory memory = createMemory(UUID.randomUUID(), 8, FIXED_NOW, originalConfidence);
+            
+            when(memoryRepository.findRetrievableMemories(eq(TEST_FATHER_ID), anyCollection(), any(BigDecimal.class)))
+                    .thenReturn(Collections.singletonList(memory));
+            
+            when(memoryMapper.toDto(any(Memory.class))).thenAnswer(invocation -> {
+                Memory m = invocation.getArgument(0);
+                MemoryDto dto = new MemoryDto();
+                dto.setId(m.getId());
+                return dto;
+            });
+
+            // When: Memory is retrieved multiple times (simulating repeated access)
+            for (int i = 0; i < 5; i++) {
+                memoryRetriever.retrieveRanked(TEST_FATHER_ID, "topic " + i, null, 10);
+            }
+
+            // Then: Confidence should STILL be the original value (no accumulation from usage)
+            assertThat(memory.getConfidenceScore())
+                    .as("Confidence must not accumulate from repeated retrieval (SPEC-004 Req 5.2)")
+                    .isEqualByComparingTo(originalConfidence);
+            
+            // But access count should reflect all retrievals
+            assertThat(memory.getAccessCount()).isEqualTo(5);
+        }
+
+        @Test
+        @DisplayName("Should preserve confidence for all retrieved memories regardless of access count")
+        void shouldPreserveConfidenceForAllRetrievedMemories() {
+            // Given: Multiple memories with different confidence scores and access counts
+            Memory lowAccessMemory = createMemory(UUID.randomUUID(), 8, FIXED_NOW, new BigDecimal("0.40"));
+            lowAccessMemory.setAccessCount(1);
+            
+            Memory highAccessMemory = createMemory(UUID.randomUUID(), 8, FIXED_NOW, new BigDecimal("0.80"));
+            highAccessMemory.setAccessCount(100); // Already heavily accessed
+            
+            BigDecimal originalLowConfidence = lowAccessMemory.getConfidenceScore();
+            BigDecimal originalHighConfidence = highAccessMemory.getConfidenceScore();
+            
+            when(memoryRepository.findRetrievableMemories(eq(TEST_FATHER_ID), anyCollection(), any(BigDecimal.class)))
+                    .thenReturn(Arrays.asList(lowAccessMemory, highAccessMemory));
+            
+            when(memoryMapper.toDto(any(Memory.class))).thenAnswer(invocation -> {
+                Memory m = invocation.getArgument(0);
+                MemoryDto dto = new MemoryDto();
+                dto.setId(m.getId());
+                return dto;
+            });
+
+            // When: Memories are retrieved
+            memoryRetriever.retrieveRanked(TEST_FATHER_ID, null, null, 10);
+
+            // Then: Both memories should have unchanged confidence scores
+            assertThat(lowAccessMemory.getConfidenceScore())
+                    .as("Low-access memory confidence should not change")
+                    .isEqualByComparingTo(originalLowConfidence);
+            
+            assertThat(highAccessMemory.getConfidenceScore())
+                    .as("High-access memory confidence should not change")
+                    .isEqualByComparingTo(originalHighConfidence);
+        }
+
+        @Test
+        @DisplayName("recordAccess() should only update access_count and last_accessed_at")
+        void recordAccessShouldOnlyUpdateAccessCountAndTimestamp() {
+            // Given: Memory with known initial state
+            BigDecimal originalConfidence = new BigDecimal("0.55");
+            Memory memory = createMemory(UUID.randomUUID(), 6, FIXED_NOW, originalConfidence);
+            int originalAccessCount = memory.getAccessCount();
+            Instant originalLastAccessedAt = memory.getLastAccessedAt();
+            
+            // When: recordAccess is called directly
+            memory.recordAccess();
+            
+            // Then: Only access_count and last_accessed_at should change
+            assertThat(memory.getAccessCount())
+                    .as("access_count should be incremented")
+                    .isEqualTo(originalAccessCount + 1);
+            
+            assertThat(memory.getLastAccessedAt())
+                    .as("last_accessed_at should be updated")
+                    .isAfter(originalLastAccessedAt);
+            
+            assertThat(memory.getConfidenceScore())
+                    .as("confidence_score MUST NOT change in recordAccess() (SPEC-004 Req 5.2)")
+                    .isEqualByComparingTo(originalConfidence);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // Helper Methods
     // ═══════════════════════════════════════════════════════════════════════════
 

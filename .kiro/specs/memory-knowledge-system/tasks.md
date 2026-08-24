@@ -64,12 +64,12 @@ graph TD
   - `backend/src/main/java/com/dadcoach/memory/extraction/DuplicateDetector.java`
   - `backend/src/main/java/com/dadcoach/memory/extraction/DuplicateResult.java`
 - **Acceptance criteria**:
-  - [ ] Cosine similarity > 0.85 → DUPLICATE (reject creation)
-  - [ ] Cosine similarity 0.70-0.85 → POTENTIAL_UPDATE (consider supersession)
-  - [ ] Cosine similarity < 0.70 → DISTINCT (allow creation)
-  - [ ] Search scoped by father_id, category, subject_type
-  - [ ] Uses native SQL with pgvector `<=>` operator
-  - [ ] Falls back gracefully if embedding not available (skip duplicate check)
+  - [x] Cosine similarity > 0.85 → DUPLICATE (reject creation)
+  - [x] Cosine similarity 0.70-0.85 → POTENTIAL_UPDATE (consider supersession)
+  - [x] Cosine similarity < 0.70 → DISTINCT (allow creation)
+  - [x] Search scoped by father_id, category, subject_type
+  - [x] Uses native SQL with pgvector `<=>` operator
+  - [x] Falls back gracefully if embedding not available (skip duplicate check)
 - **Dependencies**: Task 1, Task 9
 
 ### Task 4: Memory Extraction Service
@@ -78,13 +78,13 @@ graph TD
   - `backend/src/main/java/com/dadcoach/memory/extraction/MemoryExtractionService.java`
   - `backend/src/main/java/com/dadcoach/memory/extraction/ExtractionValidator.java`
 - **Acceptance criteria**:
-  - [ ] Processes extraction asynchronously (never blocks conversation response)
-  - [ ] ExtractionValidator validates every AI recommendation before persistence
-  - [ ] Domain entity data (names, birthdays, phone) rejected as memories
-  - [ ] Each extracted memory checked for duplicates before creation
-  - [ ] Invalid AI output discarded; valid memories from same batch still created
-  - [ ] 500-memory capacity checked before creation (archive lowest if full)
-  - [ ] Audit entry created for every new memory
+  - [x] Processes extraction asynchronously (never blocks conversation response)
+  - [x] ExtractionValidator validates every AI recommendation before persistence
+  - [x] Domain entity data (names, birthdays, phone) rejected as memories
+  - [x] Each extracted memory checked for duplicates before creation
+  - [x] Invalid AI output discarded; valid memories from same batch still created
+  - [x] 500-memory capacity checked before creation (archive lowest if full)
+  - [x] Audit entry created for every new memory
 - **Dependencies**: Task 1, Task 3
 
 ### Task 5: Memory Lifecycle State Machine
@@ -94,12 +94,12 @@ graph TD
   - `backend/src/main/java/com/dadcoach/memory/MemoryService.java`
   - `backend/src/main/java/com/dadcoach/memory/MemoryServiceImpl.java`
 - **Acceptance criteria**:
-  - [ ] Only defined transitions allowed (invalid ones rejected)
-  - [ ] confirmMemory: ACTIVE → CONFIRMED, increments confirmation_count
-  - [ ] supersedeMemory: creates new memory, old → SUPERSEDED with superseded_by link
-  - [ ] Confidence only increases from explicit evidence (never from system usage)
-  - [ ] All state changes create version history entries
-  - [ ] MemoryService implements the public interface from design
+  - [x] Only defined transitions allowed (invalid ones rejected)
+  - [x] confirmMemory: ACTIVE → CONFIRMED, increments confirmation_count
+  - [x] supersedeMemory: creates new memory, old → SUPERSEDED with superseded_by link
+  - [x] Confidence only increases from explicit evidence (never from system usage)
+  - [x] All state changes create version history entries
+  - [x] MemoryService implements the public interface from design
 - **Dependencies**: Task 1
 
 ### Task 6: Memory Decay & Expiration Jobs
@@ -108,12 +108,12 @@ graph TD
   - `backend/src/main/java/com/dadcoach/memory/lifecycle/MemoryDecayService.java`
   - `backend/src/main/java/com/dadcoach/memory/lifecycle/MemoryExpirationService.java`
 - **Acceptance criteria**:
-  - [ ] Decay runs daily during maintenance window
-  - [ ] Processes fathers in batches to avoid lock contention
-  - [ ] Expiration checks `expires_at` for ACTIVE memories past their date
-  - [ ] Expired memories transition to EXPIRED state
-  - [ ] Skips memories that changed state since job start (race condition protection)
-  - [ ] Logs processed counts and any errors
+  - [x] Decay runs daily during maintenance window
+  - [x] Processes fathers in batches to avoid lock contention
+  - [x] Expiration checks `expires_at` for ACTIVE memories past their date
+  - [x] Expired memories transition to EXPIRED state
+  - [x] Skips memories that changed state since job start (race condition protection)
+  - [x] Logs processed counts and any errors
 - **Dependencies**: Task 5
 
 ### Task 7: Memory Consolidation Service
@@ -121,13 +121,13 @@ graph TD
 - **Files to create/modify**:
   - `backend/src/main/java/com/dadcoach/memory/lifecycle/MemoryConsolidationService.java`
 - **Acceptance criteria**:
-  - [ ] Runs weekly during maintenance window
-  - [ ] Identifies memories with high similarity within same father+category
-  - [ ] Merges overlapping memories into consolidated entries
-  - [ ] Creates weekly/monthly summary memories
-  - [ ] Archives original memories after consolidation (not deleted)
-  - [ ] Processes fathers in batches
-  - [ ] Skips memories that changed state during processing
+  - [x] Runs weekly during maintenance window
+  - [x] Identifies memories with high similarity within same father+category
+  - [x] Merges overlapping memories into consolidated entries
+  - [x] Creates weekly/monthly summary memories
+  - [x] Archives original memories after consolidation (not deleted)
+  - [x] Processes fathers in batches
+  - [x] Skips memories that changed state during processing
 - **Dependencies**: Task 5
 
 ### Task 8: Conflict Detection & Resolution
@@ -136,11 +136,11 @@ graph TD
   - `backend/src/main/java/com/dadcoach/memory/conflict/ConflictDetector.java`
   - `backend/src/main/java/com/dadcoach/memory/conflict/ConflictGroup.java`
 - **Acceptance criteria**:
-  - [ ] Detects contradictions between memories of same subject
-  - [ ] Groups conflicting memories under a conflict_group_id
-  - [ ] Newer memory with higher confidence wins (supersedes older)
-  - [ ] Both memories kept if confidence is similar (flagged for confirmation)
-  - [ ] Contradiction detected → confidence of older memory reduced by 0.3
+  - [x] Detects contradictions between memories of same subject
+  - [x] Groups conflicting memories under a conflict_group_id
+  - [x] Newer memory with higher confidence wins (supersedes older)
+  - [x] Both memories kept if confidence is similar (flagged for confirmation)
+  - [x] Contradiction detected → confidence of older memory reduced by 0.3
 - **Dependencies**: Task 1
 
 ### Task 9: Embedding Service
@@ -149,11 +149,11 @@ graph TD
   - `backend/src/main/java/com/dadcoach/memory/embedding/EmbeddingService.java`
   - `backend/src/main/java/com/dadcoach/memory/embedding/EmbeddingQueue.java`
 - **Acceptance criteria**:
-  - [ ] Generates 1536-dimension embeddings via OpenAI text-embedding-ada-002
-  - [ ] Memory stored without embedding on failure (excluded from similarity search)
-  - [ ] Retry queue: 3 attempts over 24 hours for failed embeddings
-  - [ ] Batch embedding support for efficiency
-  - [ ] Graceful degradation when embedding service unavailable
+  - [x] Generates 1536-dimension embeddings via OpenAI text-embedding-ada-002
+  - [x] Memory stored without embedding on failure (excluded from similarity search)
+  - [x] Retry queue: 3 attempts over 24 hours for failed embeddings
+  - [x] Batch embedding support for efficiency
+  - [x] Graceful degradation when embedding service unavailable
 - **Dependencies**: Task 1
 
 ### Task 10: Memory Audit & Version History
@@ -163,24 +163,26 @@ graph TD
   - `backend/src/main/java/com/dadcoach/memory/audit/MemoryAuditEntry.java`
   - `backend/src/main/java/com/dadcoach/memory/audit/MemoryAuditRepository.java`
 - **Acceptance criteria**:
-  - [ ] Audit log is append-only (no updates or deletes)
-  - [ ] Written synchronously with memory operations (rollback on audit failure)
-  - [ ] Records: operation_type, from_state, to_state, trigger_type, triggered_by
-  - [ ] Version history snapshots content, confidence, importance at each change
-  - [ ] Queryable by father_id and time range
+  - [x] Audit log is append-only (no updates or deletes)
+  - [x] Written synchronously with memory operations (rollback on audit failure)
+  - [x] Records: operation_type, from_state, to_state, trigger_type, triggered_by
+  - [x] Version history snapshots content, confidence, importance at each change
+  - [x] Queryable by father_id and time range
 - **Dependencies**: Task 1
 
 ### Task 11: Memory Deletion & GDPR Erasure
 - **Description**: Implement soft-delete with deferred erasure: immediate state transition to DELETED, 72-hour background job for content nullification, embedding deletion, and version history purge.
 - **Files to create/modify**:
   - `backend/src/main/java/com/dadcoach/memory/lifecycle/MemoryDeletionService.java`
+  - `backend/src/main/java/com/dadcoach/memory/lifecycle/MemoryErasureJob.java`
+  - `backend/src/main/java/com/dadcoach/memory/audit/MemoryAuditContentErasureService.java`
 - **Acceptance criteria**:
-  - [ ] `deleteMemory()`: immediate transition to DELETED state
-  - [ ] `deleteAllForFather()`: GDPR full erasure for a father
-  - [ ] Background job runs within 72 hours to erase: content, embedding, version history
-  - [ ] Erasure nullifies content field, removes embedding vector
-  - [ ] All version history snapshots purged
-  - [ ] Audit entry preserved (records deletion event, not content)
+  - [x] `deleteMemory()`: immediate transition to DELETED state
+  - [x] `deleteAllForFather()`: GDPR full erasure for a father
+  - [x] Background job runs within 72 hours to erase: content, embedding, version history
+  - [x] Erasure nullifies content field, removes embedding vector
+  - [x] All version history snapshots purged
+  - [x] Audit entry preserved (records deletion event, not content)
 - **Dependencies**: Task 5
 
 ### Task 12: Sensitive Memory Service
@@ -190,12 +192,12 @@ graph TD
   - `backend/src/main/java/com/dadcoach/memory/sensitive/SafetyEventRecord.java`
   - `backend/src/main/java/com/dadcoach/memory/sensitive/SafetyEventRepository.java`
 - **Acceptance criteria**:
-  - [ ] Safety events stored in separate `safety_event_records` table
-  - [ ] Records include: event_type, summary (≤100 chars), requires_review flag
-  - [ ] Expiration enforced on safety records
-  - [ ] Review workflow: reviewed_by, reviewed_at fields
-  - [ ] Never mixed into normal memory retrieval
-  - [ ] Queryable by father_id for support use cases
+  - [x] Safety events stored in separate `safety_event_records` table
+  - [x] Records include: event_type, summary (≤100 chars), requires_review flag
+  - [x] Expiration enforced on safety records
+  - [x] Review workflow: reviewed_by, reviewed_at fields
+  - [x] Never mixed into normal memory retrieval
+  - [x] Queryable by father_id for support use cases
 - **Dependencies**: Task 1
 
 ### Task 13: Flyway Migration - Memory Tables
@@ -203,12 +205,12 @@ graph TD
 - **Files to create/modify**:
   - `backend/src/main/resources/db/migration/V4__memory_knowledge_system.sql`
 - **Acceptance criteria**:
-  - [ ] pgvector extension created (`CREATE EXTENSION IF NOT EXISTS vector`)
-  - [ ] memories table with vector(1536) column and all fields from design
-  - [ ] IVFFlat index on embedding column (lists=50)
-  - [ ] memory_versions table with unique(memory_id, version_number)
-  - [ ] memory_audit_log table with indexes on father_id
-  - [ ] safety_event_records table with expiration index
-  - [ ] All CHECK constraints from design applied
-  - [ ] Migration runs successfully with pgvector extension enabled
+  - [x] pgvector extension created (`CREATE EXTENSION IF NOT EXISTS vector`)
+  - [x] memories table with vector(1536) column and all fields from design
+  - [x] IVFFlat index on embedding column (lists=50)
+  - [x] memory_versions table with unique(memory_id, version_number)
+  - [x] memory_audit_log table with indexes on father_id
+  - [x] safety_event_records table with expiration index
+  - [x] All CHECK constraints from design applied
+  - [x] Migration runs successfully with pgvector extension enabled
 - **Dependencies**: Task 1
