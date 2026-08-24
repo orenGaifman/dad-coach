@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Memories Table for Memory Knowledge System (SPEC-004)
--- Version: 5
+-- Version: 8
 -- Date: 2025
 -- 
 -- Creates the memories table with all fields from the design document.
@@ -10,7 +10,7 @@
 -- 'memory' table from V1. The IVFFlat index on the embedding column is created
 -- in a separate migration to allow for data population first.
 -- 
--- Requires: pgvector extension (enabled in V4__enable_pgvector_extension.sql)
+-- Requires: pgvector extension (enabled in V7__enable_pgvector_extension.sql)
 -- =============================================================================
 
 -- =============================================================================

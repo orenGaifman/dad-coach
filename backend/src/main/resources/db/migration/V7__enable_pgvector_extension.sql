@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Enable pgvector Extension for Memory Knowledge System
--- Version: 4
+-- Version: 7
 -- Date: 2025
 -- 
 -- This migration enables the pgvector extension required for vector similarity

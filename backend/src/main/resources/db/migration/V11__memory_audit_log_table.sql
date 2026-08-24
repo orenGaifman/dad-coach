@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Memory Audit Log Table for Memory Knowledge System (SPEC-004)
--- Version: 8
+-- Version: 11
 -- Date: 2025
 -- 
 -- Creates the memory_audit_log table for tracking all operations performed
@@ -16,7 +16,7 @@
 --   - Every state transition logged with: memory_id, from_state, to_state,
 --     trigger_reason, triggered_by (system/father), and timestamp
 -- 
--- Requires: memories table (created in V5__memories_table.sql)
+-- Requires: memories table (created in V8__memories_table.sql)
 -- =============================================================================
 
 -- =============================================================================
