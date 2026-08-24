@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Memory Versions Table for Memory Knowledge System (SPEC-004)
--- Version: 10
+-- Version: 14
 -- Date: 2025
 -- 
 -- Creates the memory_versions table for tracking version history of memories.
@@ -12,7 +12,7 @@
 --   - Preserved for superseded memories allowing reconstruction if needed
 --   - Supports the audit trail for all memory operations
 -- 
--- Requires: memories table (created in V8__memories_table.sql)
+-- Requires: memories table (created in V12__memories_table.sql)
 -- =============================================================================
 
 -- =============================================================================

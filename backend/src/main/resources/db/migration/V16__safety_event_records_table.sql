@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Safety Event Records Table for Memory Knowledge System (SPEC-004)
--- Version: 12
+-- Version: 16
 -- Date: 2025
 -- 
 -- Creates the safety_event_records table for storing safety-related events

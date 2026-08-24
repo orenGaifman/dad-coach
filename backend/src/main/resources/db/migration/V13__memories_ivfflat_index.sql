@@ -1,6 +1,6 @@
 -- =============================================================================
 -- IVFFlat Index on Memories Embedding Column (SPEC-004)
--- Version: 9
+-- Version: 13
 -- Date: 2025
 -- 
 -- Creates the IVFFlat vector index on the memories.embedding column for
@@ -15,8 +15,8 @@
 --   - Lists: 50 (good for ~500 memories per father scale)
 -- 
 -- Requires: 
---   - pgvector extension (enabled in V7__enable_pgvector_extension.sql)
---   - memories table (created in V8__memories_table.sql)
+--   - pgvector extension (enabled in V11__enable_pgvector_extension.sql)
+--   - memories table (created in V12__memories_table.sql)
 -- =============================================================================
 
 -- Create IVFFlat index on embedding column for vector similarity search
