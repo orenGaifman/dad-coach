@@ -76,7 +76,7 @@ public class ProvisioningMemoryListener {
             content.append(". Timezone: ").append(wizardData.getTimezone());
         }
 
-        memoryService.createMemory(fatherId, null, MemoryCategory.IDENTITY_FACT,
+        memoryService.createMemory(fatherId, null, MemoryCategory.IDENTITY,
                 content.toString(), IMPORTANCE_SCORE, CONFIDENCE_SCORE);
     }
 
@@ -96,7 +96,7 @@ public class ProvisioningMemoryListener {
             }
         }
 
-        memoryService.createMemory(fatherId, null, MemoryCategory.IDENTITY_FACT,
+        memoryService.createMemory(fatherId, null, MemoryCategory.IDENTITY,
                 content.toString(), IMPORTANCE_SCORE, CONFIDENCE_SCORE);
     }
 
@@ -107,7 +107,7 @@ public class ProvisioningMemoryListener {
         }
 
         String content = "Parenting goals: " + String.join(", ", goals);
-        memoryService.createMemory(fatherId, null, MemoryCategory.GOAL_RELATED,
+        memoryService.createMemory(fatherId, null, MemoryCategory.GOAL,
                 content, IMPORTANCE_SCORE, CONFIDENCE_SCORE);
     }
 
