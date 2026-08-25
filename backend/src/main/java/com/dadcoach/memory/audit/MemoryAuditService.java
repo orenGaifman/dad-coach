@@ -62,6 +62,7 @@ public class MemoryAuditService {
      * @param auditRepository the repository for persisting audit entries
      * @param objectMapper    the JSON mapper for state serialization
      */
+    @org.springframework.beans.factory.annotation.Autowired
     public MemoryAuditService(@Nullable MemoryAuditRepository auditRepository,
                               ObjectMapper objectMapper) {
         this.auditRepository = auditRepository;
@@ -71,6 +72,7 @@ public class MemoryAuditService {
     /**
      * Creates a MemoryAuditService with repository only.
      * Uses a default ObjectMapper for JSON serialization.
+     * This constructor is for testing purposes only.
      *
      * @param auditRepository the repository for persisting audit entries
      */
