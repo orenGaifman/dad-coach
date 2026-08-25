@@ -138,34 +138,34 @@ public interface MemoryAuditRepository extends Repository<MemoryAuditLog, UUID> 
     // ─── Queries by Event Type ───────────────────────────────────────────
 
     /**
-     * Find audit entries by event type for a father.
+     * Find audit entries by operation type for a father.
      *
-     * @param fatherId  the father's ID
-     * @param eventType the type of event
+     * @param fatherId      the father's ID
+     * @param operationType the type of operation
      * @return list of audit entries matching the criteria
      */
-    List<MemoryAuditLog> findByFatherIdAndEventTypeOrderByCreatedAtDesc(
-            UUID fatherId, EventType eventType);
+    List<MemoryAuditLog> findByFatherIdAndOperationTypeOrderByCreatedAtDesc(
+            UUID fatherId, EventType operationType);
 
     /**
-     * Find all audit entries by event type.
+     * Find all audit entries by operation type.
      *
-     * @param eventType the type of event
-     * @return list of audit entries matching the event type
+     * @param operationType the type of operation
+     * @return list of audit entries matching the operation type
      */
-    List<MemoryAuditLog> findByEventTypeOrderByCreatedAtDesc(EventType eventType);
+    List<MemoryAuditLog> findByOperationTypeOrderByCreatedAtDesc(EventType operationType);
 
     // ─── Queries by Actor Type ───────────────────────────────────────────
 
     /**
-     * Find audit entries by actor type for a father.
+     * Find audit entries by trigger type for a father.
      *
-     * @param fatherId  the father's ID
-     * @param actorType the type of actor (AI, USER, SYSTEM)
+     * @param fatherId    the father's ID
+     * @param triggerType the type of trigger (AI, USER, SYSTEM)
      * @return list of audit entries matching the criteria
      */
-    List<MemoryAuditLog> findByFatherIdAndActorTypeOrderByCreatedAtDesc(
-            UUID fatherId, ActorType actorType);
+    List<MemoryAuditLog> findByFatherIdAndTriggerTypeOrderByCreatedAtDesc(
+            UUID fatherId, ActorType triggerType);
 
     // ─── Count Queries ───────────────────────────────────────────────────
 
