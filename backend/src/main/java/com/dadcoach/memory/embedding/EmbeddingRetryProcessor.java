@@ -3,7 +3,6 @@ package com.dadcoach.memory.embedding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
@@ -41,11 +40,6 @@ import java.util.Optional;
  * @see EmbeddingRetryQueueService
  * @see EmbeddingRetryEntry
  */
-@Service
-@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
-        prefix = "dad-coach.ai.openai",
-        name = "api-key"
-)
 public class EmbeddingRetryProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddingRetryProcessor.class);

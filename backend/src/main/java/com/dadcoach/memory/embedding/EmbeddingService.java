@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -42,11 +41,6 @@ import java.util.concurrent.TimeoutException;
  *
  * @see com.dadcoach.memory.Memory#EMBEDDING_DIMENSION
  */
-@Service
-@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
-        prefix = "dad-coach.ai.openai", 
-        name = "api-key"
-)
 public class EmbeddingService {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddingService.class);
