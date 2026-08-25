@@ -36,10 +36,16 @@ import java.util.Optional;
  *   <li>Failure: increment attempt count, schedule next attempt or mark PERMANENTLY_FAILED</li>
  * </ol>
  *
+ * <p>This bean is only created when the OpenAI API key is configured (same as EmbeddingService).
+ *
  * @see EmbeddingRetryQueueService
  * @see EmbeddingRetryEntry
  */
 @Service
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        prefix = "dad-coach.ai.openai",
+        name = "api-key"
+)
 public class EmbeddingRetryProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddingRetryProcessor.class);

@@ -38,9 +38,15 @@ import java.util.concurrent.TimeoutException;
  * └── EmbeddingQueue.java             # Retry queue for failed embeddings
  * </pre>
  *
+ * <p>This bean is only created when the OpenAI API key is configured.
+ *
  * @see com.dadcoach.memory.Memory#EMBEDDING_DIMENSION
  */
 @Service
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        prefix = "dad-coach.ai.openai", 
+        name = "api-key"
+)
 public class EmbeddingService {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddingService.class);
