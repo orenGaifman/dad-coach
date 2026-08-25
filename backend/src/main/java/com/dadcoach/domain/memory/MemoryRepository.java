@@ -36,7 +36,7 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
      * Count active memories for a father.
      * Used to enforce the 500-memory capacity limit (Requirement 7.11).
      */
-    @Query("SELECT COUNT(m) FROM Memory m WHERE m.fatherId = :fatherId " +
+    @Query("SELECT COUNT(m) FROM LegacyMemory m WHERE m.fatherId = :fatherId " +
            "AND m.status = com.dadcoach.domain.memory.MemoryStatus.ACTIVE")
     long countActiveByFatherId(@Param("fatherId") Long fatherId);
 
@@ -44,7 +44,7 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
      * Find active memories for a father ordered by combined score (importance × confidence) ascending.
      * Used for capacity enforcement — lowest scores get archived first.
      */
-    @Query("SELECT m FROM Memory m WHERE m.fatherId = :fatherId " +
+    @Query("SELECT m FROM LegacyMemory m WHERE m.fatherId = :fatherId " +
            "AND m.status = com.dadcoach.domain.memory.MemoryStatus.ACTIVE " +
            "ORDER BY (m.importanceScore * m.confidenceScore) ASC")
     List<Memory> findActiveByFatherIdOrderByCombinedScoreAsc(@Param("fatherId") Long fatherId);
@@ -55,14 +55,14 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
      * Find all active memories for a father.
      * Used as the basis for in-memory ranking with the composite formula.
      */
-    @Query("SELECT m FROM Memory m WHERE m.fatherId = :fatherId " +
+    @Query("SELECT m FROM LegacyMemory m WHERE m.fatherId = :fatherId " +
            "AND m.status = com.dadcoach.domain.memory.MemoryStatus.ACTIVE")
     List<Memory> findActiveByFatherId(@Param("fatherId") Long fatherId);
 
     /**
      * Find active memories for a father filtered by category.
      */
-    @Query("SELECT m FROM Memory m WHERE m.fatherId = :fatherId " +
+    @Query("SELECT m FROM LegacyMemory m WHERE m.fatherId = :fatherId " +
            "AND m.category = :category " +
            "AND m.status = com.dadcoach.domain.memory.MemoryStatus.ACTIVE")
     List<Memory> findActiveByFatherIdAndCategory(@Param("fatherId") Long fatherId,
@@ -74,7 +74,7 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
      * Find active memories that have passed their expiration time.
      * Used by the scheduled expiration job.
      */
-    @Query("SELECT m FROM Memory m WHERE m.status = com.dadcoach.domain.memory.MemoryStatus.ACTIVE " +
+    @Query("SELECT m FROM LegacyMemory m WHERE m.status = com.dadcoach.domain.memory.MemoryStatus.ACTIVE " +
            "AND m.expiresAt IS NOT NULL AND m.expiresAt < :now")
     List<Memory> findExpiredMemories(@Param("now") Instant now);
 
@@ -82,7 +82,7 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
      * Find active memories with low confidence that haven't been accessed recently.
      * Used for auto-expiration (Requirement 7.3): confidence < 0.5 and not accessed in 60 days.
      */
-    @Query("SELECT m FROM Memory m WHERE m.fatherId = :fatherId " +
+    @Query("SELECT m FROM LegacyMemory m WHERE m.fatherId = :fatherId " +
            "AND m.status = com.dadcoach.domain.memory.MemoryStatus.ACTIVE " +
            "AND m.confidenceScore < :confidenceThreshold " +
            "AND (m.lastAccessedAt IS NULL OR m.lastAccessedAt < :accessThreshold)")
@@ -96,7 +96,7 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
      * Find all active memories with low confidence that haven't been accessed recently,
      * across all fathers. Used by the global expiration job (Requirement 7.3).
      */
-    @Query("SELECT m FROM Memory m WHERE m.status = com.dadcoach.domain.memory.MemoryStatus.ACTIVE " +
+    @Query("SELECT m FROM LegacyMemory m WHERE m.status = com.dadcoach.domain.memory.MemoryStatus.ACTIVE " +
            "AND m.confidenceScore < :confidenceThreshold " +
            "AND (m.lastAccessedAt IS NULL OR m.lastAccessedAt < :accessThreshold)")
     List<Memory> findAllLowConfidenceUnaccessed(
@@ -109,7 +109,7 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
      * Find active memories for a father in a specific category.
      * Used for contradiction detection and memory consolidation.
      */
-    @Query("SELECT m FROM Memory m WHERE m.fatherId = :fatherId " +
+    @Query("SELECT m FROM LegacyMemory m WHERE m.fatherId = :fatherId " +
            "AND m.childId = :childId " +
            "AND m.category = :category " +
            "AND m.status = com.dadcoach.domain.memory.MemoryStatus.ACTIVE " +
@@ -122,7 +122,7 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
      * Find active memories for a father in a specific category (without child filter).
      * Used when child_id is null.
      */
-    @Query("SELECT m FROM Memory m WHERE m.fatherId = :fatherId " +
+    @Query("SELECT m FROM LegacyMemory m WHERE m.fatherId = :fatherId " +
            "AND m.childId IS NULL " +
            "AND m.category = :category " +
            "AND m.status = com.dadcoach.domain.memory.MemoryStatus.ACTIVE " +

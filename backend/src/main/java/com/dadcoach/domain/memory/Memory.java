@@ -24,7 +24,7 @@ import java.time.temporal.ChronoUnit;
  *   <li>Capacity (Req 7.11): max 500 active memories per Father</li>
  * </ul>
  */
-@Entity
+@Entity(name = "LegacyMemory")
 @Table(name = "memory")
 public class Memory {
 
