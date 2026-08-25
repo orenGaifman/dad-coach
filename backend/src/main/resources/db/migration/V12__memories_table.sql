@@ -84,16 +84,16 @@ COMMENT ON COLUMN memories.embedding IS 'OpenAI text-embedding-ada-002 vector (1
 -- =============================================================================
 
 -- Primary query patterns: by father + state
-CREATE INDEX idx_memories_father_state ON memories(father_id, state);
+CREATE INDEX IF NOT EXISTS idx_memories_father_state ON memories(father_id, state);
 
 -- Category filtering: by father + category + state
-CREATE INDEX idx_memories_father_category ON memories(father_id, category, state);
+CREATE INDEX IF NOT EXISTS idx_memories_father_category ON memories(father_id, category, state);
 
 -- Child-specific queries: by father + subject_type + child + state
-CREATE INDEX idx_memories_father_child ON memories(father_id, subject_type, child_id, state);
+CREATE INDEX IF NOT EXISTS idx_memories_father_child ON memories(father_id, subject_type, child_id, state);
 
 -- Expiration queries: active memories with expiration dates
-CREATE INDEX idx_memories_expires ON memories(expires_at) WHERE state = 'ACTIVE';
+CREATE INDEX IF NOT EXISTS idx_memories_expires ON memories(expires_at) WHERE state = 'ACTIVE';
 
 -- Note: The IVFFlat index on embedding column is created in a separate migration
 -- to allow for data population before building the index (better for performance)

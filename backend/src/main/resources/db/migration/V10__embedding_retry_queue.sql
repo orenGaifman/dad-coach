@@ -1,8 +1,8 @@
--- V3__embedding_retry_queue.sql
+-- V10__embedding_retry_queue.sql
 -- Embedding retry queue for failed embedding generation
 -- SPEC-004: Memory stored without embedding on failure; queue retry (3 attempts / 24h)
 
-CREATE TABLE embedding_retry_queue (
+CREATE TABLE IF NOT EXISTS embedding_retry_queue (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     memory_id           UUID NOT NULL UNIQUE,
     content             TEXT NOT NULL,
@@ -23,18 +23,18 @@ CREATE TABLE embedding_retry_queue (
 
 -- Index for finding entries ready for processing
 -- Used by: EmbeddingRetryRepository.findReadyForProcessingNative()
-CREATE INDEX idx_embedding_retry_status_next_attempt 
+CREATE INDEX IF NOT EXISTS idx_embedding_retry_status_next_attempt 
     ON embedding_retry_queue(status, next_attempt_at)
     WHERE status = 'PENDING';
 
 -- Index for looking up by memory ID
 -- Used by: EmbeddingRetryRepository.findByMemoryId()
-CREATE INDEX idx_embedding_retry_memory 
+CREATE INDEX IF NOT EXISTS idx_embedding_retry_memory 
     ON embedding_retry_queue(memory_id);
 
 -- Index for cleanup queries
 -- Used by: deleteCompletedOlderThan, deleteFailedOlderThan
-CREATE INDEX idx_embedding_retry_status_updated 
+CREATE INDEX IF NOT EXISTS idx_embedding_retry_status_updated 
     ON embedding_retry_queue(status, updated_at);
 
 COMMENT ON TABLE embedding_retry_queue IS 

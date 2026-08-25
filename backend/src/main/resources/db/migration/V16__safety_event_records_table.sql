@@ -74,20 +74,20 @@ COMMENT ON COLUMN safety_event_records.expires_at IS 'When this record can be pe
 -- =============================================================================
 
 -- Primary support query: find all events for a father ordered by time
-CREATE INDEX idx_safety_events_father ON safety_event_records(father_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_safety_events_father ON safety_event_records(father_id, created_at DESC);
 
 -- Review workflow: find events requiring review, prioritized by severity
-CREATE INDEX idx_safety_events_requires_review ON safety_event_records(requires_review, severity);
+CREATE INDEX IF NOT EXISTS idx_safety_events_requires_review ON safety_event_records(requires_review, severity);
 
 -- Time-based queries: ordering by creation time
-CREATE INDEX idx_safety_events_created_at ON safety_event_records(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_safety_events_created_at ON safety_event_records(created_at DESC);
 
 -- Retention cleanup job: find expired records for deletion
-CREATE INDEX idx_safety_events_expires_at ON safety_event_records(expires_at);
+CREATE INDEX IF NOT EXISTS idx_safety_events_expires_at ON safety_event_records(expires_at);
 
 -- Event type analysis: queries by event type
-CREATE INDEX idx_safety_events_event_type ON safety_event_records(event_type);
+CREATE INDEX IF NOT EXISTS idx_safety_events_event_type ON safety_event_records(event_type);
 
 -- Severity analysis: queries by severity level
-CREATE INDEX idx_safety_events_severity ON safety_event_records(severity);
+CREATE INDEX IF NOT EXISTS idx_safety_events_severity ON safety_event_records(severity);
 

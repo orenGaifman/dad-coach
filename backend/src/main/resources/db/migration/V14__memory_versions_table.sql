@@ -64,7 +64,7 @@ COMMENT ON COLUMN memory_versions.change_reason IS 'Reason for creating this ver
 -- =============================================================================
 
 -- Primary query pattern: get all versions for a memory in order
-CREATE INDEX idx_memory_versions_memory_id ON memory_versions(memory_id, version_number);
+CREATE INDEX IF NOT EXISTS idx_memory_versions_memory_id ON memory_versions(memory_id, version_number);
 
 -- Query by change time (useful for cleanup jobs)
-CREATE INDEX idx_memory_versions_changed_at ON memory_versions(changed_at);
+CREATE INDEX IF NOT EXISTS idx_memory_versions_changed_at ON memory_versions(changed_at);

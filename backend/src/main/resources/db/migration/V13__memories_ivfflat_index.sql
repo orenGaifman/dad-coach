@@ -20,7 +20,7 @@
 -- =============================================================================
 
 -- Create IVFFlat index on embedding column for vector similarity search
-CREATE INDEX idx_memories_embedding ON memories USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
+CREATE INDEX IF NOT EXISTS idx_memories_embedding ON memories USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
 
 -- Add comment for documentation
 COMMENT ON INDEX idx_memories_embedding IS 'IVFFlat vector index for semantic similarity search with cosine distance, configured with 50 lists for ~500 memories per father';

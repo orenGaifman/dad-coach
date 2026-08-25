@@ -76,10 +76,10 @@ COMMENT ON COLUMN memory_audit_log.created_at IS 'Immutable timestamp when the o
 
 -- Primary query pattern: get audit history for a father ordered by time (most recent first)
 -- Per design.md: CREATE INDEX idx_memory_audit_father ON memory_audit_log(father_id, created_at DESC);
-CREATE INDEX idx_memory_audit_father ON memory_audit_log(father_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_audit_father ON memory_audit_log(father_id, created_at DESC);
 
 -- Query by memory_id to get full history of a specific memory
-CREATE INDEX idx_memory_audit_memory ON memory_audit_log(memory_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_memory_audit_memory ON memory_audit_log(memory_id, created_at);
 
 -- Query by operation type (useful for monitoring/reporting)
-CREATE INDEX idx_memory_audit_operation ON memory_audit_log(operation_type, created_at);
+CREATE INDEX IF NOT EXISTS idx_memory_audit_operation ON memory_audit_log(operation_type, created_at);
