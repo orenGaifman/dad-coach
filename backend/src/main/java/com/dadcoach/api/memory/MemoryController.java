@@ -3,7 +3,7 @@ package com.dadcoach.api.memory;
 import com.dadcoach.api.auth.ActorContext;
 import com.dadcoach.api.auth.AuthActor;
 import com.dadcoach.api.auth.RolePermission;
-import com.dadcoach.api.error.ResourceNotFoundException;
+import com.dadcoach.common.ResourceNotFoundException;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -34,9 +34,9 @@ public class MemoryController {
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 100;
 
-    private final MemoryService memoryService;
+    private final MemoryApiService memoryService;
 
-    public MemoryController(MemoryService memoryService) {
+    public MemoryController(MemoryApiService memoryService) {
         this.memoryService = memoryService;
     }
 
@@ -61,7 +61,7 @@ public class MemoryController {
 
         int effectivePageSize = Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE);
 
-        MemoryService.MemoryPage page = memoryService.listActiveMemories(
+        MemoryApiService.MemoryPage page = memoryService.listActiveMemories(
                 actor.getActorId(), cursor, effectivePageSize);
 
         Map<String, Object> response = new LinkedHashMap<>();

@@ -6,20 +6,18 @@ import com.dadcoach.api.admin.AggregatedAnalyticsDto;
 import com.dadcoach.api.admin.EngagementMetricsDto;
 import com.dadcoach.api.child.ChildCreateRequest;
 import com.dadcoach.api.child.ChildResponseDto;
-import com.dadcoach.api.child.ChildService;
+import com.dadcoach.api.child.ChildApiService;
 import com.dadcoach.api.conversation.ConversationResponseDto;
 import com.dadcoach.api.conversation.ConversationService;
 import com.dadcoach.api.father.AdminFatherDetailDto;
 import com.dadcoach.api.father.AdminFatherService;
 import com.dadcoach.api.father.AdminFatherSummaryDto;
 import com.dadcoach.api.health.AiProviderHealthIndicator;
-import com.dadcoach.api.health.WhatsAppHealthIndicator;
-import com.dadcoach.api.memory.AdminMemoryController;
 import com.dadcoach.api.memory.AdminMemoryDto;
 import com.dadcoach.api.memory.AdminMemoryService;
 import com.dadcoach.api.memory.MemoryAuditEntryDto;
 import com.dadcoach.api.memory.MemoryResponseDto;
-import com.dadcoach.api.memory.MemoryService;
+import com.dadcoach.api.memory.MemoryApiService;
 import com.dadcoach.api.pagination.CursorPageResponse;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -43,9 +41,9 @@ import java.util.*;
 public class ApiServiceStubConfig {
 
     @Bean("apiChildService")
-    @ConditionalOnMissingBean(com.dadcoach.api.child.ChildService.class)
-    public ChildService childService() {
-        return new ChildService() {
+    @ConditionalOnMissingBean(com.dadcoach.api.child.ChildApiService.class)
+    public ChildApiService childService() {
+        return new ChildApiService() {
             @Override
             public ChildResponseDto createChild(UUID fatherId, ChildCreateRequest request) {
                 throw new UnsupportedOperationException("Child service not yet implemented");
@@ -105,9 +103,9 @@ public class ApiServiceStubConfig {
     }
 
     @Bean("apiMemoryService")
-    @ConditionalOnMissingBean(com.dadcoach.api.memory.MemoryService.class)
-    public MemoryService memoryService() {
-        return new MemoryService() {
+    @ConditionalOnMissingBean(com.dadcoach.api.memory.MemoryApiService.class)
+    public MemoryApiService memoryService() {
+        return new MemoryApiService() {
             @Override
             public MemoryPage listActiveMemories(UUID fatherId, String cursor, int pageSize) {
                 return new MemoryPage(List.of(), null, false);
@@ -208,22 +206,6 @@ public class ApiServiceStubConfig {
             @Override
             public Map<String, Object> getDetails() {
                 return Map.of("status", "stub", "message", "AI provider health check not yet implemented");
-            }
-        };
-    }
-
-    @Bean("apiWhatsAppHealthIndicator")
-    @ConditionalOnMissingBean(WhatsAppHealthIndicator.class)
-    public WhatsAppHealthIndicator whatsAppHealthIndicator() {
-        return new WhatsAppHealthIndicator() {
-            @Override
-            public String checkHealth() {
-                return "UNKNOWN";
-            }
-
-            @Override
-            public Map<String, Object> getDetails() {
-                return Map.of("status", "stub", "message", "WhatsApp health check not yet implemented");
             }
         };
     }

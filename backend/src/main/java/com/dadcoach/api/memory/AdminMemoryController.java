@@ -2,7 +2,7 @@ package com.dadcoach.api.memory;
 
 import com.dadcoach.api.auth.ActorContext;
 import com.dadcoach.api.auth.AuthActor;
-import com.dadcoach.api.error.ResourceNotFoundException;
+import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.api.pagination.CursorPageResponse;
 
 import org.springframework.http.ResponseEntity;

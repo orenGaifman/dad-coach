@@ -1,6 +1,6 @@
 package com.dadcoach.api.father;
 
-import com.dadcoach.api.error.ResourceNotFoundException;
+import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.api.pagination.CursorPageResponse;
 import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.domain.father.Father;

@@ -5,7 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Service interface for memory operations in the Father API.
+ * API-layer service interface for memory operations.
  * <p>
  * Controllers delegate to this service for memory retrieval and deletion.
  * The implementation is responsible for:
@@ -15,7 +15,7 @@ import java.util.UUID;
  *   <li>Triggering the SPEC-004 deletion flow on delete requests</li>
  * </ul>
  */
-public interface MemoryService {
+public interface MemoryApiService {
 
     /**
      * Lists active memories for the given father, paginated by cursor.

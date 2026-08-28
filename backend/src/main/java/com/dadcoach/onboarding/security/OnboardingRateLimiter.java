@@ -2,6 +2,7 @@ package com.dadcoach.onboarding.security;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,10 +11,10 @@ import java.time.Instant;
 
 /**
  * Rate limiter for the onboarding flow.
- * Currently DISABLED for development - always allows requests.
  * 
- * TODO: Re-enable rate limiting before production deployment.
- * Original limits: IP-based (10 attempts/hour) and phone-based (5 attempts/hour).
+ * <p>Limits: IP-based (10 attempts/hour) and phone-based (5 attempts/hour).</p>
+ * 
+ * <p>Enable/disable via property: {@code onboarding.rate-limit.enabled=true}</p>
  */
 @Component
 public class OnboardingRateLimiter {
@@ -26,14 +27,15 @@ public class OnboardingRateLimiter {
 
     private static final String KEY_TYPE_IP = "IP";
     private static final String KEY_TYPE_PHONE = "PHONE";
-    
-    // Rate limiting disabled for development
-    private static final boolean RATE_LIMITING_ENABLED = false;
 
     private final RateLimitEntryRepository repository;
+    private final boolean rateLimitingEnabled;
 
-    public OnboardingRateLimiter(RateLimitEntryRepository repository) {
+    public OnboardingRateLimiter(
+            RateLimitEntryRepository repository,
+            @Value("${onboarding.rate-limit.enabled:true}") boolean rateLimitingEnabled) {
         this.repository = repository;
+        this.rateLimitingEnabled = rateLimitingEnabled;
     }
 
     /**
@@ -45,7 +47,7 @@ public class OnboardingRateLimiter {
      */
     @Transactional
     public RateLimitResult checkIpLimit(String ipAddress) {
-        if (!RATE_LIMITING_ENABLED) {
+        if (!rateLimitingEnabled) {
             return RateLimitResult.allowed(Integer.MAX_VALUE);
         }
         return checkLimit(KEY_TYPE_IP, ipAddress, IP_LIMIT_PER_HOUR);
@@ -59,7 +61,7 @@ public class OnboardingRateLimiter {
      */
     @Transactional
     public RateLimitResult checkPhoneLimit(String phoneNumber) {
-        if (!RATE_LIMITING_ENABLED) {
+        if (!rateLimitingEnabled) {
             return RateLimitResult.allowed(Integer.MAX_VALUE);
         }
         return checkLimit(KEY_TYPE_PHONE, phoneNumber, PHONE_LIMIT_PER_HOUR);

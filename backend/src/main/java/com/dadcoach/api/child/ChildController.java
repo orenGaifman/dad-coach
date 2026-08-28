@@ -4,7 +4,7 @@ import com.dadcoach.api.auth.ActorContext;
 import com.dadcoach.api.auth.AuthActor;
 import com.dadcoach.api.auth.RolePermission;
 import com.dadcoach.api.error.LimitExceededException;
-import com.dadcoach.api.error.ResourceNotFoundException;
+import com.dadcoach.common.ResourceNotFoundException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -40,9 +40,9 @@ public class ChildController {
 
     private static final int MAX_CHILDREN_PER_FATHER = 8;
 
-    private final ChildService childService;
+    private final ChildApiService childService;
 
-    public ChildController(ChildService childService) {
+    public ChildController(ChildApiService childService) {
         this.childService = childService;
     }
 

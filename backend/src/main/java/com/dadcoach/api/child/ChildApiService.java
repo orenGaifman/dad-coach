@@ -5,13 +5,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Service interface for Child domain operations.
+ * API-layer service interface for Child operations.
  * <p>
  * The API controller delegates all business logic to this service.
  * The implementation is provided by the domain layer (SPEC-002).
  * Controllers never perform direct DB writes.
  */
-public interface ChildService {
+public interface ChildApiService {
 
     /**
      * Creates a new child for the given father.

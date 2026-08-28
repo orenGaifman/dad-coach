@@ -1,6 +1,6 @@
 package com.dadcoach.api.father;
 
-import com.dadcoach.api.error.ResourceNotFoundException;
+import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.father.CoachingStyle;

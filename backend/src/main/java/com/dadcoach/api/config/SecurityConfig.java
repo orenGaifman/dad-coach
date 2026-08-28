@@ -71,7 +71,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/calendar/**").permitAll()
                         // Magic link auth (token is the credential)
                         .requestMatchers("/api/v1/auth/magic-link/**").permitAll()
-                        // Admin endpoints (for dev invite page - temporarily permitAll until auth is implemented)
+                        // TODO: SECURITY - Admin endpoints are currently public.
+                        // Production deployment should implement admin authentication before enabling.
+                        // Options: OAuth2, API key validation, or IP whitelist.
                         .requestMatchers("/api/v1/admin/**").permitAll()
                         // Dev endpoints (protected by DevEnvironmentGuard - blocks in production)
                         .requestMatchers("/api/v1/dev/**").permitAll()

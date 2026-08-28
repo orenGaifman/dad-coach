@@ -3,7 +3,7 @@ package com.dadcoach.api.goal;
 import com.dadcoach.api.auth.ActorContext;
 import com.dadcoach.api.auth.AuthActor;
 import com.dadcoach.api.error.LimitExceededException;
-import com.dadcoach.api.error.ResourceNotFoundException;
+import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.common.BusinessRuleViolationException;
 import com.dadcoach.domain.goal.Goal;
 import com.dadcoach.domain.goal.GoalRepository;

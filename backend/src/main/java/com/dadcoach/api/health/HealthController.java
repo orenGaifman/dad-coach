@@ -1,5 +1,7 @@
 package com.dadcoach.api.health;
 
+import org.springframework.boot.actuate.health.Health;
+import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -23,11 +25,11 @@ public class HealthController {
 
     private final DataSource dataSource;
     private final AiProviderHealthIndicator aiProviderHealthIndicator;
-    private final WhatsAppHealthIndicator whatsAppHealthIndicator;
+    private final HealthIndicator whatsAppHealthIndicator;
 
     public HealthController(DataSource dataSource,
                             AiProviderHealthIndicator aiProviderHealthIndicator,
-                            WhatsAppHealthIndicator whatsAppHealthIndicator) {
+                            com.dadcoach.health.WhatsAppHealthIndicator whatsAppHealthIndicator) {
         this.dataSource = dataSource;
         this.aiProviderHealthIndicator = aiProviderHealthIndicator;
         this.whatsAppHealthIndicator = whatsAppHealthIndicator;
@@ -49,7 +51,8 @@ public class HealthController {
     private String overallStatus() {
         boolean dbUp = checkDatabaseHealth().equals("UP");
         boolean aiUp = aiProviderHealthIndicator.checkHealth().equals("UP");
-        boolean whatsAppUp = whatsAppHealthIndicator.checkHealth().equals("UP");
+        Health whatsAppHealth = whatsAppHealthIndicator.health();
+        boolean whatsAppUp = whatsAppHealth.getStatus().getCode().equals("UP");
 
         if (dbUp && aiUp && whatsAppUp) {
             return "UP";
@@ -85,8 +88,9 @@ public class HealthController {
 
     private Map<String, Object> buildWhatsAppStatus() {
         Map<String, Object> status = new LinkedHashMap<>();
-        status.put("status", whatsAppHealthIndicator.checkHealth());
-        status.put("details", whatsAppHealthIndicator.getDetails());
+        Health health = whatsAppHealthIndicator.health();
+        status.put("status", health.getStatus().getCode());
+        status.put("details", health.getDetails());
         return status;
     }
 

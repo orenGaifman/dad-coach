@@ -4,6 +4,7 @@ import com.dadcoach.ai.AiRateLimitExceededException;
 import com.dadcoach.api.auth.RolePermission;
 import com.dadcoach.common.BusinessRuleViolationException;
 import com.dadcoach.common.InvalidStateTransitionException;
+import com.dadcoach.common.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.UUID;

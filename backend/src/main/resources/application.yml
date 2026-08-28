@@ -128,9 +128,12 @@ dadcoach:
     message-generator-timeout-ms: 5000
     # Maximum exchanges for follow-up conversations (Requirement 7.5)
     max-follow-up-exchanges: 3
-  onboarding:
-    security:
-      wizard-data-encryption-key: ${WIZARD_DATA_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+
+onboarding:
+  rate-limit:
+    enabled: true
+  security:
+    wizard-data-encryption-key: ${WIZARD_DATA_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
 
 api:
   rate-limit:

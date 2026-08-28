@@ -26,7 +26,7 @@ import java.util.UUID;
  */
 @Service("apiChildService")
 @Transactional
-public class ChildServiceAdapter implements ChildService {
+public class ChildServiceAdapter implements ChildApiService {
 
     private static final Logger log = LoggerFactory.getLogger(ChildServiceAdapter.class);
 
