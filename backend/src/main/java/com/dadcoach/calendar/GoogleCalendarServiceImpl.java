@@ -410,7 +410,13 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
                 JsonNode tokens = objectMapper.readTree(response.getBody());
                 
                 father.setGoogleAccessToken(tokens.get("access_token").asText());
-                father.setGoogleRefreshToken(tokens.get("refresh_token").asText());
+                
+                // Google only returns refresh_token on first authorization
+                // Don't overwrite existing refresh_token if not provided
+                JsonNode refreshTokenNode = tokens.get("refresh_token");
+                if (refreshTokenNode != null && !refreshTokenNode.isNull()) {
+                    father.setGoogleRefreshToken(refreshTokenNode.asText());
+                }
                 
                 int expiresIn = tokens.get("expires_in").asInt();
                 father.setGoogleTokenExpiresAt(Instant.now().plusSeconds(expiresIn));

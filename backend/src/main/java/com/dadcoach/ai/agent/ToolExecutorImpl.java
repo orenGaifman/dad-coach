@@ -200,20 +200,57 @@ public class ToolExecutorImpl implements ToolExecutor {
             );
             
             String dayName = formatDayName(targetDate);
-            String response = String.format(
-                "מעולה! 🎯 קבעתי זמן איכות עם %s ל%s ב-%s.\nתזכורת תגיע שעה לפני.\n\n📊 לצפייה בדשבורד: %s",
-                child.getName(),
-                dayName,
-                time.format(DateTimeFormatter.ofPattern("HH:mm")),
-                dashboardUrl
-            );
             
-            return AgentToolResult.success(
-                "schedule_quality_time",
-                response,
-                WorkflowState.WAITING,
-                params
-            );
+            // Check if weekly goal is complete after this scheduling
+            SystemState.WeeklyGoalInfo goalInfo = context.systemState().weeklyGoalInfo();
+            int scheduledAfterThis = goalInfo.scheduledQualityTimes() + 1;
+            int targetGoal = goalInfo.targetQualityTimes();
+            boolean goalComplete = !goalInfo.hasGoal() || scheduledAfterThis >= targetGoal;
+            
+            if (goalComplete) {
+                // Goal is complete - transition to WAITING
+                String response = String.format(
+                    "מעולה! 🎯 קבעתי זמן איכות עם %s ל%s ב-%s.\n" +
+                    "תזכורת תגיע שעה לפני.\n\n" +
+                    "✅ השלמת את היעד השבועי שלך! כל הכבוד!\n\n" +
+                    "📊 לצפייה בדשבורד: %s",
+                    child.getName(),
+                    dayName,
+                    time.format(DateTimeFormatter.ofPattern("HH:mm")),
+                    dashboardUrl
+                );
+                
+                return AgentToolResult.success(
+                    "schedule_quality_time",
+                    response,
+                    WorkflowState.WAITING,
+                    params
+                );
+            } else {
+                // Goal not complete - stay in SCHEDULE_QUALITY_TIME and prompt for more
+                int remaining = targetGoal - scheduledAfterThis;
+                String response = String.format(
+                    "מעולה! 🎯 קבעתי זמן איכות עם %s ל%s ב-%s.\n" +
+                    "תזכורת תגיע שעה לפני.\n\n" +
+                    "📊 זה %d מתוך %d זמני איכות ליעד השבועי שלך.\n" +
+                    "נשאר עוד %d לקבוע - נקבע עוד אחד? 💪\n\n" +
+                    "📊 לצפייה בדשבורד: %s",
+                    child.getName(),
+                    dayName,
+                    time.format(DateTimeFormatter.ofPattern("HH:mm")),
+                    scheduledAfterThis,
+                    targetGoal,
+                    remaining,
+                    dashboardUrl
+                );
+                
+                return AgentToolResult.success(
+                    "schedule_quality_time",
+                    response,
+                    WorkflowState.SCHEDULE_QUALITY_TIME,  // Stay in scheduling state
+                    params
+                );
+            }
         } catch (IllegalStateException e) {
             // Calendar conflict
             return AgentToolResult.success("schedule_quality_time",
