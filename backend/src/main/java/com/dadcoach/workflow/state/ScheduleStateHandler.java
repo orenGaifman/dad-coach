@@ -333,11 +333,9 @@ public class ScheduleStateHandler implements StateHandler {
         
         log.info("Father {} acknowledged in SCHEDULE_QUALITY_TIME state, re-presenting slots", fatherId);
         
-        // Check if Google Calendar is connected
-        if (!father.hasGoogleCalendarConfigured()) {
-            log.info("Father {} has no Google Calendar connected, prompting for connection", fatherId);
-            return StateAction.respond(buildCalendarConnectMessage(father, locale));
-        }
+        // Log calendar status for debugging but don't block the flow
+        boolean hasCalendarConfigured = father.hasGoogleCalendarConfigured();
+        log.info("Calendar status for father {}: hasGoogleCalendarConfigured={}", fatherId, hasCalendarConfigured);
         
         // Reset offset to show first batch of slots again
         slotOffsetByFather.put(fatherId, 0);

@@ -245,17 +245,7 @@ public class WelcomeStateHandler implements StateHandler {
         log.info("Calendar status for father {}: enabled={}, hasRefreshToken={}, hasGoogleCalendarConfigured={}", 
                 context.getFatherId(), calendarEnabled, hasRefreshToken, hasCalendarConfigured);
         
-        if (!hasCalendarConfigured) {
-            log.info("Father {} has no Google Calendar connected, prompting for connection", 
-                    context.getFatherId());
-            
-            String calendarConnectMessage = buildCalendarConnectMessage(father, locale);
-            
-            // Still transition to SCHEDULE state - user can connect calendar from there
-            return StateAction.transition(WorkflowState.SCHEDULE_QUALITY_TIME, calendarConnectMessage);
-        }
-        
-        // Load available slots for scheduling
+        // Load available slots for scheduling - works with or without calendar
         List<AvailableSlot> availableSlots = systemStateLoader.loadAvailableSlots(context.getFatherId());
         
         // Limit to MAX_SLOTS_TO_SHOW
@@ -285,6 +275,13 @@ public class WelcomeStateHandler implements StateHandler {
                 messageContext,
                 MessageGenerator.DEFAULT_TIMEOUT_MS
         );
+        
+        // If calendar not connected, add a note but don't block the flow
+        if (!hasCalendarConfigured) {
+            log.info("Father {} has no Google Calendar connected, proceeding without calendar integration", 
+                    context.getFatherId());
+            // Don't prompt for calendar - just proceed. User can connect later from settings.
+        }
         
         return StateAction.transition(WorkflowState.SCHEDULE_QUALITY_TIME, transitionMessage);
     }
