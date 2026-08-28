@@ -331,6 +331,13 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 return cached.get();
             }
             
+            // Step 0.5: Mark message as in-flight to prevent race conditions
+            // If an identical message is already being processed, skip this one
+            if (!idempotencyService.markInFlight(message.fatherChannelIdentity(), message.textContent())) {
+                log.info("Identical message already in-flight, skipping to prevent duplicate response");
+                return null; // Return null - no response needed for duplicate
+            }
+            
             // Step 1: Parse and validate message (already done by channel layer)
             String messageText = message.textContent();
             if (messageText == null) {
@@ -547,6 +554,9 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                     fatherLocaleHolder,
                     errorResponse
             );
+        } finally {
+            // Always clear the in-flight marker to prevent blocking future messages
+            idempotencyService.clearInFlight(message.fatherChannelIdentity(), message.textContent());
         }
     }
     

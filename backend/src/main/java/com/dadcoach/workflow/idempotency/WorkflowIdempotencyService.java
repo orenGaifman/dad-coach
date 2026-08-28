@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -48,6 +49,12 @@ public class WorkflowIdempotencyService {
     
     /** Content fingerprint cache: contentFingerprint -> CachedResponse */
     private final Map<String, CachedResponse> contentFingerprintCache = new ConcurrentHashMap<>();
+    
+    /** 
+     * Set of content fingerprints currently being processed (in-flight).
+     * Prevents race conditions where two identical messages arrive before either finishes processing.
+     */
+    private final Set<String> inFlightFingerprints = ConcurrentHashMap.newKeySet();
     
     /**
      * Record of a cached response with its creation timestamp.
@@ -102,6 +109,10 @@ public class WorkflowIdempotencyService {
      * This enhanced version detects duplicates even when messages have different webhook delivery IDs
      * but identical content from the same sender within a 60-second window.
      * 
+     * <p>Also prevents race conditions by tracking messages currently being processed (in-flight).
+     * If an identical message is already being processed, this returns empty but does NOT mark
+     * it as in-flight (caller should use {@link #markInFlight} to do that).</p>
+     * 
      * @param idempotencyKey the unique key from the inbound message (WhatsApp message ID)
      * @param sender the sender identifier (e.g., phone number or father channel identity)
      * @param content the message text content
@@ -128,6 +139,49 @@ public class WorkflowIdempotencyService {
         }
         
         return Optional.empty();
+    }
+    
+    /**
+     * Marks a message as in-flight (currently being processed).
+     * This prevents race conditions where two identical messages arrive before either finishes processing.
+     * 
+     * @param sender the sender identifier (e.g., phone number or father channel identity)
+     * @param content the message text content
+     * @return true if the message was successfully marked as in-flight (new message),
+     *         false if an identical message is already being processed (duplicate)
+     */
+    public boolean markInFlight(String sender, String content) {
+        if (sender == null || content == null) {
+            return true; // Allow processing if we can't generate fingerprint
+        }
+        
+        String fingerprint = generateContentFingerprint(sender, content);
+        boolean added = inFlightFingerprints.add(fingerprint);
+        
+        if (!added) {
+            log.info("Race condition prevented: identical message already in-flight for sender: {}", sender);
+        } else {
+            log.debug("Message marked in-flight for sender: {}", sender);
+        }
+        
+        return added;
+    }
+    
+    /**
+     * Removes a message from the in-flight set after processing completes.
+     * Should be called in a finally block to ensure cleanup.
+     * 
+     * @param sender the sender identifier (e.g., phone number or father channel identity)
+     * @param content the message text content
+     */
+    public void clearInFlight(String sender, String content) {
+        if (sender == null || content == null) {
+            return;
+        }
+        
+        String fingerprint = generateContentFingerprint(sender, content);
+        inFlightFingerprints.remove(fingerprint);
+        log.debug("Message cleared from in-flight for sender: {}", sender);
     }
     
     /**
@@ -249,6 +303,7 @@ public class WorkflowIdempotencyService {
     public void clearCache() {
         cache.clear();
         contentFingerprintCache.clear();
+        inFlightFingerprints.clear();
         log.debug("Idempotency caches cleared");
     }
     
