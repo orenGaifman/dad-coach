@@ -1067,7 +1067,11 @@ public class WorkflowEngineImpl implements WorkflowEngine {
             }
             
             // Add dashboard link if appropriate (when showing progress)
-            if (responseMessage.contains("התקדמות") || responseMessage.contains("📊")) {
+            // BUT only if the message doesn't already contain a dashboard URL
+            boolean alreadyHasLink = responseMessage.contains("dad-coach.onrender.com") || 
+                                     responseMessage.contains("לפרטים נוספים:") ||
+                                     responseMessage.contains("לצפייה בדשבורד:");
+            if (!alreadyHasLink && (responseMessage.contains("התקדמות") || responseMessage.contains("📊"))) {
                 // Generate a dashboard link for the father
                 String linkMessage = dashboardLinkAppender.generateLinkMessage(
                     father.getId(),

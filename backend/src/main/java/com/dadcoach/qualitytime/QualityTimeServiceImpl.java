@@ -9,6 +9,7 @@ import com.dadcoach.qualitytime.dto.ScheduleQualityTimeResult;
 import com.dadcoach.qualitytime.dto.UpcomingQualityTimeDto;
 import com.dadcoach.workflow.Belt;
 import com.dadcoach.workflow.metrics.WorkflowMetrics;
+import com.dadcoach.workspace.commitment.CommitmentService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -53,6 +54,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
     private final FatherRepository fatherRepository;
     private final ChildRepository childRepository;
     private final WorkflowMetrics workflowMetrics;
+    private final CommitmentService commitmentService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
@@ -66,11 +68,13 @@ public class QualityTimeServiceImpl implements QualityTimeService {
             QualityTimeRepository qualityTimeRepository,
             FatherRepository fatherRepository,
             ChildRepository childRepository,
-            WorkflowMetrics workflowMetrics) {
+            WorkflowMetrics workflowMetrics,
+            CommitmentService commitmentService) {
         this.qualityTimeRepository = qualityTimeRepository;
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.workflowMetrics = workflowMetrics;
+        this.commitmentService = commitmentService;
         this.restTemplate = new RestTemplate();
         this.objectMapper = new ObjectMapper();
     }
@@ -143,6 +147,23 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         QualityTime saved = qualityTimeRepository.save(qualityTime);
         log.info("Quality Time {} scheduled successfully with calendar event {}", 
                 saved.getId(), calendarEventId);
+
+        // Also create a commitment record for dashboard display
+        try {
+            commitmentService.createCommitment(
+                fatherId,
+                childId,
+                startTime,
+                "QUALITY_TIME",
+                "זמן איכות עם " + child.getName(),
+                "WHATSAPP",
+                null  // No conversation ID in this context
+            );
+            log.info("Created commitment for quality time {} display on dashboard", saved.getId());
+        } catch (Exception e) {
+            log.warn("Failed to create commitment for quality time {}: {}", saved.getId(), e.getMessage());
+            // Don't fail the whole scheduling if commitment creation fails
+        }
 
         return ScheduleQualityTimeResult.success(
                 saved.getId(),
