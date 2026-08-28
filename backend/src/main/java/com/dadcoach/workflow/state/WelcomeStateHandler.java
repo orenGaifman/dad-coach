@@ -237,8 +237,15 @@ public class WelcomeStateHandler implements StateHandler {
         String locale = father.getLocale() != null ? father.getLocale() : "en";
         String fatherName = father.getDisplayName() != null ? father.getDisplayName() : "";
         
-        // Check if Google Calendar is connected
-        if (!father.hasGoogleCalendarConfigured()) {
+        // Check if Google Calendar is connected - add detailed logging
+        boolean calendarEnabled = Boolean.TRUE.equals(father.getGoogleCalendarEnabled());
+        boolean hasRefreshToken = father.getGoogleRefreshToken() != null && !father.getGoogleRefreshToken().isEmpty();
+        boolean hasCalendarConfigured = father.hasGoogleCalendarConfigured();
+        
+        log.info("Calendar status for father {}: enabled={}, hasRefreshToken={}, hasGoogleCalendarConfigured={}", 
+                context.getFatherId(), calendarEnabled, hasRefreshToken, hasCalendarConfigured);
+        
+        if (!hasCalendarConfigured) {
             log.info("Father {} has no Google Calendar connected, prompting for connection", 
                     context.getFatherId());
             

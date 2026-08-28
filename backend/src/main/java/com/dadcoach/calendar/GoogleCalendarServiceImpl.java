@@ -409,13 +409,26 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
             if (response.getStatusCode().is2xxSuccessful()) {
                 JsonNode tokens = objectMapper.readTree(response.getBody());
                 
-                father.setGoogleAccessToken(tokens.get("access_token").asText());
+                String accessToken = tokens.get("access_token").asText();
+                father.setGoogleAccessToken(accessToken);
                 
-                // Google only returns refresh_token on first authorization
-                // Don't overwrite existing refresh_token if not provided
+                // Google only returns refresh_token on first authorization or with prompt=consent
                 JsonNode refreshTokenNode = tokens.get("refresh_token");
                 if (refreshTokenNode != null && !refreshTokenNode.isNull()) {
                     father.setGoogleRefreshToken(refreshTokenNode.asText());
+                    log.info("Received refresh token for father {}", fatherId);
+                } else {
+                    // If no refresh token returned but we have an existing one, keep it
+                    // If no refresh token at all, this is a problem - log warning
+                    if (father.getGoogleRefreshToken() == null || father.getGoogleRefreshToken().isEmpty()) {
+                        log.warn("No refresh token received and none exists for father {}. " +
+                                "Calendar will not be marked as configured. User may need to revoke app access " +
+                                "in Google account settings and re-authorize.", fatherId);
+                        // Still set access token and enabled flag, but hasGoogleCalendarConfigured()
+                        // will return false until we get a refresh token
+                    } else {
+                        log.info("No refresh token in response for father {}, keeping existing token", fatherId);
+                    }
                 }
                 
                 int expiresIn = tokens.get("expires_in").asInt();
@@ -424,12 +437,21 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
                 
                 fatherRepository.save(father);
                 
-                log.info("Successfully connected Google Calendar for father {}", fatherId);
+                // Log the final state for debugging
+                log.info("Google Calendar OAuth complete for father {}: enabled={}, hasRefreshToken={}, hasGoogleCalendarConfigured={}", 
+                        fatherId, 
+                        father.getGoogleCalendarEnabled(),
+                        father.getGoogleRefreshToken() != null && !father.getGoogleRefreshToken().isEmpty(),
+                        father.hasGoogleCalendarConfigured());
+                
                 return true;
+            } else {
+                log.error("Google token exchange failed for father {}: status={}", 
+                        fatherId, response.getStatusCode());
             }
 
         } catch (Exception e) {
-            log.error("Failed to handle OAuth callback for father {}: {}", fatherId, e.getMessage());
+            log.error("Failed to handle OAuth callback for father {}: {}", fatherId, e.getMessage(), e);
         }
 
         return false;
