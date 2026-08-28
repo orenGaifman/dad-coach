@@ -30,7 +30,6 @@ import java.util.UUID;
 
 /**
  * REST controller for invitation management.
- * Provides endpoints for validating, creating, and revoking invitations.
  */
 @RestController
 @RequestMapping("/api/v1/invitations")
@@ -51,14 +50,9 @@ public class InvitationController {
         this.auditService = auditService;
     }
 
-    /**
-     * Validates an invitation token. Rate-limited by IP (10 attempts/hour).
-     */
     @GetMapping("/{token}/validate")
-    @Operation(
-        summary = "Validate an invitation token",
-        description = "Checks if the token is valid, not expired, and has remaining uses. Rate-limited to 10 attempts per IP per hour."
-    )
+    @Operation(summary = "Validate an invitation token",
+        description = "Checks if the token is valid, not expired, and has remaining uses.")
     @ApiResponse(responseCode = "200", description = "Invitation is valid",
         content = @Content(schema = @Schema(implementation = InvitationValidationResponse.class)))
     @ApiResponse(responseCode = "404", description = "Token not found",
@@ -74,61 +68,41 @@ public class InvitationController {
         String clientIp = getClientIp(request);
         String userAgent = request.getHeader("User-Agent");
 
-        // Rate limiting check
         RateLimitResult rateLimitResult = rateLimiter.checkIpLimit(clientIp);
         if (!rateLimitResult.allowed()) {
             auditService.logValidationAttempt(token, "VALIDATION", "RATE_LIMITED", clientIp, userAgent);
-            throw new OnboardingRateLimitException(rateLimitResult.retryAfterSeconds());
+            throw new OnboardingExceptions.RateLimitExceeded(rateLimitResult.retryAfterSeconds());
         }
 
-        // Validate invitation
         InvitationValidationResult result = invitationService.validate(token, clientIp);
-
-        // Audit log the attempt
         auditService.logValidationAttempt(token, "VALIDATION", result.status().name(), clientIp, userAgent);
 
         return switch (result.status()) {
             case VALID -> ResponseEntity.ok(new InvitationValidationResponse(
-                    result.type().name(),
-                    null, // inviter_name resolved separately if needed
-                    result.expiresAt(),
-                    result.remainingUses()
-            ));
-            case NOT_FOUND -> throw new InvitationNotFoundException(token);
-            case EXPIRED -> throw new InvitationExpiredException(result.expiresAt());
-            case REVOKED -> throw new InvitationRevokedException();
-            case EXHAUSTED -> throw new InvitationExhaustedException();
+                    result.type().name(), null, result.expiresAt(), result.remainingUses()));
+            case NOT_FOUND -> throw new OnboardingExceptions.InvitationNotFound(token);
+            case EXPIRED -> throw new OnboardingExceptions.InvitationExpired(result.expiresAt());
+            case REVOKED -> throw new OnboardingExceptions.InvitationRevoked();
+            case EXHAUSTED -> throw new OnboardingExceptions.InvitationExhausted();
         };
     }
 
-    /**
-     * Creates a new invitation. Requires authentication (admin or service).
-     */
     @PostMapping
-    @Operation(
-        summary = "Create a new invitation",
-        description = "Creates a new invitation token. Requires authenticated admin access."
-    )
+    @Operation(summary = "Create a new invitation",
+        description = "Creates a new invitation token. Requires authenticated admin access.")
     @ApiResponse(responseCode = "201", description = "Invitation created",
         content = @Content(schema = @Schema(implementation = InvitationCreateResponseDto.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request",
-        content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "401", description = "Not authenticated",
         content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<InvitationCreateResponseDto> createInvitation(
             @Valid @RequestBody InvitationCreateRequestDto requestDto,
             HttpServletRequest request) {
 
-        // In a full implementation, get creator UUID from auth context
         UUID createdBy = UUID.randomUUID(); // TODO: Extract from authentication context
 
         InvitationType type = InvitationType.valueOf(requestDto.type().toUpperCase());
         int maxUses = requestDto.maxUses() != null ? requestDto.maxUses() : (type == InvitationType.REUSABLE ? 50 : 1);
-        InvitationCreateRequest createRequest = new InvitationCreateRequest(
-                type,
-                null, // metadata
-                maxUses
-        );
+        InvitationCreateRequest createRequest = new InvitationCreateRequest(type, null, maxUses);
 
         Invitation invitation = invitationService.create(createRequest, createdBy);
 
@@ -146,26 +120,17 @@ public class InvitationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(responseDto);
     }
 
-    /**
-     * Revokes an invitation. Requires admin access.
-     */
     @DeleteMapping("/{invitationId}")
-    @Operation(
-        summary = "Revoke an invitation",
-        description = "Revokes an invitation, preventing further use. Requires admin access."
-    )
+    @Operation(summary = "Revoke an invitation",
+        description = "Revokes an invitation, preventing further use.")
     @ApiResponse(responseCode = "204", description = "Invitation revoked")
     @ApiResponse(responseCode = "404", description = "Invitation not found",
-        content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "401", description = "Not authenticated",
         content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<Void> revokeInvitation(
             @PathVariable @Parameter(description = "Invitation UUID") UUID invitationId,
             HttpServletRequest request) {
 
-        // In a full implementation, get revoker UUID from auth context
         UUID revokedBy = UUID.randomUUID(); // TODO: Extract from authentication context
-
         invitationService.revoke(invitationId, revokedBy);
         log.info("Invitation revoked: id={}", invitationId);
         return ResponseEntity.noContent().build();

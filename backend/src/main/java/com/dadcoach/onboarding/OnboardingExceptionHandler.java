@@ -16,7 +16,6 @@ import java.util.Map;
 
 /**
  * Global exception handler for onboarding controllers.
- * Returns consistent error format: {error: {code, message, field_errors, details}}
  */
 @Order(0)
 @RestControllerAdvice(basePackages = "com.dadcoach.onboarding")
@@ -27,145 +26,115 @@ public class OnboardingExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(
             MethodArgumentNotValidException ex, HttpServletRequest request) {
-
         List<ErrorResponse.FieldError> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
                 .map(e -> new ErrorResponse.FieldError(e.getField(), determineCode(e.getCode()), e.getDefaultMessage()))
                 .toList();
-
-        ErrorResponse response = ErrorResponse.withFieldErrors(
-                "VALIDATION_FAILED", "Invalid input data", fieldErrors);
-
         log.warn("Validation failed on {} with {} error(s)", request.getRequestURI(), fieldErrors.size());
-        return ResponseEntity.badRequest().body(response);
+        return ResponseEntity.badRequest().body(
+                ErrorResponse.withFieldErrors("VALIDATION_FAILED", "Invalid input data", fieldErrors));
     }
 
-    @ExceptionHandler(OnboardingValidationException.class)
+    @ExceptionHandler(OnboardingExceptions.ValidationFailed.class)
     public ResponseEntity<ErrorResponse> handleOnboardingValidation(
-            OnboardingValidationException ex, HttpServletRequest request) {
-
-        ErrorResponse response = ErrorResponse.withFieldErrors(
-                "VALIDATION_FAILED", "Invalid input data", ex.getFieldErrors());
-
+            OnboardingExceptions.ValidationFailed ex, HttpServletRequest request) {
         log.warn("Step validation failed on {}: {}", request.getRequestURI(), ex.getMessage());
-        return ResponseEntity.badRequest().body(response);
+        return ResponseEntity.badRequest().body(
+                ErrorResponse.withFieldErrors("VALIDATION_FAILED", "Invalid input data", ex.getFieldErrors()));
     }
 
-    @ExceptionHandler(InvitationNotFoundException.class)
+    @ExceptionHandler(OnboardingExceptions.InvitationNotFound.class)
     public ResponseEntity<ErrorResponse> handleInvitationNotFound(
-            InvitationNotFoundException ex, HttpServletRequest request) {
-
-        ErrorResponse response = ErrorResponse.of("INVITE_NOT_FOUND", "This invitation link is invalid.");
+            OnboardingExceptions.InvitationNotFound ex, HttpServletRequest request) {
         log.warn("Invitation not found on {}", request.getRequestURI());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+                ErrorResponse.of("INVITE_NOT_FOUND", "This invitation link is invalid."));
     }
 
-    @ExceptionHandler(InvitationExpiredException.class)
+    @ExceptionHandler(OnboardingExceptions.InvitationExpired.class)
     public ResponseEntity<ErrorResponse> handleInvitationExpired(
-            InvitationExpiredException ex, HttpServletRequest request) {
-
+            OnboardingExceptions.InvitationExpired ex, HttpServletRequest request) {
         Map<String, Object> details = ex.getExpiredAt() != null
-                ? Map.of("expired_at", ex.getExpiredAt().toString())
-                : Map.of();
-        ErrorResponse response = ErrorResponse.withDetails(
-                "INVITE_EXPIRED", "This invitation has expired.", details);
+                ? Map.of("expired_at", ex.getExpiredAt().toString()) : Map.of();
         log.warn("Invitation expired on {}", request.getRequestURI());
-        return ResponseEntity.status(HttpStatus.GONE).body(response);
+        return ResponseEntity.status(HttpStatus.GONE).body(
+                ErrorResponse.withDetails("INVITE_EXPIRED", "This invitation has expired.", details));
     }
 
-    @ExceptionHandler(InvitationRevokedException.class)
+    @ExceptionHandler(OnboardingExceptions.InvitationRevoked.class)
     public ResponseEntity<ErrorResponse> handleInvitationRevoked(
-            InvitationRevokedException ex, HttpServletRequest request) {
-
-        ErrorResponse response = ErrorResponse.of("INVITE_REVOKED", "This invitation has been revoked.");
+            OnboardingExceptions.InvitationRevoked ex, HttpServletRequest request) {
         log.warn("Invitation revoked on {}", request.getRequestURI());
-        return ResponseEntity.status(HttpStatus.GONE).body(response);
+        return ResponseEntity.status(HttpStatus.GONE).body(
+                ErrorResponse.of("INVITE_REVOKED", "This invitation has been revoked."));
     }
 
-    @ExceptionHandler(InvitationExhaustedException.class)
+    @ExceptionHandler(OnboardingExceptions.InvitationExhausted.class)
     public ResponseEntity<ErrorResponse> handleInvitationExhausted(
-            InvitationExhaustedException ex, HttpServletRequest request) {
-
-        ErrorResponse response = ErrorResponse.of("INVITE_EXHAUSTED",
-                "This invitation has reached its maximum number of uses.");
+            OnboardingExceptions.InvitationExhausted ex, HttpServletRequest request) {
         log.warn("Invitation exhausted on {}", request.getRequestURI());
-        return ResponseEntity.status(HttpStatus.GONE).body(response);
+        return ResponseEntity.status(HttpStatus.GONE).body(
+                ErrorResponse.of("INVITE_EXHAUSTED", "This invitation has reached its maximum number of uses."));
     }
 
-    @ExceptionHandler(SessionExpiredException.class)
+    @ExceptionHandler(OnboardingExceptions.SessionExpired.class)
     public ResponseEntity<ErrorResponse> handleSessionExpired(
-            SessionExpiredException ex, HttpServletRequest request) {
-
-        ErrorResponse response = ErrorResponse.of("SESSION_EXPIRED",
-                "Your session has expired. Please start over.");
+            OnboardingExceptions.SessionExpired ex, HttpServletRequest request) {
         log.warn("Session expired on {}", request.getRequestURI());
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+                ErrorResponse.of("SESSION_EXPIRED", "Your session has expired. Please start over."));
     }
 
-    @ExceptionHandler(PhoneAlreadyRegisteredException.class)
+    @ExceptionHandler(OnboardingExceptions.PhoneAlreadyRegistered.class)
     public ResponseEntity<ErrorResponse> handlePhoneRegistered(
-            PhoneAlreadyRegisteredException ex, HttpServletRequest request) {
-
-        ErrorResponse response = ErrorResponse.withDetails(
-                "PHONE_REGISTERED",
-                "This phone number is already registered.",
-                Map.of("login_url", "/login"));
+            OnboardingExceptions.PhoneAlreadyRegistered ex, HttpServletRequest request) {
         log.warn("Duplicate phone detected on {}", request.getRequestURI());
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                ErrorResponse.withDetails("PHONE_REGISTERED", "This phone number is already registered.",
+                        Map.of("login_url", "/login")));
     }
 
-    @ExceptionHandler(StepOutOfOrderException.class)
+    @ExceptionHandler(OnboardingExceptions.StepOutOfOrder.class)
     public ResponseEntity<ErrorResponse> handleStepOutOfOrder(
-            StepOutOfOrderException ex, HttpServletRequest request) {
-
-        ErrorResponse response = ErrorResponse.withDetails(
-                "STEP_OUT_OF_ORDER", ex.getMessage(),
-                Map.of("current_step", ex.getCurrentStep(),
-                       "attempted_step", ex.getAttemptedStep()));
+            OnboardingExceptions.StepOutOfOrder ex, HttpServletRequest request) {
         log.warn("Step out of order on {}: {}", request.getRequestURI(), ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
+                ErrorResponse.withDetails("STEP_OUT_OF_ORDER", ex.getMessage(),
+                        Map.of("current_step", ex.getCurrentStep(), "attempted_step", ex.getAttemptedStep())));
     }
 
-    @ExceptionHandler(MaxRetriesExceededException.class)
+    @ExceptionHandler(OnboardingExceptions.MaxRetriesExceeded.class)
     public ResponseEntity<ErrorResponse> handleMaxRetries(
-            MaxRetriesExceededException ex, HttpServletRequest request) {
-
-        ErrorResponse response = ErrorResponse.withDetails(
-                "MAX_RETRIES_EXCEEDED",
-                "Maximum activation retries reached. Please contact support.",
-                Map.of("retry_count", ex.getRetryCount(), "support_url", "/support"));
+            OnboardingExceptions.MaxRetriesExceeded ex, HttpServletRequest request) {
         log.warn("Max retries exceeded on {}", request.getRequestURI());
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(
+                ErrorResponse.withDetails("MAX_RETRIES_EXCEEDED",
+                        "Maximum activation retries reached. Please contact support.",
+                        Map.of("retry_count", ex.getRetryCount(), "support_url", "/support")));
     }
 
-    @ExceptionHandler(OnboardingRateLimitException.class)
+    @ExceptionHandler(OnboardingExceptions.RateLimitExceeded.class)
     public ResponseEntity<ErrorResponse> handleRateLimit(
-            OnboardingRateLimitException ex, HttpServletRequest request) {
-
-        ErrorResponse response = ErrorResponse.withDetails(
-                "RATE_LIMIT_EXCEEDED",
-                "Too many attempts. Please try again later.",
-                Map.of("retry_after", ex.getRetryAfterSeconds()));
+            OnboardingExceptions.RateLimitExceeded ex, HttpServletRequest request) {
         log.warn("Rate limit exceeded on {}", request.getRequestURI());
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
-                .body(response);
+                .body(ErrorResponse.withDetails("RATE_LIMIT_EXCEEDED", "Too many attempts. Please try again later.",
+                        Map.of("retry_after", ex.getRetryAfterSeconds())));
     }
 
-    @ExceptionHandler(CsrfValidationException.class)
+    @ExceptionHandler(OnboardingExceptions.CsrfValidation.class)
     public ResponseEntity<ErrorResponse> handleCsrfFailure(
-            CsrfValidationException ex, HttpServletRequest request) {
-
-        ErrorResponse response = ErrorResponse.of("CSRF_INVALID", "Invalid or missing CSRF token.");
+            OnboardingExceptions.CsrfValidation ex, HttpServletRequest request) {
         log.warn("CSRF validation failed on {}", request.getRequestURI());
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+                ErrorResponse.of("CSRF_INVALID", "Invalid or missing CSRF token."));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneral(Exception ex, HttpServletRequest request) {
         log.error("Unhandled exception on {}: {}", request.getRequestURI(), ex.getMessage(), ex);
-        ErrorResponse response = ErrorResponse.of("INTERNAL_ERROR",
-                "An unexpected error occurred. Please try again later.");
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred. Please try again later."));
     }
 
     private String determineCode(String validationCode) {
