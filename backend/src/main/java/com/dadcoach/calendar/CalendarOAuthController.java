@@ -216,4 +216,84 @@ public class CalendarOAuthController {
         
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * Fetches upcoming events from the father's Google Calendar.
+     * 
+     * Returns events from the calendar that can be displayed on the dashboard.
+     * By default, only returns Dad Coach related events (missions, quality time).
+     * 
+     * @param fatherId the father ID
+     * @param days number of days ahead to fetch (default: 7)
+     * @param allEvents if true, return all events, not just Dad Coach related
+     * @return list of upcoming calendar events
+     */
+    @GetMapping("/events/{fatherId}")
+    @Operation(
+        summary = "Get upcoming calendar events",
+        description = "Fetches upcoming events from the father's Google Calendar"
+    )
+    @ApiResponse(responseCode = "200", description = "Events returned")
+    @ApiResponse(responseCode = "404", description = "Father not found")
+    public ResponseEntity<CalendarEventsResponse> getUpcomingEvents(
+            @Parameter(description = "Father ID") @PathVariable Long fatherId,
+            @Parameter(description = "Days ahead to fetch") @RequestParam(defaultValue = "7") int days,
+            @Parameter(description = "Return all events, not just Dad Coach related") 
+            @RequestParam(defaultValue = "false") boolean allEvents) {
+        
+        Optional<Father> fatherOpt = fatherRepository.findById(fatherId);
+        if (fatherOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        Father father = fatherOpt.get();
+        
+        if (!father.hasGoogleCalendarConfigured()) {
+            return ResponseEntity.ok(new CalendarEventsResponse(
+                false, 
+                java.util.Collections.emptyList(),
+                "Calendar not connected"
+            ));
+        }
+        
+        java.time.Instant from = java.time.Instant.now();
+        java.time.Instant to = from.plus(days, java.time.temporal.ChronoUnit.DAYS);
+        
+        java.util.List<GoogleCalendarService.CalendarEvent> events = 
+            googleCalendarService.getUpcomingEvents(father, from, to, !allEvents);
+        
+        java.util.List<CalendarEventDto> eventDtos = events.stream()
+            .map(e -> new CalendarEventDto(
+                e.eventId(),
+                e.title(),
+                e.description(),
+                e.startTime(),
+                e.endTime(),
+                e.location()
+            ))
+            .toList();
+        
+        return ResponseEntity.ok(new CalendarEventsResponse(true, eventDtos, null));
+    }
+
+    /**
+     * Response DTO for calendar events.
+     */
+    public record CalendarEventsResponse(
+        boolean connected,
+        java.util.List<CalendarEventDto> events,
+        String error
+    ) {}
+
+    /**
+     * DTO for a single calendar event.
+     */
+    public record CalendarEventDto(
+        String eventId,
+        String title,
+        String description,
+        java.time.Instant startTime,
+        java.time.Instant endTime,
+        String location
+    ) {}
 }

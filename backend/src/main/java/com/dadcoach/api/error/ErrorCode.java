@@ -32,6 +32,7 @@ public enum ErrorCode {
 
     // 429 - Rate limit
     RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "Rate Limit Exceeded", true),
+    AI_CREDITS_EXHAUSTED(HttpStatus.TOO_MANY_REQUESTS, "AI Credits Exhausted", false),
 
     // 500 - Internal errors (sanitized, no stack traces)
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", true);

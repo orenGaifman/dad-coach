@@ -3,6 +3,8 @@ package com.dadcoach.calendar;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.mission.Mission;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -12,9 +14,36 @@ import java.util.Optional;
  * - Create calendar events for missions
  * - Update calendar events when missions are rescheduled
  * - Delete calendar events when missions are cancelled/completed
+ * - Fetch upcoming events from Google Calendar
  * - Manage OAuth tokens for fathers
  */
 public interface GoogleCalendarService {
+
+    /**
+     * Represents a calendar event fetched from Google Calendar.
+     */
+    record CalendarEvent(
+        String eventId,
+        String title,
+        String description,
+        Instant startTime,
+        Instant endTime,
+        String location
+    ) {}
+
+    /**
+     * Fetches upcoming events from a father's Google Calendar.
+     * 
+     * Returns events that contain "Dad Coach" or related keywords in title/description,
+     * or optionally all events within the time range.
+     *
+     * @param father the father whose calendar to fetch from
+     * @param from start of time range (inclusive)
+     * @param to end of time range (exclusive)
+     * @param filterDadCoachOnly if true, only return Dad Coach related events
+     * @return list of calendar events, empty if calendar not configured
+     */
+    List<CalendarEvent> getUpcomingEvents(Father father, Instant from, Instant to, boolean filterDadCoachOnly);
 
     /**
      * Creates a calendar event for a mission.

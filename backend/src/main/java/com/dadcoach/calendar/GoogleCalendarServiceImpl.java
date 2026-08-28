@@ -26,7 +26,10 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -46,6 +49,12 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     private static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
     private static final String GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
     private static final String CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+    
+    /** Keywords to identify Dad Coach related events in calendar. */
+    private static final List<String> DAD_COACH_KEYWORDS = List.of(
+        "dad coach", "אבא מאמן", "משימת אבא", "זמן איכות", "quality time",
+        "dad mission", "🎯"
+    );
 
     private final FatherRepository fatherRepository;
     private final ChildRepository childRepository;
@@ -70,6 +79,141 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
         this.missionRepository = missionRepository;
         this.restTemplate = new RestTemplate();
         this.objectMapper = new ObjectMapper();
+    }
+
+    @Override
+    public List<CalendarEvent> getUpcomingEvents(Father father, Instant from, Instant to, boolean filterDadCoachOnly) {
+        if (!isCalendarConfigured(father)) {
+            log.debug("Calendar not configured for father {}", father.getId());
+            return Collections.emptyList();
+        }
+
+        try {
+            String accessToken = getValidAccessToken(father);
+            if (accessToken == null) {
+                log.warn("Could not get valid access token for father {}", father.getId());
+                return Collections.emptyList();
+            }
+
+            String calendarId = father.getGoogleCalendarId() != null ? 
+                father.getGoogleCalendarId() : "primary";
+            
+            String url = GOOGLE_CALENDAR_API + "/calendars/" + 
+                URLEncoder.encode(calendarId, StandardCharsets.UTF_8) + "/events" +
+                "?timeMin=" + URLEncoder.encode(from.toString(), StandardCharsets.UTF_8) +
+                "&timeMax=" + URLEncoder.encode(to.toString(), StandardCharsets.UTF_8) +
+                "&singleEvents=true" +
+                "&orderBy=startTime" +
+                "&maxResults=50";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(accessToken);
+
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                JsonNode root = objectMapper.readTree(response.getBody());
+                JsonNode items = root.get("items");
+                
+                if (items == null || !items.isArray()) {
+                    return Collections.emptyList();
+                }
+
+                List<CalendarEvent> events = new ArrayList<>();
+                for (JsonNode item : items) {
+                    CalendarEvent event = parseCalendarEvent(item);
+                    if (event != null) {
+                        if (filterDadCoachOnly) {
+                            if (isDadCoachEvent(event)) {
+                                events.add(event);
+                            }
+                        } else {
+                            events.add(event);
+                        }
+                    }
+                }
+                
+                log.info("Fetched {} calendar events for father {} (filterDadCoach={})", 
+                    events.size(), father.getId(), filterDadCoachOnly);
+                return events;
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to fetch calendar events for father {}: {}", father.getId(), e.getMessage());
+        }
+
+        return Collections.emptyList();
+    }
+
+    /**
+     * Parses a calendar event from Google Calendar API response.
+     */
+    private CalendarEvent parseCalendarEvent(JsonNode item) {
+        try {
+            String eventId = item.has("id") ? item.get("id").asText() : null;
+            String title = item.has("summary") ? item.get("summary").asText() : "";
+            String description = item.has("description") ? item.get("description").asText() : "";
+            String location = item.has("location") ? item.get("location").asText() : null;
+            
+            // Parse start time
+            Instant startTime = null;
+            JsonNode startNode = item.get("start");
+            if (startNode != null) {
+                if (startNode.has("dateTime")) {
+                    startTime = Instant.parse(normalizeDateTime(startNode.get("dateTime").asText()));
+                } else if (startNode.has("date")) {
+                    // All-day event - use start of day
+                    String date = startNode.get("date").asText();
+                    startTime = ZonedDateTime.parse(date + "T00:00:00Z", 
+                        DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneId.of("UTC"))).toInstant();
+                }
+            }
+            
+            // Parse end time
+            Instant endTime = null;
+            JsonNode endNode = item.get("end");
+            if (endNode != null) {
+                if (endNode.has("dateTime")) {
+                    endTime = Instant.parse(normalizeDateTime(endNode.get("dateTime").asText()));
+                } else if (endNode.has("date")) {
+                    String date = endNode.get("date").asText();
+                    endTime = ZonedDateTime.parse(date + "T23:59:59Z", 
+                        DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneId.of("UTC"))).toInstant();
+                }
+            }
+            
+            if (eventId == null || startTime == null) {
+                return null;
+            }
+            
+            return new CalendarEvent(eventId, title, description, startTime, endTime, location);
+        } catch (Exception e) {
+            log.debug("Failed to parse calendar event: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Normalizes a date-time string to ISO-8601 format that Instant can parse.
+     */
+    private String normalizeDateTime(String dateTime) {
+        // Google returns format like "2024-01-15T10:00:00+02:00" or "2024-01-15T10:00:00Z"
+        // Convert to format Instant can parse
+        if (dateTime.contains("+") || dateTime.contains("-") && dateTime.lastIndexOf("-") > 7) {
+            // Has timezone offset - convert to instant via ZonedDateTime
+            return ZonedDateTime.parse(dateTime, DateTimeFormatter.ISO_OFFSET_DATE_TIME).toInstant().toString();
+        }
+        return dateTime;
+    }
+
+    /**
+     * Checks if an event is a Dad Coach related event.
+     */
+    private boolean isDadCoachEvent(CalendarEvent event) {
+        String searchText = (event.title() + " " + event.description()).toLowerCase();
+        return DAD_COACH_KEYWORDS.stream()
+            .anyMatch(keyword -> searchText.contains(keyword.toLowerCase()));
     }
 
     @Override

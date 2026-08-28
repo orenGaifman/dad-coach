@@ -1,5 +1,6 @@
 package com.dadcoach.api.error;
 
+import com.dadcoach.ai.AiRateLimitExceededException;
 import com.dadcoach.api.auth.RolePermission;
 import com.dadcoach.common.BusinessRuleViolationException;
 import com.dadcoach.common.InvalidStateTransitionException;
@@ -280,6 +281,28 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     // --- 429: Rate Limit ---
 
+    @ExceptionHandler(AiRateLimitExceededException.class)
+    public ResponseEntity<ProblemDetail> handleAiRateLimitExceeded(
+            AiRateLimitExceededException ex, HttpServletRequest request) {
+
+        String requestId = generateRequestId();
+
+        // User-friendly Hebrew message for AI credits exhaustion
+        String detail = "נגמרו הקרדיטים היומיים לשיחה עם הבוט. הקרדיטים יתחדשו מחר בחצות. " +
+                        "בינתיים, אתה יכול לצפות במשימות הקיימות או לדווח על זמן איכות.";
+
+        ProblemDetail problemDetail = ProblemDetail.of(
+                ErrorCode.AI_CREDITS_EXHAUSTED, detail, request.getRequestURI(), requestId);
+
+        log.warn("AI credits exhausted for father [request_id={}]: {}/{}",
+                requestId, ex.getCurrentCount(), ex.getMaxAllowed());
+
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .contentType(PROBLEM_JSON)
+                .header("Retry-After", String.valueOf(getSecondsUntilMidnight()))
+                .body(problemDetail);
+    }
+
     @ExceptionHandler(RateLimitExceededException.class)
     public ResponseEntity<ProblemDetail> handleRateLimitExceeded(
             RateLimitExceededException ex, HttpServletRequest request) {
@@ -350,5 +373,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             case "NotNull", "NotBlank", "NotEmpty" -> ErrorCode.FIELD_REQUIRED.name();
             default -> ErrorCode.FIELD_INVALID.name();
         };
+    }
+
+    /**
+     * Calculate seconds until midnight (Israel timezone) for AI credit reset.
+     */
+    private long getSecondsUntilMidnight() {
+        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Jerusalem"));
+        java.time.ZonedDateTime midnight = now.toLocalDate().plusDays(1).atStartOfDay(now.getZone());
+        return java.time.Duration.between(now, midnight).getSeconds();
     }
 }
