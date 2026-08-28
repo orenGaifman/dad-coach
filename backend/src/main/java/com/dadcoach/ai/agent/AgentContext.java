@@ -50,10 +50,21 @@ public record AgentContext(
     public String buildContextSummary() {
         StringBuilder sb = new StringBuilder();
         
-        // Current date and day of week - CRITICAL for day_selection calculation
-        var now = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Jerusalem"));
+        // Get timezone from system state if available
+        String timezone = "Asia/Jerusalem";
+        if (systemState != null && systemState.fatherProfile() != null && 
+            systemState.fatherProfile().timezone() != null) {
+            timezone = systemState.fatherProfile().timezone();
+        }
+        java.time.ZoneId zoneId = java.time.ZoneId.of(timezone);
+        
+        // Current date, time and day of week - CRITICAL for time calculations
+        var nowDateTime = java.time.ZonedDateTime.now(zoneId);
+        var now = nowDateTime.toLocalDate();
         var hebrewDayName = getHebrewDayName(now.getDayOfWeek());
+        var currentTime = nowDateTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
         sb.append("📅 היום: ").append(hebrewDayName).append(" (").append(now.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM"))).append(")\n");
+        sb.append("🕐 השעה הנוכחית: ").append(currentTime).append("\n");
         
         // Father info
         sb.append("שם האב: ").append(fatherName != null ? fatherName : "לא ידוע").append("\n");

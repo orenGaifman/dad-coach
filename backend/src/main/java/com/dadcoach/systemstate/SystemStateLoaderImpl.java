@@ -361,9 +361,29 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
 
             if (response.getStatusCode().is2xxSuccessful()) {
                 return parseCalendarEvents(response.getBody());
+            } else {
+                log.warn("Calendar API returned non-success status: {}, fatherId={}", 
+                        response.getStatusCode(), father.getId());
+            }
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            // Log detailed error information for debugging
+            log.error("Error fetching calendar events for father {}: status={}, body={}", 
+                    father.getId(), e.getStatusCode(), e.getResponseBodyAsString());
+            
+            // If it's a 401 Unauthorized, the token might be invalid - clear it
+            if (e.getStatusCode().value() == 401) {
+                log.warn("Calendar access token invalid for father {}, clearing token", father.getId());
+                father.setGoogleAccessToken(null);
+                father.setGoogleTokenExpiresAt(null);
+                fatherRepository.save(father);
+            }
+            // If it's a 400 Bad Request, log the calendar ID being used
+            else if (e.getStatusCode().value() == 400) {
+                log.error("Calendar API 400 error - calendarId='{}', timeMin='{}', timeMax='{}'", 
+                        calendarId, timeMin, timeMax);
             }
         } catch (Exception e) {
-            log.error("Error fetching calendar events: {}", e.getMessage());
+            log.error("Error fetching calendar events for father {}: {}", father.getId(), e.getMessage());
         }
 
         return List.of();
@@ -764,6 +784,18 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
             return father.getGoogleAccessToken();
         }
 
+        // Check if we have credentials configured
+        if (clientId == null || clientId.isEmpty() || clientSecret == null || clientSecret.isEmpty()) {
+            log.warn("Google Calendar client credentials not configured, cannot refresh token");
+            return null;
+        }
+
+        // Check if we have a refresh token
+        if (father.getGoogleRefreshToken() == null || father.getGoogleRefreshToken().isEmpty()) {
+            log.warn("No refresh token available for father {}", father.getId());
+            return null;
+        }
+
         // Refresh the token
         try {
             org.springframework.util.LinkedMultiValueMap<String, String> params = 
@@ -791,9 +823,26 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
                 father.setGoogleTokenExpiresAt(Instant.now().plusSeconds(expiresIn));
                 fatherRepository.save(father);
 
+                log.debug("Successfully refreshed access token for father {}", father.getId());
                 return newAccessToken;
+            } else {
+                log.error("Failed to refresh token for father {}: status={}", 
+                        father.getId(), response.getStatusCode());
             }
 
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            log.error("Failed to refresh access token for father {}: status={}, body={}",
+                    father.getId(), e.getStatusCode(), e.getResponseBodyAsString());
+            
+            // If refresh token is invalid (400 or 401), mark calendar as disconnected
+            if (e.getStatusCode().value() == 400 || e.getStatusCode().value() == 401) {
+                log.warn("Refresh token invalid for father {}, disabling calendar integration", father.getId());
+                father.setGoogleCalendarEnabled(false);
+                father.setGoogleAccessToken(null);
+                father.setGoogleTokenExpiresAt(null);
+                // Keep the refresh token in case user wants to reconnect
+                fatherRepository.save(father);
+            }
         } catch (Exception e) {
             log.error("Failed to refresh access token for father {}: {}",
                     father.getId(), e.getMessage());
