@@ -57,7 +57,7 @@ public class ToolExecutorImpl implements ToolExecutor {
         // NOTE: connect_calendar removed - calendar connection is handled during web onboarding
     );
     
-    private static final Duration DEFAULT_QUALITY_TIME_DURATION = Duration.ofMinutes(60);
+    private static final Duration DEFAULT_QUALITY_TIME_DURATION = Duration.ofMinutes(30);
     private static final ZoneId ISRAEL_ZONE = ZoneId.of("Asia/Jerusalem");
     
     private final QualityTimeService qualityTimeService;
@@ -155,6 +155,13 @@ public class ToolExecutorImpl implements ToolExecutor {
         Instant startTime = targetDate.atTime(time)
             .atZone(ISRAEL_ZONE)
             .toInstant();
+        
+        // Validate that the start time is in the future
+        if (startTime.isBefore(Instant.now())) {
+            return AgentToolResult.success("schedule_quality_time",
+                "השעה שבחרת כבר עברה. אנא בחר שעה עתידית.",
+                params);
+        }
         
         // Get the child
         Child child = getChildForScheduling(context, childSelection);
