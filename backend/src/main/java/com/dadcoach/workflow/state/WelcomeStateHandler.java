@@ -212,6 +212,9 @@ public class WelcomeStateHandler implements StateHandler {
      *   <li>Returns a transition action to SCHEDULE_QUALITY_TIME</li>
      * </ol>
      * 
+     * <p><b>Note:</b> Google Calendar connection is handled during web onboarding,
+     * not in the WhatsApp flow. The bot never prompts for calendar connection.</p>
+     * 
      * <p><b>Validates Requirement 4.5:</b> When transitioning out of WELCOME,
      * the welcomed_at timestamp is set and the father never returns to WELCOME state.</p>
      * 
@@ -223,7 +226,6 @@ public class WelcomeStateHandler implements StateHandler {
                 context.getFatherId());
         
         // Load and update father
-        // Convert UUID to Long: father UUID uses least significant bits for the Long ID
         Father father = fatherRepository.findById(context.getFatherId().getLeastSignificantBits())
                 .orElseThrow(() -> new IllegalStateException(
                         "Father not found: " + context.getFatherId()));
@@ -237,15 +239,7 @@ public class WelcomeStateHandler implements StateHandler {
         String locale = father.getLocale() != null ? father.getLocale() : "en";
         String fatherName = father.getDisplayName() != null ? father.getDisplayName() : "";
         
-        // Check if Google Calendar is connected - add detailed logging
-        boolean calendarEnabled = Boolean.TRUE.equals(father.getGoogleCalendarEnabled());
-        boolean hasRefreshToken = father.getGoogleRefreshToken() != null && !father.getGoogleRefreshToken().isEmpty();
-        boolean hasCalendarConfigured = father.hasGoogleCalendarConfigured();
-        
-        log.info("Calendar status for father {}: enabled={}, hasRefreshToken={}, hasGoogleCalendarConfigured={}", 
-                context.getFatherId(), calendarEnabled, hasRefreshToken, hasCalendarConfigured);
-        
-        // Load available slots for scheduling - works with or without calendar
+        // Load available slots for scheduling
         List<AvailableSlot> availableSlots = systemStateLoader.loadAvailableSlots(context.getFatherId());
         
         // Limit to MAX_SLOTS_TO_SHOW
@@ -275,13 +269,6 @@ public class WelcomeStateHandler implements StateHandler {
                 messageContext,
                 MessageGenerator.DEFAULT_TIMEOUT_MS
         );
-        
-        // If calendar not connected, add a note but don't block the flow
-        if (!hasCalendarConfigured) {
-            log.info("Father {} has no Google Calendar connected, proceeding without calendar integration", 
-                    context.getFatherId());
-            // Don't prompt for calendar - just proceed. User can connect later from settings.
-        }
         
         return StateAction.transition(WorkflowState.SCHEDULE_QUALITY_TIME, transitionMessage);
     }
@@ -347,40 +334,5 @@ public class WelcomeStateHandler implements StateHandler {
             return List.of("מוכן לתאם", "ספר לי עוד");
         }
         return List.of("Ready to schedule", "Tell me more");
-    }
-    
-    /**
-     * Builds a message prompting the father to connect their Google Calendar.
-     * 
-     * <p>The message explains why calendar connection is needed and provides
-     * a link to connect. The link uses the backend API which will redirect
-     * to Google's OAuth flow.</p>
-     * 
-     * @param father the father entity
-     * @param locale the father's locale ("en" or "he")
-     * @return the calendar connection prompt message with link
-     */
-    private String buildCalendarConnectMessage(Father father, String locale) {
-        // Build the calendar connect URL - this goes to our backend which redirects to Google OAuth
-        String connectUrl = String.format("https://dad-coach.onrender.com/api/v1/calendar/connect/%d", 
-                father.getId());
-        
-        if ("he".equals(locale)) {
-            return String.format(
-                "🗓️ כדי לתזמן זמן איכות, אני צריך גישה ללוח השנה שלך בגוגל.\n\n" +
-                "זה יעזור לי למצוא זמנים פנויים ולתאם אוטומטית את הזמן עם הילדים.\n\n" +
-                "👉 לחץ כאן לחיבור הלוח: %s\n\n" +
-                "אחרי שתחבר, שלח לי הודעה ואמשיך מאיפה שהפסקנו! 😊",
-                connectUrl
-            );
-        }
-        
-        return String.format(
-            "🗓️ To schedule quality time, I need access to your Google Calendar.\n\n" +
-            "This helps me find available times and automatically coordinate time with your kids.\n\n" +
-            "👉 Click here to connect: %s\n\n" +
-            "Once connected, send me a message and I'll continue from where we left off! 😊",
-            connectUrl
-        );
     }
 }
