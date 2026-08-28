@@ -1,6 +1,7 @@
 package com.dadcoach.workflow.scheduler;
 
 import com.dadcoach.channel.dto.OutboundMessageDto;
+import com.dadcoach.domain.conversation.MessageLogService;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.qualitytime.QualityTime;
@@ -89,6 +90,7 @@ public class WorkflowScheduler {
     private final SchedulerConfig schedulerConfig;
     private final WeeklyGoalService weeklyGoalService;
     private final BeltPromotionNotifier beltPromotionNotifier;
+    private final MessageLogService messageLogService;
 
     /**
      * Constructs a new WorkflowScheduler with required dependencies.
@@ -102,6 +104,7 @@ public class WorkflowScheduler {
      * @param schedulerConfig configuration properties for scheduler timing and batching
      * @param weeklyGoalService service for weekly goal management
      * @param beltPromotionNotifier notifier for belt promotion messages
+     * @param messageLogService service for logging conversation messages
      */
     public WorkflowScheduler(
             QualityTimeRepository qualityTimeRepository,
@@ -112,7 +115,8 @@ public class WorkflowScheduler {
             FallbackMessages fallbackMessages,
             SchedulerConfig schedulerConfig,
             WeeklyGoalService weeklyGoalService,
-            BeltPromotionNotifier beltPromotionNotifier) {
+            BeltPromotionNotifier beltPromotionNotifier,
+            MessageLogService messageLogService) {
         this.qualityTimeRepository = qualityTimeRepository;
         this.fatherRepository = fatherRepository;
         this.workflowEngine = workflowEngine;
@@ -122,6 +126,7 @@ public class WorkflowScheduler {
         this.schedulerConfig = schedulerConfig;
         this.weeklyGoalService = weeklyGoalService;
         this.beltPromotionNotifier = beltPromotionNotifier;
+        this.messageLogService = messageLogService;
         
         log.info("WorkflowScheduler initialized with config: morningReminderCron={}, followUpIntervalMs={}, " +
                 "staleDetectionIntervalMs={}, batchSize={}",
@@ -325,6 +330,8 @@ public class WorkflowScheduler {
             // Send via WhatsApp
             try {
                 whatsAppService.sendText(father.getPhone(), message);
+                // Log outbound message for conversation history
+                messageLogService.logOutbound(father.getId(), message);
                 log.debug("Sent morning reminder for QualityTime {}", qualityTime.getId());
             } catch (Exception e) {
                 log.error("Failed to send WhatsApp reminder: {}", e.getMessage());
@@ -508,6 +515,8 @@ public class WorkflowScheduler {
         
         try {
             whatsAppService.sendText(father.getPhone(), message);
+            // Log outbound message for conversation history
+            messageLogService.logOutbound(father.getId(), message);
             log.debug("Sent pre-QT reminder message to father {}", father.getId());
         } catch (Exception e) {
             log.error("Failed to send pre-QT reminder message: {}", e.getMessage(), e);
@@ -650,6 +659,8 @@ public class WorkflowScheduler {
                 
                 if (phoneNumber != null && messageText != null && !messageText.isBlank()) {
                     whatsAppService.sendText(phoneNumber, messageText);
+                    // Log outbound message for conversation history
+                    messageLogService.logOutbound(father.getId(), messageText);
                     log.info("Sent follow-up message (phone: {})", maskPhone(phoneNumber));
                 } else {
                     log.warn("Could not send follow-up message for Quality Time {}: missing phone or message", 
@@ -868,6 +879,8 @@ public class WorkflowScheduler {
         
         try {
             whatsAppService.sendText(father.getPhone(), message);
+            // Log outbound message for conversation history
+            messageLogService.logOutbound(father.getId(), message);
             log.debug("Sent re-engagement message to phone {}", maskPhone(father.getPhone()));
         } catch (Exception e) {
             // Log but don't fail the entire processing - the state has already been updated
@@ -1041,6 +1054,8 @@ public class WorkflowScheduler {
         
         try {
             whatsAppService.sendText(father.getPhone(), message);
+            // Log outbound message for conversation history
+            messageLogService.logOutbound(father.getId(), message);
             log.debug("Sent inactivity nudge message to phone {}", maskPhone(father.getPhone()));
         } catch (Exception e) {
             log.error("Failed to send inactivity nudge message: {}", e.getMessage(), e);
