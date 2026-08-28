@@ -214,7 +214,7 @@ public class WorkspaceController {
      * Gets the next scheduled Quality Time event for the father.
      */
     private QualityTimeSummaryDto getNextScheduledQualityTime(Long fatherId) {
-        Optional<QualityTime> nextQualityTime = qualityTimeRepository.findLatestScheduledForFather(fatherId);
+        Optional<QualityTime> nextQualityTime = qualityTimeRepository.findFirstByFatherIdAndStatusOrderByScheduledStartAsc(fatherId, QualityTimeStatus.SCHEDULED);
         
         if (nextQualityTime.isEmpty()) {
             return null;

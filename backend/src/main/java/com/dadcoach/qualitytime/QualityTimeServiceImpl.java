@@ -419,7 +419,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
     public Optional<UpcomingQualityTimeDto> getUpcomingQualityTime(Long fatherId) {
         log.debug("Getting upcoming Quality Time for father {}", fatherId);
 
-        return qualityTimeRepository.findLatestScheduledForFather(fatherId)
+        return qualityTimeRepository.findFirstByFatherIdAndStatusOrderByScheduledStartAsc(fatherId, QualityTimeStatus.SCHEDULED)
                 .map(UpcomingQualityTimeDto::from);
     }
 

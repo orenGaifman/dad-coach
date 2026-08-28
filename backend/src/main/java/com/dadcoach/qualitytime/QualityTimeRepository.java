@@ -30,18 +30,15 @@ public interface QualityTimeRepository extends JpaRepository<QualityTime, UUID> 
     List<QualityTime> findByFatherIdOrderByScheduledStartDesc(Long fatherId);
 
     /**
-     * Find the latest scheduled Quality Time for a father.
+     * Find the next scheduled Quality Time for a father (earliest upcoming).
      * Used to show the next upcoming Quality Time on the dashboard.
      * 
      * Requirements: 6.6
      * 
      * @param fatherId the father's internal database ID
-     * @return the most recent scheduled Quality Time, if any
+     * @return the next scheduled Quality Time, if any
      */
-    @Query("SELECT qt FROM QualityTime qt WHERE qt.fatherId = :fatherId " +
-           "AND qt.status = 'SCHEDULED' " +
-           "ORDER BY qt.scheduledStart ASC")
-    Optional<QualityTime> findLatestScheduledForFather(@Param("fatherId") Long fatherId);
+    Optional<QualityTime> findFirstByFatherIdAndStatusOrderByScheduledStartAsc(Long fatherId, QualityTimeStatus status);
 
     /**
      * Find all Quality Time events scheduled between two instants.
