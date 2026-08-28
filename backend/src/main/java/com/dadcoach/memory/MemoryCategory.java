@@ -22,6 +22,15 @@ public enum MemoryCategory {
     IDENTITY,
 
     /**
+     * Specific factual biographical details about a person.
+     * More granular than IDENTITY - captures individual facts that can be verified.
+     * Typical subjects: Father, Child.
+     * Default importance: 8-9.
+     * Examples: "Lucas's favorite color is blue", "Father works as a software engineer".
+     */
+    IDENTITY_FACT,
+
+    /**
      * Dynamics, quality, and patterns between father and child.
      * Typical subjects: Father-Child pair.
      * Default importance: 7-8.
