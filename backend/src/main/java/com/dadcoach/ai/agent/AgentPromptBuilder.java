@@ -66,10 +66,11 @@ public class AgentPromptBuilder {
         
         ## כללים קריטיים
         
-        ### 0. בדיקת חיבור יומן גוגל
-        - אם "יומן גוגל: לא מחובר ❌" - הצע חיבור לפני קביעת זמנים
-        - **אם "יומן גוגל: מחובר ✓" - אל תזכיר את נושא חיבור היומן בכלל! היומן כבר מחובר ופועל.**
-        - הסבר (רק אם לא מחובר): "כדי שאוכל לשלוח תזכורות ולסנכרן עם היומן שלך"
+        ### 0. יומן גוגל - אל תזכיר בכלל!
+        - **חיבור יומן גוגל מבוצע במהלך ההרשמה באתר - לא בוואטסאפ!**
+        - **לעולם אל תבקש מהאב לחבר יומן ואל תשלח קישור לחיבור יומן**
+        - אם האב שואל על חיבור יומן - הסבר שזה מתבצע דרך האתר
+        - המשך תמיד עם קביעת זמני איכות ללא תלות במצב היומן
         
         ### 1. הבן את ההקשר - אל תשאל שאלות מיותרות!
         - תשובות כמו "כן", "סבבה", "בסדר", "מאשר", "יאללה" = הסכמה
@@ -358,25 +359,12 @@ public class AgentPromptBuilder {
         }
         ```
         
-        ### חיבור יומן (רק אם לא מחובר!)
-        הודעה: "בוקר טוב" (יומן לא מחובר)
-        תשובה:
-        ```json
-        {
-          "tool": "connect_calendar",
-          "parameters": {},
-          "response": "בוקר טוב! 🌅\\n\\nלפני שנתחיל, בוא נחבר את יומן גוגל שלך - ככה אוכל לשלוח תזכורות ולסנכרן את זמני האיכות אוטומטית."
-        }
-        ```
-        
-        **⚠️ אם היומן כבר מחובר (יומן גוגל: מחובר ✓) - אל תשתמש בדוגמה הזו! המשך ישר לקביעת זמנים.**
-        
         ## חשוב מאוד!
         - תמיד החזר JSON תקין בלבד
         - **לאחר כל פעולה משמעותית - הזמן לדשבורד**
         - **היה ברור לגבי היעד, ההתקדמות, והצעד הבא**
         - אם אין יעד שבועי - הצע לקבוע אחד לפני קביעת זמן איכות
-        - **אם יומן גוגל מחובר (✓) - אל תציע לחבר אותו! המשך ישר לפעולות אחרות.**
+        - **לעולם אל תבקש חיבור יומן גוגל - זה מטופל בהרשמה באתר!**
         """;
     
     /**
@@ -643,7 +631,7 @@ public class AgentPromptBuilder {
             AgentTool.SHOW_WEEKLY_SUMMARY,
             AgentTool.SET_WEEKLY_GOAL,
             AgentTool.GET_WEEKLY_GOAL_STATUS,
-            AgentTool.CONNECT_CALENDAR,
+            // NOTE: CONNECT_CALENDAR removed - calendar connection is handled during web onboarding
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
             AgentTool.CLARIFY
@@ -661,7 +649,7 @@ public class AgentPromptBuilder {
             AgentTool.SET_WEEKLY_GOAL,
             AgentTool.GET_WEEKLY_GOAL_STATUS,
             AgentTool.GET_DASHBOARD_LINK,
-            AgentTool.CONNECT_CALENDAR,
+            // NOTE: CONNECT_CALENDAR removed - calendar connection is handled during web onboarding
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
             AgentTool.CLARIFY
@@ -680,7 +668,7 @@ public class AgentPromptBuilder {
             AgentTool.SHOW_PROGRESS,
             AgentTool.GET_DASHBOARD_LINK,
             AgentTool.GET_WEEKLY_GOAL_STATUS,
-            AgentTool.CONNECT_CALENDAR,
+            // NOTE: CONNECT_CALENDAR removed - calendar connection is handled during web onboarding
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
             AgentTool.CLARIFY
@@ -698,7 +686,7 @@ public class AgentPromptBuilder {
             AgentTool.SCHEDULE_QUALITY_TIME,
             AgentTool.SHOW_AVAILABLE_SLOTS,
             AgentTool.GET_DASHBOARD_LINK,
-            AgentTool.CONNECT_CALENDAR,
+            // NOTE: CONNECT_CALENDAR removed - calendar connection is handled during web onboarding
             AgentTool.GREET,
             AgentTool.SHOW_HELP,
             AgentTool.CLARIFY

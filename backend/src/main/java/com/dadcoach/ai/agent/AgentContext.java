@@ -78,9 +78,9 @@ public record AgentContext(
         }
         
         if (systemState != null) {
-            // Calendar connection status - important for scheduling!
-            boolean calendarConnected = systemState.hasGoogleCalendarConnected();
-            sb.append("יומן גוגל: ").append(calendarConnected ? "מחובר ✓" : "לא מחובר ❌").append("\n");
+            // NOTE: Calendar connection status removed from context.
+            // Calendar connection is handled during web onboarding, not WhatsApp.
+            // Showing the status here was causing the AI to ask users to connect calendar.
             
             // Weekly goal - IMPORTANT for guiding the conversation!
             if (systemState.weeklyGoalInfo() != null && systemState.weeklyGoalInfo().hasGoal()) {

@@ -53,9 +53,8 @@ public class ToolExecutorImpl implements ToolExecutor {
         // Weekly goal tools
         "show_weekly_summary",
         "set_weekly_goal",
-        "get_weekly_goal_status",
-        // Calendar tools
-        "connect_calendar"
+        "get_weekly_goal_status"
+        // NOTE: connect_calendar removed - calendar connection is handled during web onboarding
     );
     
     private static final Duration DEFAULT_QUALITY_TIME_DURATION = Duration.ofMinutes(60);
@@ -120,22 +119,10 @@ public class ToolExecutorImpl implements ToolExecutor {
     // ─── Tool Implementations ────────────────────────────────────────────────
     
     private AgentToolResult executeScheduleQualityTime(Map<String, Object> params, AgentContext context) {
-        // MUST have Google Calendar connected before scheduling
-        boolean isCalendarConnected = context.systemState() != null && 
-                                      context.systemState().hasGoogleCalendarConnected();
-        
-        if (!isCalendarConnected) {
-            Long fatherDbId = getFatherDbId(context);
-            String connectUrl = fatherDbId != null 
-                ? String.format("https://dad-coach.onrender.com/api/v1/calendar/connect/%d", fatherDbId)
-                : "https://dad-coach.onrender.com";
-            
-            return AgentToolResult.success("schedule_quality_time",
-                String.format("🗓️ לפני שנקבע זמן איכות, צריך לחבר את יומן גוגל כדי שאוכל לשלוח תזכורות ולסנכרן את הלוח שלך.\n\n" +
-                    "👉 לחץ כאן לחיבור: %s\n\n" +
-                    "אחרי החיבור, שלח לי הודעה ונקבע את הזמן! 😊", connectUrl),
-                params);
-        }
+        // NOTE: Calendar connection is handled during web onboarding, not WhatsApp.
+        // We proceed with scheduling regardless of calendar status.
+        // If calendar is not connected, the quality time will still be scheduled
+        // in our system, but won't sync to Google Calendar.
         
         // Extract parameters
         Integer daySelection = getIntParam(params, "day_selection", 0);
