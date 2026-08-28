@@ -6,6 +6,7 @@ import com.dadcoach.ai.provider.AiProviderRequest;
 import com.dadcoach.ai.provider.AiProviderResponse;
 import com.dadcoach.systemstate.SystemState;
 import com.dadcoach.systemstate.SystemStateLoader;
+import com.dadcoach.workflow.WelcomeStep;
 import com.dadcoach.workflow.WorkflowState;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -125,6 +126,7 @@ public class CoachingAgent {
                         .fatherId(fatherId)
                         .fatherName(fatherName)
                         .currentState(state)
+                        .welcomeStep(getWelcomeStep(systemState))
                         .inboundMessage(inboundMessage)
                         .systemState(systemState)
                         .conversationHistory(limitHistory(conversationHistory))
@@ -159,6 +161,7 @@ public class CoachingAgent {
                 .fatherId(fatherId)
                 .fatherName(fatherName)
                 .currentState(state)
+                .welcomeStep(getWelcomeStep(systemState))
                 .inboundMessage(inboundMessage)
                 .systemState(systemState)
                 .conversationHistory(limitHistory(conversationHistory))
@@ -275,6 +278,26 @@ public class CoachingAgent {
             return systemState.fatherProfile().displayName();
         }
         return null;
+    }
+    
+    /**
+     * Get the current welcome step from system state.
+     * Returns null if not in WELCOME state or if welcome step is not set.
+     */
+    private WelcomeStep getWelcomeStep(SystemState systemState) {
+        if (systemState == null || systemState.fatherProfile() == null) {
+            return WelcomeStep.INTRO; // Default for new users
+        }
+        
+        // Check if we're in WELCOME state
+        WorkflowState currentState = systemState.workflowState();
+        if (currentState != WorkflowState.WELCOME) {
+            return null; // Not in welcome flow
+        }
+        
+        // Get welcome step from father profile
+        WelcomeStep step = systemState.fatherProfile().welcomeStep();
+        return step != null ? step : WelcomeStep.INTRO;
     }
     
     private List<AgentTool> getToolsForState(WorkflowState state, SystemState systemState) {

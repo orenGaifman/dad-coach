@@ -1082,7 +1082,7 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 messageLogService.logOutbound(father.getId(), responseMessage);
             }
             
-            return new OutboundMessageDto(
+            OutboundMessageDto response = new OutboundMessageDto(
                 UUID.randomUUID(),  // Generate new message ID
                 fatherUuid,
                 "WHATSAPP",
@@ -1096,6 +1096,17 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 Instant.now()
             );
             
+            // Record in idempotency service to prevent duplicate processing
+            // This fixes the bug where AI Agent path didn't record processed messages
+            idempotencyService.recordProcessed(
+                    message.idempotencyKey(),
+                    message.fatherChannelIdentity(),
+                    message.textContent(),
+                    response
+            );
+            
+            return response;
+            
         } catch (Exception e) {
             log.error("AI Agent processing failed for father {}: {}", fatherUuid, e.getMessage(), e);
             
@@ -1108,7 +1119,7 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                     .build()
             );
             
-            return new OutboundMessageDto(
+            OutboundMessageDto errorResponse = new OutboundMessageDto(
                 UUID.randomUUID(),
                 fatherUuid,
                 "WHATSAPP",
@@ -1121,6 +1132,16 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 MessagePriority.IMMEDIATE,
                 Instant.now()
             );
+            
+            // Record error response in idempotency service to prevent duplicate error messages
+            idempotencyService.recordProcessed(
+                    message.idempotencyKey(),
+                    message.fatherChannelIdentity(),
+                    message.textContent(),
+                    errorResponse
+            );
+            
+            return errorResponse;
         }
     }
     

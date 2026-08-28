@@ -2,6 +2,7 @@ package com.dadcoach.ai.agent;
 
 import com.dadcoach.systemstate.AvailableSlot;
 import com.dadcoach.systemstate.SystemState;
+import com.dadcoach.workflow.WelcomeStep;
 import com.dadcoach.workflow.WorkflowState;
 
 import java.util.List;
@@ -16,6 +17,7 @@ import java.util.UUID;
  * @param fatherId the father's unique identifier
  * @param fatherName the father's display name
  * @param currentState the current workflow state
+ * @param welcomeStep the current step within the WELCOME state (null if not in welcome)
  * @param inboundMessage the message from the user
  * @param systemState the complete system state (can be null)
  * @param conversationHistory recent messages for context
@@ -26,6 +28,7 @@ public record AgentContext(
     UUID fatherId,
     String fatherName,
     WorkflowState currentState,
+    WelcomeStep welcomeStep,
     String inboundMessage,
     SystemState systemState,
     List<ConversationTurn> conversationHistory,
@@ -55,6 +58,13 @@ public record AgentContext(
         // Father info
         sb.append("שם האב: ").append(fatherName != null ? fatherName : "לא ידוע").append("\n");
         sb.append("מצב נוכחי: ").append(currentState).append("\n");
+        
+        // Welcome step - CRITICAL for step-by-step onboarding!
+        if (currentState == WorkflowState.WELCOME && welcomeStep != null) {
+            sb.append("\n🎯 **שלב בתהליך ההצטרפות:** ").append(welcomeStep.name());
+            sb.append(" (שלב ").append(welcomeStep.getStepNumber()).append(" מתוך ").append(WelcomeStep.getTotalSteps()).append(")\n");
+            sb.append("⚠️ **חשוב:** עקוב בדיוק אחרי השלב הנוכחי! לא לדלג קדימה!\n\n");
+        }
         
         if (systemState != null) {
             // Calendar connection status - important for scheduling!
@@ -244,6 +254,7 @@ public record AgentContext(
         private UUID fatherId;
         private String fatherName;
         private WorkflowState currentState;
+        private WelcomeStep welcomeStep;
         private String inboundMessage;
         private SystemState systemState;
         private List<ConversationTurn> conversationHistory = List.of();
@@ -262,6 +273,11 @@ public record AgentContext(
         
         public Builder currentState(WorkflowState currentState) {
             this.currentState = currentState;
+            return this;
+        }
+        
+        public Builder welcomeStep(WelcomeStep welcomeStep) {
+            this.welcomeStep = welcomeStep;
             return this;
         }
         
@@ -291,7 +307,7 @@ public record AgentContext(
         }
         
         public AgentContext build() {
-            return new AgentContext(fatherId, fatherName, currentState, inboundMessage, 
+            return new AgentContext(fatherId, fatherName, currentState, welcomeStep, inboundMessage, 
                                     systemState, conversationHistory, availableTools, availableSlots);
         }
     }

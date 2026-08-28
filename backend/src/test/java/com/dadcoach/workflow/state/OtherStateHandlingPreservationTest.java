@@ -652,7 +652,8 @@ class OtherStateHandlingPreservationTest {
                 "he",
                 "Asia/Jerusalem",
                 LocalTime.of(15, 0),
-                true
+                true,
+                null  // welcomeStep - null means welcome flow completed
         );
         
         DashboardMetrics dashboardMetrics = new DashboardMetrics(

@@ -13,6 +13,7 @@ import com.dadcoach.weeklygoal.WeeklyGoal;
 import com.dadcoach.weeklygoal.WeeklyGoalRepository;
 import com.dadcoach.weeklygoal.WeeklyGoalStatus;
 import com.dadcoach.workflow.Belt;
+import com.dadcoach.workflow.WelcomeStep;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -287,7 +288,8 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
                 father.getLocale() != null ? father.getLocale() : "en",
                 father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem",
                 father.getPreferredCoachingTime(),
-                father.hasGoogleCalendarConfigured()
+                father.hasGoogleCalendarConfigured(),
+                father.getWelcomeStep()
         );
     }
 

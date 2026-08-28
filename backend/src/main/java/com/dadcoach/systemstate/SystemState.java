@@ -1,6 +1,7 @@
 package com.dadcoach.systemstate;
 
 import com.dadcoach.workflow.Belt;
+import com.dadcoach.workflow.WelcomeStep;
 import com.dadcoach.workflow.WorkflowState;
 
 import java.time.Instant;
@@ -64,6 +65,7 @@ public record SystemState(
      * @param timezone the father's timezone (e.g., "America/Mexico_City")
      * @param preferredCoachingTime the father's preferred time for coaching interactions
      * @param googleCalendarConnected whether Google Calendar is connected
+     * @param welcomeStep the current step in the welcome onboarding flow (null if completed)
      */
     public record FatherProfile(
         Long fatherId,
@@ -73,7 +75,8 @@ public record SystemState(
         String locale,
         String timezone,
         LocalTime preferredCoachingTime,
-        boolean googleCalendarConnected
+        boolean googleCalendarConnected,
+        WelcomeStep welcomeStep
     ) {
         /**
          * Creates a FatherProfile with defensive copy of children list.

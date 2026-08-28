@@ -6,6 +6,7 @@ import com.dadcoach.father.CoachingStyle;
 import com.dadcoach.father.FatherStatus;
 import com.dadcoach.father.OnboardingState;
 import com.dadcoach.workflow.Belt;
+import com.dadcoach.workflow.WelcomeStep;
 import com.dadcoach.workflow.WorkflowState;
 
 import jakarta.persistence.*;
@@ -126,6 +127,10 @@ public class Father {
     @Enumerated(EnumType.STRING)
     @Column(name = "current_workflow_state", length = 30)
     private WorkflowState currentWorkflowState = WorkflowState.WELCOME;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "welcome_step", length = 40)
+    private WelcomeStep welcomeStep = WelcomeStep.INTRO;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "previous_workflow_state", length = 30)
@@ -460,6 +465,14 @@ public class Father {
 
     public void setWorkflowStateEnteredAt(Instant workflowStateEnteredAt) {
         this.workflowStateEnteredAt = workflowStateEnteredAt;
+    }
+
+    public WelcomeStep getWelcomeStep() {
+        return welcomeStep;
+    }
+
+    public void setWelcomeStep(WelcomeStep welcomeStep) {
+        this.welcomeStep = welcomeStep;
     }
 
     public Instant getWelcomedAt() {
