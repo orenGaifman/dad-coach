@@ -538,7 +538,7 @@ public class CoachingAgent {
         // Common acknowledgment patterns
         Set<String> acknowledgments = Set.of(
             "כן", "אוקי", "סבבה", "בסדר", "יאללה", "טוב", "נשמע טוב", 
-            "מעולה", "סבבה", "אחלה", "תודה", "תנקס", "ok", "yes", "sure"
+            "מעולה", "אחלה", "תודה", "תנקס", "ok", "yes", "sure"
         );
         
         // Check if it's an acknowledgment
