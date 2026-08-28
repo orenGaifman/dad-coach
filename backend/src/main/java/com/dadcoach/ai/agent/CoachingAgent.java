@@ -533,29 +533,119 @@ public class CoachingAgent {
     private String buildIntelligentClarifyResponse(AgentContext context) {
         // Check conversation history to understand context
         List<AgentContext.ConversationTurn> history = context.conversationHistory();
-        String message = context.inboundMessage().toLowerCase();
+        String message = context.inboundMessage();
+        String messageLower = message.toLowerCase();
         
-        // Common acknowledgment patterns
-        Set<String> acknowledgments = Set.of(
+        // Common acknowledgment patterns (text)
+        Set<String> textAcknowledgments = Set.of(
             "כן", "אוקי", "סבבה", "בסדר", "יאללה", "טוב", "נשמע טוב", 
-            "מעולה", "אחלה", "תודה", "תנקס", "ok", "yes", "sure"
+            "מעולה", "אחלה", "תודה", "תנקס", "ok", "yes", "sure", "yep",
+            "בטח", "נכון", "מסכים", "קדימה", "יופי", "אוקיי", "קול"
         );
         
-        // Check if it's an acknowledgment
-        for (String ack : acknowledgments) {
-            if (message.contains(ack)) {
-                // This is an acknowledgment - respond positively
+        // Common acknowledgment emojis
+        Set<String> emojiAcknowledgments = Set.of(
+            "👍", "✅", "🙏", "👌", "💪", "🎉", "😊", "🙂", "👏", "❤️",
+            "💙", "🔥", "✔️", "☑️", "🤝", "😁", "😄", "🥳", "💯"
+        );
+        
+        // Check if it's a text acknowledgment
+        for (String ack : textAcknowledgments) {
+            if (messageLower.contains(ack)) {
                 return buildAcknowledgmentResponse(context);
             }
         }
         
+        // Check if it's an emoji acknowledgment
+        for (String emoji : emojiAcknowledgments) {
+            if (message.contains(emoji)) {
+                return buildAcknowledgmentResponse(context);
+            }
+        }
+        
+        // If not a known acknowledgment, ask AI to determine intent
+        String aiResponse = askAiForIntentClassification(message, context.fatherId());
+        if (aiResponse != null) {
+            if ("acknowledgment".equals(aiResponse)) {
+                return buildAcknowledgmentResponse(context);
+            } else if ("question".equals(aiResponse)) {
+                return buildStatusSummary(context);
+            }
+            // For other intents, let the original flow handle it
+        }
+        
         // Check if asking for clarification about something bot said
-        if (message.contains("מה") && (message.contains("להסביר") || message.contains("זה"))) {
+        if (messageLower.contains("מה") && (messageLower.contains("להסביר") || messageLower.contains("זה"))) {
             return buildStatusSummary(context);
         }
         
         // Default - give a status summary and ask what they want to do
         return null; // Let the original clarify flow handle it
+    }
+    
+    /**
+     * Ask AI to classify user intent when we can't determine it from patterns.
+     * Returns: "acknowledgment", "question", "request", or null if unsure.
+     */
+    private String askAiForIntentClassification(String message, UUID fatherId) {
+        try {
+            String systemPrompt = """
+                אתה מסווג הודעות. המשתמש שלח הודעה ואתה צריך לקבוע את הכוונה.
+                
+                סוגי כוונות:
+                - acknowledgment: המשתמש מסכים, מאשר, אומר תודה, או שולח אימוג'י חיובי (כמו 👍, ✅, 🙏)
+                - question: המשתמש שואל שאלה או מבקש הסבר
+                - request: המשתמש מבקש לעשות משהו ספציפי
+                - unclear: לא ברור מה הכוונה
+                
+                החזר רק מילה אחת: acknowledgment, question, request, או unclear
+                """;
+            
+            String userPrompt = "הודעת המשתמש: \"" + message + "\"";
+            
+            AiProviderResponse response = callAiProviderSimple(systemPrompt, userPrompt, fatherId);
+            
+            if (response != null && response.content() != null) {
+                String intent = response.content().trim().toLowerCase();
+                if (intent.contains("acknowledgment")) {
+                    return "acknowledgment";
+                } else if (intent.contains("question")) {
+                    return "question";
+                } else if (intent.contains("request")) {
+                    return "request";
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to classify intent with AI: {}", e.getMessage());
+        }
+        return null;
+    }
+    
+    /**
+     * Simplified AI call for quick classification tasks.
+     */
+    private AiProviderResponse callAiProviderSimple(String systemPrompt, String userPrompt, UUID fatherId) {
+        List<AiMessage> messages = List.of(
+            AiMessage.system(systemPrompt),
+            AiMessage.user(userPrompt)
+        );
+        
+        Map<String, String> metadata = Map.of(
+            "fatherId", fatherId.toString(),
+            "component", "CoachingAgent-IntentClassifier"
+        );
+        
+        AiProviderRequest request = new AiProviderRequest(
+            modelName,
+            messages,
+            0.1,    // Very low temperature for consistent classification
+            1.0,
+            50,     // Short response - just the classification
+            false,  // No JSON mode needed
+            metadata
+        );
+        
+        return aiProvider.sendPrompt(request);
     }
     
     /**
