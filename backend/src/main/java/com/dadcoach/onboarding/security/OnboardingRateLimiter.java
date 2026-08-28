@@ -10,8 +10,10 @@ import java.time.Instant;
 
 /**
  * Rate limiter for the onboarding flow.
- * Supports IP-based (10 attempts/hour) and phone-based (5 attempts/hour) limiting,
- * backed by the rate_limit_entries database table.
+ * Currently DISABLED for development - always allows requests.
+ * 
+ * TODO: Re-enable rate limiting before production deployment.
+ * Original limits: IP-based (10 attempts/hour) and phone-based (5 attempts/hour).
  */
 @Component
 public class OnboardingRateLimiter {
@@ -24,6 +26,9 @@ public class OnboardingRateLimiter {
 
     private static final String KEY_TYPE_IP = "IP";
     private static final String KEY_TYPE_PHONE = "PHONE";
+    
+    // Rate limiting disabled for development
+    private static final boolean RATE_LIMITING_ENABLED = false;
 
     private final RateLimitEntryRepository repository;
 
@@ -40,6 +45,9 @@ public class OnboardingRateLimiter {
      */
     @Transactional
     public RateLimitResult checkIpLimit(String ipAddress) {
+        if (!RATE_LIMITING_ENABLED) {
+            return RateLimitResult.allowed(Integer.MAX_VALUE);
+        }
         return checkLimit(KEY_TYPE_IP, ipAddress, IP_LIMIT_PER_HOUR);
     }
 
@@ -51,6 +59,9 @@ public class OnboardingRateLimiter {
      */
     @Transactional
     public RateLimitResult checkPhoneLimit(String phoneNumber) {
+        if (!RATE_LIMITING_ENABLED) {
+            return RateLimitResult.allowed(Integer.MAX_VALUE);
+        }
         return checkLimit(KEY_TYPE_PHONE, phoneNumber, PHONE_LIMIT_PER_HOUR);
     }
 
