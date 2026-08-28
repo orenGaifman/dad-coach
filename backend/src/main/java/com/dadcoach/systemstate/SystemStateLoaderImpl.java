@@ -377,10 +377,16 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
                 father.setGoogleTokenExpiresAt(null);
                 fatherRepository.save(father);
             }
-            // If it's a 400 Bad Request, log the calendar ID being used
+            // If it's a 400 Bad Request, disable calendar integration to prevent repeated errors
             else if (e.getStatusCode().value() == 400) {
-                log.error("Calendar API 400 error - calendarId='{}', timeMin='{}', timeMax='{}'", 
-                        calendarId, timeMin, timeMax);
+                log.warn("Calendar API 400 error for father {}, disabling calendar integration - calendarId='{}', timeMin='{}', timeMax='{}'", 
+                        father.getId(), calendarId, timeMin, timeMax);
+                // Clear all calendar credentials to disable integration
+                father.setGoogleAccessToken(null);
+                father.setGoogleRefreshToken(null);
+                father.setGoogleTokenExpiresAt(null);
+                father.setGoogleCalendarId(null);
+                fatherRepository.save(father);
             }
         } catch (Exception e) {
             log.error("Error fetching calendar events for father {}: {}", father.getId(), e.getMessage());
