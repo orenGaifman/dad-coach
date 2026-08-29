@@ -1,6 +1,7 @@
 package com.dadcoach.workflow.scheduler;
 
 import com.dadcoach.channel.dto.OutboundMessageDto;
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.conversation.MessageLogService;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
@@ -245,7 +246,7 @@ public class WorkflowScheduler {
         
         String timezoneId = father.getTimezone();
         if (timezoneId == null || timezoneId.isBlank()) {
-            timezoneId = "Asia/Jerusalem"; // Default timezone
+            timezoneId = AppConstants.DEFAULT_TIMEZONE; // Default timezone
         }
         
         ZoneId fatherZone;
@@ -253,7 +254,7 @@ public class WorkflowScheduler {
             fatherZone = ZoneId.of(timezoneId);
         } catch (Exception e) {
             log.warn("Invalid timezone '{}' for father {}, using default", timezoneId, father.getId());
-            fatherZone = ZoneId.of("Asia/Jerusalem");
+            fatherZone = AppConstants.DEFAULT_ZONE_ID;
         }
         
         // Get current time in father's timezone
@@ -293,7 +294,7 @@ public class WorkflowScheduler {
         try (WorkflowLoggingContext ctx = WorkflowLoggingContext.forFather(father.getId())) {
             // Build message context
             String locale = father.getLocale() != null ? father.getLocale() : "en";
-            String timezone = father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem";
+            String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
             
             // Get child name
             String childName = qualityTime.getChild() != null ? qualityTime.getChild().getName() : "your child";
@@ -303,7 +304,7 @@ public class WorkflowScheduler {
             try {
                 fatherZone = ZoneId.of(timezone);
             } catch (Exception e) {
-                fatherZone = ZoneId.of("Asia/Jerusalem");
+                fatherZone = AppConstants.DEFAULT_ZONE_ID;
             }
             
             ZonedDateTime scheduledInFatherZone = qualityTime.getScheduledStart().atZone(fatherZone);
@@ -496,7 +497,7 @@ public class WorkflowScheduler {
      */
     private void sendPreQtReminderMessage(QualityTime qualityTime, Father father) {
         String locale = father.getLocale() != null ? father.getLocale() : "en";
-        String timezone = father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem";
+        String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
         String childName = qualityTime.getChild() != null ? qualityTime.getChild().getName() : "your child";
         String fatherName = father.getDisplayName() != null ? father.getDisplayName() : "";
         

@@ -1,5 +1,6 @@
 package com.dadcoach.ai.agent;
 
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildService;
 import com.dadcoach.qualitytime.QualityTime;
@@ -58,7 +59,7 @@ public class ToolExecutorImpl implements ToolExecutor {
     );
     
     private static final Duration DEFAULT_QUALITY_TIME_DURATION = Duration.ofMinutes(30);
-    private static final ZoneId ISRAEL_ZONE = ZoneId.of("Asia/Jerusalem");
+    private static final ZoneId ISRAEL_ZONE = AppConstants.DEFAULT_ZONE_ID;
     
     private final QualityTimeService qualityTimeService;
     private final ChildService childService;

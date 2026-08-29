@@ -1,5 +1,6 @@
 package com.dadcoach.workspace.commitment;
 
+import com.dadcoach.common.AppConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -277,7 +278,7 @@ public class CommitmentExtractor {
                 log.warn("Invalid timezone: {}", timezone);
             }
         }
-        return ZoneId.of("Asia/Jerusalem");
+        return AppConstants.DEFAULT_ZONE_ID;
     }
 
     /**

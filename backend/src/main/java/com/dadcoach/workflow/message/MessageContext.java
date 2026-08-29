@@ -1,5 +1,6 @@
 package com.dadcoach.workflow.message;
 
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.systemstate.AvailableSlot;
 import com.dadcoach.workflow.Belt;
 
@@ -54,7 +55,7 @@ public final class MessageContext {
     public static final String DEFAULT_LOCALE = "en";
     
     /** Default timezone when not specified. */
-    public static final String DEFAULT_TIMEZONE = "Asia/Jerusalem";
+    public static final String DEFAULT_TIMEZONE = AppConstants.DEFAULT_TIMEZONE;
     
     /** English locale code. */
     public static final String LOCALE_ENGLISH = "en";

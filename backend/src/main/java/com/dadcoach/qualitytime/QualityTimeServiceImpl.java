@@ -1,5 +1,6 @@
 package com.dadcoach.qualitytime;
 
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.domain.father.Father;
@@ -194,7 +195,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
             String calendarId = father.getGoogleCalendarId() != null 
                     ? father.getGoogleCalendarId() : "primary";
             String timezone = father.getTimezone() != null 
-                    ? father.getTimezone() : "Asia/Jerusalem";
+                    ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
 
             // Query events in the time range
             String timeMin = ZonedDateTime.ofInstant(startTime, ZoneId.of(timezone))
@@ -569,7 +570,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         }
 
         try {
-            String timezone = father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem";
+            String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
             String locale = father.getLocale() != null ? father.getLocale() : "he";
 
             Map<String, Object> event = buildCalendarEvent(child.getName(), startTime, endTime, timezone, locale);

@@ -2,6 +2,7 @@ package com.dadcoach.workflow.api;
 
 import com.dadcoach.api.auth.ActorContext;
 import com.dadcoach.api.auth.AuthActor;
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
@@ -74,11 +75,11 @@ public class WorkspaceAdapterController {
         int daysSinceActivation = 0;
         Instant activatedAt = father.getCreatedAt();
         if (activationDate != null) {
-            activatedAt = activationDate.atStartOfDay(java.time.ZoneId.of(father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem")).toInstant();
+            activatedAt = activationDate.atStartOfDay(java.time.ZoneId.of(father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE)).toInstant();
             daysSinceActivation = (int) java.time.temporal.ChronoUnit.DAYS.between(activationDate, LocalDate.now());
         } else if (father.getCreatedAt() != null) {
             daysSinceActivation = (int) java.time.temporal.ChronoUnit.DAYS.between(
-                father.getCreatedAt().atZone(java.time.ZoneId.of("Asia/Jerusalem")).toLocalDate(), 
+                father.getCreatedAt().atZone(AppConstants.DEFAULT_ZONE_ID).toLocalDate(), 
                 LocalDate.now());
         }
         
@@ -87,7 +88,7 @@ public class WorkspaceAdapterController {
                 father.getDisplayName(),
                 father.getPhone(),
                 null, // email - not stored yet
-                father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem",
+                father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE,
                 father.getLocale() != null ? father.getLocale() : "he",
                 father.getCoachingStyle() != null ? father.getCoachingStyle().name() : "BALANCED",
                 coachingTime != null ? coachingTime.toString() : "08:00",

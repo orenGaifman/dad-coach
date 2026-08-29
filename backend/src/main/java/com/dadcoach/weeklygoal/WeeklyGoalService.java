@@ -1,5 +1,6 @@
 package com.dadcoach.weeklygoal;
 
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.workflow.Belt;
@@ -30,7 +31,7 @@ import java.util.Optional;
 public class WeeklyGoalService {
 
     private static final Logger log = LoggerFactory.getLogger(WeeklyGoalService.class);
-    private static final ZoneId ISRAEL_ZONE = ZoneId.of("Asia/Jerusalem");
+    private static final ZoneId ISRAEL_ZONE = AppConstants.DEFAULT_ZONE_ID;
 
     private final WeeklyGoalRepository weeklyGoalRepository;
     private final FatherRepository fatherRepository;

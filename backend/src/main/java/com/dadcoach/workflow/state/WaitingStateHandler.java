@@ -1,5 +1,6 @@
 package com.dadcoach.workflow.state;
 
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.mission.Mission;
@@ -507,7 +508,7 @@ public class WaitingStateHandler implements StateHandler {
         try {
             zoneId = ZoneId.of(timezone);
         } catch (Exception e) {
-            zoneId = ZoneId.of("Asia/Jerusalem");
+            zoneId = AppConstants.DEFAULT_ZONE_ID;
         }
         
         Locale displayLocale = "he".equals(locale) ? Locale.forLanguageTag("he-IL") : Locale.ENGLISH;

@@ -1,5 +1,6 @@
 package com.dadcoach.workspace.commitment;
 
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import org.slf4j.Logger;
@@ -191,7 +192,7 @@ public class CommitmentService {
                 log.warn("Invalid timezone '{}' for father {}, using default", tz, father.getId());
             }
         }
-        return ZoneId.of("Asia/Jerusalem");
+        return AppConstants.DEFAULT_ZONE_ID;
     }
 
     /**

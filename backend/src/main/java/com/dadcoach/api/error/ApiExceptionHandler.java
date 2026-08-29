@@ -2,6 +2,7 @@ package com.dadcoach.api.error;
 
 import com.dadcoach.ai.AiRateLimitExceededException;
 import com.dadcoach.api.auth.RolePermission;
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.common.BusinessRuleViolationException;
 import com.dadcoach.common.InvalidStateTransitionException;
 import com.dadcoach.common.ResourceNotFoundException;
@@ -380,7 +381,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
      * Calculate seconds until midnight (Israel timezone) for AI credit reset.
      */
     private long getSecondsUntilMidnight() {
-        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Jerusalem"));
+        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(AppConstants.DEFAULT_ZONE_ID);
         java.time.ZonedDateTime midnight = now.toLocalDate().plusDays(1).atStartOfDay(now.getZone());
         return java.time.Duration.between(now, midnight).getSeconds();
     }

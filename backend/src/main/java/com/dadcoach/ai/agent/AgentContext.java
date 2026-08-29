@@ -1,5 +1,6 @@
 package com.dadcoach.ai.agent;
 
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.systemstate.AvailableSlot;
 import com.dadcoach.systemstate.SystemState;
 import com.dadcoach.workflow.WelcomeStep;
@@ -51,7 +52,7 @@ public record AgentContext(
         StringBuilder sb = new StringBuilder();
         
         // Get timezone from system state if available
-        String timezone = "Asia/Jerusalem";
+        String timezone = AppConstants.DEFAULT_TIMEZONE;
         if (systemState != null && systemState.fatherProfile() != null && 
             systemState.fatherProfile().timezone() != null) {
             timezone = systemState.fatherProfile().timezone();
@@ -158,7 +159,7 @@ public record AgentContext(
      */
     private String formatInstant(java.time.Instant instant) {
         if (instant == null) return "לא ידוע";
-        var zoned = instant.atZone(java.time.ZoneId.of("Asia/Jerusalem"));
+        var zoned = instant.atZone(AppConstants.DEFAULT_ZONE_ID);
         var formatter = java.time.format.DateTimeFormatter.ofPattern("dd/MM בשעה HH:mm");
         return zoned.format(formatter);
     }
@@ -198,7 +199,7 @@ public record AgentContext(
         if (availableSlots != null && !availableSlots.isEmpty()) {
             sb.append("📅 **זמנים פנויים ביומן שלך:**\n\n");
             
-            java.time.ZoneId israelZone = java.time.ZoneId.of("Asia/Jerusalem");
+            java.time.ZoneId israelZone = AppConstants.DEFAULT_ZONE_ID;
             java.time.LocalDate lastDate = null;
             int slotNum = 0;
             

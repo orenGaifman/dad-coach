@@ -1,5 +1,6 @@
 package com.dadcoach.workflow.state;
 
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.mission.Mission;
@@ -439,7 +440,7 @@ public class ScheduleStateHandler implements StateHandler {
         
         // Get father's timezone
         ZoneId timezone = ZoneId.of(father.getTimezone() != null 
-                ? father.getTimezone() : "Asia/Jerusalem");
+                ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE);
         
         // Check if user provided a specific time (HH:MM or am/pm format)
         LocalTime explicitTime = extractTimeFromMessage(message, locale);
@@ -968,9 +969,9 @@ public class ScheduleStateHandler implements StateHandler {
                                                      Instant scheduledStart, String timezone) {
         ZoneId zoneId;
         try {
-            zoneId = ZoneId.of(timezone != null ? timezone : "Asia/Jerusalem");
+            zoneId = ZoneId.of(timezone != null ? timezone : AppConstants.DEFAULT_TIMEZONE);
         } catch (Exception e) {
-            zoneId = ZoneId.of("Asia/Jerusalem");
+            zoneId = AppConstants.DEFAULT_ZONE_ID;
         }
         
         ZonedDateTime zdt = scheduledStart.atZone(zoneId);

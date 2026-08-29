@@ -1,5 +1,6 @@
 package com.dadcoach.workflow.state;
 
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.mission.Mission;
@@ -230,9 +231,9 @@ public class InactivityNudgeStateHandler implements StateHandler {
     private String formatScheduledTime(Instant time, String timezone, String locale) {
         ZoneId zoneId;
         try {
-            zoneId = ZoneId.of(timezone != null ? timezone : "Asia/Jerusalem");
+            zoneId = ZoneId.of(timezone != null ? timezone : AppConstants.DEFAULT_TIMEZONE);
         } catch (Exception e) {
-            zoneId = ZoneId.of("Asia/Jerusalem");
+            zoneId = AppConstants.DEFAULT_ZONE_ID;
         }
         
         Locale displayLocale = "he".equals(locale) ? Locale.forLanguageTag("he-IL") : Locale.ENGLISH;

@@ -1,5 +1,6 @@
 package com.dadcoach.calendar;
 
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.domain.father.Father;
@@ -527,7 +528,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
         Map<String, Object> event = new HashMap<>();
         
         String locale = father.getLocale() != null ? father.getLocale() : "he";
-        String timezone = father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem";
+        String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
 
         // Title
         if ("he".equals(locale)) {

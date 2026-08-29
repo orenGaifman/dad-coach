@@ -2,6 +2,7 @@ package com.dadcoach.qualitytime.api;
 
 import com.dadcoach.api.auth.ActorContext;
 import com.dadcoach.api.auth.AuthActor;
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
@@ -69,7 +70,7 @@ public class QualityTimeController {
     private static final int DEFAULT_DAYS_AHEAD = 7;
     private static final int MAX_DAYS_AHEAD = 14;
     private static final int DEFAULT_MIN_DURATION_MINUTES = 30;
-    private static final String DEFAULT_TIMEZONE = "Asia/Jerusalem";
+    private static final String DEFAULT_TIMEZONE = AppConstants.DEFAULT_TIMEZONE;
 
     private final QualityTimeService qualityTimeService;
     private final QualityTimeRepository qualityTimeRepository;

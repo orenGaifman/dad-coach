@@ -2,6 +2,7 @@ package com.dadcoach.workflow.api;
 
 import com.dadcoach.api.auth.ActorContext;
 import com.dadcoach.api.auth.AuthActor;
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
@@ -170,7 +171,7 @@ public class WorkspaceController {
      */
     private WeeklyGoalProgressDto computeWeeklyGoalProgress(Father father) {
         Long fatherId = father.getId();
-        String timezone = father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem";
+        String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
         
         // Get the start of the current week (Monday) in father's timezone
         ZoneId zoneId = ZoneId.of(timezone);

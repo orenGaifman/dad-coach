@@ -4,6 +4,7 @@ import com.dadcoach.channel.delivery.DeliveryService;
 import com.dadcoach.channel.dto.MessagePriority;
 import com.dadcoach.channel.dto.MessageType;
 import com.dadcoach.channel.dto.OutboundMessageDto;
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.domain.father.Father;
@@ -218,7 +219,7 @@ public class CommitmentReminderScheduler {
 
     private String formatTime(Instant instant, String timezone) {
         try {
-            ZoneId zone = timezone != null ? ZoneId.of(timezone) : ZoneId.of("Asia/Jerusalem");
+            ZoneId zone = timezone != null ? ZoneId.of(timezone) : AppConstants.DEFAULT_ZONE_ID;;
             ZonedDateTime zdt = instant.atZone(zone);
             return zdt.format(DateTimeFormatter.ofPattern("HH:mm"));
         } catch (Exception e) {

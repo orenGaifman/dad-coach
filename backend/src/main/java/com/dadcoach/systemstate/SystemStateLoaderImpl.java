@@ -1,5 +1,6 @@
 package com.dadcoach.systemstate;
 
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
@@ -286,7 +287,7 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
                 father.getPhone(),
                 childInfos,
                 father.getLocale() != null ? father.getLocale() : "en",
-                father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem",
+                father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE,
                 father.getPreferredCoachingTime(),
                 father.hasGoogleCalendarConfigured(),
                 father.getWelcomeStep()
@@ -334,7 +335,7 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
      * Fetches calendar events from Google Calendar API.
      */
     private List<SystemState.CalendarEvent> fetchCalendarEvents(Father father, String accessToken, int daysAhead) {
-        String timezone = father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem";
+        String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
         ZoneId zoneId = ZoneId.of(timezone);
 
         Instant now = Instant.now();
@@ -599,7 +600,7 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
             List<QualityTime> qualityTimeEvents,
             int daysAhead) {
 
-        String timezone = father.getTimezone() != null ? father.getTimezone() : "Asia/Jerusalem";
+        String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
         ZoneId zoneId = ZoneId.of(timezone);
         Instant now = Instant.now();
 
