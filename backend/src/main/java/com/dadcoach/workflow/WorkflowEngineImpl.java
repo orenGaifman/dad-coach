@@ -6,6 +6,7 @@ import com.dadcoach.channel.dto.InboundMessageDto;
 import com.dadcoach.channel.dto.MessagePriority;
 import com.dadcoach.channel.dto.MessageType;
 import com.dadcoach.channel.dto.OutboundMessageDto;
+import com.dadcoach.common.MaskingUtils;
 import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.domain.conversation.MessageLogService;
 import com.dadcoach.domain.father.Father;
@@ -279,7 +280,7 @@ public class WorkflowEngineImpl implements WorkflowEngine {
      */
     private void sendProcessingMessage(String phoneNumber, String fatherName, String locale) {
         try {
-            log.info("Processing timeout reached, sending processing message to {}", maskPhone(phoneNumber));
+            log.info("Processing timeout reached, sending processing message to {}", MaskingUtils.maskPhone(phoneNumber));
             
             // Build message context
             MessageContext msgContext = MessageContext.builder()
@@ -297,20 +298,10 @@ public class WorkflowEngineImpl implements WorkflowEngine {
             // Send via WhatsApp
             whatsAppService.sendText(phoneNumber, processingMessage);
             
-            log.info("Processing message sent successfully to {}", maskPhone(phoneNumber));
+            log.info("Processing message sent successfully to {}", MaskingUtils.maskPhone(phoneNumber));
         } catch (Exception e) {
-            log.error("Failed to send processing message to {}: {}", maskPhone(phoneNumber), e.getMessage(), e);
+            log.error("Failed to send processing message to {}: {}", MaskingUtils.maskPhone(phoneNumber), e.getMessage(), e);
         }
-    }
-    
-    /**
-     * Masks a phone number for safe logging, showing only last 4 digits.
-     */
-    private String maskPhone(String phone) {
-        if (phone == null || phone.length() < 4) {
-            return "****";
-        }
-        return "****" + phone.substring(phone.length() - 4);
     }
     
     /**

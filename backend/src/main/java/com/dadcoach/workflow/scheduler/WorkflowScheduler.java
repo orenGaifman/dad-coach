@@ -2,6 +2,7 @@ package com.dadcoach.workflow.scheduler;
 
 import com.dadcoach.channel.dto.OutboundMessageDto;
 import com.dadcoach.common.AppConstants;
+import com.dadcoach.common.MaskingUtils;
 import com.dadcoach.domain.conversation.MessageLogService;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
@@ -662,7 +663,7 @@ public class WorkflowScheduler {
                     whatsAppService.sendText(phoneNumber, messageText);
                     // Log outbound message for conversation history
                     messageLogService.logOutbound(father.getId(), messageText);
-                    log.info("Sent follow-up message (phone: {})", maskPhone(phoneNumber));
+                    log.info("Sent follow-up message (phone: {})", MaskingUtils.maskPhone(phoneNumber));
                 } else {
                     log.warn("Could not send follow-up message for Quality Time {}: missing phone or message", 
                             qualityTime.getId());
@@ -692,19 +693,6 @@ public class WorkflowScheduler {
             return UUID.randomUUID();
         }
         return new UUID(0L, domainId);
-    }
-    
-    /**
-     * Masks a phone number for logging (privacy).
-     * 
-     * @param phone the phone number
-     * @return masked phone number
-     */
-    private String maskPhone(String phone) {
-        if (phone == null || phone.length() < 4) {
-            return "****";
-        }
-        return "****" + phone.substring(phone.length() - 4);
     }
     
     // ─── Stale State Detection Job (Task 14.5) ────────────────────────────────
@@ -882,7 +870,7 @@ public class WorkflowScheduler {
             whatsAppService.sendText(father.getPhone(), message);
             // Log outbound message for conversation history
             messageLogService.logOutbound(father.getId(), message);
-            log.debug("Sent re-engagement message to phone {}", maskPhone(father.getPhone()));
+            log.debug("Sent re-engagement message to phone {}", MaskingUtils.maskPhone(father.getPhone()));
         } catch (Exception e) {
             // Log but don't fail the entire processing - the state has already been updated
             log.error("Failed to send re-engagement message: {}", e.getMessage(), e);
@@ -1057,7 +1045,7 @@ public class WorkflowScheduler {
             whatsAppService.sendText(father.getPhone(), message);
             // Log outbound message for conversation history
             messageLogService.logOutbound(father.getId(), message);
-            log.debug("Sent inactivity nudge message to phone {}", maskPhone(father.getPhone()));
+            log.debug("Sent inactivity nudge message to phone {}", MaskingUtils.maskPhone(father.getPhone()));
         } catch (Exception e) {
             log.error("Failed to send inactivity nudge message: {}", e.getMessage(), e);
         }

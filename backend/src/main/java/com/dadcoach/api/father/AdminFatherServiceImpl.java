@@ -1,5 +1,6 @@
 package com.dadcoach.api.father;
 
+import com.dadcoach.common.MaskingUtils;
 import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.api.pagination.CursorPageResponse;
 import com.dadcoach.domain.child.ChildRepository;
@@ -102,7 +103,7 @@ public class AdminFatherServiceImpl implements AdminFatherService {
         Father father = fatherRepository.findById(fatherId)
             .orElseThrow(() -> new ResourceNotFoundException("Father", fatherId));
 
-        log.info("Deleting father: id={}, phone={}", fatherId, maskPhone(father.getPhone()));
+        log.info("Deleting father: id={}, phone={}", fatherId, MaskingUtils.maskPhone(father.getPhone()));
 
         UUID fatherUuid = new UUID(0L, fatherId);
 
@@ -146,7 +147,7 @@ public class AdminFatherServiceImpl implements AdminFatherService {
         // Use phone as fallback display name if not set
         String displayName = father.getDisplayName();
         if (displayName == null || displayName.isBlank()) {
-            displayName = father.getPhone() != null ? maskPhoneForDisplay(father.getPhone()) : "User";
+            displayName = father.getPhone() != null ? MaskingUtils.maskPhoneForDisplay(father.getPhone()) : "User";
         }
         dto.setDisplayName(displayName);
         dto.setPhoneNumber(father.getPhone());
@@ -174,7 +175,7 @@ public class AdminFatherServiceImpl implements AdminFatherService {
         // Use phone as fallback display name if not set
         String displayName = father.getDisplayName();
         if (displayName == null || displayName.isBlank()) {
-            displayName = father.getPhone() != null ? maskPhoneForDisplay(father.getPhone()) : "User";
+            displayName = father.getPhone() != null ? MaskingUtils.maskPhoneForDisplay(father.getPhone()) : "User";
         }
         dto.setDisplayName(displayName);
         dto.setPhoneNumber(father.getPhone());
@@ -188,23 +189,5 @@ public class AdminFatherServiceImpl implements AdminFatherService {
         dto.setEngagementScore(father.getEngagementScore());
         dto.setCoachingStreak(father.getCoachingStreak());
         return dto;
-    }
-
-    private String maskPhone(String phone) {
-        if (phone == null || phone.length() < 4) {
-            return "***";
-        }
-        return phone.substring(0, 4) + "****" + phone.substring(phone.length() - 2);
-    }
-
-    /**
-     * Creates a display-friendly version of phone for use as fallback name.
-     * Shows last 4 digits only: "User ***1234"
-     */
-    private String maskPhoneForDisplay(String phone) {
-        if (phone == null || phone.length() < 4) {
-            return "User";
-        }
-        return "User ***" + phone.substring(phone.length() - 4);
     }
 }

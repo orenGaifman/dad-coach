@@ -1,5 +1,6 @@
 package com.dadcoach.health;
 
+import com.dadcoach.common.MaskingUtils;
 import com.dadcoach.config.WhatsAppProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,7 +70,7 @@ public class WhatsAppHealthIndicator implements HealthIndicator {
                 return Health.up()
                         .withDetail("component", "WhatsAppAPI")
                         .withDetail("apiVersion", whatsAppProperties.apiVersion())
-                        .withDetail("phoneNumberId", maskPhoneNumberId(whatsAppProperties.phoneNumberId()))
+                        .withDetail("phoneNumberId", MaskingUtils.maskPhoneNumberId(whatsAppProperties.phoneNumberId()))
                         .build();
             } else {
                 return Health.down()
@@ -162,19 +163,6 @@ public class WhatsAppHealthIndicator implements HealthIndicator {
             log.warn("WhatsApp API connectivity check failed: {}", e.getMessage());
             return false;
         }
-    }
-
-    /**
-     * Masks the phone number ID for security in health output.
-     *
-     * @param phoneNumberId the phone number ID
-     * @return masked phone number ID showing only last 4 characters
-     */
-    private String maskPhoneNumberId(String phoneNumberId) {
-        if (phoneNumberId == null || phoneNumberId.length() <= 4) {
-            return "****";
-        }
-        return "****" + phoneNumberId.substring(phoneNumberId.length() - 4);
     }
 
     /**
