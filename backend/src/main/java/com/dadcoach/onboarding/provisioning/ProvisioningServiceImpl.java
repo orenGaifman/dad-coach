@@ -2,6 +2,7 @@ package com.dadcoach.onboarding.provisioning;
 
 import com.dadcoach.channel.CommunicationEndpoint;
 import com.dadcoach.channel.CommunicationEndpointRepository;
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
@@ -202,7 +203,7 @@ public class ProvisioningServiceImpl implements ProvisioningService {
         Father father = new Father(wizardData.getPhoneNumber());
         father.setDisplayName(wizardData.getDisplayName());
         father.setStatus(FatherStatus.ONBOARDING);
-        father.setLocale(wizardData.getLanguage() != null ? wizardData.getLanguage() : "he");
+        father.setLocale(wizardData.getLanguage() != null ? wizardData.getLanguage() : AppConstants.DEFAULT_LOCALE);
 
         if (wizardData.getTimezone() != null) {
             father.setTimezone(wizardData.getTimezone());
@@ -283,7 +284,7 @@ public class ProvisioningServiceImpl implements ProvisioningService {
     }
 
     private void createLanguagePreference(Father father, WizardData wizardData) {
-        String language = wizardData.getLanguage() != null ? wizardData.getLanguage() : "he";
+        String language = wizardData.getLanguage() != null ? wizardData.getLanguage() : AppConstants.DEFAULT_LOCALE;
         LanguagePreference pref = new LanguagePreference(new UUID(0L, father.getId()), language);
         languagePreferenceRepository.save(pref);
     }

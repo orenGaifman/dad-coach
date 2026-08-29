@@ -10,6 +10,7 @@ import com.dadcoach.channel.dto.MessagePriority;
 import com.dadcoach.channel.dto.MessageType;
 import com.dadcoach.channel.dto.OutboundMessageDto;
 import com.dadcoach.channel.session.SessionWindowService;
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.conversation.ConversationType;
 import com.dadcoach.domain.father.FatherService;
 import com.dadcoach.onboarding.provisioning.ActivationRecord;
@@ -252,7 +253,7 @@ public class ActivationServiceImpl implements ActivationService {
 
         // Regenerate deep link (determine language from father's locale)
         var father = fatherService.getFather(record.getFatherId().getLeastSignificantBits());
-        String language = father.getLocale() != null ? father.getLocale() : "he";
+        String language = father.getLocale() != null ? father.getLocale() : AppConstants.DEFAULT_LOCALE;
 
         String deepLink = generateDeepLink(record.getFatherId().getLeastSignificantBits(), language);
         log.info("Regenerated deep link for activation {} (retry {})", activationId, record.getRetryCount());
@@ -290,7 +291,7 @@ public class ActivationServiceImpl implements ActivationService {
             // Get father details for message personalization
             var father = fatherService.getFather(fatherId);
             String fatherName = father.getDisplayName() != null ? father.getDisplayName() : "";
-            String locale = father.getLocale() != null ? father.getLocale() : "he";
+            String locale = father.getLocale() != null ? father.getLocale() : AppConstants.DEFAULT_LOCALE;
 
             // Build message context for the welcome greeting
             MessageContext messageContext = MessageContext.builder()

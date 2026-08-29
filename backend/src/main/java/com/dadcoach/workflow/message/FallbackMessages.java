@@ -40,9 +40,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class FallbackMessages {
 
     private static final Logger log = LoggerFactory.getLogger(FallbackMessages.class);
-    
-    private static final String LOCALE_ENGLISH = "en";
-    private static final String LOCALE_HEBREW = "he";
 
     private final MessageTemplateRepository templateRepository;
     
@@ -81,10 +78,10 @@ public class FallbackMessages {
                 log.warn("No fallback template found for message type: {}", type);
             } else {
                 Map<String, String> langTemplates = templateCache.get(type);
-                if (!langTemplates.containsKey(LOCALE_ENGLISH)) {
+                if (!langTemplates.containsKey(MessageContext.LOCALE_ENGLISH)) {
                     log.warn("No English fallback template for: {}", type);
                 }
-                if (!langTemplates.containsKey(LOCALE_HEBREW)) {
+                if (!langTemplates.containsKey(MessageContext.LOCALE_HEBREW)) {
                     log.warn("No Hebrew fallback template for: {}", type);
                 }
             }
@@ -116,7 +113,7 @@ public class FallbackMessages {
         }
         
         // Fall back to English
-        template = langTemplates.get(LOCALE_ENGLISH);
+        template = langTemplates.get(MessageContext.LOCALE_ENGLISH);
         if (template != null) {
             log.debug("No {} template for {}, using English fallback", language, type);
             return template;
@@ -144,7 +141,7 @@ public class FallbackMessages {
      * @return the English template text with placeholders
      */
     public String get(MessageType type) {
-        return get(type, LOCALE_ENGLISH);
+        return get(type, MessageContext.LOCALE_ENGLISH);
     }
 
     /**
@@ -194,7 +191,7 @@ public class FallbackMessages {
             result = result.replace("{childName}", childName);
         } else {
             // Fallback: use generic text based on locale
-            String fallbackChildName = LOCALE_HEBREW.equals(context.getLocale()) 
+            String fallbackChildName = MessageContext.LOCALE_HEBREW.equals(context.getLocale()) 
                 ? "הילד/ה" 
                 : "your child";
             result = result.replace("{childName}", fallbackChildName);
@@ -316,7 +313,7 @@ public class FallbackMessages {
         }
         
         // Add instructions at the end
-        boolean isHebrew = LOCALE_HEBREW.equals(context.getLocale());
+        boolean isHebrew = MessageContext.LOCALE_HEBREW.equals(context.getLocale());
         int slotCount = context.getTimeSlots().size();
         
         sb.append("\n");
@@ -354,7 +351,7 @@ public class FallbackMessages {
      * Provides hardcoded default templates when database templates are missing.
      */
     private String getDefaultTemplate(MessageType type, String language) {
-        boolean isHebrew = LOCALE_HEBREW.equals(language);
+        boolean isHebrew = MessageContext.LOCALE_HEBREW.equals(language);
         
         return switch (type) {
             case WELCOME_GREETING -> isHebrew 
@@ -484,7 +481,7 @@ public class FallbackMessages {
         }
         
         Locale displayLocale = context.getDisplayLocale();
-        boolean isHebrew = LOCALE_HEBREW.equals(context.getLocale());
+        boolean isHebrew = MessageContext.LOCALE_HEBREW.equals(context.getLocale());
         
         // Get the day-of-week name
         String dayOfWeekName = date.getDayOfWeek().getDisplayName(TextStyle.FULL, displayLocale);

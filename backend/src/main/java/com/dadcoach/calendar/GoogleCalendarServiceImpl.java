@@ -527,7 +527,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     private Map<String, Object> buildCalendarEvent(Mission mission, Father father, String childName) {
         Map<String, Object> event = new HashMap<>();
         
-        String locale = father.getLocale() != null ? father.getLocale() : "he";
+        String locale = father.getLocale() != null ? father.getLocale() : AppConstants.DEFAULT_LOCALE;
         String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
 
         // Title

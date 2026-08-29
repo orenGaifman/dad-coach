@@ -571,7 +571,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
 
         try {
             String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
-            String locale = father.getLocale() != null ? father.getLocale() : "he";
+            String locale = father.getLocale() != null ? father.getLocale() : AppConstants.DEFAULT_LOCALE;
 
             Map<String, Object> event = buildCalendarEvent(child.getName(), startTime, endTime, timezone, locale);
 

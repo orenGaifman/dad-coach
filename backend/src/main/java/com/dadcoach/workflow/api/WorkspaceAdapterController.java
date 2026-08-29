@@ -89,7 +89,7 @@ public class WorkspaceAdapterController {
                 father.getPhone(),
                 null, // email - not stored yet
                 father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE,
-                father.getLocale() != null ? father.getLocale() : "he",
+                father.getLocale() != null ? father.getLocale() : AppConstants.DEFAULT_LOCALE,
                 father.getCoachingStyle() != null ? father.getCoachingStyle().name() : "BALANCED",
                 coachingTime != null ? coachingTime.toString() : "08:00",
                 "DAILY", // notification_frequency - default for now

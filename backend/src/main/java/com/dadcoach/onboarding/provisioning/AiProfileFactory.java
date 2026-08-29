@@ -1,5 +1,6 @@
 package com.dadcoach.onboarding.provisioning;
 
+import com.dadcoach.common.AppConstants;
 import com.dadcoach.onboarding.session.WizardData;
 import org.springframework.stereotype.Component;
 
@@ -28,7 +29,7 @@ public class AiProfileFactory {
      */
     public AiProfile buildProfile(UUID fatherId, WizardData wizardData) {
         String coachingStyle = extractCoachingStyle(wizardData);
-        String language = wizardData.getLanguage() != null ? wizardData.getLanguage() : "he";
+        String language = wizardData.getLanguage() != null ? wizardData.getLanguage() : AppConstants.DEFAULT_LOCALE;
         String childrenContext = buildChildrenContext(wizardData.getChildren());
         String goalsContext = buildGoalsContext(wizardData.getGoals());
         String personalityBrief = buildPersonalityBrief(wizardData);

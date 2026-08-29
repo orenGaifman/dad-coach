@@ -156,7 +156,7 @@ public class CommitmentReminderScheduler {
     private String buildReminderMessage(QualityTimeCommitment commitment, Father father, Child child) {
         String fatherName = father.getDisplayName() != null ? father.getDisplayName() : "";
         String childName = child != null ? child.getName() : "הילד/ה";
-        String locale = father.getLocale() != null ? father.getLocale() : "he";
+        String locale = father.getLocale() != null ? father.getLocale() : AppConstants.DEFAULT_LOCALE;
         
         String timeStr = formatTime(commitment.getScheduledAt(), father.getTimezone());
         
@@ -194,7 +194,7 @@ public class CommitmentReminderScheduler {
     private String buildMissedMessage(QualityTimeCommitment commitment, Father father, Child child) {
         String fatherName = father.getDisplayName() != null ? father.getDisplayName() : "";
         String childName = child != null ? child.getName() : "הילד/ה";
-        String locale = father.getLocale() != null ? father.getLocale() : "he";
+        String locale = father.getLocale() != null ? father.getLocale() : AppConstants.DEFAULT_LOCALE;
         
         if ("he".equals(locale)) {
             return String.format(

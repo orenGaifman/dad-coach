@@ -27,4 +27,17 @@ public final class AppConstants {
     
     /** Default timezone as ZoneId for date/time operations. */
     public static final ZoneId DEFAULT_ZONE_ID = ZoneId.of(DEFAULT_TIMEZONE);
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Locale Constants
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    /** Default locale for the application (Hebrew). */
+    public static final String DEFAULT_LOCALE = "he";
+    
+    /** English locale code. */
+    public static final String LOCALE_ENGLISH = "en";
+    
+    /** Hebrew locale code. */
+    public static final String LOCALE_HEBREW = "he";
 }
