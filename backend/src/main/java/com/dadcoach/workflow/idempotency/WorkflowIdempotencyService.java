@@ -44,6 +44,9 @@ public class WorkflowIdempotencyService {
     /** TTL for content fingerprint cache - 60 seconds for content-based duplicate detection */
     private static final Duration FINGERPRINT_TTL = Duration.ofSeconds(60);
     
+    /** Threshold for triggering cache cleanup to prevent unbounded growth */
+    private static final int CACHE_CLEANUP_THRESHOLD = 1000;
+    
     /** In-memory cache: idempotencyKey -> CachedResponse */
     private final Map<String, CachedResponse> cache = new ConcurrentHashMap<>();
     
@@ -225,7 +228,7 @@ public class WorkflowIdempotencyService {
                 idempotencyKey, CACHE_TTL.toHours());
         
         // Periodically cleanup expired entries (simple approach - could use scheduled task)
-        if (cache.size() > 1000) {
+        if (cache.size() > CACHE_CLEANUP_THRESHOLD) {
             cleanupExpired();
         }
     }
@@ -259,7 +262,7 @@ public class WorkflowIdempotencyService {
         }
         
         // Periodically cleanup expired entries
-        if (cache.size() > 1000 || contentFingerprintCache.size() > 1000) {
+        if (cache.size() > CACHE_CLEANUP_THRESHOLD || contentFingerprintCache.size() > CACHE_CLEANUP_THRESHOLD) {
             cleanupExpired();
         }
     }
