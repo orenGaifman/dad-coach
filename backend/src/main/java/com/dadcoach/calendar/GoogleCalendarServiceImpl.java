@@ -74,11 +74,12 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
     public GoogleCalendarServiceImpl(FatherRepository fatherRepository,
                                      ChildRepository childRepository,
-                                     MissionRepository missionRepository) {
+                                     MissionRepository missionRepository,
+                                     RestTemplate restTemplate) {
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.missionRepository = missionRepository;
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = restTemplate;
         this.objectMapper = new ObjectMapper();
     }
 

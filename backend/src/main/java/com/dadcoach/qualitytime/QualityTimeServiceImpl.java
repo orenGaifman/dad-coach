@@ -70,13 +70,14 @@ public class QualityTimeServiceImpl implements QualityTimeService {
             FatherRepository fatherRepository,
             ChildRepository childRepository,
             WorkflowMetrics workflowMetrics,
-            CommitmentService commitmentService) {
+            CommitmentService commitmentService,
+            RestTemplate restTemplate) {
         this.qualityTimeRepository = qualityTimeRepository;
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.workflowMetrics = workflowMetrics;
         this.commitmentService = commitmentService;
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = restTemplate;
         this.objectMapper = new ObjectMapper();
     }
 

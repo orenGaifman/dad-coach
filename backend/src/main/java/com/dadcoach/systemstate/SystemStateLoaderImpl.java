@@ -85,13 +85,14 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
             ChildRepository childRepository,
             QualityTimeRepository qualityTimeRepository,
             MessageLogRepository messageLogRepository,
-            WeeklyGoalRepository weeklyGoalRepository) {
+            WeeklyGoalRepository weeklyGoalRepository,
+            RestTemplate restTemplate) {
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.qualityTimeRepository = qualityTimeRepository;
         this.messageLogRepository = messageLogRepository;
         this.weeklyGoalRepository = weeklyGoalRepository;
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = restTemplate;
         this.objectMapper = new ObjectMapper();
     }
 

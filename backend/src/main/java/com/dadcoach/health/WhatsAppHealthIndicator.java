@@ -42,10 +42,11 @@ public class WhatsAppHealthIndicator implements HealthIndicator {
      * Constructs the health indicator with WhatsApp configuration.
      *
      * @param whatsAppProperties WhatsApp configuration properties
+     * @param restTemplate configured RestTemplate for HTTP calls
      */
-    public WhatsAppHealthIndicator(WhatsAppProperties whatsAppProperties) {
+    public WhatsAppHealthIndicator(WhatsAppProperties whatsAppProperties, RestTemplate restTemplate) {
         this.whatsAppProperties = whatsAppProperties;
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = restTemplate;
     }
 
     @Override

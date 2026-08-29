@@ -27,7 +27,11 @@ public class KeepWarmJob {
     @Value("${RENDER_EXTERNAL_URL:}")
     private String renderExternalUrl;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+    
+    public KeepWarmJob(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
 
     /**
      * Pings the health endpoint every 5 minutes to keep the instance warm.
