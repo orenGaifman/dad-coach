@@ -211,23 +211,6 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 .body(problemDetail);
     }
 
-    @ExceptionHandler(DuplicateResourceException.class)
-    public ResponseEntity<ProblemDetail> handleDuplicateResource(
-            DuplicateResourceException ex, HttpServletRequest request) {
-
-        String requestId = generateRequestId();
-
-        ProblemDetail problemDetail = ProblemDetail.of(
-                ErrorCode.DUPLICATE_RESOURCE, ex.getMessage(), request.getRequestURI(), requestId);
-
-        log.warn("Duplicate resource on {} [request_id={}]: {}",
-                request.getRequestURI(), requestId, ex.getMessage());
-
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .contentType(PROBLEM_JSON)
-                .body(problemDetail);
-    }
-
     // --- 422: Business Rule Violations ---
 
     @ExceptionHandler(LimitExceededException.class)
