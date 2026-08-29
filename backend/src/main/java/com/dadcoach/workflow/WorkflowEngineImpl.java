@@ -279,7 +279,7 @@ public class WorkflowEngineImpl implements WorkflowEngine {
      */
     private void sendProcessingMessage(String phoneNumber, String fatherName, String locale) {
         try {
-            log.info("Processing timeout reached, sending processing message to {}", phoneNumber);
+            log.info("Processing timeout reached, sending processing message to {}", maskPhone(phoneNumber));
             
             // Build message context
             MessageContext msgContext = MessageContext.builder()
@@ -297,10 +297,20 @@ public class WorkflowEngineImpl implements WorkflowEngine {
             // Send via WhatsApp
             whatsAppService.sendText(phoneNumber, processingMessage);
             
-            log.info("Processing message sent successfully to {}", phoneNumber);
+            log.info("Processing message sent successfully to {}", maskPhone(phoneNumber));
         } catch (Exception e) {
-            log.error("Failed to send processing message to {}: {}", phoneNumber, e.getMessage(), e);
+            log.error("Failed to send processing message to {}: {}", maskPhone(phoneNumber), e.getMessage(), e);
         }
+    }
+    
+    /**
+     * Masks a phone number for safe logging, showing only last 4 digits.
+     */
+    private String maskPhone(String phone) {
+        if (phone == null || phone.length() < 4) {
+            return "****";
+        }
+        return "****" + phone.substring(phone.length() - 4);
     }
     
     /**
