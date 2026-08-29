@@ -1,5 +1,6 @@
-package com.dadcoach.onboarding;
+package com.dadcoach.api.onboarding;
 
+import com.dadcoach.onboarding.OnboardingExceptions;
 import com.dadcoach.onboarding.dto.ErrorResponse;
 import com.dadcoach.onboarding.dto.InvitationCreateRequestDto;
 import com.dadcoach.onboarding.dto.InvitationCreateResponseDto;

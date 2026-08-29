@@ -1,5 +1,6 @@
-package com.dadcoach.workspace.magiclink;
+package com.dadcoach.api.workspace;
 
+import com.dadcoach.workspace.magiclink.MagicLinkService;
 import com.dadcoach.workspace.magiclink.MagicLinkService.MagicLinkValidationResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

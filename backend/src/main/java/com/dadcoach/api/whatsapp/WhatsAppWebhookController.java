@@ -1,9 +1,10 @@
-package com.dadcoach.whatsapp;
+package com.dadcoach.api.whatsapp;
 
 import com.dadcoach.channel.ChannelRouter;
 import com.dadcoach.channel.ChannelAdapter;
 import com.dadcoach.config.WhatsAppProperties;
 import com.dadcoach.onboarding.activation.ActivationListener;
+import com.dadcoach.whatsapp.WhatsAppSignatureVerifier;
 import com.dadcoach.workflow.WorkflowEngine;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;

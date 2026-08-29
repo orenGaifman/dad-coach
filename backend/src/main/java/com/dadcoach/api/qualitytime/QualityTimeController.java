@@ -1,4 +1,4 @@
-package com.dadcoach.qualitytime.api;
+package com.dadcoach.api.qualitytime;
 
 import com.dadcoach.api.auth.ActorContext;
 import com.dadcoach.api.auth.AuthActor;

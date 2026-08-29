@@ -1,5 +1,7 @@
-package com.dadcoach.whatsapp;
+package com.dadcoach.api.whatsapp;
 
+import com.dadcoach.whatsapp.SendTextRequest;
+import com.dadcoach.whatsapp.WhatsAppService;
 import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.context.annotation.Profile;

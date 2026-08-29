@@ -1,5 +1,6 @@
-package com.dadcoach.onboarding;
+package com.dadcoach.api.onboarding;
 
+import com.dadcoach.onboarding.OnboardingExceptions;
 import com.dadcoach.onboarding.activation.ActivationService;
 import com.dadcoach.onboarding.activation.ActivationStatusResponse;
 import com.dadcoach.onboarding.dto.*;

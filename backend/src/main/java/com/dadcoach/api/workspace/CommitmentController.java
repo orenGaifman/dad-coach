@@ -1,10 +1,12 @@
-package com.dadcoach.workspace.commitment;
+package com.dadcoach.api.workspace;
 
 import com.dadcoach.api.auth.ActorContext;
 import com.dadcoach.api.auth.AuthActor;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
+import com.dadcoach.workspace.commitment.CommitmentService;
 import com.dadcoach.workspace.commitment.CommitmentService.CommitmentStats;
+import com.dadcoach.workspace.commitment.QualityTimeCommitment;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

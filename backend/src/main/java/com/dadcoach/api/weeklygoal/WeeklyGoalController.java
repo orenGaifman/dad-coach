@@ -1,10 +1,13 @@
-package com.dadcoach.weeklygoal;
+package com.dadcoach.api.weeklygoal;
 
 import com.dadcoach.api.auth.ActorContext;
 import com.dadcoach.api.auth.AuthActor;
 import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
+import com.dadcoach.weeklygoal.WeeklyGoal;
+import com.dadcoach.weeklygoal.WeeklyGoalRepository;
+import com.dadcoach.weeklygoal.WeeklyGoalService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

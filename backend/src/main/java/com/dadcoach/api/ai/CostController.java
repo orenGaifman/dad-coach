@@ -1,5 +1,6 @@
-package com.dadcoach.ai.routing;
+package com.dadcoach.api.ai;
 
+import com.dadcoach.ai.routing.DailyUsageTracker;
 import com.dadcoach.domain.conversation.ConversationType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

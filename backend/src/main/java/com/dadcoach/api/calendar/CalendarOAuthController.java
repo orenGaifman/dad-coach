@@ -1,5 +1,6 @@
-package com.dadcoach.calendar;
+package com.dadcoach.api.calendar;
 
+import com.dadcoach.calendar.GoogleCalendarService;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 

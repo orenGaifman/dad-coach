@@ -1,4 +1,4 @@
-package com.dadcoach.workflow.api;
+package com.dadcoach.api.workflow;
 
 import com.dadcoach.api.auth.ActorContext;
 import com.dadcoach.api.auth.AuthActor;
