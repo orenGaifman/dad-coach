@@ -29,20 +29,24 @@ The application follows a package-by-feature layout where each domain (webhook, 
 ```
 backend/src/main/java/com/dadcoach/
 ├── DadCoachApplication.java
+├── api/             # REST controllers (workspace, quality time, onboarding, admin)
+├── ai/              # AI coaching layer (Claude integration, tools, agents)
+├── calendar/        # Google Calendar integration
+├── channel/         # Multi-channel messaging (WhatsApp, templates)
+├── child/           # Child domain and management
 ├── common/          # Global exception handler, logging filter, startup listener
-├── config/          # Application configuration (OpenAPI, HTTP client, WhatsApp props)
+├── config/          # Application configuration (OpenAPI, HTTP client, props)
+├── conversation/    # Conversation session management
+├── father/          # Father domain and profile management
+├── memory/          # AI memory system (embedding, lifecycle, audit, extraction)
+├── mission/         # Coaching missions and quality time
+├── onboarding/      # User onboarding flow (invitations, activation)
+├── qualitytime/     # Quality time scheduling and tracking
+├── scheduling/      # Scheduled tasks and inactivity handling
 ├── webhook/         # WhatsApp webhook handling
 ├── whatsapp/        # WhatsApp API client
-├── father/          # Father domain (future)
-├── child/           # Child domain (future)
-├── conversation/    # Conversation domain (future)
-├── memory/          # AI memory (future)
-├── ai/              # AI coaching (future)
-├── scheduler/       # Scheduled tasks (future)
-├── health/          # Custom health indicators (future)
-├── mission/         # Coaching missions (future)
-├── goal/            # Parenting goals (future)
-└── notification/    # Push notifications (future)
+├── weeklygoal/      # Weekly parenting goals
+└── workflow/        # Workflow orchestration and idempotency
 ```
 
 ## Running Locally (without Docker)
