@@ -116,6 +116,6 @@ public interface FatherRepository extends JpaRepository<Father, Long> {
      * @return list of active fathers without a weekly goal for that week
      */
     @Query("SELECT f FROM Father f WHERE f.status = 'ACTIVE' " +
-           "AND NOT EXISTS (SELECT wg FROM WeeklyGoal wg WHERE wg.fatherId = f.id AND wg.weekStart = :weekStart)")
+           "AND NOT EXISTS (SELECT wg FROM WeeklyGoal wg WHERE wg.fatherId = f.id AND wg.weekStartDate = :weekStart)")
     List<Father> findActiveFathersWithoutWeeklyGoal(@Param("weekStart") java.time.LocalDate weekStart);
 }
