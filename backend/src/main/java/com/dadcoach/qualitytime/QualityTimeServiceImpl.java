@@ -8,6 +8,7 @@ import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.qualitytime.dto.CompleteQualityTimeResult;
 import com.dadcoach.qualitytime.dto.ScheduleQualityTimeResult;
 import com.dadcoach.qualitytime.dto.UpcomingQualityTimeDto;
+import com.dadcoach.weeklygoal.WeeklyGoalService;
 import com.dadcoach.workflow.Belt;
 import com.dadcoach.workflow.metrics.WorkflowMetrics;
 import com.dadcoach.workspace.commitment.CommitmentService;
@@ -56,6 +57,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
     private final ChildRepository childRepository;
     private final WorkflowMetrics workflowMetrics;
     private final CommitmentService commitmentService;
+    private final WeeklyGoalService weeklyGoalService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
@@ -71,12 +73,14 @@ public class QualityTimeServiceImpl implements QualityTimeService {
             ChildRepository childRepository,
             WorkflowMetrics workflowMetrics,
             CommitmentService commitmentService,
+            WeeklyGoalService weeklyGoalService,
             RestTemplate restTemplate) {
         this.qualityTimeRepository = qualityTimeRepository;
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.workflowMetrics = workflowMetrics;
         this.commitmentService = commitmentService;
+        this.weeklyGoalService = weeklyGoalService;
         this.restTemplate = restTemplate;
         this.objectMapper = new ObjectMapper();
     }
@@ -328,6 +332,11 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         // Record Quality Time completion metric (Requirement 16.2)
         workflowMetrics.recordQualityTimeCompletion();
 
+        // Record completed minutes to weekly goal
+        int durationMinutes = calculateDurationMinutes(qualityTime);
+        weeklyGoalService.recordCompletedQualityTime(father.getId(), durationMinutes);
+        log.info("Recorded {} minutes to weekly goal for father {}", durationMinutes, father.getId());
+
         log.info("Quality Time {} completed. Streak: {}, Total: {}, Belt: {}", 
                 qualityTimeId, newStreak, totalCompleted, newBelt);
 
@@ -338,6 +347,20 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         } else {
             return CompleteQualityTimeResult.withoutNewBelt(qualityTimeId, newStreak, newBelt);
         }
+    }
+
+    /**
+     * Calculates the duration of a Quality Time event in minutes.
+     * 
+     * @param qualityTime the Quality Time entity
+     * @return the duration in minutes
+     */
+    private int calculateDurationMinutes(QualityTime qualityTime) {
+        if (qualityTime.getScheduledStart() == null || qualityTime.getScheduledEnd() == null) {
+            return 30; // Default to 30 minutes if times are not set
+        }
+        long minutes = Duration.between(qualityTime.getScheduledStart(), qualityTime.getScheduledEnd()).toMinutes();
+        return (int) Math.max(minutes, 1); // Minimum 1 minute
     }
 
     /**

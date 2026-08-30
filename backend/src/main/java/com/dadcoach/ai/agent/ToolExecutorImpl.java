@@ -3,7 +3,6 @@ package com.dadcoach.ai.agent;
 import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildService;
-import com.dadcoach.qualitytime.QualityTime;
 import com.dadcoach.qualitytime.QualityTimeService;
 import com.dadcoach.qualitytime.dto.ScheduleQualityTimeResult;
 import com.dadcoach.systemstate.AvailableSlot;
@@ -258,9 +257,14 @@ public class ToolExecutorImpl implements ToolExecutor {
         Integer daySelection = getIntParam(params, "day_selection", 0);
         String timeStr = getStringParam(params, "time", "");
         
-        // Get current quality time
-        QualityTime currentQT = getCurrentQualityTime(context);
-        if (currentQT == null) {
+        // Get upcoming quality time from service
+        Long fatherDbId = getFatherDbId(context);
+        if (fatherDbId == null) {
+            return AgentToolResult.failure("reschedule_quality_time", "לא נמצא פרופיל אב.");
+        }
+        
+        var upcomingQT = qualityTimeService.getUpcomingQualityTime(fatherDbId);
+        if (upcomingQT.isEmpty()) {
             return AgentToolResult.success("reschedule_quality_time",
                 "אין כרגע זמן איכות מתוכנן לשינוי. רוצה לקבוע זמן חדש?",
                 params);
@@ -283,16 +287,16 @@ public class ToolExecutorImpl implements ToolExecutor {
         
         // Cancel old and create new
         try {
-            qualityTimeService.cancelQualityTime(currentQT.getId());
+            var currentQT = upcomingQT.get();
+            qualityTimeService.cancelQualityTime(currentQT.id());
             
             Instant newStartTime = targetDate.atTime(time)
                 .atZone(ISRAEL_ZONE)
                 .toInstant();
             
-            Long fatherDbId = getFatherDbId(context);
             qualityTimeService.scheduleQualityTime(
                 fatherDbId,
-                currentQT.getChild().getId(),
+                currentQT.childId(),
                 newStartTime,
                 DEFAULT_QUALITY_TIME_DURATION
             );
@@ -313,15 +317,21 @@ public class ToolExecutorImpl implements ToolExecutor {
     }
     
     private AgentToolResult executeCancelQualityTime(Map<String, Object> params, AgentContext context) {
-        QualityTime currentQT = getCurrentQualityTime(context);
-        if (currentQT == null) {
+        // Get upcoming quality time from service
+        Long fatherDbId = getFatherDbId(context);
+        if (fatherDbId == null) {
+            return AgentToolResult.failure("cancel_quality_time", "לא נמצא פרופיל אב.");
+        }
+        
+        var upcomingQT = qualityTimeService.getUpcomingQualityTime(fatherDbId);
+        if (upcomingQT.isEmpty()) {
             return AgentToolResult.success("cancel_quality_time",
                 "אין כרגע זמן איכות מתוכנן לביטול.",
                 params);
         }
         
         try {
-            qualityTimeService.cancelQualityTime(currentQT.getId());
+            qualityTimeService.cancelQualityTime(upcomingQT.get().id());
             return AgentToolResult.success(
                 "cancel_quality_time",
                 "ביטלתי את זמן האיכות. רוצה לקבוע זמן חדש?",
@@ -329,7 +339,8 @@ public class ToolExecutorImpl implements ToolExecutor {
                 params
             );
         } catch (Exception e) {
-            log.error("Failed to cancel quality time", e);
+            log.error("Failed to cancel quality time: qualityTimeId={}, error={}", 
+                upcomingQT.get().id(), e.getMessage());
             return AgentToolResult.failure("cancel_quality_time",
                 "לא הצלחתי לבטל את זמן האיכות. אפשר לנסות שוב?");
         }
@@ -390,8 +401,14 @@ public class ToolExecutorImpl implements ToolExecutor {
     }
     
     private AgentToolResult executeCompleteQualityTime(Map<String, Object> params, AgentContext context) {
-        QualityTime currentQT = getCurrentQualityTime(context);
-        if (currentQT == null) {
+        // Get upcoming quality time from service
+        Long fatherDbId = getFatherDbId(context);
+        if (fatherDbId == null) {
+            return AgentToolResult.failure("complete_quality_time", "לא נמצא פרופיל אב.");
+        }
+        
+        var upcomingQT = qualityTimeService.getUpcomingQualityTime(fatherDbId);
+        if (upcomingQT.isEmpty()) {
             return AgentToolResult.success("complete_quality_time",
                 "אין זמן איכות פעיל לסימון כהושלם.",
                 params);
@@ -400,7 +417,7 @@ public class ToolExecutorImpl implements ToolExecutor {
         String feedback = getStringParam(params, "feedback", null);
         
         try {
-            var result = qualityTimeService.completeQualityTime(currentQT.getId(), feedback);
+            var result = qualityTimeService.completeQualityTime(upcomingQT.get().id(), feedback);
             
             String response = String.format(
                 "כל הכבוד! 🎉 סימנתי את זמן האיכות כהושלם.\n" +
@@ -418,7 +435,8 @@ public class ToolExecutorImpl implements ToolExecutor {
                 params
             );
         } catch (Exception e) {
-            log.error("Failed to complete quality time", e);
+            log.error("Failed to complete quality time: qualityTimeId={}, error={}", 
+                upcomingQT.get().id(), e.getMessage());
             return AgentToolResult.failure("complete_quality_time",
                 "לא הצלחתי לעדכן את זמן האיכות. אפשר לנסות שוב?");
         }
@@ -888,20 +906,6 @@ public class ToolExecutorImpl implements ToolExecutor {
             log.error("Failed to find child for scheduling", e);
             return null;
         }
-    }
-    
-    private QualityTime getCurrentQualityTime(AgentContext context) {
-        if (context.systemState() == null) {
-            return null;
-        }
-        var nextQT = context.systemState().getNextScheduledQualityTime();
-        if (nextQT == null) {
-            return null;
-        }
-        // The SystemState has a summary, but we need the actual QualityTime entity
-        // This would need to be fetched from the repository
-        // For now, return null and let the service handle the lookup
-        return null;
     }
     
     private Long getFatherDbId(AgentContext context) {
