@@ -1092,9 +1092,21 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 responseMessage = responseMessage + "\n\n" + linkMessage;
             }
             
-            // Log outbound message for conversation history
+            // Log outbound message for conversation history with AI decision metadata
             if (messageLogService != null && !responseMessage.isEmpty()) {
-                messageLogService.logOutbound(father.getId(), responseMessage);
+                String newStateStr = agentResponse.hasStateTransition() 
+                        ? agentResponse.newState().name() 
+                        : null;
+                messageLogService.logOutboundWithAiDecision(
+                        father.getId(),
+                        responseMessage,
+                        agentResponse.toolUsed(),
+                        agentResponse.parameters(),
+                        currentState.name(),
+                        newStateStr,
+                        agentResponse.success(),
+                        agentResponse.errorMessage()
+                );
             }
             
             OutboundMessageDto response = new OutboundMessageDto(

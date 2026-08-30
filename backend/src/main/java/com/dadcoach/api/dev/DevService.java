@@ -399,7 +399,14 @@ public class DevService {
                 message.getId(),
                 message.getDirection() != null ? message.getDirection().name() : null,
                 message.getContent(),
-                message.getCreatedAt()
+                message.getCreatedAt(),
+                // AI Decision metadata (for outbound messages)
+                message.getToolUsed(),
+                message.getToolParameters(),
+                message.getPreviousState(),
+                message.getNewState(),
+                message.getToolSuccess(),
+                message.getErrorMessage()
         );
     }
 }
