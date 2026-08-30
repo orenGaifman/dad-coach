@@ -87,12 +87,23 @@ public record AgentContext(
             if (systemState.weeklyGoalInfo() != null && systemState.weeklyGoalInfo().hasGoal()) {
                 var goal = systemState.weeklyGoalInfo();
                 sb.append("\n📎 יעד שבועי:\n");
-                sb.append("  יעד: ").append(goal.targetQualityTimes()).append(" זמני איכות\n");
-                sb.append("  הושלמו: ").append(goal.completedQualityTimes()).append("\n");
+                sb.append("  יעד: ").append(goal.targetQualityTimes()).append(" שעות זמן איכות\n");
+                sb.append("  הושלמו: ").append(goal.completedQualityTimes()).append(" זמני איכות\n");
                 sb.append("  מתוכננים: ").append(goal.scheduledQualityTimes()).append("\n");
                 sb.append("  נשארו להשלמת היעד: ").append(goal.remainingToGoal()).append("\n");
+            } else if (systemState.weeklyGoalInfo() != null && systemState.weeklyGoalInfo().isNewWeekWithPreviousData()) {
+                // NEW WEEK! Show last week summary and prompt for new goal
+                var lastWeek = systemState.weeklyGoalInfo().lastWeekSummary();
+                sb.append("\n🆕 **שבוע חדש התחיל!**\n");
+                sb.append("\n📊 **סיכום השבוע שעבר:**\n");
+                sb.append("  יעד: ").append(lastWeek.targetHours()).append(" שעות\n");
+                sb.append("  בפועל: ").append(lastWeek.actualHours()).append(" שעות (").append(lastWeek.completedCount()).append(" זמני איכות)\n");
+                sb.append("  ").append(lastWeek.goalMet() ? "✅ היעד הושג!" : "❌ היעד לא הושג").append("\n");
+                sb.append("\n⚠️ **חשוב:** קודם הצג לאב את סיכום השבוע שעבר, ואז בקש ממנו לקבוע יעד חדש לשבוע הנוכחי!\n");
+                sb.append("⚠️ **אל תציע לקבוע זמן איכות לפני שיש יעד שבועי!**\n");
             } else {
                 sb.append("\n⚠️ אין יעד שבועי מוגדר - הצע לאב לקבוע יעד!\n");
+                sb.append("⚠️ **אל תציע לקבוע זמן איכות לפני שיש יעד שבועי!**\n");
             }
             
             // Children info
