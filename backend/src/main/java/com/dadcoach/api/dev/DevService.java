@@ -1,10 +1,13 @@
 package com.dadcoach.api.dev;
 
+import com.dadcoach.ai.agent.ToolWishlist;
+import com.dadcoach.ai.agent.ToolWishlistRepository;
 import com.dadcoach.api.dev.dto.ChildDto;
 import com.dadcoach.api.dev.dto.FatherListItemDto;
 import com.dadcoach.api.dev.dto.FatherStateDetailsDto;
 import com.dadcoach.api.dev.dto.MessageDto;
 import com.dadcoach.api.dev.dto.QualityTimeDto;
+import com.dadcoach.api.dev.dto.ToolWishlistDto;
 import com.dadcoach.api.dev.dto.TransitionDto;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
@@ -49,6 +52,7 @@ public class DevService {
     private final QualityTimeRepository qualityTimeRepository;
     private final MessageLogRepository messageLogRepository;
     private final WorkflowTransitionLogRepository workflowTransitionLogRepository;
+    private final ToolWishlistRepository toolWishlistRepository;
 
     /**
      * Maximum allowed limit for message queries.
@@ -64,12 +68,14 @@ public class DevService {
                       ChildRepository childRepository,
                       QualityTimeRepository qualityTimeRepository,
                       MessageLogRepository messageLogRepository,
-                      WorkflowTransitionLogRepository workflowTransitionLogRepository) {
+                      WorkflowTransitionLogRepository workflowTransitionLogRepository,
+                      ToolWishlistRepository toolWishlistRepository) {
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.qualityTimeRepository = qualityTimeRepository;
         this.messageLogRepository = messageLogRepository;
         this.workflowTransitionLogRepository = workflowTransitionLogRepository;
+        this.toolWishlistRepository = toolWishlistRepository;
     }
 
     /**
@@ -408,5 +414,44 @@ public class DevService {
                 message.getToolSuccess(),
                 message.getErrorMessage()
         );
+    }
+
+    /**
+     * Retrieves tool wishlist entries.
+     *
+     * <p>Returns tool wishes that the AI has suggested, ordered by
+     * occurrence count (most requested first).</p>
+     *
+     * @param status optional filter by status (NEW, REVIEWING, APPROVED, REJECTED, IMPLEMENTED, DUPLICATE)
+     * @param limit maximum number of wishes to return (capped at 200)
+     * @return list of ToolWishlistDto ordered by occurrence count descending
+     */
+    public List<ToolWishlistDto> getToolWishlist(String status, int limit) {
+        log.debug("Getting tool wishlist: status={}, limit={}", status, limit);
+
+        // Apply max limit constraint
+        int effectiveLimit = Math.min(limit, MAX_MESSAGE_LIMIT);
+
+        List<ToolWishlist> wishes;
+
+        if (status != null && !status.isBlank()) {
+            // Parse status and filter
+            try {
+                ToolWishlist.WishStatus wishStatus = ToolWishlist.WishStatus.valueOf(status.toUpperCase());
+                wishes = toolWishlistRepository.findByStatusOrderByOccurrenceCountDesc(wishStatus);
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid status filter: {}", status);
+                wishes = List.of();
+            }
+        } else {
+            // Get all wishes ordered by occurrence count
+            wishes = toolWishlistRepository.findTopRequested();
+        }
+
+        // Apply limit and map to DTOs
+        return wishes.stream()
+                .limit(effectiveLimit)
+                .map(ToolWishlistDto::fromEntity)
+                .toList();
     }
 }

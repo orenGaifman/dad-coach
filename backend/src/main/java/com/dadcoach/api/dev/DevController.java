@@ -5,6 +5,7 @@ import com.dadcoach.api.dev.dto.FatherListItemDto;
 import com.dadcoach.api.dev.dto.FatherStateDetailsDto;
 import com.dadcoach.api.dev.dto.MessageDto;
 import com.dadcoach.api.dev.dto.PaginatedResponse;
+import com.dadcoach.api.dev.dto.ToolWishlistDto;
 import com.dadcoach.api.dev.dto.TransitionDto;
 
 import org.slf4j.Logger;
@@ -258,5 +259,45 @@ public class DevController {
         List<TransitionDto> transitions = devService.getTransitions(id, limit);
 
         return ResponseEntity.ok(transitions);
+    }
+
+    /**
+     * GET /api/v1/dev/tool-wishlist - Get the AI tool wishlist.
+     *
+     * <p>Returns all tool wishes that the AI has suggested, ordered by
+     * occurrence count (most requested first) and then by creation date.</p>
+     *
+     * <p>This endpoint helps developers review what capabilities users are
+     * asking for that don't exist yet, enabling data-driven tool development.</p>
+     *
+     * @param status optional filter by status (NEW, REVIEWING, APPROVED, REJECTED, IMPLEMENTED, DUPLICATE)
+     * @param limit maximum number of wishes to return (default 50, max 200)
+     * @return HTTP 200 with list of ToolWishlistDto, HTTP 403 in production
+     */
+    @GetMapping("/tool-wishlist")
+    public ResponseEntity<?> getToolWishlist(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "50") int limit) {
+
+        // Check environment access
+        environmentGuard.requireDevAccess();
+
+        log.debug("Getting tool wishlist: status={}, limit={}", status, limit);
+
+        // Validate limit
+        if (limit > MAX_MESSAGE_LIMIT) {
+            return ResponseEntity
+                    .badRequest()
+                    .body(ErrorResponse.badRequest(
+                            "limit must not exceed " + MAX_MESSAGE_LIMIT));
+        }
+
+        if (limit < 1) {
+            limit = DEFAULT_MESSAGE_LIMIT;
+        }
+
+        List<ToolWishlistDto> wishes = devService.getToolWishlist(status, limit);
+
+        return ResponseEntity.ok(wishes);
     }
 }
