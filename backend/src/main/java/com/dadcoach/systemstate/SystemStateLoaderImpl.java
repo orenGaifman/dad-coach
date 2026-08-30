@@ -64,7 +64,7 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
     private static final int MIN_SLOT_DURATION_MINUTES = 30;
     private static final int DEFAULT_ACTIVITY_START_HOUR = 6;  // 6 AM
     private static final int DEFAULT_ACTIVITY_END_HOUR = 22;   // 10 PM
-    private static final int RECENT_MESSAGES_LIMIT = 10;        // Load last 10 messages for context
+    private static final int RECENT_MESSAGES_LIMIT = 20;        // Load last 20 messages for personalization context
 
     private final FatherRepository fatherRepository;
     private final ChildRepository childRepository;
