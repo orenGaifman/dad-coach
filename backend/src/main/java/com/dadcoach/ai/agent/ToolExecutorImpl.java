@@ -178,23 +178,37 @@ public class ToolExecutorImpl implements ToolExecutor {
             );
             
             String dayName = formatDayName(targetDate);
+            String timeFormatted = time.format(DateTimeFormatter.ofPattern("HH:mm"));
             
-            // Check if weekly goal is complete after this scheduling
+            // Check if scheduling for "now" (within 1 hour) - don't show reminder message
+            long minutesUntilStart = java.time.Duration.between(Instant.now(), startTime).toMinutes();
+            boolean isScheduledSoon = minutesUntilStart <= 60;
+            String reminderText = isScheduledSoon ? "" : "\nתזכורת תגיע שעה לפני.";
+            
+            // Check if Google Calendar event was created successfully
+            boolean calendarSynced = result.calendarEventId() != null;
+            String calendarNote = calendarSynced ? " ✅ נוסף ליומן" : "";
+            
+            // Check weekly goal progress - but DON'T say "goal complete" on scheduling!
+            // Goal is only complete when quality time is actually DONE, not just scheduled.
             SystemState.WeeklyGoalInfo goalInfo = context.systemState().weeklyGoalInfo();
             int scheduledAfterThis = goalInfo.scheduledQualityTimes() + 1;
             int targetGoal = goalInfo.targetQualityTimes();
-            boolean goalComplete = !goalInfo.hasGoal() || scheduledAfterThis >= targetGoal;
+            boolean allScheduled = goalInfo.hasGoal() && scheduledAfterThis >= targetGoal;
             
-            if (goalComplete) {
-                // Goal is complete - transition to WAITING
+            if (allScheduled) {
+                // All quality times for this week are now scheduled - transition to WAITING
+                // But DON'T say "goal complete" - it's only complete after actual completion
                 String response = String.format(
-                    "מעולה! 🎯 קבעתי זמן איכות עם %s ל%s ב-%s.\n" +
-                    "תזכורת תגיע שעה לפני.\n\n" +
-                    "✅ השלמת את היעד השבועי שלך! כל הכבוד!\n\n" +
+                    "מעולה! 🎯 קבעתי זמן איכות עם %s ל%s ב-%s.%s%s\n\n" +
+                    "📊 קבעת את כל %d זמני האיכות ליעד השבועי! עכשיו נשאר לבצע אותם 💪\n\n" +
                     "📊 לצפייה בדשבורד: %s",
                     child.getName(),
                     dayName,
-                    time.format(DateTimeFormatter.ofPattern("HH:mm")),
+                    timeFormatted,
+                    calendarNote,
+                    reminderText,
+                    targetGoal,
                     dashboardUrl
                 );
                 
@@ -205,17 +219,18 @@ public class ToolExecutorImpl implements ToolExecutor {
                     params
                 );
             } else {
-                // Goal not complete - stay in SCHEDULE_QUALITY_TIME and prompt for more
+                // More quality times to schedule - stay in SCHEDULE_QUALITY_TIME
                 int remaining = targetGoal - scheduledAfterThis;
                 String response = String.format(
-                    "מעולה! 🎯 קבעתי זמן איכות עם %s ל%s ב-%s.\n" +
-                    "תזכורת תגיע שעה לפני.\n\n" +
+                    "מעולה! 🎯 קבעתי זמן איכות עם %s ל%s ב-%s.%s%s\n\n" +
                     "📊 זה %d מתוך %d זמני איכות ליעד השבועי שלך.\n" +
                     "נשאר עוד %d לקבוע - נקבע עוד אחד? 💪\n\n" +
                     "📊 לצפייה בדשבורד: %s",
                     child.getName(),
                     dayName,
-                    time.format(DateTimeFormatter.ofPattern("HH:mm")),
+                    timeFormatted,
+                    calendarNote,
+                    reminderText,
                     scheduledAfterThis,
                     targetGoal,
                     remaining,
@@ -286,10 +301,17 @@ public class ToolExecutorImpl implements ToolExecutor {
             );
             
             String dayName = formatDayName(targetDate);
+            
+            // Check if rescheduling for "now" (within 1 hour) - don't show reminder message
+            long minutesUntilStart = java.time.Duration.between(Instant.now(), newStartTime).toMinutes();
+            boolean isScheduledSoon = minutesUntilStart <= 60;
+            String reminderText = isScheduledSoon ? "" : "\nתזכורת תגיע אליך שעה לפני.";
+            
             String response = String.format(
-                "שיניתי את זמן האיכות ל%s ב-%s 👍\nתזכורת תגיע אליך שעה לפני.",
+                "שיניתי את זמן האיכות ל%s ב-%s 👍%s",
                 dayName,
-                time.format(DateTimeFormatter.ofPattern("HH:mm"))
+                time.format(DateTimeFormatter.ofPattern("HH:mm")),
+                reminderText
             );
             
             return AgentToolResult.success("reschedule_quality_time", response, params);
