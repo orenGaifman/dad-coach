@@ -314,7 +314,8 @@ public class ToolExecutorImpl implements ToolExecutor {
                 reminderText
             );
             
-            return AgentToolResult.success("reschedule_quality_time", response, params);
+            // After rescheduling, user has a scheduled QT - go to WAITING
+            return AgentToolResult.success("reschedule_quality_time", response, WorkflowState.WAITING, params);
         } catch (Exception e) {
             log.error("Failed to reschedule quality time", e);
             return AgentToolResult.failure("reschedule_quality_time",
@@ -425,19 +426,46 @@ public class ToolExecutorImpl implements ToolExecutor {
         try {
             var result = qualityTimeService.completeQualityTime(upcomingQT.get().id(), feedback);
             
-            String response = String.format(
-                "כל הכבוד! 🎉 סימנתי את זמן האיכות כהושלם.\n" +
-                "🔥 הרצף שלך: %d זמני איכות רצופים!\n" +
-                "🥋 החגורה: %s\n\n" +
-                "רוצה לקבוע את זמן האיכות הבא?",
-                result.newStreak(),
-                result.currentBelt() != null ? result.currentBelt().getDisplayName() : "לבנה"
-            );
+            // Check weekly goal progress after completion
+            SystemState.WeeklyGoalInfo goalInfo = context.systemState() != null 
+                ? context.systemState().weeklyGoalInfo() 
+                : null;
+            
+            StringBuilder response = new StringBuilder();
+            response.append("כל הכבוד! 🎉 סימנתי את זמן האיכות כהושלם.\n");
+            response.append(String.format("🔥 הרצף שלך: %d זמני איכות רצופים!\n", result.newStreak()));
+            response.append(String.format("🥋 החגורה: %s\n\n", 
+                result.currentBelt() != null ? result.currentBelt().getDisplayName() : "לבנה"));
+            
+            WorkflowState nextState;
+            
+            if (goalInfo != null && goalInfo.hasGoal()) {
+                int completedAfterThis = goalInfo.completedQualityTimes() + 1;
+                int target = goalInfo.targetQualityTimes();
+                
+                if (completedAfterThis >= target) {
+                    // Weekly goal achieved! Celebrate and go to WAITING
+                    response.append("🏆 השלמת את היעד השבועי! כל הכבוד!\n\n");
+                    response.append("📊 לצפייה בהתקדמות בדשבורד");
+                    nextState = WorkflowState.WAITING;
+                } else {
+                    // More QTs to complete
+                    int remaining = target - completedAfterThis;
+                    response.append(String.format("📊 זה %d מתוך %d ליעד השבועי. נשאר %d!\n\n",
+                        completedAfterThis, target, remaining));
+                    response.append("רוצה לקבוע את זמן האיכות הבא?");
+                    nextState = WorkflowState.SCHEDULE_QUALITY_TIME;
+                }
+            } else {
+                // No weekly goal - just prompt for next
+                response.append("רוצה לקבוע את זמן האיכות הבא?");
+                nextState = WorkflowState.SCHEDULE_QUALITY_TIME;
+            }
             
             return AgentToolResult.success(
                 "complete_quality_time",
-                response,
-                WorkflowState.SCHEDULE_QUALITY_TIME,
+                response.toString(),
+                nextState,
                 params
             );
         } catch (Exception e) {
@@ -520,19 +548,40 @@ public class ToolExecutorImpl implements ToolExecutor {
             greeting = "ערב טוב" + (name.isEmpty() ? "" : " " + name) + "! 🌙";
         }
         
-        // Add context-aware message
-        if (context.systemState() != null) {
-            var nextQT = context.systemState().getNextScheduledQualityTime();
-            if (nextQT != null) {
+        // Determine state transition and message based on context
+        SystemState state = context.systemState();
+        WorkflowState nextState = null;
+        
+        if (state != null) {
+            var weeklyGoalInfo = state.weeklyGoalInfo();
+            var nextQT = state.getNextScheduledQualityTime();
+            
+            if (!weeklyGoalInfo.hasGoal()) {
+                // No weekly goal set - guide to set one first
+                greeting += "\n\nבוא נקבע יעד שבועי! כמה זמני איכות תרצה לקבוע כיעד? 1, 2 או 3?";
+                nextState = WorkflowState.SET_WEEKLY_GOAL;
+            } else if (nextQT != null) {
+                // Has scheduled quality time - stay in WAITING
                 greeting += "\n\nיש לך זמן איכות מתוכנן עם " + nextQT.childName() + ".";
+                nextState = WorkflowState.WAITING;
             } else {
-                greeting += "\n\nרוצה לקבוע זמן איכות?";
+                // Has goal but no scheduled QT - guide to schedule
+                int remaining = weeklyGoalInfo.targetQualityTimes() - weeklyGoalInfo.scheduledQualityTimes();
+                if (remaining > 0) {
+                    greeting += String.format("\n\nיש לך יעד של %d זמני איכות השבוע. נשאר לקבוע %d. מתי נוח לך?",
+                        weeklyGoalInfo.targetQualityTimes(), remaining);
+                } else {
+                    greeting += "\n\nרוצה לקבוע עוד זמן איכות?";
+                }
+                nextState = WorkflowState.SCHEDULE_QUALITY_TIME;
             }
         } else {
-            greeting += "\n\nמה נשמע? רוצה לקבוע זמן איכות?";
+            // No state - new user, guide to set weekly goal
+            greeting += "\n\nברוך הבא! בוא נתחיל עם יעד שבועי - כמה זמני איכות תרצה לקבוע? 1, 2 או 3?";
+            nextState = WorkflowState.SET_WEEKLY_GOAL;
         }
         
-        return AgentToolResult.success("greet", greeting, Map.of());
+        return AgentToolResult.success("greet", greeting, nextState, Map.of());
     }
     
     private AgentToolResult executeShowHelp(AgentContext context) {
