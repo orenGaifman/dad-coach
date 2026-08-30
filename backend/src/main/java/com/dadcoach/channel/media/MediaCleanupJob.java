@@ -32,9 +32,11 @@ public class MediaCleanupJob {
     public void cleanupExpiredMedia() {
         Instant now = Instant.now();
         log.info("Media cleanup job started. Deleting assets expired before {}", now);
-
-        int deletedCount = mediaAssetRepository.deleteExpiredAssets(now);
-
-        log.info("Media cleanup job completed. Deleted {} expired media assets", deletedCount);
+        try {
+            int deletedCount = mediaAssetRepository.deleteExpiredAssets(now);
+            log.info("Media cleanup job completed. Deleted {} expired media assets", deletedCount);
+        } catch (Exception e) {
+            log.error("Media cleanup job failed: {}", e.getMessage(), e);
+        }
     }
 }

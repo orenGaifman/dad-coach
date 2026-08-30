@@ -41,12 +41,14 @@ public class MagicLinkCleanupJob {
     @Transactional
     public void cleanupExpiredTokens() {
         Instant cutoff = Instant.now(clock).minus(RETENTION_PERIOD);
-        
-        int deleted = repository.deleteExpiredBefore(cutoff);
-        
-        if (deleted > 0) {
-            log.info("Magic link cleanup: deleted {} expired tokens older than {}", 
-                    deleted, cutoff);
+        try {
+            int deleted = repository.deleteExpiredBefore(cutoff);
+            if (deleted > 0) {
+                log.info("Magic link cleanup: deleted {} expired tokens older than {}", 
+                        deleted, cutoff);
+            }
+        } catch (Exception e) {
+            log.error("Magic link cleanup job failed: {}", e.getMessage(), e);
         }
     }
 }
