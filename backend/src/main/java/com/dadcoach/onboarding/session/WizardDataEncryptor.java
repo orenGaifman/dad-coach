@@ -24,7 +24,7 @@ import java.util.Base64;
  * using AES-256-GCM authenticated encryption.
  *
  * <p>The encryption key is sourced from the application property
- * {@code dadcoach.onboarding.security.wizard-data-encryption-key} (Base64-encoded 256-bit key).
+ * {@code onboarding.security.wizard-data-encryption-key} (Base64-encoded 256-bit key).
  *
  * <p>Wire format: [12-byte IV][ciphertext + 16-byte GCM tag]
  *
@@ -46,7 +46,7 @@ public class WizardDataEncryptor implements AttributeConverter<WizardData, byte[
     private final SecureRandom secureRandom;
 
     public WizardDataEncryptor(
-            @Value("${dadcoach.onboarding.security.wizard-data-encryption-key}") String encodedKey,
+            @Value("${onboarding.security.wizard-data-encryption-key}") String encodedKey,
             ObjectMapper objectMapper) {
         byte[] keyBytes = Base64.getDecoder().decode(encodedKey);
         if (keyBytes.length != 32) {
