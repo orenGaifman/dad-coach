@@ -48,6 +48,7 @@ public class CoachingAgent {
     private final ToolExecutor toolExecutor;
     private final SystemStateLoader systemStateLoader;
     private final ObjectMapper objectMapper;
+    private final ToolWishlistService toolWishlistService;
     
     @Value("${ai.agent.model:claude-sonnet-5}")
     private String modelName;
@@ -60,13 +61,15 @@ public class CoachingAgent {
             AgentPromptBuilder promptBuilder,
             ToolExecutor toolExecutor,
             SystemStateLoader systemStateLoader,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            ToolWishlistService toolWishlistService
     ) {
         this.aiProvider = aiProvider;
         this.promptBuilder = promptBuilder;
         this.toolExecutor = toolExecutor;
         this.systemStateLoader = systemStateLoader;
         this.objectMapper = objectMapper;
+        this.toolWishlistService = toolWishlistService;
     }
     
     /**
@@ -135,7 +138,7 @@ public class CoachingAgent {
             AiProviderResponse aiResponse = callAiProvider(systemPrompt, userPrompt, fatherId);
             
             // 8. Parse AI response
-            AiDecision decision = parseAiResponse(aiResponse.content());
+            AiDecision decision = parseAiResponse(aiResponse.content(), fatherId, inboundMessage, context);
             log.info("AI decision: tool={}, params={}", decision.tool(), decision.parameters());
             
             // ═══════════════════════════════════════════════════════════════════════
@@ -312,7 +315,7 @@ public class CoachingAgent {
         return aiProvider.sendPrompt(request);
     }
     
-    private AiDecision parseAiResponse(String content) {
+    private AiDecision parseAiResponse(String content, UUID fatherId, String originalMessage, AgentContext context) {
         if (content == null || content.isBlank()) {
             return AiDecision.fallback();
         }
@@ -356,12 +359,62 @@ public class CoachingAgent {
                 }
             }
             
+            // Extract tool_wish if present (ML-style learning mechanism)
+            if (root.has("tool_wish") && fatherId != null) {
+                extractAndRecordToolWish(root.get("tool_wish"), fatherId, originalMessage, context);
+            }
+            
             return new AiDecision(tool, parameters, response);
             
         } catch (JsonProcessingException e) {
             log.warn("Failed to parse AI response as JSON: {}", content, e);
             return AiDecision.fallback();
         }
+    }
+    
+    /**
+     * Extract and record a tool wish from the AI response.
+     * 
+     * <p>When the AI identifies a user need that doesn't match any existing tool,
+     * it can suggest a new tool via the tool_wish field. This enables ML-style
+     * learning where we track what capabilities users are asking for.</p>
+     */
+    private void extractAndRecordToolWish(JsonNode wishNode, UUID fatherId, String originalMessage, AgentContext context) {
+        try {
+            String suggestedName = wishNode.has("suggested_name") 
+                ? wishNode.get("suggested_name").asText() : null;
+            String userNeed = wishNode.has("user_need") 
+                ? wishNode.get("user_need").asText() : null;
+            String suggestedCapability = wishNode.has("suggested_capability") 
+                ? wishNode.get("suggested_capability").asText() : null;
+            
+            if (suggestedName != null && !suggestedName.isBlank()) {
+                // Get the database father ID (Long) from context if available
+                Long fatherDbId = getFatherDbId(context);
+                
+                toolWishlistService.recordWish(
+                    suggestedName,
+                    userNeed,
+                    suggestedCapability,
+                    originalMessage,
+                    fatherDbId
+                );
+                log.info("Recorded tool wish: name={}, fatherId={}", suggestedName, fatherDbId);
+            }
+        } catch (Exception e) {
+            // Don't fail the main flow if wish recording fails
+            log.warn("Failed to record tool wish: {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * Get the father's database ID (Long) from the context.
+     */
+    private Long getFatherDbId(AgentContext context) {
+        if (context != null && context.systemState() != null && context.systemState().fatherProfile() != null) {
+            return context.systemState().fatherProfile().fatherId();
+        }
+        return null;
     }
     
     private String truncate(String text, int maxLength) {
@@ -387,7 +440,7 @@ public class CoachingAgent {
             // Make the second AI call
             AiProviderResponse retryResponse = callAiProvider(enhancedSystemPrompt, enhancedUserPrompt, fatherId);
             
-            return parseAiResponse(retryResponse.content());
+            return parseAiResponse(retryResponse.content(), fatherId, context.inboundMessage(), context);
             
         } catch (Exception e) {
             log.warn("Smart fallback failed for father {}: {}", fatherId, e.getMessage());

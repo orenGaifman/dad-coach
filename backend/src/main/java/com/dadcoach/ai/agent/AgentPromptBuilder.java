@@ -590,19 +590,41 @@ public class AgentPromptBuilder {
     
     /**
      * Build the tools section describing available tools.
+     * 
+     * <p>Uses the structured ToolMapping to provide the AI with:
+     * - Clear tool categories
+     * - User intent triggers for each tool
+     * - When to use / when not to use guidance
+     * - Tool wish mechanism for missing capabilities</p>
      */
     private String buildToolsSection(List<AgentTool> tools) {
         if (tools == null || tools.isEmpty()) {
             return "אין כלים זמינים כרגע.";
         }
         
-        return tools.stream()
-            .map(tool -> formatTool(tool))
-            .collect(Collectors.joining("\n\n"));
+        StringBuilder sb = new StringBuilder();
+        
+        // Use the structured tool mapping
+        sb.append(ToolMapping.generateToolMappingForPrompt());
+        
+        // Also include a quick reference of currently available tools
+        sb.append("\n## כלים זמינים עכשיו (רשימה מקוצרת)\n");
+        sb.append(tools.stream()
+            .map(this::formatToolQuickRef)
+            .collect(Collectors.joining("\n")));
+        
+        return sb.toString();
     }
     
     /**
-     * Format a single tool for the prompt.
+     * Format a single tool as a quick reference line.
+     */
+    private String formatToolQuickRef(AgentTool tool) {
+        return "- `" + tool.name() + "`: " + tool.description();
+    }
+    
+    /**
+     * Format a single tool for the prompt (legacy format, kept for compatibility).
      */
     private String formatTool(AgentTool tool) {
         return """
