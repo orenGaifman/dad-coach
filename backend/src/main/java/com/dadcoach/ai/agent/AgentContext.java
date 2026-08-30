@@ -24,6 +24,7 @@ import java.util.UUID;
  * @param conversationHistory recent messages for context
  * @param availableTools list of tools the AI can use in this state
  * @param availableSlots list of free time slots from Google Calendar (can be null/empty)
+ * @param stateGoal the proactive goal the AI should guide the user towards (can be null)
  */
 public record AgentContext(
     UUID fatherId,
@@ -34,7 +35,8 @@ public record AgentContext(
     SystemState systemState,
     List<ConversationTurn> conversationHistory,
     List<AgentTool> availableTools,
-    List<AvailableSlot> availableSlots
+    List<AvailableSlot> availableSlots,
+    StateGoal stateGoal
 ) {
     
     /**
@@ -283,6 +285,7 @@ public record AgentContext(
         private List<ConversationTurn> conversationHistory = List.of();
         private List<AgentTool> availableTools = List.of();
         private List<AvailableSlot> availableSlots = List.of();
+        private StateGoal stateGoal;
         
         public Builder fatherId(UUID fatherId) {
             this.fatherId = fatherId;
@@ -329,9 +332,14 @@ public record AgentContext(
             return this;
         }
         
+        public Builder stateGoal(StateGoal stateGoal) {
+            this.stateGoal = stateGoal;
+            return this;
+        }
+        
         public AgentContext build() {
             return new AgentContext(fatherId, fatherName, currentState, welcomeStep, inboundMessage, 
-                                    systemState, conversationHistory, availableTools, availableSlots);
+                                    systemState, conversationHistory, availableTools, availableSlots, stateGoal);
         }
     }
 }

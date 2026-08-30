@@ -49,6 +49,7 @@ public class CoachingAgent {
     private final SystemStateLoader systemStateLoader;
     private final ObjectMapper objectMapper;
     private final ToolWishlistService toolWishlistService;
+    private final StateGoalResolver stateGoalResolver;
     
     @Value("${ai.agent.model:claude-sonnet-5}")
     private String modelName;
@@ -62,7 +63,8 @@ public class CoachingAgent {
             ToolExecutor toolExecutor,
             SystemStateLoader systemStateLoader,
             ObjectMapper objectMapper,
-            ToolWishlistService toolWishlistService
+            ToolWishlistService toolWishlistService,
+            StateGoalResolver stateGoalResolver
     ) {
         this.aiProvider = aiProvider;
         this.promptBuilder = promptBuilder;
@@ -70,6 +72,7 @@ public class CoachingAgent {
         this.systemStateLoader = systemStateLoader;
         this.objectMapper = objectMapper;
         this.toolWishlistService = toolWishlistService;
+        this.stateGoalResolver = stateGoalResolver;
     }
     
     /**
@@ -116,7 +119,14 @@ public class CoachingAgent {
             // 4. Load available calendar slots (for smarter scheduling suggestions)
             List<com.dadcoach.systemstate.AvailableSlot> availableSlots = loadAvailableSlots(fatherId);
             
-            // 5. Build context
+            // 5. Resolve the proactive state goal (what the user should do next)
+            StateGoal stateGoal = stateGoalResolver.resolve(systemState);
+            log.info("Resolved state goal: type={}, priority={}, userIsOnTrack={}", 
+                stateGoal.priorityGoal() != null ? stateGoal.priorityGoal().type() : "NONE",
+                stateGoal.priorityGoal() != null ? stateGoal.priorityGoal().priority() : "NONE",
+                stateGoal.userIsOnTrack());
+            
+            // 6. Build context
             List<AgentTool> availableTools = getToolsForState(state, systemState);
             AgentContext context = AgentContext.builder()
                 .fatherId(fatherId)
@@ -128,6 +138,7 @@ public class CoachingAgent {
                 .conversationHistory(limitHistory(conversationHistory))
                 .availableTools(availableTools)
                 .availableSlots(availableSlots)
+                .stateGoal(stateGoal)
                 .build();
             
             // 6. Build prompts

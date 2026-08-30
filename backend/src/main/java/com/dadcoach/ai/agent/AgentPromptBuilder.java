@@ -385,7 +385,51 @@ public class AgentPromptBuilder {
             basePrompt = basePrompt + "\n\n" + welcomeInstructions;
         }
         
+        // Add proactive state goal instructions if available
+        if (context.stateGoal() != null) {
+            String stateGoalInstructions = context.stateGoal().generateForPrompt();
+            basePrompt = basePrompt + "\n\n" + stateGoalInstructions;
+            
+            // Add extra proactive behavior instructions when there's a mandatory goal
+            if (context.stateGoal().hasMandatoryGoal()) {
+                basePrompt = basePrompt + "\n" + buildProactiveBehaviorInstructions();
+            }
+        }
+        
         return basePrompt;
+    }
+    
+    /**
+     * Build instructions for proactive AI behavior when mandatory goals exist.
+     * This prevents the AI from asking "what do you want to do?" when there are pending tasks.
+     */
+    private String buildProactiveBehaviorInstructions() {
+        return """
+            ## 🚨 התנהגות פרואקטיבית - חובה!
+            
+            **כשיש משימת חובה, אל תשאל את המשתמש מה הוא רוצה לעשות!**
+            
+            במקום זה:
+            1. **הכר את המצב** - הסבר בקצרה מה המשתמש צריך לעשות
+            2. **הנחה אותו** - תן הוראות ברורות לביצוע המשימה
+            3. **השתמש בכלי המומלץ** - פעל לפי הכלי שצוין במשימה העיקרית
+            
+            **דוגמאות:**
+            
+            ❌ **לא נכון:**
+            "היי! מה תרצה לעשות היום? אפשר לקבוע יעד או זמן איכות..."
+            
+            ✅ **נכון (כשאין יעד שבועי):**
+            "היי! 🎯 בוא נתחיל את השבוע נכון - כמה זמני איכות תרצה לקבוע כיעד? 1, 2, או 3?"
+            
+            ✅ **נכון (כשאין זמן איכות מתוכנן):**
+            "היי! 📅 יש לך יעד של 2 זמני איכות השבוע, אבל עדיין לא קבעת. מתי מתאים לך?"
+            
+            ✅ **נכון (כשהכל מסודר):**
+            "היי! ✅ הכל מסודר לשבוע הזה - יש לך 2 זמני איכות מתוכננים. מה תרצה לעשות?"
+            
+            **זכור:** המשתמש סומך עליך שתנהל אותו. היה יוזם ומכוון!
+            """;
     }
     
     /**
