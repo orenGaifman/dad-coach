@@ -175,8 +175,17 @@ public class CoachingAgent {
             }
             // ═══════════════════════════════════════════════════════════════════════
             
-            // 8. Execute tool
-            AgentToolResult toolResult = toolExecutor.execute(decision.tool(), decision.parameters(), context);
+            // 8. Validate and execute tool
+            AgentToolResult toolResult;
+            if (!toolExecutor.canExecute(decision.tool())) {
+                log.warn("AI requested unknown tool: {}. Falling back to show_help.", decision.tool());
+                // Record the unknown tool as a wish for future development
+                recordUnknownToolWish(decision.tool(), inboundMessage, context);
+                // Fall back to show_help with a friendly message
+                toolResult = toolExecutor.execute("show_help", Map.of(), context);
+            } else {
+                toolResult = toolExecutor.execute(decision.tool(), decision.parameters(), context);
+            }
             
             // 9. Determine response message
             // For tools that generate URLs/links, ALWAYS use tool result (AI can't know the URL)
@@ -426,6 +435,29 @@ public class CoachingAgent {
             return context.systemState().fatherProfile().fatherId();
         }
         return null;
+    }
+    
+    /**
+     * Record an unknown tool that the AI tried to use.
+     * 
+     * <p>When the AI hallucinates a tool that doesn't exist, we record it as a wish.
+     * This helps identify patterns where we might need to add new tools.</p>
+     */
+    private void recordUnknownToolWish(String unknownTool, String userMessage, AgentContext context) {
+        try {
+            Long fatherDbId = getFatherDbId(context);
+            toolWishlistService.recordWish(
+                unknownTool,
+                "AI tried to use non-existent tool",
+                "Unknown - AI hallucinated this tool name",
+                userMessage,
+                fatherDbId
+            );
+            log.info("Recorded unknown tool as wish: name={}, fatherId={}", unknownTool, fatherDbId);
+        } catch (Exception e) {
+            // Don't fail the main flow if wish recording fails
+            log.warn("Failed to record unknown tool wish: {}", e.getMessage());
+        }
     }
     
     private String truncate(String text, int maxLength) {

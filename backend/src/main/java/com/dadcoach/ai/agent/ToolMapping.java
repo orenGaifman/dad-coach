@@ -680,6 +680,25 @@ public final class ToolMapping {
     // ─── Utility Methods ─────────────────────────────────────────────────────
     
     /**
+     * Get all supported tool names as a Set.
+     * 
+     * <p>This is the single source of truth for which tools are available.
+     * ToolExecutorImpl should use this instead of maintaining its own list.</p>
+     */
+    public static Set<String> getSupportedToolNames() {
+        return getAllTools().stream()
+            .map(ToolDefinition::toolName)
+            .collect(java.util.stream.Collectors.toSet());
+    }
+    
+    /**
+     * Check if a tool name is supported.
+     */
+    public static boolean isToolSupported(String toolName) {
+        return getSupportedToolNames().contains(toolName);
+    }
+    
+    /**
      * Find the best matching tool for a user message based on intent triggers.
      * Returns null if no clear match found.
      */

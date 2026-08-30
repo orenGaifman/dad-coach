@@ -31,31 +31,15 @@ import java.util.UUID;
  * 
  * <p>This class acts as a coordinator between the AI agent's tool selections
  * and the actual business services that perform the operations.</p>
+ * 
+ * <p>The list of supported tools is defined in {@link ToolMapping} as the single
+ * source of truth. This class uses {@link ToolMapping#getSupportedToolNames()}
+ * to validate tool names.</p>
  */
 @Component
 public class ToolExecutorImpl implements ToolExecutor {
     
     private static final Logger log = LoggerFactory.getLogger(ToolExecutorImpl.class);
-    
-    private static final Set<String> SUPPORTED_TOOLS = Set.of(
-        "schedule_quality_time",
-        "reschedule_quality_time", 
-        "cancel_quality_time",
-        "show_available_slots",
-        "get_activity_ideas",
-        "complete_quality_time",
-        "show_progress",
-        "get_dashboard_link",
-        "greet",
-        "show_help",
-        "clarify",
-        "acknowledge",  // NEW: for acknowledging user messages intelligently
-        // Weekly goal tools
-        "show_weekly_summary",
-        "set_weekly_goal",
-        "get_weekly_goal_status"
-        // NOTE: connect_calendar removed - calendar connection is handled during web onboarding
-    );
     
     private static final Duration DEFAULT_QUALITY_TIME_DURATION = Duration.ofMinutes(30);
     private static final ZoneId ISRAEL_ZONE = AppConstants.DEFAULT_ZONE_ID;
@@ -82,7 +66,7 @@ public class ToolExecutorImpl implements ToolExecutor {
     
     @Override
     public boolean canExecute(String toolName) {
-        return SUPPORTED_TOOLS.contains(toolName);
+        return ToolMapping.isToolSupported(toolName);
     }
     
     @Override
