@@ -207,40 +207,102 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
     /**
      * Loads the current weekly goal information for the father.
      * 
+     * <p>Only returns a goal if it's for the CURRENT week (based on weekStartDate).
+     * If an ACTIVE goal exists from a previous week, it is NOT returned - instead
+     * noGoal() is returned to trigger the new week flow.</p>
+     * 
+     * <p>Also loads last week's summary if no current week goal exists, to enable
+     * the AI to show a weekly recap before asking to set a new goal.</p>
+     * 
      * @param father the father whose weekly goal to load
-     * @return WeeklyGoalInfo, or noGoal() if no goal is set for this week
+     * @return WeeklyGoalInfo for CURRENT week only, or noGoal() if no goal is set for this week
      */
     private SystemState.WeeklyGoalInfo loadWeeklyGoalInfo(Father father) {
         try {
             // Get current week's start date (Sunday)
             LocalDate today = LocalDate.now();
-            LocalDate weekStart = today.minusDays(today.getDayOfWeek().getValue() % 7);
+            LocalDate currentWeekStart = today.minusDays(today.getDayOfWeek().getValue() % 7);
+            LocalDate lastWeekStart = currentWeekStart.minusWeeks(1);
             
-            // Find active weekly goal for current week
-            Optional<WeeklyGoal> activeGoal = weeklyGoalRepository.findByFatherIdAndStatus(
-                    father.getId(), WeeklyGoalStatus.ACTIVE);
+            // Load last week's summary (for weekly recap)
+            SystemState.LastWeekSummary lastWeekSummary = loadLastWeekSummary(father, lastWeekStart);
             
-            if (activeGoal.isEmpty()) {
-                // Also check for the current week's goal even if not ACTIVE
-                activeGoal = weeklyGoalRepository.findByFatherIdAndWeekStartDate(
-                        father.getId(), weekStart);
+            // ONLY look for goal for the CURRENT week - not any ACTIVE goal from previous weeks
+            Optional<WeeklyGoal> currentWeekGoal = weeklyGoalRepository.findByFatherIdAndWeekStartDate(
+                    father.getId(), currentWeekStart);
+            
+            if (currentWeekGoal.isPresent()) {
+                WeeklyGoal goal = currentWeekGoal.get();
+                // Only return if it's actually for current week (double check)
+                if (goal.getWeekStartDate().equals(currentWeekStart)) {
+                    return new SystemState.WeeklyGoalInfo(
+                            true,
+                            goal.getTargetHours(),
+                            goal.getCompletedCount(),
+                            goal.getScheduledCount(),
+                            goal.getWeekStartDate(),
+                            lastWeekSummary
+                    );
+                }
             }
             
-            if (activeGoal.isPresent()) {
-                WeeklyGoal goal = activeGoal.get();
-                return new SystemState.WeeklyGoalInfo(
-                        true,
-                        goal.getTargetHours(),  // Using targetHours as number of quality times
-                        goal.getCompletedCount(),
-                        goal.getScheduledCount(),
-                        goal.getWeekStartDate()
-                );
-            }
+            // No goal for current week - return noGoal with last week summary
+            log.debug("No weekly goal found for current week {} for father {}", 
+                    currentWeekStart, father.getId());
             
+            if (lastWeekSummary != null) {
+                return SystemState.WeeklyGoalInfo.noGoalWithLastWeek(lastWeekSummary);
+            }
             return SystemState.WeeklyGoalInfo.noGoal();
         } catch (Exception e) {
             log.warn("Failed to load weekly goal info for father {}: {}", father.getId(), e.getMessage());
             return SystemState.WeeklyGoalInfo.noGoal();
+        }
+    }
+    
+    /**
+     * Loads the summary of last week's goal (if any).
+     * 
+     * @param father the father
+     * @param lastWeekStart start date of last week
+     * @return LastWeekSummary or null if no last week goal
+     */
+    private SystemState.LastWeekSummary loadLastWeekSummary(Father father, LocalDate lastWeekStart) {
+        try {
+            // First try to find last week's specific goal
+            Optional<WeeklyGoal> lastWeekGoal = weeklyGoalRepository.findByFatherIdAndWeekStartDate(
+                    father.getId(), lastWeekStart);
+            
+            if (lastWeekGoal.isPresent()) {
+                WeeklyGoal goal = lastWeekGoal.get();
+                boolean goalMet = goal.getActualMinutes() >= (goal.getTargetHours() * 60);
+                return new SystemState.LastWeekSummary(
+                        goal.getTargetHours(),
+                        goal.getActualMinutes(),
+                        goal.getCompletedCount(),
+                        goalMet,
+                        goal.getWeekStartDate()
+                );
+            }
+            
+            // If no specific last week goal, try to find the most recent completed/missed goal
+            Optional<WeeklyGoal> recentGoal = weeklyGoalRepository.findLastCompletedOrMissedGoal(father.getId());
+            if (recentGoal.isPresent()) {
+                WeeklyGoal goal = recentGoal.get();
+                boolean goalMet = goal.getStatus() == WeeklyGoalStatus.COMPLETED;
+                return new SystemState.LastWeekSummary(
+                        goal.getTargetHours(),
+                        goal.getActualMinutes(),
+                        goal.getCompletedCount(),
+                        goalMet,
+                        goal.getWeekStartDate()
+                );
+            }
+            
+            return null;
+        } catch (Exception e) {
+            log.warn("Failed to load last week summary for father {}: {}", father.getId(), e.getMessage());
+            return null;
         }
     }
 

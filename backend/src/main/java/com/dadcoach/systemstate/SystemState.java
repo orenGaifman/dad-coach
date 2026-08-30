@@ -216,23 +216,32 @@ public record SystemState(
      * Weekly goal information for the current week.
      * 
      * @param hasGoal whether a weekly goal is set for this week
-     * @param targetQualityTimes target number of quality times for the week
+     * @param targetQualityTimes target number of quality times for the week (hours)
      * @param completedQualityTimes number of quality times completed this week
      * @param scheduledQualityTimes number of quality times scheduled this week
      * @param weekStartDate the start date of the current week (Sunday)
+     * @param lastWeekSummary summary of last week's goal (null if no previous goal)
      */
     public record WeeklyGoalInfo(
         boolean hasGoal,
         int targetQualityTimes,
         int completedQualityTimes,
         int scheduledQualityTimes,
-        LocalDate weekStartDate
+        LocalDate weekStartDate,
+        LastWeekSummary lastWeekSummary
     ) {
         /**
          * Creates a WeeklyGoalInfo indicating no goal is set.
          */
         public static WeeklyGoalInfo noGoal() {
-            return new WeeklyGoalInfo(false, 0, 0, 0, null);
+            return new WeeklyGoalInfo(false, 0, 0, 0, null, null);
+        }
+        
+        /**
+         * Creates a WeeklyGoalInfo indicating no goal is set, but with last week summary.
+         */
+        public static WeeklyGoalInfo noGoalWithLastWeek(LastWeekSummary lastWeek) {
+            return new WeeklyGoalInfo(false, 0, 0, 0, null, lastWeek);
         }
         
         /**
@@ -240,6 +249,38 @@ public record SystemState(
          */
         public int remainingToGoal() {
             return Math.max(0, targetQualityTimes - completedQualityTimes);
+        }
+        
+        /**
+         * Returns true if this is the start of a new week and there's a previous week's data.
+         */
+        public boolean isNewWeekWithPreviousData() {
+            return !hasGoal && lastWeekSummary != null;
+        }
+    }
+    
+    /**
+     * Summary of last week's goal performance.
+     * Used to show the weekly summary before setting a new goal.
+     * 
+     * @param targetHours the target hours from last week
+     * @param actualMinutes actual minutes completed last week
+     * @param completedCount number of quality times completed
+     * @param goalMet whether the goal was met
+     * @param weekStartDate start date of last week
+     */
+    public record LastWeekSummary(
+        int targetHours,
+        int actualMinutes,
+        int completedCount,
+        boolean goalMet,
+        LocalDate weekStartDate
+    ) {
+        /**
+         * Returns the actual hours completed (rounded to 1 decimal).
+         */
+        public double actualHours() {
+            return Math.round(actualMinutes / 6.0) / 10.0; // Round to 1 decimal
         }
     }
     
