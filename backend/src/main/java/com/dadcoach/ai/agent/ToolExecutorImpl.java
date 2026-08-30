@@ -540,7 +540,14 @@ public class ToolExecutorImpl implements ToolExecutor {
     }
     
     private AgentToolResult executeClarify(Map<String, Object> params, AgentContext context) {
-        String question = getStringParam(params, "question", "לא הבנתי. אפשר להסביר שוב?");
+        // Get the question from params, with an improved default that offers helpful options
+        String defaultQuestion = "היי! 😊 אשמח לעזור.\n\n" +
+            "אפשר לכתוב:\n" +
+            "🎯 \"קבע זמן\" - לקבוע זמן איכות\n" +
+            "💡 \"רעיונות\" - לקבל רעיונות לפעילויות\n" +
+            "📊 \"התקדמות\" - לראות את ההתקדמות שלך\n\n" +
+            "מה תרצה לעשות?";
+        String question = getStringParam(params, "question", defaultQuestion);
         return AgentToolResult.success("clarify", question, params);
     }
     

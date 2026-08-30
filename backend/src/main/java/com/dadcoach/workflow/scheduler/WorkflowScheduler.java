@@ -357,7 +357,14 @@ public class WorkflowScheduler {
      * <p>Key differences from morning reminder:
      * <ul>
      *   <li>Morning reminder: Sent at 8 AM local time, just sends a message</li>
-     *   <li>Pre-QT reminder: Sent 1 hour before QT, transitions state to QUALITY_TIME_REMINDER</li>
+     *   <li>Pre-QT reminder: Sent ~1 hour before QT, transitions state to QUALITY_TIME_REMINDER</li>
+     * </ul>
+     * </p>
+     * 
+     * <p>Time window: 45-75 minutes before QT start. This ensures:
+     * <ul>
+     *   <li>Reminder is sent approximately 1 hour before (not too early, not too late)</li>
+     *   <li>30-minute window covers the 15-minute job interval with margin</li>
      * </ul>
      * </p>
      * 
@@ -380,17 +387,19 @@ public class WorkflowScheduler {
             int batchSize = getBatchSize();
             
             try {
-                // Find Quality Times starting within the next 30-90 minutes
-                // (window allows for 15-minute job interval margin)
+                // Find Quality Times starting within the next 45-75 minutes
+                // This ensures reminder goes out ~1 hour before QT starts
+                // Window: 45min (earliest) to 75min (latest) - covers 30min span for 15min job interval
+                // Example: Job at 10:00 finds QT from 10:45-11:15, reminder sent ~1h before
                 Instant now = Instant.now();
-                Instant windowStart = now.plus(30, java.time.temporal.ChronoUnit.MINUTES);
-                Instant windowEnd = now.plus(90, java.time.temporal.ChronoUnit.MINUTES);
+                Instant windowStart = now.plus(45, java.time.temporal.ChronoUnit.MINUTES);
+                Instant windowEnd = now.plus(75, java.time.temporal.ChronoUnit.MINUTES);
                 
                 List<QualityTime> approachingQualityTimes = qualityTimeRepository
                         .findApproachingWithoutPreQtReminder(windowStart, windowEnd);
                 
-                log.info("Found {} Quality Times approaching that need pre-QT reminder", 
-                        approachingQualityTimes.size());
+                log.info("Found {} Quality Times approaching in {}-{} minute window that need pre-QT reminder", 
+                        approachingQualityTimes.size(), 45, 75);
                 
                 // Process in batches
                 for (int i = 0; i < approachingQualityTimes.size(); i += batchSize) {
@@ -1070,6 +1079,100 @@ public class WorkflowScheduler {
                 .build();
         
         return fallbackMessages.getProcessed(MessageType.INACTIVITY_NUDGE, context);
+    }
+
+    /**
+     * Weekly goal setting prompt job that runs every Sunday at 8 AM Israel time.
+     * 
+     * <p>This job prompts fathers who don't have a weekly goal set for the new week
+     * to set their goal. It sends a WhatsApp message asking them to set their target.</p>
+     * 
+     * <p>The cron expression "0 0 5 * * SUN" runs at 5:00 AM UTC (8:00 AM Israel time).</p>
+     * 
+     * <p>The job is idempotent - it only targets fathers without an active weekly goal
+     * for the current week.</p>
+     */
+    @Scheduled(cron = "${dadcoach.scheduler.weekly-goal-prompt-cron:0 0 5 * * SUN}")
+    @Transactional
+    public void promptWeeklyGoalSetting() {
+        try (WorkflowLoggingContext ctx = WorkflowLoggingContext.forJob("weekly_goal_prompt")) {
+            log.info("Starting weekly goal prompt job");
+            SchedulerJobLog jobLog = new SchedulerJobLog("weekly_goal_prompt");
+            jobLogRepository.save(jobLog);
+            
+            int processedCount = 0;
+            int errorCount = 0;
+            int batchSize = getBatchSize();
+            
+            try {
+                // Find all active fathers who don't have a weekly goal for this week
+                List<Father> fathersNeedingGoal = fatherRepository.findActiveFathersWithoutWeeklyGoal(
+                        weeklyGoalService.getCurrentWeekStart());
+                
+                log.info("Found {} fathers without weekly goal for this week", fathersNeedingGoal.size());
+                
+                // Process in batches
+                for (int i = 0; i < fathersNeedingGoal.size(); i += batchSize) {
+                    int batchEnd = Math.min(i + batchSize, fathersNeedingGoal.size());
+                    List<Father> batch = fathersNeedingGoal.subList(i, batchEnd);
+                    
+                    for (Father father : batch) {
+                        try {
+                            sendWeeklyGoalPrompt(father);
+                            processedCount++;
+                            jobLog.incrementProcessed();
+                        } catch (Exception e) {
+                            errorCount++;
+                            jobLog.incrementErrors();
+                            log.error("Error sending weekly goal prompt to father {}: {}", 
+                                    father.getId(), e.getMessage(), e);
+                        }
+                    }
+                    
+                    log.debug("Processed batch {}-{} of {} weekly goal prompts", 
+                            i + 1, batchEnd, fathersNeedingGoal.size());
+                }
+                
+                jobLog.markCompleted(processedCount, errorCount);
+                log.info("Weekly goal prompt job completed: sent={}, errors={}", 
+                        processedCount, errorCount);
+                
+            } catch (Exception e) {
+                jobLog.markFailed(processedCount, errorCount + 1);
+                log.error("Weekly goal prompt job failed: {}", e.getMessage(), e);
+            } finally {
+                jobLogRepository.save(jobLog);
+            }
+        }
+    }
+    
+    /**
+     * Sends a weekly goal setting prompt to a father.
+     */
+    private void sendWeeklyGoalPrompt(Father father) {
+        String locale = father.getLocale() != null ? father.getLocale() : "en";
+        String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
+        String fatherName = father.getDisplayName() != null ? father.getDisplayName() : "";
+        
+        // Build message context
+        MessageContext context = MessageContext.builder()
+                .messageType(MessageType.WEEKLY_GOAL_PROMPT)
+                .fatherName(fatherName)
+                .locale(locale)
+                .timezone(timezone)
+                .build();
+        
+        // Generate message using fallback templates
+        String message = fallbackMessages.getProcessed(MessageType.WEEKLY_GOAL_PROMPT, context);
+        
+        try {
+            whatsAppService.sendText(father.getPhone(), message);
+            messageLogService.logOutbound(father.getId(), message);
+            log.debug("Sent weekly goal prompt to father {}", father.getId());
+        } catch (Exception e) {
+            log.error("Failed to send weekly goal prompt: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
     /**

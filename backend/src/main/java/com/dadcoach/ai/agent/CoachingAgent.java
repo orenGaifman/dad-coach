@@ -181,7 +181,13 @@ public class CoachingAgent {
             } else if (toolResult.responseMessage() != null && !toolResult.responseMessage().isEmpty()) {
                 responseMessage = toolResult.responseMessage();
             } else {
-                responseMessage = "לא הבנתי. אפשר לנסות שוב?";
+                // Improved fallback - offer helpful options instead of generic error
+                responseMessage = "היי! 😊 אשמח לעזור.\n\n" +
+                    "אפשר לכתוב:\n" +
+                    "🎯 \"קבע זמן\" - לקבוע זמן איכות\n" +
+                    "💡 \"רעיונות\" - לקבל רעיונות לפעילויות\n" +
+                    "📊 \"התקדמות\" - לראות את ההתקדמות שלך\n\n" +
+                    "מה תרצה לעשות?";
             }
             
             // 10. Return response
@@ -512,8 +518,48 @@ public class CoachingAgent {
             return buildStatusSummary(context);
         }
         
-        // Default - give a status summary and ask what they want to do
-        return null; // Let the original clarify flow handle it
+        // Default - instead of generic "I don't understand", offer helpful options
+        // This is the KEY FIX for Bug 5: never return null, always give helpful context
+        return buildHelpfulFallbackResponse(context);
+    }
+    
+    /**
+     * Build a helpful fallback response instead of generic "I don't understand".
+     * This provides context-aware options based on the user's current state.
+     */
+    private String buildHelpfulFallbackResponse(AgentContext context) {
+        SystemState state = context.systemState();
+        StringBuilder sb = new StringBuilder();
+        
+        sb.append("היי! 😊 אשמח לעזור.\n\n");
+        
+        // Show what we can do based on context
+        sb.append("אלו הדברים שאני יכול לעזור בהם:\n\n");
+        
+        // Check if has scheduled QT
+        if (state != null && state.getNextScheduledQualityTime() != null) {
+            var qt = state.getNextScheduledQualityTime();
+            sb.append("📅 יש לך זמן איכות מתוכנן עם ").append(qt.childName()).append("\n");
+            sb.append("   • לשנות את הזמן? כתוב \"שנה זמן\"\n");
+            sb.append("   • רעיונות לפעילויות? כתוב \"רעיונות\"\n\n");
+        } else {
+            sb.append("🎯 לקבוע זמן איכות? כתוב \"קבע זמן\"\n");
+            sb.append("💡 רעיונות לפעילויות? כתוב \"רעיונות\"\n\n");
+        }
+        
+        // Weekly goal status
+        if (state != null && state.weeklyGoalInfo() != null && state.weeklyGoalInfo().hasGoal()) {
+            var goal = state.weeklyGoalInfo();
+            sb.append("📊 התקדמות השבוע: ")
+              .append(goal.completedQualityTimes())
+              .append("/")
+              .append(goal.targetQualityTimes())
+              .append(" זמני איכות הושלמו\n\n");
+        }
+        
+        sb.append("מה תרצה לעשות? 🙂");
+        
+        return sb.toString();
     }
     
     /**
@@ -648,7 +694,14 @@ public class CoachingAgent {
         String response
     ) {
         public static AiDecision fallback() {
-            return new AiDecision("clarify", Map.of("question", "לא הבנתי. אפשר להסביר שוב?"), null);
+            // Improved fallback message - offers helpful options instead of generic "I don't understand"
+            return new AiDecision("clarify", Map.of("question", 
+                "היי! 😊 אשמח לעזור.\n\n" +
+                "אפשר לכתוב:\n" +
+                "🎯 \"קבע זמן\" - לקבוע זמן איכות\n" +
+                "💡 \"רעיונות\" - לקבל רעיונות לפעילויות\n" +
+                "📊 \"התקדמות\" - לראות את ההתקדמות שלך\n\n" +
+                "מה תרצה לעשות?"), null);
         }
     }
     

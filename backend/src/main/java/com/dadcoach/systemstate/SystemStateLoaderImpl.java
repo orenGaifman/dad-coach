@@ -455,19 +455,50 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
 
     /**
      * Loads Quality Time events for the father.
+     * 
+     * <p>For SCHEDULED quality times that are linked to Google Calendar, this method
+     * validates that the calendar event still exists. If a QT has a googleCalendarEventId
+     * but the event no longer exists in the calendar, it is marked as CANCELLED_BY_SYNC
+     * to prevent the AI from telling users they have QT when they deleted it from calendar.</p>
+     * 
+     * <p>Implements Bug Fix #4: AI says QT exists when calendar is empty</p>
      */
     private List<SystemState.QualityTimeEvent> loadQualityTimeEvents(Father father) {
         List<QualityTime> qualityTimes = qualityTimeRepository.findByFatherIdOrderByScheduledStartDesc(father.getId());
 
+        // If father has Google Calendar connected, load calendar events for validation
+        Set<String> calendarEventIds = new java.util.HashSet<>();
+        if (father.hasGoogleCalendarConfigured()) {
+            try {
+                List<SystemState.CalendarEvent> calendarEvents = loadCalendarEvents(father, DEFAULT_DAYS_AHEAD);
+                for (SystemState.CalendarEvent event : calendarEvents) {
+                    if (event.eventId() != null) {
+                        calendarEventIds.add(event.eventId());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Could not load calendar events for QT validation: {}", e.getMessage());
+                // Continue without validation - better to show possibly stale QT than hide valid ones
+            }
+        }
+
         return qualityTimes.stream()
-                .map(qt -> mapToQualityTimeEvent(qt, father))
+                .map(qt -> mapToQualityTimeEvent(qt, father, calendarEventIds))
                 .collect(Collectors.toList());
     }
 
     /**
      * Maps a QualityTime entity to a QualityTimeEvent record.
+     * 
+     * <p>If the QT has a Google Calendar event ID but that event no longer exists
+     * in the calendar, the status is changed to "CANCELLED_BY_SYNC" to indicate
+     * the event was deleted from calendar.</p>
+     * 
+     * @param qt the QualityTime entity
+     * @param father the father (for context)
+     * @param calendarEventIds set of existing Google Calendar event IDs
      */
-    private SystemState.QualityTimeEvent mapToQualityTimeEvent(QualityTime qt, Father father) {
+    private SystemState.QualityTimeEvent mapToQualityTimeEvent(QualityTime qt, Father father, Set<String> calendarEventIds) {
         String childName = "Unknown";
 
         // Get child name
@@ -482,13 +513,36 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
             log.debug("Could not load child name for quality time {}", qt.getId());
         }
 
+        // Determine the effective status
+        String effectiveStatus = qt.getStatus().name();
+        
+        // If QT is SCHEDULED and has a Google Calendar event ID, verify it still exists
+        if ("SCHEDULED".equals(effectiveStatus) 
+                && qt.getGoogleCalendarEventId() != null 
+                && !qt.getGoogleCalendarEventId().isEmpty()
+                && !calendarEventIds.isEmpty()  // Only validate if we have calendar data
+                && !calendarEventIds.contains(qt.getGoogleCalendarEventId())) {
+            
+            log.info("QT {} has calendar event {} but event not found in calendar - marking as CANCELLED_BY_SYNC",
+                    qt.getId(), qt.getGoogleCalendarEventId());
+            effectiveStatus = "CANCELLED_BY_SYNC";
+            
+            // Also update the DB to prevent repeated mismatches
+            try {
+                qt.setStatus(com.dadcoach.qualitytime.QualityTimeStatus.CANCELLED);
+                qualityTimeRepository.save(qt);
+            } catch (Exception e) {
+                log.warn("Could not update QT status to CANCELLED: {}", e.getMessage());
+            }
+        }
+
         return new SystemState.QualityTimeEvent(
                 qt.getId(),
                 qt.getChildId(),
                 childName,
                 qt.getScheduledStart(),
                 qt.getScheduledEnd(),
-                qt.getStatus().name(),
+                effectiveStatus,
                 qt.getGoogleCalendarEventId(),
                 qt.getCompletedAt(),
                 qt.getCompletionNotes()

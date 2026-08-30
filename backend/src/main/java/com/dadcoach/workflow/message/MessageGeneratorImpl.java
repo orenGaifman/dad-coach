@@ -415,6 +415,10 @@ public class MessageGeneratorImpl implements MessageGenerator {
                 
             case COACHING_PAUSED -> "Let them know we're here when they're ready to continue. " +
                 "Be supportive and understanding. Leave the door open for their return.";
+                
+            case WEEKLY_GOAL_PROMPT -> "Prompt the father to set their weekly Quality Time goal. " +
+                "A new week is starting - ask how many sessions they want to aim for. " +
+                "Be encouraging and motivating. Ask them to reply with a number.";
         };
     }
 

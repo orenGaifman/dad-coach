@@ -98,4 +98,24 @@ public interface FatherRepository extends JpaRepository<Father, Long> {
            "AND f.currentWorkflowState != 'INACTIVITY_NUDGE' " +
            "AND f.currentWorkflowState IN ('WAITING', 'SCHEDULE_QUALITY_TIME', 'QUALITY_TIME_FOLLOW_UP', 'SET_WEEKLY_GOAL')")
     List<Father> findInactiveFathersForNudge(@Param("cutoffTime") Instant lastInteractionBefore);
+
+    // ─── Weekly Goal Query Methods ───────────────────────────────────────────
+
+    /**
+     * Find active fathers who don't have a weekly goal set for the given week.
+     * Used by the Sunday 8am weekly goal prompt scheduler.
+     * 
+     * <p>Finds fathers who:
+     * <ul>
+     *   <li>Have status ACTIVE</li>
+     *   <li>Don't have an existing weekly goal for the specified week start date</li>
+     * </ul>
+     * </p>
+     * 
+     * @param weekStart the start date of the week (typically Sunday or Monday)
+     * @return list of active fathers without a weekly goal for that week
+     */
+    @Query("SELECT f FROM Father f WHERE f.status = 'ACTIVE' " +
+           "AND NOT EXISTS (SELECT wg FROM WeeklyGoal wg WHERE wg.fatherId = f.id AND wg.weekStart = :weekStart)")
+    List<Father> findActiveFathersWithoutWeeklyGoal(@Param("weekStart") java.time.LocalDate weekStart);
 }

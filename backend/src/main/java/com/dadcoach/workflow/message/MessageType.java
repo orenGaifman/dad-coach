@@ -279,7 +279,19 @@ public enum MessageType {
      * 
      * <p>Context required: fatherName</p>
      */
-    COACHING_PAUSED("coaching_paused");
+    COACHING_PAUSED("coaching_paused"),
+    
+    // ─── Weekly Goal Messages ───────────────────────────────────────────────
+    
+    /**
+     * Sunday morning prompt asking father to set their weekly Quality Time goal.
+     * Sent at 8:00 AM Israel time to fathers who don't have a goal for the new week.
+     * 
+     * <p>Context required: fatherName, childName (optional)</p>
+     * 
+     * @see WorkflowState#SET_WEEKLY_GOAL
+     */
+    WEEKLY_GOAL_PROMPT("weekly_goal_prompt");
     
     private final String templateKey;
     

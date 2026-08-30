@@ -445,6 +445,10 @@ public class FallbackMessages {
             case COACHING_PAUSED -> isHebrew
                 ? "{fatherName}, אני כאן כשתרצה לחזור. 🤗\n\nפשוט שלח הודעה ונמשיך מאיפה שהפסקנו!"
                 : "{fatherName}, I'm here when you're ready to continue. 🤗\n\nJust send a message and we'll pick up where we left off!";
+                
+            case WEEKLY_GOAL_PROMPT -> isHebrew
+                ? "בוקר טוב {fatherName}! 🌅\n\nשבוע חדש מתחיל! כמה מפגשי זמן איכות עם {childName} אתה שואף להשלים השבוע?\n\nשלח מספר (למשל: 2 או 3) לקביעת היעד השבועי שלך."
+                : "Good morning {fatherName}! 🌅\n\nA new week is starting! How many Quality Time sessions with {childName} are you aiming for this week?\n\nReply with a number (e.g., 2 or 3) to set your weekly goal.";
         };
     }
     
