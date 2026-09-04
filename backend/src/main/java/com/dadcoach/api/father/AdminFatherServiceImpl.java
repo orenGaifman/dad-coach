@@ -14,6 +14,7 @@ import com.dadcoach.onboarding.provisioning.AiProfileRepository;
 import com.dadcoach.onboarding.provisioning.CommunicationPreferenceRepository;
 import com.dadcoach.onboarding.provisioning.FamilyRepository;
 import com.dadcoach.onboarding.provisioning.LanguagePreferenceRepository;
+import com.dadcoach.workspace.commitment.QualityTimeCommitmentRepository;
 import com.dadcoach.workspace.magiclink.MagicLinkService;
 
 import org.slf4j.Logger;
@@ -46,6 +47,7 @@ public class AdminFatherServiceImpl implements AdminFatherService {
     private final AiProfileRepository aiProfileRepository;
     private final ActivationRecordRepository activationRecordRepository;
     private final MagicLinkService magicLinkService;
+    private final QualityTimeCommitmentRepository qualityTimeCommitmentRepository;
 
     public AdminFatherServiceImpl(
             FatherRepository fatherRepository,
@@ -58,7 +60,8 @@ public class AdminFatherServiceImpl implements AdminFatherService {
             CommunicationPreferenceRepository communicationPreferenceRepository,
             AiProfileRepository aiProfileRepository,
             ActivationRecordRepository activationRecordRepository,
-            MagicLinkService magicLinkService) {
+            MagicLinkService magicLinkService,
+            QualityTimeCommitmentRepository qualityTimeCommitmentRepository) {
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.goalRepository = goalRepository;
@@ -70,6 +73,7 @@ public class AdminFatherServiceImpl implements AdminFatherService {
         this.aiProfileRepository = aiProfileRepository;
         this.activationRecordRepository = activationRecordRepository;
         this.magicLinkService = magicLinkService;
+        this.qualityTimeCommitmentRepository = qualityTimeCommitmentRepository;
     }
 
     @Override
@@ -111,31 +115,34 @@ public class AdminFatherServiceImpl implements AdminFatherService {
         // 1. Delete memories (must be deleted before father due to FK constraint)
         memoryRepository.deleteByFatherId(fatherId);
         
-        // 2. Delete children
+        // 2. Delete quality time commitments (must be deleted before children due to FK constraint on child_id)
+        qualityTimeCommitmentRepository.deleteByFatherId(fatherId);
+        
+        // 3. Delete children
         childRepository.deleteByFatherId(fatherId);
         
-        // 3. Delete goals
+        // 4. Delete goals
         goalRepository.deleteByFatherId(fatherId);
         
-        // 4. Delete communication endpoints
+        // 5. Delete communication endpoints
         communicationEndpointRepository.deleteByFatherId(fatherUuid);
         
-        // 5. Delete family
+        // 6. Delete family
         familyRepository.deleteByFatherId(fatherUuid);
         
-        // 6. Delete language preference
+        // 7. Delete language preference
         languagePreferenceRepository.deleteByFatherId(fatherUuid);
         
-        // 7. Delete communication preference
+        // 8. Delete communication preference
         communicationPreferenceRepository.deleteByFatherId(fatherUuid);
         
-        // 8. Delete AI profile
+        // 9. Delete AI profile
         aiProfileRepository.deleteByFatherId(fatherUuid);
         
-        // 9. Delete activation record
+        // 10. Delete activation record
         activationRecordRepository.deleteByFatherId(fatherUuid);
         
-        // 10. Finally delete the father
+        // 11. Finally delete the father
         fatherRepository.delete(father);
         
         log.info("Deleted father and all related data: id={}", fatherId);

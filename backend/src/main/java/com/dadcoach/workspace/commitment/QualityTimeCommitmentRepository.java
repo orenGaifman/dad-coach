@@ -80,4 +80,10 @@ public interface QualityTimeCommitmentRepository extends JpaRepository<QualityTi
            "AND c.status = 'COMPLETED' ORDER BY c.completedAt DESC LIMIT :limit")
     List<QualityTimeCommitment> findRecentCompleted(@Param("fatherId") Long fatherId, 
                                                      @Param("limit") int limit);
+
+    /**
+     * Delete all commitments for a father.
+     * This must be called before deleting children due to FK constraint.
+     */
+    void deleteByFatherId(Long fatherId);
 }
