@@ -146,7 +146,13 @@ public class QualityTimeServiceImpl implements QualityTimeService {
             calendarEventId = createCalendarEventWithRetry(father, child, startTime, endTime);
             if (calendarEventId != null) {
                 qualityTime.setGoogleCalendarEventId(calendarEventId);
+            } else {
+                log.warn("Calendar event creation failed for fatherId={}, calendar configured but event not created",
+                        fatherId);
             }
+        } else {
+            log.info("Skipping calendar sync for fatherId={}: googleCalendarEnabled={}, hasRefreshToken={}",
+                    fatherId, father.getGoogleCalendarEnabled(), father.getGoogleRefreshToken() != null);
         }
 
         // Save the Quality Time record with google_calendar_event_id

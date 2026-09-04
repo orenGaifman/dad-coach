@@ -187,7 +187,10 @@ public class ToolExecutorImpl implements ToolExecutor {
             
             // Check if Google Calendar event was created successfully
             boolean calendarSynced = result.calendarEventId() != null;
-            String calendarNote = calendarSynced ? " ✅ נוסף ליומן" : "";
+            // If calendar not synced, show note about connecting calendar in onboarding
+            String calendarNote = calendarSynced 
+                    ? " ✅ נוסף ליומן" 
+                    : "\n💡 רוצה שזה יופיע גם ביומן גוגל שלך? חבר את היומן דרך הדשבורד";
             
             // Check weekly goal progress - but DON'T say "goal complete" on scheduling!
             // Goal is only complete when quality time is actually DONE, not just scheduled.

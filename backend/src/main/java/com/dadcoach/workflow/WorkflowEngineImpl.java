@@ -178,15 +178,15 @@ public class WorkflowEngineImpl implements WorkflowEngine {
     
     /**
      * Sets the message log service for conversation history tracking.
+     * This is required for the dashboard to show conversation messages.
      * 
      * @param messageLogService the message log service
      */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.beans.factory.annotation.Autowired
     public void setMessageLogService(MessageLogService messageLogService) {
         this.messageLogService = messageLogService;
-        if (messageLogService != null) {
-            log.info("MessageLogService injected into WorkflowEngine");
-        }
+        log.info("MessageLogService injected into WorkflowEngine: bean={}", 
+                messageLogService.getClass().getSimpleName());
     }
     
     /**
@@ -992,8 +992,9 @@ public class WorkflowEngineImpl implements WorkflowEngine {
         }
         messageText = messageText.trim();
         
-        // Log inbound message for conversation history
-        if (messageLogService != null && !messageText.isEmpty()) {
+        // Log inbound message for conversation history (required for dashboard)
+        if (!messageText.isEmpty()) {
+            log.debug("Logging inbound message for fatherId={}, length={}", father.getId(), messageText.length());
             messageLogService.logInbound(father.getId(), messageText);
         }
         
@@ -1092,11 +1093,13 @@ public class WorkflowEngineImpl implements WorkflowEngine {
                 responseMessage = responseMessage + "\n\n" + linkMessage;
             }
             
-            // Log outbound message for conversation history with AI decision metadata
-            if (messageLogService != null && !responseMessage.isEmpty()) {
+            // Log outbound message for conversation history with AI decision metadata (required for dashboard)
+            if (!responseMessage.isEmpty()) {
                 String newStateStr = agentResponse.hasStateTransition() 
                         ? agentResponse.newState().name() 
                         : null;
+                log.debug("Logging outbound message for fatherId={}, tool={}, stateChange={}->{}",
+                        father.getId(), agentResponse.toolUsed(), currentState.name(), newStateStr);
                 messageLogService.logOutboundWithAiDecision(
                         father.getId(),
                         responseMessage,
