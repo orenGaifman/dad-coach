@@ -39,7 +39,7 @@ public class CoachingAgent {
     private static final Logger log = LoggerFactory.getLogger(CoachingAgent.class);
     
     private static final double TEMPERATURE = 0.3; // Low temperature for consistent behavior
-    private static final int MAX_TOKENS = 500;     // Keep responses short for WhatsApp
+    private static final int MAX_TOKENS = 1000;    // Increased from 500 to prevent JSON truncation with Hebrew/emoji
     private static final int MAX_CONVERSATION_HISTORY = 10; // Last 10 turns - more context for smarter responses
     private static final int MAX_CLARIFY_RETRIES = 1; // Max retries when AI wants to clarify
     
