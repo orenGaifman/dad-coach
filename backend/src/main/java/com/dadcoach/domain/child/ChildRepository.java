@@ -19,6 +19,14 @@ public interface ChildRepository extends JpaRepository<Child, Long> {
     List<Child> findByFatherId(Long fatherId);
 
     /**
+     * Find all children belonging to a given father with a specific status.
+     * @param fatherId the father's internal database ID
+     * @param status the child status (e.g., "ACTIVE")
+     * @return list of children matching the criteria
+     */
+    List<Child> findByFatherIdAndStatus(Long fatherId, String status);
+
+    /**
      * Count the number of active children for a given father.
      * Used to enforce the max-8-children-per-father business rule.
      */

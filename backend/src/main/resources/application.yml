@@ -144,6 +144,22 @@ api:
       ADMIN: 300
       SERVICE: 1000
 
+# Tool API configuration for ai-workflow-platform integration
+tool-api:
+  api-key: ${TOOL_API_KEY:dev-api-key}
+  enabled: true
+
+# ai-workflow-platform integration for delegated workflow execution
+# When enabled, workflow processing is delegated to the centralized platform
+workflow:
+  platform:
+    enabled: ${WORKFLOW_PLATFORM_ENABLED:false}
+    base-url: ${WORKFLOW_PLATFORM_BASE_URL:http://localhost:8081}
+    api-key: ${WORKFLOW_PLATFORM_API_KEY:}
+    workflow-id: ${WORKFLOW_PLATFORM_WORKFLOW_ID:}
+    connect-timeout-ms: 5000
+    read-timeout-ms: 30000
+
 # Belt images for promotion notifications
 # Default URLs point to the dad-coach-web Vercel deployment
 belt:
