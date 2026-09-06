@@ -146,7 +146,7 @@ api:
 
 # Tool API configuration for ai-workflow-platform integration
 tool-api:
-  api-key: ${TOOL_API_KEY:dev-api-key}
+  api-key: ${TOOL_API_KEY:e76625b0ee030a88400a68b3dd9bf23fe24e657455f1dd08b295991073d439f6}
   enabled: true
 
 # ai-workflow-platform integration for delegated workflow execution
