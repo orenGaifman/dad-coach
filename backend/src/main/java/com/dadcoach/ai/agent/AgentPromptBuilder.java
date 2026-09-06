@@ -12,7 +12,13 @@ import java.util.stream.Collectors;
  * <p>This class constructs the system prompt that instructs Claude on how to
  * behave as a parenting coach, which tools are available, and how to respond
  * to user messages in Hebrew.</p>
+ * 
+ * @deprecated Since 2.0. Prompts and guidance are now managed by ai-workflow-platform
+ *             via database-driven workflow_state.guidance fields. This class remains
+ *             only for backward compatibility until all users migrate to the platform.
+ *             New prompt changes should be made in ai-workflow-platform workflow configuration.
  */
+@Deprecated(since = "2.0", forRemoval = true)
 @Component
 public class AgentPromptBuilder {
     

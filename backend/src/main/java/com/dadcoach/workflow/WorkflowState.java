@@ -25,7 +25,13 @@ import java.util.Set;
  * 
  * @see <a href="Requirements 1.1">Workflow State Definitions</a>
  * @see <a href="Requirements 1.3">State Transitions</a>
+ * 
+ * @deprecated Since 2.0. Workflow states are now managed by ai-workflow-platform via
+ *             database-driven configuration. This enum remains only for backward compatibility
+ *             with the Father.current_workflow_state column until data migration completes.
+ *             See ai-workflow-platform for the new workflow state management.
  */
+@Deprecated(since = "2.0", forRemoval = true)
 public enum WorkflowState {
     
     /**

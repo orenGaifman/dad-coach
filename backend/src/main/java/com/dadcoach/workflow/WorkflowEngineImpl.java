@@ -62,7 +62,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @see WorkflowEngine
  * @see WorkflowState
  * @see StateHandler
+ * 
+ * @deprecated Since 2.0. Workflow execution is now handled by ai-workflow-platform.
+ *             This implementation remains as the default engine until
+ *             {@code workflow.platform.enabled=true} is set for all users.
+ *             New features should be implemented in ai-workflow-platform only.
  */
+@Deprecated(since = "2.0", forRemoval = true)
 @Service
 public class WorkflowEngineImpl implements WorkflowEngine {
     
