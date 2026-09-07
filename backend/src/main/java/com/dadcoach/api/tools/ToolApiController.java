@@ -193,12 +193,18 @@ public class ToolApiController {
         }
 
         // Standard flow: resolve userId to fatherId first
-        Long fatherId;
+        Long fatherId = null;
         try {
             fatherId = resolveFatherId(request);
         } catch (ResourceNotFoundException e) {
-            log.warn("Father not found for userId: {}", request.userId());
-            return ResponseEntity.ok(ToolExecutionResponse.notFound("Father", request.userId()));
+            // For new user safe tools, allow proceeding without a Father record
+            if (isNewUserSafeTool(toolKey)) {
+                log.info("New user safe tool '{}' called for new user: {}", toolKey, request.userId());
+                // fatherId remains null - handlers will use Optional.findById(null) which returns empty
+            } else {
+                log.warn("Father not found for userId: {}", request.userId());
+                return ResponseEntity.ok(ToolExecutionResponse.notFound("Father", request.userId()));
+            }
         }
 
         // Create resolved request with numeric father ID
@@ -463,5 +469,16 @@ public class ToolApiController {
             }
             return Boolean.parseBoolean(value.toString());
         }
+    }
+
+    /**
+     * Checks if a tool can be executed without a Father record.
+     * These tools handle new user scenarios gracefully.
+     * 
+     * @param toolKey the tool key to check
+     * @return true if the tool can work without a Father record
+     */
+    private boolean isNewUserSafeTool(String toolKey) {
+        return Set.of("greet", "show_help", "clarify").contains(toolKey);
     }
 }

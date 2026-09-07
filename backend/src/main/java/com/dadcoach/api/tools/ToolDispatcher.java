@@ -510,35 +510,58 @@ public class ToolDispatcher {
     }
 
     private ToolExecutionResponse handleGreet(ToolApiController.ResolvedToolRequest request) {
-        Father father = fatherRepository.findById(request.userId())
-                .orElseThrow(() -> new ResourceNotFoundException("Father", request.userId()));
-
-        String locale = father.getLocale() != null ? father.getLocale() : "he";
+        // Handle null userId for new users (no Father record exists yet)
+        Optional<Father> fatherOpt = request.userId() != null 
+            ? fatherRepository.findById(request.userId())
+            : Optional.empty();
+        
+        String locale;
+        String displayName;
+        boolean isNewUser;
+        
+        if (fatherOpt.isPresent()) {
+            Father father = fatherOpt.get();
+            locale = father.getLocale() != null ? father.getLocale() : "he";
+            displayName = father.getDisplayName();
+            isNewUser = false;
+        } else {
+            // New user - use default Hebrew locale and no name
+            locale = "he";
+            displayName = null;
+            isNewUser = true;
+        }
+        
         String greeting;
         String welcomeMessage;
 
         if ("he".equals(locale)) {
-            greeting = "שלום " + (father.getDisplayName() != null ? father.getDisplayName() : "אבא") + "! 👋";
-            welcomeMessage = "אני Dad Coach, המאמן האישי שלך לזמן איכות עם הילדים. איך אפשר לעזור לך היום?";
+            greeting = "שלום " + (displayName != null ? displayName : "אבא") + "! 👋";
+            welcomeMessage = isNewUser 
+                ? "ברוכים הבאים ל-Dad Coach! אני כאן לעזור לך ליצור זמן איכות משמעותי עם הילדים שלך."
+                : "אני Dad Coach, המאמן האישי שלך לזמן איכות עם הילדים. איך אפשר לעזור לך היום?";
         } else {
-            greeting = "Hello " + (father.getDisplayName() != null ? father.getDisplayName() : "Dad") + "! 👋";
-            welcomeMessage = "I'm Dad Coach, your personal coach for quality time with your children. How can I help you today?";
+            greeting = "Hello " + (displayName != null ? displayName : "Dad") + "! 👋";
+            welcomeMessage = isNewUser
+                ? "Welcome to Dad Coach! I'm here to help you create meaningful quality time with your children."
+                : "I'm Dad Coach, your personal coach for quality time with your children. How can I help you today?";
         }
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("greeting", greeting);
         data.put("welcome_message", welcomeMessage);
-        data.put("father_name", father.getDisplayName());
+        data.put("father_name", displayName);
         data.put("locale", locale);
+        data.put("is_new_user", isNewUser);
 
         return ToolExecutionResponse.success(data);
     }
 
     private ToolExecutionResponse handleShowHelp(ToolApiController.ResolvedToolRequest request) {
-        Father father = fatherRepository.findById(request.userId())
-                .orElseThrow(() -> new ResourceNotFoundException("Father", request.userId()));
-
-        String locale = father.getLocale() != null ? father.getLocale() : "he";
+        // Handle null userId for new users (no Father record exists yet)
+        Optional<Father> fatherOpt = request.userId() != null
+            ? fatherRepository.findById(request.userId())
+            : Optional.empty();
+        String locale = fatherOpt.map(f -> f.getLocale() != null ? f.getLocale() : "he").orElse("he");
 
         List<Map<String, String>> commands = new ArrayList<>();
         if ("he".equals(locale)) {
@@ -567,10 +590,11 @@ public class ToolDispatcher {
     private ToolExecutionResponse handleClarify(ToolApiController.ResolvedToolRequest request) {
         String topic = request.getStringParam("topic");
 
-        Father father = fatherRepository.findById(request.userId())
-                .orElseThrow(() -> new ResourceNotFoundException("Father", request.userId()));
-
-        String locale = father.getLocale() != null ? father.getLocale() : "he";
+        // Handle null userId for new users (no Father record exists yet)
+        Optional<Father> fatherOpt = request.userId() != null
+            ? fatherRepository.findById(request.userId())
+            : Optional.empty();
+        String locale = fatherOpt.map(f -> f.getLocale() != null ? f.getLocale() : "he").orElse("he");
         String clarificationPrompt;
 
         if ("he".equals(locale)) {
