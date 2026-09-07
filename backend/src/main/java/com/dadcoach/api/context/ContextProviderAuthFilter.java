@@ -10,13 +10,15 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * Authentication filter for the Context Provider API.
@@ -30,6 +32,7 @@ import java.io.IOException;
  * <ul>
  *   <li>Only applies to requests matching /api/context/*</li>
  *   <li>Validates the X-API-Key header against the configured API key</li>
+ *   <li>Sets authentication in SecurityContext on success</li>
  *   <li>Returns 401 Unauthorized if the key is missing or invalid</li>
  *   <li>Returns 503 Service Unavailable if the API is disabled</li>
  * </ul>
@@ -38,7 +41,6 @@ import java.io.IOException;
  * @see ContextProviderController
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
 public class ContextProviderAuthFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(ContextProviderAuthFilter.class);
@@ -69,6 +71,8 @@ public class ContextProviderAuthFilter extends OncePerRequestFilter {
         String requestPath = request.getRequestURI();
         String method = request.getMethod();
 
+        log.debug("ContextProviderAuthFilter processing request: {} {}", method, requestPath);
+
         // Check if API is enabled (reuse the same enabled flag as Tool API)
         if (!toolApiConfig.isEnabled()) {
             log.warn("Context Provider API is disabled, rejecting request: {} {}", method, requestPath);
@@ -90,7 +94,15 @@ public class ContextProviderAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        // API key is valid, proceed with the request
+        // API key is valid - set authentication in SecurityContext
+        // This ensures Spring Security's authorization checks pass
+        List<SimpleGrantedAuthority> authorities = List.of(
+                new SimpleGrantedAuthority("ROLE_CONTEXT_API")
+        );
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken("context-api-client", null, authorities);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
         log.debug("Context Provider API request authenticated: {} {}", method, requestPath);
         filterChain.doFilter(request, response);
     }
