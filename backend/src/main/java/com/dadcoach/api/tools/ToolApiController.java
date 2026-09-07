@@ -1,5 +1,9 @@
 package com.dadcoach.api.tools;
 
+import com.dadcoach.common.ResourceNotFoundException;
+import com.dadcoach.domain.father.Father;
+import com.dadcoach.domain.father.FatherRepository;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -17,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -33,6 +38,13 @@ import java.util.Set;
  * <h2>Authentication</h2>
  * <p>All requests must include a valid API key in the X-API-Key header.
  * The API key is configured via the tool-api.api-key property.</p>
+ * 
+ * <h2>User Identification</h2>
+ * <p>The userId can be either:</p>
+ * <ul>
+ *   <li>A numeric father ID (e.g., "123")</li>
+ *   <li>A phone number (e.g., "+972503020551") which will be resolved to a father ID</li>
+ * </ul>
  * 
  * <h2>Available Tools (16 total)</h2>
  * <h3>Scheduling Tools</h3>
@@ -80,9 +92,11 @@ public class ToolApiController {
     private static final Logger log = LoggerFactory.getLogger(ToolApiController.class);
 
     private final ToolDispatcher toolDispatcher;
+    private final FatherRepository fatherRepository;
 
-    public ToolApiController(ToolDispatcher toolDispatcher) {
+    public ToolApiController(ToolDispatcher toolDispatcher, FatherRepository fatherRepository) {
         this.toolDispatcher = toolDispatcher;
+        this.fatherRepository = fatherRepository;
     }
 
     /**
@@ -91,20 +105,21 @@ public class ToolApiController {
      * <p>This is the main endpoint for tool execution. The tool key is specified
      * in the path, and the request body contains the execution parameters.</p>
      * 
-     * <p>Example request:</p>
+     * <p>The userId can be a numeric father ID or a phone number. Phone numbers
+     * are automatically resolved to father IDs.</p>
+     * 
+     * <p>Example request with phone number:</p>
      * <pre>
-     * POST /api/tools/schedule_quality_time
+     * POST /api/tools/show_available_slots
      * X-API-Key: your-api-key
      * Content-Type: application/json
      * 
      * {
      *   "execution_id": "exec-123",
      *   "idempotency_key": "idmp-456",
-     *   "user_id": 1,
+     *   "user_id": "+972503020551",
      *   "parameters": {
-     *     "child_id": 2,
-     *     "start_time": "2024-01-15T10:00:00Z",
-     *     "duration_minutes": 30
+     *     "days_ahead": 7
      *   }
      * }
      * </pre>
@@ -148,12 +163,62 @@ public class ToolApiController {
         log.info("Tool execution request: toolKey={}, executionId={}, idempotencyKey={}, userId={}",
                 toolKey, request.executionId(), request.idempotencyKey(), request.userId());
 
-        ToolExecutionResponse response = toolDispatcher.dispatch(toolKey, request);
+        // Resolve userId to fatherId
+        Long fatherId;
+        try {
+            fatherId = resolveFatherId(request);
+        } catch (ResourceNotFoundException e) {
+            log.warn("Father not found for userId: {}", request.userId());
+            return ResponseEntity.ok(ToolExecutionResponse.notFound("Father", request.userId()));
+        }
+
+        // Create resolved request with numeric father ID
+        ResolvedToolRequest resolvedRequest = new ResolvedToolRequest(
+                request.executionId(),
+                request.idempotencyKey(),
+                fatherId,
+                request.parameters()
+        );
+
+        ToolExecutionResponse response = toolDispatcher.dispatch(toolKey, resolvedRequest);
 
         log.info("Tool execution complete: toolKey={}, executionId={}, success={}",
                 toolKey, request.executionId(), response.success());
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Resolves a userId (phone number or numeric ID) to a father ID.
+     *
+     * @param request the tool execution request
+     * @return the resolved father ID
+     * @throws ResourceNotFoundException if the father is not found
+     */
+    private Long resolveFatherId(ToolExecutionRequest request) {
+        String userId = request.userId();
+        
+        // Try to parse as numeric ID first
+        Long numericId = request.resolveNumericUserId();
+        if (numericId != null) {
+            // Verify father exists
+            if (fatherRepository.existsById(numericId)) {
+                log.debug("Resolved userId as numeric ID: {}", numericId);
+                return numericId;
+            }
+            throw new ResourceNotFoundException("Father", numericId);
+        }
+
+        // Must be a phone number - look up by phone
+        log.debug("Resolving userId as phone number: {}", userId);
+        Optional<Father> father = fatherRepository.findByPhone(userId);
+        if (father.isPresent()) {
+            Long fatherId = father.get().getId();
+            log.debug("Resolved phone {} to fatherId {}", userId, fatherId);
+            return fatherId;
+        }
+
+        throw new ResourceNotFoundException("Father", userId);
     }
 
     /**
@@ -210,5 +275,59 @@ public class ToolApiController {
         response.put("tools_count", toolDispatcher.getAvailableTools().size());
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Internal resolved request with numeric father ID.
+     */
+    public record ResolvedToolRequest(
+            String executionId,
+            String idempotencyKey,
+            Long userId,
+            Map<String, Object> parameters
+    ) {
+        public String getStringParam(String key) {
+            if (parameters == null) return null;
+            Object value = parameters.get(key);
+            return value != null ? value.toString() : null;
+        }
+
+        public Long getLongParam(String key) {
+            if (parameters == null) return null;
+            Object value = parameters.get(key);
+            if (value == null) return null;
+            if (value instanceof Number) {
+                return ((Number) value).longValue();
+            }
+            try {
+                return Long.parseLong(value.toString());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+
+        public Integer getIntParam(String key) {
+            if (parameters == null) return null;
+            Object value = parameters.get(key);
+            if (value == null) return null;
+            if (value instanceof Number) {
+                return ((Number) value).intValue();
+            }
+            try {
+                return Integer.parseInt(value.toString());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+
+        public Boolean getBooleanParam(String key) {
+            if (parameters == null) return null;
+            Object value = parameters.get(key);
+            if (value == null) return null;
+            if (value instanceof Boolean) {
+                return (Boolean) value;
+            }
+            return Boolean.parseBoolean(value.toString());
+        }
     }
 }

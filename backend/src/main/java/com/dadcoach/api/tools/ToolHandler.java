@@ -17,8 +17,8 @@ public interface ToolHandler {
     /**
      * Executes the tool with the given request.
      *
-     * @param request the tool execution request containing userId and parameters
+     * @param request the resolved tool execution request containing fatherId and parameters
      * @return the tool execution response with success/failure and data
      */
-    ToolExecutionResponse execute(ToolExecutionRequest request);
+    ToolExecutionResponse execute(ToolApiController.ResolvedToolRequest request);
 }

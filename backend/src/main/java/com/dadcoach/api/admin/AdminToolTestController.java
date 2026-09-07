@@ -4,7 +4,7 @@ import com.dadcoach.api.context.ContextProviderRequest;
 import com.dadcoach.api.context.ContextProviderResponse;
 import com.dadcoach.api.context.ContextProviderRouter;
 import com.dadcoach.api.tools.ToolDispatcher;
-import com.dadcoach.api.tools.ToolExecutionRequest;
+import com.dadcoach.api.tools.ToolApiController;
 import com.dadcoach.api.tools.ToolExecutionResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -97,7 +97,7 @@ public class AdminToolTestController {
         String executionId = "admin-test-" + UUID.randomUUID().toString().substring(0, 8);
         String idempotencyKey = "admin-idmp-" + System.currentTimeMillis();
         
-        ToolExecutionRequest execRequest = new ToolExecutionRequest(
+        ToolApiController.ResolvedToolRequest execRequest = new ToolApiController.ResolvedToolRequest(
                 executionId,
                 idempotencyKey,
                 request.userId(),
@@ -149,7 +149,7 @@ public class AdminToolTestController {
             Map<String, Object> params = buildTestParameters(toolKey, request);
             
             String executionId = "admin-all-" + UUID.randomUUID().toString().substring(0, 8);
-            ToolExecutionRequest execRequest = new ToolExecutionRequest(
+            ToolApiController.ResolvedToolRequest execRequest = new ToolApiController.ResolvedToolRequest(
                     executionId, "idmp-" + System.currentTimeMillis(),
                     request.userId(), params
             );

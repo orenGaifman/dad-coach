@@ -2,7 +2,6 @@ package com.dadcoach.api.tools;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 
 import java.util.Map;
 
@@ -14,7 +13,7 @@ import java.util.Map;
  * <ul>
  *   <li>executionId - unique identifier for tracing</li>
  *   <li>idempotencyKey - for retry safety</li>
- *   <li>userId - the father's identifier</li>
+ *   <li>userId - the father's identifier (phone number or numeric ID)</li>
  *   <li>parameters - tool-specific parameters</li>
  * </ul>
  * 
@@ -38,11 +37,13 @@ public record ToolExecutionRequest(
         String idempotencyKey,
 
         /**
-         * The user (father) ID for whom to execute the tool.
+         * The user (father) identifier for whom to execute the tool.
+         * Can be a phone number (e.g., "+972503020551") or a numeric ID.
+         * The controller resolves phone numbers to father IDs.
          */
-        @NotNull(message = "userId is required")
+        @NotBlank(message = "userId is required")
         @JsonProperty("user_id")
-        Long userId,
+        String userId,
 
         /**
          * Tool-specific parameters as a key-value map.
@@ -117,5 +118,39 @@ public record ToolExecutionRequest(
             return (Boolean) value;
         }
         return Boolean.parseBoolean(value.toString());
+    }
+
+    /**
+     * Resolves the userId to a Long father ID.
+     * If userId is a phone number (contains + or is non-numeric), returns null.
+     * If userId is numeric, parses and returns it as a Long.
+     * 
+     * @return the numeric father ID, or null if userId is a phone number
+     */
+    public Long resolveNumericUserId() {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+        // If contains + or any non-digit character (except leading -), treat as phone number
+        if (userId.contains("+") || !userId.matches("-?\\d+")) {
+            return null;
+        }
+        try {
+            return Long.parseLong(userId);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Checks if the userId appears to be a phone number.
+     * 
+     * @return true if userId looks like a phone number
+     */
+    public boolean isPhoneNumber() {
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+        return userId.contains("+") || !userId.matches("-?\\d+");
     }
 }

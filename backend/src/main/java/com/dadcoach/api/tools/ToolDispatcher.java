@@ -146,7 +146,7 @@ public class ToolDispatcher {
      * @param request the execution request
      * @return the execution response
      */
-    public ToolExecutionResponse dispatch(String toolKey, ToolExecutionRequest request) {
+    public ToolExecutionResponse dispatch(String toolKey, ToolApiController.ResolvedToolRequest request) {
         log.info("Dispatching tool: toolKey={}, executionId={}, userId={}",
                 toolKey, request.executionId(), request.userId());
 
@@ -182,7 +182,7 @@ public class ToolDispatcher {
 
     // ─── Scheduling Tool Handlers ────────────────────────────────────────────
 
-    private ToolExecutionResponse handleScheduleQualityTime(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleScheduleQualityTime(ToolApiController.ResolvedToolRequest request) {
         Long childId = request.getLongParam("child_id");
         String startTimeStr = request.getStringParam("start_time");
         Integer durationMinutes = request.getIntParam("duration_minutes");
@@ -215,7 +215,7 @@ public class ToolDispatcher {
         return ToolExecutionResponse.success(data);
     }
 
-    private ToolExecutionResponse handleRescheduleQualityTime(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleRescheduleQualityTime(ToolApiController.ResolvedToolRequest request) {
         String qualityTimeIdStr = request.getStringParam("quality_time_id");
         String newStartTimeStr = request.getStringParam("new_start_time");
         Integer newDurationMinutes = request.getIntParam("new_duration_minutes");
@@ -264,7 +264,7 @@ public class ToolDispatcher {
         return ToolExecutionResponse.success(data);
     }
 
-    private ToolExecutionResponse handleCancelQualityTime(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleCancelQualityTime(ToolApiController.ResolvedToolRequest request) {
         String qualityTimeIdStr = request.getStringParam("quality_time_id");
 
         if (qualityTimeIdStr == null) {
@@ -291,7 +291,7 @@ public class ToolDispatcher {
         return ToolExecutionResponse.success(data);
     }
 
-    private ToolExecutionResponse handleCompleteQualityTime(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleCompleteQualityTime(ToolApiController.ResolvedToolRequest request) {
         String qualityTimeIdStr = request.getStringParam("quality_time_id");
         String notes = request.getStringParam("notes");
 
@@ -325,7 +325,7 @@ public class ToolDispatcher {
         return ToolExecutionResponse.success(data);
     }
 
-    private ToolExecutionResponse handleShowAvailableSlots(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleShowAvailableSlots(ToolApiController.ResolvedToolRequest request) {
         Integer daysAhead = request.getIntParam("days_ahead");
         if (daysAhead == null || daysAhead < 1) {
             daysAhead = 7;
@@ -361,7 +361,7 @@ public class ToolDispatcher {
 
     // ─── Weekly Goal Tool Handlers ───────────────────────────────────────────
 
-    private ToolExecutionResponse handleSetWeeklyGoal(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleSetWeeklyGoal(ToolApiController.ResolvedToolRequest request) {
         Integer targetHours = request.getIntParam("target_hours");
 
         if (targetHours == null || targetHours < 1) {
@@ -380,7 +380,7 @@ public class ToolDispatcher {
         return ToolExecutionResponse.success(data);
     }
 
-    private ToolExecutionResponse handleGetWeeklyGoalStatus(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleGetWeeklyGoalStatus(ToolApiController.ResolvedToolRequest request) {
         Optional<WeeklyGoal> activeGoal = weeklyGoalService.getActiveGoal(request.userId());
 
         Map<String, Object> data = new LinkedHashMap<>();
@@ -402,7 +402,7 @@ public class ToolDispatcher {
         return ToolExecutionResponse.success(data);
     }
 
-    private ToolExecutionResponse handleShowWeeklySummary(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleShowWeeklySummary(ToolApiController.ResolvedToolRequest request) {
         WeeklyGoalService.WeeklySummary summary = weeklyGoalService.generateWeeklySummary(request.userId());
 
         Map<String, Object> data = new LinkedHashMap<>();
@@ -428,7 +428,7 @@ public class ToolDispatcher {
 
     // ─── Progress & Dashboard Tool Handlers ──────────────────────────────────
 
-    private ToolExecutionResponse handleShowProgress(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleShowProgress(ToolApiController.ResolvedToolRequest request) {
         Father father = fatherRepository.findById(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("Father", request.userId()));
 
@@ -453,7 +453,7 @@ public class ToolDispatcher {
         return ToolExecutionResponse.success(data);
     }
 
-    private ToolExecutionResponse handleGetDashboardLink(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleGetDashboardLink(ToolApiController.ResolvedToolRequest request) {
         Father father = fatherRepository.findById(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("Father", request.userId()));
 
@@ -469,7 +469,7 @@ public class ToolDispatcher {
 
     // ─── Activity & Communication Tool Handlers ──────────────────────────────
 
-    private ToolExecutionResponse handleGetActivityIdeas(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleGetActivityIdeas(ToolApiController.ResolvedToolRequest request) {
         Long childId = request.getLongParam("child_id");
         String activityType = request.getStringParam("activity_type"); // indoor, outdoor, or null for both
 
@@ -509,7 +509,7 @@ public class ToolDispatcher {
         return ToolExecutionResponse.success(data);
     }
 
-    private ToolExecutionResponse handleGreet(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleGreet(ToolApiController.ResolvedToolRequest request) {
         Father father = fatherRepository.findById(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("Father", request.userId()));
 
@@ -534,7 +534,7 @@ public class ToolDispatcher {
         return ToolExecutionResponse.success(data);
     }
 
-    private ToolExecutionResponse handleShowHelp(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleShowHelp(ToolApiController.ResolvedToolRequest request) {
         Father father = fatherRepository.findById(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("Father", request.userId()));
 
@@ -564,7 +564,7 @@ public class ToolDispatcher {
         return ToolExecutionResponse.success(data);
     }
 
-    private ToolExecutionResponse handleClarify(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleClarify(ToolApiController.ResolvedToolRequest request) {
         String topic = request.getStringParam("topic");
 
         Father father = fatherRepository.findById(request.userId())
@@ -591,7 +591,7 @@ public class ToolDispatcher {
         return ToolExecutionResponse.success(data);
     }
 
-    private ToolExecutionResponse handleConnectCalendar(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleConnectCalendar(ToolApiController.ResolvedToolRequest request) {
         String redirectUrl = request.getStringParam("redirect_url");
 
         String authUrl = redirectUrl != null
@@ -606,7 +606,7 @@ public class ToolDispatcher {
         return ToolExecutionResponse.success(data);
     }
 
-    private ToolExecutionResponse handleGetUpcomingQualityTime(ToolExecutionRequest request) {
+    private ToolExecutionResponse handleGetUpcomingQualityTime(ToolApiController.ResolvedToolRequest request) {
         Optional<UpcomingQualityTimeDto> upcoming = qualityTimeService.getUpcomingQualityTime(request.userId());
 
         Map<String, Object> data = new LinkedHashMap<>();
