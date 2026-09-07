@@ -3,6 +3,7 @@ package com.dadcoach.api.tools;
 import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
+import com.dadcoach.domain.father.FatherService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -17,8 +18,11 @@ import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -46,7 +50,16 @@ import java.util.Set;
  *   <li>A phone number (e.g., "+972503020551") which will be resolved to a father ID</li>
  * </ul>
  * 
- * <h2>Available Tools (16 total)</h2>
+ * <h2>Pre-Registration Tools</h2>
+ * <p>Some tools (like save_user_profile) can create the father if they don't exist.
+ * These tools skip the normal father resolution step and handle user creation internally.</p>
+ * 
+ * <h2>Available Tools (17 total)</h2>
+ * <h3>Pre-Registration Tools</h3>
+ * <ul>
+ *   <li><code>save_user_profile</code> - Create or update father profile (creates father if needed)</li>
+ * </ul>
+ * 
  * <h3>Scheduling Tools</h3>
  * <ul>
  *   <li><code>schedule_quality_time</code> - Schedule a new Quality Time event</li>
@@ -91,12 +104,20 @@ public class ToolApiController {
 
     private static final Logger log = LoggerFactory.getLogger(ToolApiController.class);
 
+    /** Tool key for profile creation/update - handled as pre-registration tool */
+    private static final String TOOL_SAVE_USER_PROFILE = "save_user_profile";
+
     private final ToolDispatcher toolDispatcher;
     private final FatherRepository fatherRepository;
+    private final FatherService fatherService;
 
-    public ToolApiController(ToolDispatcher toolDispatcher, FatherRepository fatherRepository) {
+    public ToolApiController(
+            ToolDispatcher toolDispatcher,
+            FatherRepository fatherRepository,
+            FatherService fatherService) {
         this.toolDispatcher = toolDispatcher;
         this.fatherRepository = fatherRepository;
+        this.fatherService = fatherService;
     }
 
     /**
@@ -107,6 +128,9 @@ public class ToolApiController {
      * 
      * <p>The userId can be a numeric father ID or a phone number. Phone numbers
      * are automatically resolved to father IDs.</p>
+     * 
+     * <p>Pre-registration tools (like save_user_profile) can create the father
+     * if they don't exist, so they skip the normal father resolution step.</p>
      * 
      * <p>Example request with phone number:</p>
      * <pre>
@@ -163,7 +187,12 @@ public class ToolApiController {
         log.info("Tool execution request: toolKey={}, executionId={}, idempotencyKey={}, userId={}",
                 toolKey, request.executionId(), request.idempotencyKey(), request.userId());
 
-        // Resolve userId to fatherId
+        // Handle pre-registration tools that can create the father if needed
+        if (TOOL_SAVE_USER_PROFILE.equals(toolKey)) {
+            return handleSaveUserProfile(request);
+        }
+
+        // Standard flow: resolve userId to fatherId first
         Long fatherId;
         try {
             fatherId = resolveFatherId(request);
@@ -186,6 +215,108 @@ public class ToolApiController {
                 toolKey, request.executionId(), response.success());
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Handles the save_user_profile tool execution.
+     * 
+     * <p>This tool is special because it can create the father if they don't exist.
+     * It implements an upsert pattern:</p>
+     * <ul>
+     *   <li>If the phone exists, update the existing father profile</li>
+     *   <li>If the phone doesn't exist, create a new father and set profile</li>
+     * </ul>
+     *
+     * @param request the tool execution request
+     * @return the tool execution response
+     */
+    @Transactional
+    private ResponseEntity<ToolExecutionResponse> handleSaveUserProfile(ToolExecutionRequest request) {
+        String phone = request.userId();
+        Map<String, Object> params = request.parameters() != null ? request.parameters() : Map.of();
+
+        log.info("Handling save_user_profile: phone={}", phone);
+
+        try {
+            // Extract profile parameters
+            String displayName = getStringParam(params, "displayName");
+            String timezone = getStringParam(params, "timezone");
+            String locale = getStringParam(params, "locale");
+            String preferredCoachingTime = getStringParam(params, "preferredCoachingTime");
+
+            if (displayName == null || displayName.isBlank()) {
+                return ResponseEntity.ok(ToolExecutionResponse.invalidParameters("displayName is required"));
+            }
+
+            // Try to find existing father by phone
+            Optional<Father> existingFather = fatherRepository.findByPhone(phone);
+
+            Father father;
+            boolean created;
+
+            if (existingFather.isPresent()) {
+                // Update existing father
+                father = existingFather.get();
+                created = false;
+                log.info("Updating existing father profile: fatherId={}", father.getId());
+            } else {
+                // Create new father
+                father = fatherService.createFather(phone);
+                created = true;
+                log.info("Created new father: fatherId={}", father.getId());
+            }
+
+            // Update profile fields
+            father.setDisplayName(displayName);
+            if (timezone != null && !timezone.isBlank()) {
+                father.setTimezone(timezone);
+            }
+            if (locale != null && !locale.isBlank()) {
+                father.setLocale(locale);
+            }
+            if (preferredCoachingTime != null && !preferredCoachingTime.isBlank()) {
+                try {
+                    LocalTime time = LocalTime.parse(preferredCoachingTime);
+                    father.setPreferredCoachingTime(time);
+                } catch (DateTimeParseException e) {
+                    log.warn("Invalid preferredCoachingTime format: {}", preferredCoachingTime);
+                    // Continue without setting - don't fail the whole request
+                }
+            }
+
+            // Save the updated father
+            father = fatherRepository.save(father);
+
+            log.info("Profile {} successfully: fatherId={}", created ? "created" : "updated", father.getId());
+
+            // Build response data
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("fatherId", father.getId());
+            data.put("displayName", father.getDisplayName());
+            data.put("timezone", father.getTimezone());
+            data.put("locale", father.getLocale());
+            if (father.getPreferredCoachingTime() != null) {
+                data.put("preferredCoachingTime", father.getPreferredCoachingTime().toString());
+            }
+
+            return ResponseEntity.ok(ToolExecutionResponse.success(data));
+
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid parameters for save_user_profile: {}", e.getMessage());
+            return ResponseEntity.ok(ToolExecutionResponse.invalidParameters(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error executing save_user_profile: {}", e.getMessage(), e);
+            return ResponseEntity.ok(ToolExecutionResponse.failure(
+                    "Internal error: " + e.getMessage(), "INTERNAL_ERROR"));
+        }
+    }
+
+    /**
+     * Extracts a string parameter from the parameters map.
+     */
+    private String getStringParam(Map<String, Object> params, String key) {
+        Object value = params.get(key);
+        return value != null ? value.toString() : null;
     }
 
     /**
@@ -246,12 +377,15 @@ public class ToolApiController {
     })
     public ResponseEntity<Map<String, Object>> listTools() {
         Set<String> tools = toolDispatcher.getAvailableTools();
+        // Add pre-registration tools to the list
+        Set<String> allTools = new java.util.TreeSet<>(tools);
+        allTools.add(TOOL_SAVE_USER_PROFILE);
 
         Map<String, Object> response = new LinkedHashMap<>();
-        response.put("tools", tools);
-        response.put("count", tools.size());
+        response.put("tools", allTools);
+        response.put("count", allTools.size());
 
-        log.debug("Listed {} available tools", tools.size());
+        log.debug("Listed {} available tools", allTools.size());
         return ResponseEntity.ok(response);
     }
 
@@ -272,7 +406,7 @@ public class ToolApiController {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("status", "healthy");
         response.put("service", "tool-api");
-        response.put("tools_count", toolDispatcher.getAvailableTools().size());
+        response.put("tools_count", toolDispatcher.getAvailableTools().size() + 1); // +1 for save_user_profile
 
         return ResponseEntity.ok(response);
     }
