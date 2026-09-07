@@ -117,17 +117,24 @@ public class TriggerNotificationController {
             return "Unknown trigger type: " + notification.triggerType();
         }
 
+        // Pass Worker identity for message formatting
+        WorkerIdentity workerIdentity = notification.workerIdentity();
+        if (workerIdentity != null) {
+            log.debug("Processing trigger with Worker identity: workerKey={}", workerIdentity.workerKey());
+        }
+
         return switch (triggerType) {
-            case REMINDER_MORNING -> processMorningReminder(notification, father);
-            case REMINDER_1_HOUR -> processOneHourReminder(notification, father);
-            case FOLLOW_UP -> processFollowUp(notification, father);
+            case REMINDER_MORNING -> processMorningReminder(notification, father, workerIdentity);
+            case REMINDER_1_HOUR -> processOneHourReminder(notification, father, workerIdentity);
+            case FOLLOW_UP -> processFollowUp(notification, father, workerIdentity);
         };
     }
 
     /**
      * Processes morning reminder (08:00 on quality time day).
      */
-    private String processMorningReminder(TriggerNotificationRequest notification, Father father) {
+    private String processMorningReminder(TriggerNotificationRequest notification, Father father,
+                                           WorkerIdentity workerIdentity) {
         log.debug("Processing REMINDER_MORNING for father {}", father.getId());
 
         // Extract context from trigger payload
@@ -143,9 +150,9 @@ public class TriggerNotificationController {
                 .timezone(father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE)
                 .build();
 
-        // Generate and send message
+        // Generate and send message with Worker identity
         String message = fallbackMessages.getProcessed(MessageType.WAITING_REMINDER, context);
-        sendWhatsAppMessage(father, message);
+        sendWhatsAppMessage(father, message, workerIdentity);
 
         return "Morning reminder sent";
     }
@@ -154,7 +161,8 @@ public class TriggerNotificationController {
      * Processes 1-hour before reminder.
      * Transitions from WAITING to QUALITY_TIME_REMINDER state.
      */
-    private String processOneHourReminder(TriggerNotificationRequest notification, Father father) {
+    private String processOneHourReminder(TriggerNotificationRequest notification, Father father,
+                                           WorkerIdentity workerIdentity) {
         log.debug("Processing REMINDER_1_HOUR for father {}", father.getId());
 
         // Extract context from trigger payload
@@ -185,9 +193,9 @@ public class TriggerNotificationController {
                 .timezone(father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE)
                 .build();
 
-        // Generate and send message
+        // Generate and send message with Worker identity
         String message = fallbackMessages.getProcessed(MessageType.QUALITY_TIME_REMINDER, context);
-        sendWhatsAppMessage(father, message);
+        sendWhatsAppMessage(father, message, workerIdentity);
 
         return "1-hour reminder sent, state transition to QUALITY_TIME_REMINDER";
     }
@@ -196,7 +204,8 @@ public class TriggerNotificationController {
      * Processes follow-up trigger (1 hour after quality time ends).
      * Transitions from WAITING to QUALITY_TIME_FOLLOW_UP state.
      */
-    private String processFollowUp(TriggerNotificationRequest notification, Father father) {
+    private String processFollowUp(TriggerNotificationRequest notification, Father father,
+                                    WorkerIdentity workerIdentity) {
         log.debug("Processing FOLLOW_UP for father {}", father.getId());
 
         // Extract context from trigger payload
@@ -227,26 +236,89 @@ public class TriggerNotificationController {
                 .timezone(father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE)
                 .build();
 
-        // Generate and send follow-up question
+        // Generate and send follow-up question with Worker identity
         String message = fallbackMessages.getProcessed(MessageType.FOLLOW_UP_QUESTION, context);
-        sendWhatsAppMessage(father, message);
+        sendWhatsAppMessage(father, message, workerIdentity);
 
         return "Follow-up sent, state transition to QUALITY_TIME_FOLLOW_UP";
     }
 
     /**
      * Sends a WhatsApp message to the father and logs it.
+     *
+     * <p>If Worker identity is provided, the message is prefixed with the Worker's
+     * identity (emoji + name) in the format: "{emoji} {name}: {message}".</p>
+     *
+     * @param father the father to send the message to
+     * @param message the message content
+     * @param workerIdentity the Worker identity for prefixing (may be null for legacy triggers)
      */
-    private void sendWhatsAppMessage(Father father, String message) {
+    private void sendWhatsAppMessage(Father father, String message, WorkerIdentity workerIdentity) {
         try {
-            whatsAppService.sendText(father.getPhone(), message);
-            messageLogService.logOutbound(father.getId(), message);
+            // Format message with Worker identity prefix if available
+            String formattedMessage = formatWithWorkerIdentity(message, workerIdentity);
+            
+            whatsAppService.sendText(father.getPhone(), formattedMessage);
+            messageLogService.logOutbound(father.getId(), formattedMessage);
             log.debug("WhatsApp message sent to phone {}", MaskingUtils.maskPhone(father.getPhone()));
         } catch (Exception e) {
             log.error("Failed to send WhatsApp message: fatherId={}, error={}",
                     father.getId(), e.getMessage(), e);
             // Don't rethrow - the trigger is still processed even if message fails
         }
+    }
+
+    /**
+     * Formats a message with Worker identity prefix if available.
+     *
+     * <p>Format: "{emoji} {name}: {message}" where:</p>
+     * <ul>
+     *   <li>If both emoji and name are present: "🥗 Nutri: message"</li>
+     *   <li>If only emoji is present: "🥗: message"</li>
+     *   <li>If only name is present: "Nutri: message"</li>
+     *   <li>If neither is present: "message" (unchanged)</li>
+     * </ul>
+     *
+     * @param message the original message
+     * @param workerIdentity the Worker identity (may be null)
+     * @return the formatted message
+     */
+    private String formatWithWorkerIdentity(String message, WorkerIdentity workerIdentity) {
+        if (workerIdentity == null) {
+            return message;
+        }
+
+        String emoji = workerIdentity.iconEmoji();
+        String name = workerIdentity.workerName();
+
+        boolean hasEmoji = emoji != null && !emoji.isBlank();
+        boolean hasName = name != null && !name.isBlank();
+
+        if (!hasEmoji && !hasName) {
+            return message;
+        }
+
+        StringBuilder prefix = new StringBuilder();
+        if (hasEmoji) {
+            prefix.append(emoji);
+            if (hasName) {
+                prefix.append(" ");
+            }
+        }
+        if (hasName) {
+            prefix.append(name);
+        }
+        prefix.append(": ");
+
+        log.debug("Formatted message with Worker identity: workerKey={}", workerIdentity.workerKey());
+        return prefix + message;
+    }
+
+    /**
+     * Sends a WhatsApp message to the father and logs it (legacy method for backward compatibility).
+     */
+    private void sendWhatsAppMessage(Father father, String message) {
+        sendWhatsAppMessage(father, message, null);
     }
 
     /**
@@ -302,7 +374,22 @@ public class TriggerNotificationController {
             @JsonProperty("workflowInstanceId") String workflowInstanceId,
             @JsonProperty("userId") String userId,
             @JsonProperty("channel") String channel,
-            @JsonProperty("workflowContext") Map<String, Object> workflowContext
+            @JsonProperty("workflowContext") Map<String, Object> workflowContext,
+            @JsonProperty("workerIdentity") WorkerIdentity workerIdentity
+    ) {}
+
+    /**
+     * Worker identity information from ai-workflow-platform.
+     *
+     * <p>When a scheduled trigger is associated with a Worker, this information
+     * is included so messages can be formatted with the Worker's identity prefix
+     * (e.g., "🥗 Nutri: Here's your meal plan...").</p>
+     */
+    public record WorkerIdentity(
+            @JsonProperty("workerInstanceId") String workerInstanceId,
+            @JsonProperty("workerKey") String workerKey,
+            @JsonProperty("workerName") String workerName,
+            @JsonProperty("iconEmoji") String iconEmoji
     ) {}
 
     /**
