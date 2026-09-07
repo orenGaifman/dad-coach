@@ -2,14 +2,18 @@ package com.dadcoach.api.whatsapp;
 
 import com.dadcoach.channel.ChannelRouter;
 import com.dadcoach.channel.ChannelAdapter;
+import com.dadcoach.channel.dto.InboundMessageDto;
+import com.dadcoach.channel.dto.OutboundMessageDto;
 import com.dadcoach.config.WhatsAppProperties;
 import com.dadcoach.onboarding.activation.ActivationListener;
 import com.dadcoach.whatsapp.WhatsAppSignatureVerifier;
 import com.dadcoach.workflow.WorkflowEngine;
+import com.dadcoach.workflow.idempotency.WorkflowIdempotencyService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -22,7 +26,11 @@ import org.springframework.web.bind.annotation.*;
  * <p>Routes incoming WhatsApp messages through the WorkflowEngine
  * which implements a deterministic state machine for conversation handling.</p>
  * 
+ * <p>Includes idempotency protection to handle WhatsApp's multi-server retry mechanism,
+ * which sends the same webhook from multiple IPs simultaneously.</p>
+ * 
  * @see WorkflowEngine
+ * @see WorkflowIdempotencyService
  */
 @RestController
 @RequestMapping("/webhook/whatsapp")
@@ -37,19 +45,22 @@ public class WhatsAppWebhookController {
     private final WorkflowEngine workflowEngine;
     private final ActivationListener activationListener;
     private final ObjectMapper objectMapper;
+    private final WorkflowIdempotencyService idempotencyService;
 
     public WhatsAppWebhookController(WhatsAppSignatureVerifier signatureVerifier,
                                      WhatsAppProperties properties,
                                      ChannelRouter channelRouter,
                                      WorkflowEngine workflowEngine,
                                      ActivationListener activationListener,
-                                     ObjectMapper objectMapper) {
+                                     ObjectMapper objectMapper,
+                                     WorkflowIdempotencyService idempotencyService) {
         this.signatureVerifier = signatureVerifier;
         this.properties = properties;
         this.channelRouter = channelRouter;
         this.workflowEngine = workflowEngine;
         this.activationListener = activationListener;
         this.objectMapper = objectMapper;
+        this.idempotencyService = idempotencyService;
     }
 
     @GetMapping
@@ -91,7 +102,7 @@ public class WhatsAppWebhookController {
             com.dadcoach.whatsapp.dto.WhatsAppWebhookPayload payload = 
                 objectMapper.readValue(rawBody, com.dadcoach.whatsapp.dto.WhatsAppWebhookPayload.class);
             ChannelAdapter adapter = channelRouter.getAdapter("WHATSAPP");
-            com.dadcoach.channel.dto.InboundMessageDto inbound = adapter.normalizeInbound(payload);
+            InboundMessageDto inbound = adapter.normalizeInbound(payload);
 
             if (inbound != null) {
                 log.info("Processing inbound message from: {}", inbound.fatherChannelIdentity());
@@ -106,14 +117,37 @@ public class WhatsAppWebhookController {
         return ResponseEntity.ok().build();
     }
 
-    private void processMessage(com.dadcoach.channel.dto.InboundMessageDto inbound, ChannelAdapter adapter) {
+    private void processMessage(InboundMessageDto inbound, ChannelAdapter adapter) {
+        String sender = inbound.fatherChannelIdentity();
+        String content = inbound.textContent();
+        String idempotencyKey = inbound.idempotencyKey();
+        
+        // Check for duplicate message using both idempotency key and content fingerprint
+        Optional<OutboundMessageDto> cachedResponse = idempotencyService.checkDuplicate(
+                idempotencyKey, sender, content);
+        
+        if (cachedResponse.isPresent()) {
+            log.info("Duplicate webhook detected for sender: {}, returning cached response", sender);
+            // Send the cached response (WhatsApp expects a response even for duplicates)
+            OutboundMessageDto response = cachedResponse.get();
+            if (response != null && response.textContent() != null) {
+                adapter.sendMessage(response, sender);
+            }
+            return;
+        }
+        
+        // Mark as in-flight to prevent race conditions with simultaneous webhooks
+        boolean canProcess = idempotencyService.markInFlight(sender, content);
+        if (!canProcess) {
+            log.info("Message already in-flight for sender: {}, skipping to avoid concurrent processing", sender);
+            return; // Another thread is already processing this exact message
+        }
+        
         try {
             // Check if this is an ONBOARDING father - intercept for activation flow
             // This handles the first message after onboarding completion
-            if (activationListener.interceptByPhoneIfOnboarding(
-                    inbound.fatherChannelIdentity(), 
-                    inbound.textContent())) {
-                log.info("Message intercepted by activation flow for: {}", inbound.fatherChannelIdentity());
+            if (activationListener.interceptByPhoneIfOnboarding(sender, content)) {
+                log.info("Message intercepted by activation flow for: {}", sender);
                 // Activation flow handles:
                 // 1. ONBOARDING → ACTIVE status transition
                 // 2. Sending welcome message
@@ -122,16 +156,22 @@ public class WhatsAppWebhookController {
             }
             
             // Normal flow: process through state machine
-            com.dadcoach.channel.dto.OutboundMessageDto response = workflowEngine.processMessage(inbound);
+            OutboundMessageDto response = workflowEngine.processMessage(inbound);
             
             if (response != null && response.textContent() != null) {
-                log.info("Response generated, sending to: {}", inbound.fatherChannelIdentity());
-                adapter.sendMessage(response, inbound.fatherChannelIdentity());
+                log.info("Response generated, sending to: {}", sender);
+                adapter.sendMessage(response, sender);
+                
+                // Record the processed message to prevent future duplicates
+                idempotencyService.recordProcessed(idempotencyKey, sender, content, response);
             } else {
-                log.warn("No response generated for message from: {}", inbound.fatherChannelIdentity());
+                log.warn("No response generated for message from: {}", sender);
             }
         } catch (Exception e) {
-            log.error("Error processing message for {}: {}", inbound.fatherChannelIdentity(), e.getMessage(), e);
+            log.error("Error processing message for {}: {}", sender, e.getMessage(), e);
+        } finally {
+            // Always clear the in-flight flag
+            idempotencyService.clearInFlight(sender, content);
         }
     }
 
@@ -161,8 +201,8 @@ public class WhatsAppWebhookController {
         
         try {
             ChannelAdapter adapter = channelRouter.getAdapter("WHATSAPP");
-            com.dadcoach.channel.dto.OutboundMessageDto channelMessage =
-                new com.dadcoach.channel.dto.OutboundMessageDto(
+            OutboundMessageDto channelMessage =
+                new OutboundMessageDto(
                     java.util.UUID.randomUUID(),
                     null,
                     "WHATSAPP",
@@ -194,7 +234,9 @@ public class WhatsAppWebhookController {
             "verifyToken", properties.verifyToken() != null ? "SET" : "NOT SET",
             "webhookSecret", properties.webhookSecret() != null ? "SET" : "NOT SET",
             "accessToken", properties.accessToken() != null ? "SET" : "NOT SET",
-            "serverTime", Instant.now().toString()
+            "serverTime", Instant.now().toString(),
+            "idempotencyCacheSize", idempotencyService.getCacheSize(),
+            "fingerprintCacheSize", idempotencyService.getFingerprintCacheSize()
         ));
     }
 }
