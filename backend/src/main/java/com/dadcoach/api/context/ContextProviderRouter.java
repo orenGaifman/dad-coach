@@ -112,6 +112,36 @@ public class ContextProviderRouter {
         return Collections.unmodifiableSet(handlers.keySet());
     }
 
+
+    // ─── Helper: Father Lookup ───────────────────────────────────────────────
+
+    /**
+     * Looks up a Father by ID or phone number from config.
+     * <p>When userId is null (e.g., when the platform receives a phone number like "+972503020551"
+     * which cannot be parsed as a Long), this method falls back to looking up by phone number
+     * from the config map.</p>
+     *
+     * @param request the context provider request containing userId and config
+     * @return Optional containing the Father if found, empty otherwise
+     */
+    private Optional<Father> lookupFather(ContextProviderRequest request) {
+        // First try by userId if present
+        if (request.userId() != null) {
+            return fatherRepository.findById(request.userId());
+        }
+        
+        // Fall back to phone lookup from config
+        String phone = request.getStringConfig("phone");
+        if (phone != null && !phone.isBlank()) {
+            log.debug("Looking up father by phone from config: phone={}", phone);
+            return fatherRepository.findByPhone(phone);
+        }
+        
+        // No valid identifier provided
+        log.warn("No valid userId or phone provided for father lookup");
+        return Optional.empty();
+    }
+
     // ─── Family Context Provider ─────────────────────────────────────────────
 
     /**
@@ -126,7 +156,7 @@ public class ContextProviderRouter {
      * </ul>
      */
     private ContextProviderResponse handleFamilyContext(ContextProviderRequest request) {
-        Optional<Father> fatherOpt = fatherRepository.findById(request.userId());
+        Optional<Father> fatherOpt = lookupFather(request);
         
         if (fatherOpt.isEmpty()) {
             // Return empty/default data for missing user
@@ -195,7 +225,7 @@ public class ContextProviderRouter {
      * </ul>
      */
     private ContextProviderResponse handleCalendarContext(ContextProviderRequest request) {
-        Optional<Father> fatherOpt = fatherRepository.findById(request.userId());
+        Optional<Father> fatherOpt = lookupFather(request);
         
         if (fatherOpt.isEmpty()) {
             return ContextProviderResponse.success(buildEmptyCalendarContext());
@@ -302,7 +332,7 @@ public class ContextProviderRouter {
      * </ul>
      */
     private ContextProviderResponse handleQualityTimeContext(ContextProviderRequest request) {
-        Optional<Father> fatherOpt = fatherRepository.findById(request.userId());
+        Optional<Father> fatherOpt = lookupFather(request);
         
         if (fatherOpt.isEmpty()) {
             return ContextProviderResponse.success(buildEmptyQualityTimeContext());
