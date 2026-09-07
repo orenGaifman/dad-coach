@@ -19,6 +19,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * <ul>
  *   <li>{@code /actuator/health/**} — public (liveness/readiness probes)</li>
  *   <li>{@code /webhook/**} — public (provider webhooks use their own signature verification)</li>
+ *   <li>{@code /api/tools/**} — permitAll (uses X-API-Key via ToolApiAuthFilter)</li>
+ *   <li>{@code /api/context/**} — permitAll (uses X-API-Key via ContextProviderAuthFilter)</li>
+ *   <li>{@code /api/webhooks/**} — permitAll (uses X-API-Key via webhook auth)</li>
  *   <li>{@code /api/v1/admin/**} — requires ADMIN role</li>
  *   <li>{@code /api/v1/service/**} — requires SERVICE role</li>
  *   <li>{@code /api/v1/fathers/me/**} — requires FATHER role</li>
@@ -63,6 +66,12 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**").permitAll()
                         // WhatsApp webhooks (use their own signature verification)
                         .requestMatchers("/webhook/**").permitAll()
+                        // Tool API endpoints (use X-API-Key via ToolApiAuthFilter)
+                        .requestMatchers("/api/tools/**").permitAll()
+                        // Context Provider API endpoints (use X-API-Key via ContextProviderAuthFilter)
+                        .requestMatchers("/api/context/**").permitAll()
+                        // Platform webhook endpoints (use X-API-Key auth)
+                        .requestMatchers("/api/webhooks/**").permitAll()
                         // Onboarding endpoints (no auth required - uses invitation tokens)
                         .requestMatchers("/api/v1/onboarding/**").permitAll()
                         .requestMatchers("/api/v1/invitations/**").permitAll()
