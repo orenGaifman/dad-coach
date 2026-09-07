@@ -1,6 +1,5 @@
 package com.dadcoach.systemstate;
 
-import com.dadcoach.calendar.CalendarEvent;
 import com.dadcoach.calendar.GoogleCalendarService;
 import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.domain.child.Child;
@@ -11,6 +10,7 @@ import com.dadcoach.qualitytime.QualityTime;
 import com.dadcoach.qualitytime.QualityTimeRepository;
 import com.dadcoach.weeklygoal.WeeklyGoal;
 import com.dadcoach.weeklygoal.WeeklyGoalRepository;
+import com.dadcoach.weeklygoal.WeeklyGoalStatus;
 import com.dadcoach.workflow.Belt;
 
 import org.slf4j.Logger;
@@ -23,12 +23,8 @@ import java.util.stream.Collectors;
 
 /**
  * Default implementation of SystemStateLoader.
- * 
- * <p>Loads complete system state for a father by querying the database
- * and Google Calendar API. Implements the Read Before Write principle.</p>
- * 
- * @see SystemStateLoader
- * @see SystemState
+ * Loads complete system state for a father by querying the database
+ * and Google Calendar API.
  */
 @Service
 public class SystemStateLoaderImpl implements SystemStateLoader {
@@ -64,16 +60,14 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
             throw new IllegalArgumentException("fatherId must not be null");
         }
         
-        // Convert UUID to Long for database lookup
         Long fatherIdLong = fatherId.getLeastSignificantBits();
-        
         log.debug("Loading system state for father: fatherId={}", fatherIdLong);
         
         Father father = fatherRepository.findById(fatherIdLong)
                 .orElseThrow(() -> new ResourceNotFoundException("Father", fatherIdLong));
         
         // Load children
-        List<Child> children = childRepository.findByFatherIdAndArchivedFalse(fatherIdLong);
+        List<Child> children = childRepository.findByFatherId(fatherIdLong);
         List<SystemState.ChildInfo> childInfos = children.stream()
                 .map(this::mapToChildInfo)
                 .collect(Collectors.toList());
@@ -95,45 +89,56 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
         List<SystemState.CalendarEvent> calendarEvents = List.of();
         if (father.hasGoogleCalendarConfigured()) {
             try {
-                calendarEvents = loadCalendarEvents(fatherIdLong, 7);
+                calendarEvents = loadCalendarEvents(father, 7);
             } catch (Exception e) {
-                log.warn("Failed to load calendar events for father: fatherId={}, error={}", 
+                log.warn("Failed to load calendar events: fatherId={}, error={}", 
                         fatherIdLong, e.getMessage());
             }
         }
         
         // Load quality time events
-        List<QualityTime> qualityTimes = qualityTimeRepository.findByFatherIdOrderByScheduledStartDesc(
-                father.getPhone());
+        List<QualityTime> qualityTimes = qualityTimeRepository.findByFatherIdOrderByScheduledStartDesc(fatherIdLong);
         List<SystemState.QualityTimeEvent> qtEvents = qualityTimes.stream()
                 .limit(20)
                 .map(this::mapToQualityTimeEvent)
                 .collect(Collectors.toList());
         
         // Build dashboard metrics
+        Belt currentBelt = father.getCurrentBelt();
+        Belt nextBelt = currentBelt.getNextBelt();
+        int progressToNext = 0;
+        int qtToNext = 0;
+        if (nextBelt != null) {
+            int current = father.getTotalQualityTimesCompleted();
+            int needed = nextBelt.getMinCompletions() - currentBelt.getMinCompletions();
+            int done = current - currentBelt.getMinCompletions();
+            progressToNext = needed > 0 ? Math.min(100, (done * 100) / needed) : 100;
+            qtToNext = Math.max(0, nextBelt.getMinCompletions() - current);
+        }
+        
         SystemState.DashboardMetrics metrics = new SystemState.DashboardMetrics(
-                father.getCurrentBelt(),
+                currentBelt,
                 father.getQualityTimeStreak(),
                 father.getQualityTimeLongestStreak(),
                 father.getTotalQualityTimesCompleted(),
-                List.of(), // Recent achievements - can be enhanced later
-                calculateProgressToNextBelt(father),
-                calculateQualityTimesToNextBelt(father)
+                List.of(),
+                progressToNext,
+                qtToNext
         );
         
         // Load weekly goal info
         SystemState.WeeklyGoalInfo weeklyGoalInfo = loadWeeklyGoalInfo(fatherIdLong);
         
-        log.debug("System state loaded for father: fatherId={}, children={}, qtEvents={}", 
+        log.debug("System state loaded: fatherId={}, children={}, qtEvents={}", 
                 fatherIdLong, childInfos.size(), qtEvents.size());
         
         return new SystemState(
                 fatherProfile,
-                father.getWorkflowState(),
+                father.getCurrentWorkflowState(),
                 calendarEvents,
                 qtEvents,
                 metrics,
-                List.of(), // Conversation context - can be enhanced later
+                List.of(),
                 weeklyGoalInfo
         );
     }
@@ -152,37 +157,31 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
         Father father = fatherRepository.findById(fatherIdLong)
                 .orElseThrow(() -> new ResourceNotFoundException("Father", fatherIdLong));
         
-        // If no calendar connected, return empty list
         if (!father.hasGoogleCalendarConfigured()) {
-            log.debug("No Google Calendar connected for father: fatherId={}", fatherIdLong);
+            log.debug("No Google Calendar connected: fatherId={}", fatherIdLong);
             return List.of();
         }
         
-        // Get father's timezone
         ZoneId timezone = father.getTimezone() != null 
                 ? ZoneId.of(father.getTimezone()) 
                 : ZoneId.of("Asia/Jerusalem");
         
-        // Load calendar events
-        List<CalendarEvent> calendarEvents;
+        Instant now = Instant.now();
+        Instant to = now.plus(Duration.ofDays(daysAhead));
+        
+        List<GoogleCalendarService.CalendarEvent> calendarEvents;
         try {
-            calendarEvents = googleCalendarService.getUpcomingEvents(fatherIdLong, daysAhead);
+            calendarEvents = googleCalendarService.getUpcomingEvents(father, now, to, false);
         } catch (Exception e) {
             log.warn("Failed to load calendar events: fatherId={}, error={}", fatherIdLong, e.getMessage());
             return List.of();
         }
         
-        // Calculate available slots
-        List<AvailableSlot> slots = calculateAvailableSlots(calendarEvents, daysAhead, timezone);
-        
-        log.debug("Available slots loaded: fatherId={}, daysAhead={}, slotsFound={}", 
-                fatherIdLong, daysAhead, slots.size());
-        
-        return slots;
+        return calculateAvailableSlots(calendarEvents, daysAhead, timezone);
     }
     
     private List<AvailableSlot> calculateAvailableSlots(
-            List<CalendarEvent> busyEvents, 
+            List<GoogleCalendarService.CalendarEvent> busyEvents, 
             int daysAhead, 
             ZoneId timezone) {
         
@@ -191,32 +190,26 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
         
         for (int day = 0; day < daysAhead; day++) {
             LocalDate date = LocalDate.now(timezone).plusDays(day);
-            
-            // Activity window for this day
             ZonedDateTime dayStart = date.atTime(DEFAULT_ACTIVITY_START_HOUR, 0).atZone(timezone);
             ZonedDateTime dayEnd = date.atTime(DEFAULT_ACTIVITY_END_HOUR, 0).atZone(timezone);
             
-            // Skip if day is in the past
             if (dayEnd.toInstant().isBefore(now)) {
                 continue;
             }
             
-            // Adjust start time if it's today
             Instant windowStart = dayStart.toInstant().isBefore(now) ? now : dayStart.toInstant();
             Instant windowEnd = dayEnd.toInstant();
             
-            // Get busy periods for this day
             List<BusyPeriod> busyPeriods = busyEvents.stream()
-                    .filter(e -> !e.isAllDay())
-                    .filter(e -> e.getStart().isBefore(windowEnd) && e.getEnd().isAfter(windowStart))
+                    .filter(e -> e.startTime() != null && e.endTime() != null)
+                    .filter(e -> e.startTime().isBefore(windowEnd) && e.endTime().isAfter(windowStart))
                     .map(e -> new BusyPeriod(
-                            e.getStart().isBefore(windowStart) ? windowStart : e.getStart(),
-                            e.getEnd().isAfter(windowEnd) ? windowEnd : e.getEnd()
+                            e.startTime().isBefore(windowStart) ? windowStart : e.startTime(),
+                            e.endTime().isAfter(windowEnd) ? windowEnd : e.endTime()
                     ))
                     .sorted(Comparator.comparing(BusyPeriod::start))
                     .collect(Collectors.toList());
             
-            // Find gaps between busy periods
             Instant currentStart = windowStart;
             for (BusyPeriod busy : busyPeriods) {
                 if (currentStart.isBefore(busy.start())) {
@@ -230,7 +223,6 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
                 }
             }
             
-            // Add slot after last busy period
             if (currentStart.isBefore(windowEnd)) {
                 long gapMinutes = Duration.between(currentStart, windowEnd).toMinutes();
                 if (gapMinutes >= MINIMUM_SLOT_MINUTES) {
@@ -239,7 +231,6 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
             }
         }
         
-        // Limit to reasonable number
         return slots.stream().limit(20).collect(Collectors.toList());
     }
     
@@ -264,7 +255,7 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
         return new SystemState.QualityTimeEvent(
                 qt.getId(),
                 qt.getChildId(),
-                null, // Child name could be resolved if needed
+                null,
                 qt.getScheduledStart(),
                 qt.getScheduledEnd(),
                 qt.getStatus().name(),
@@ -274,21 +265,27 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
         );
     }
     
-    private List<SystemState.CalendarEvent> loadCalendarEvents(Long fatherId, int daysAhead) {
-        List<CalendarEvent> events = googleCalendarService.getUpcomingEvents(fatherId, daysAhead);
+    private List<SystemState.CalendarEvent> loadCalendarEvents(Father father, int daysAhead) {
+        Instant now = Instant.now();
+        Instant to = now.plus(Duration.ofDays(daysAhead));
+        
+        List<GoogleCalendarService.CalendarEvent> events = 
+                googleCalendarService.getUpcomingEvents(father, now, to, false);
+        
         return events.stream()
                 .map(e -> new SystemState.CalendarEvent(
-                        e.getEventId(),
-                        e.getTitle(),
-                        e.getStart(),
-                        e.getEnd(),
-                        e.isAllDay()
+                        e.eventId(),
+                        e.title(),
+                        e.startTime(),
+                        e.endTime(),
+                        false
                 ))
                 .collect(Collectors.toList());
     }
     
     private SystemState.WeeklyGoalInfo loadWeeklyGoalInfo(Long fatherId) {
-        Optional<WeeklyGoal> activeGoal = weeklyGoalRepository.findActiveGoalByFatherId(fatherId);
+        Optional<WeeklyGoal> activeGoal = weeklyGoalRepository.findByFatherIdAndStatus(
+                fatherId, WeeklyGoalStatus.ACTIVE);
         
         if (activeGoal.isPresent()) {
             WeeklyGoal goal = activeGoal.get();
@@ -296,32 +293,12 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
                     true,
                     goal.getTargetHours(),
                     goal.getActualMinutes() / 60,
-                    0, // scheduled count - could be calculated
+                    0,
                     goal.getWeekStartDate(),
-                    null // last week summary - could be enhanced
+                    null
             );
         }
         
         return SystemState.WeeklyGoalInfo.noGoal();
-    }
-    
-    private int calculateProgressToNextBelt(Father father) {
-        Belt currentBelt = father.getCurrentBelt();
-        Belt nextBelt = currentBelt.getNextBelt();
-        if (nextBelt == null) {
-            return 100; // Already at max belt
-        }
-        int required = nextBelt.getMinimumQualityTimes() - currentBelt.getMinimumQualityTimes();
-        int completed = father.getTotalQualityTimesCompleted() - currentBelt.getMinimumQualityTimes();
-        return required > 0 ? Math.min(100, (completed * 100) / required) : 100;
-    }
-    
-    private int calculateQualityTimesToNextBelt(Father father) {
-        Belt currentBelt = father.getCurrentBelt();
-        Belt nextBelt = currentBelt.getNextBelt();
-        if (nextBelt == null) {
-            return 0;
-        }
-        return Math.max(0, nextBelt.getMinimumQualityTimes() - father.getTotalQualityTimesCompleted());
     }
 }
