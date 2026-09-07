@@ -1,6 +1,8 @@
 package com.dadcoach.api.config;
 
 import com.dadcoach.api.auth.JwtAuthFilter;
+import com.dadcoach.api.context.ContextProviderAuthFilter;
+import com.dadcoach.api.tools.ToolApiAuthFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,15 +29,28 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *   <li>{@code /api/v1/fathers/me/**} — requires FATHER role</li>
  *   <li>All other requests — authenticated</li>
  * </ul>
+ * <p>
+ * Filter chain order:
+ * <ol>
+ *   <li>ToolApiAuthFilter - handles /api/tools/** with X-API-Key</li>
+ *   <li>ContextProviderAuthFilter - handles /api/context/** with X-API-Key</li>
+ *   <li>JwtAuthFilter - handles JWT Bearer token authentication</li>
+ * </ol>
  */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final ToolApiAuthFilter toolApiAuthFilter;
+    private final ContextProviderAuthFilter contextProviderAuthFilter;
 
-    public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter,
+                          ToolApiAuthFilter toolApiAuthFilter,
+                          ContextProviderAuthFilter contextProviderAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.toolApiAuthFilter = toolApiAuthFilter;
+        this.contextProviderAuthFilter = contextProviderAuthFilter;
     }
 
     @Bean
@@ -89,6 +104,9 @@ public class SecurityConfig {
                         // All other requests require authentication
                         .anyRequest().authenticated()
                 )
+                // Add API key filters before JWT filter to handle /api/tools/** and /api/context/**
+                .addFilterBefore(toolApiAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(contextProviderAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
