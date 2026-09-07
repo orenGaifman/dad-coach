@@ -67,7 +67,7 @@ public class ToolApiAuthFilter extends OncePerRequestFilter {
         String requestPath = request.getRequestURI();
         String method = request.getMethod();
 
-        log.debug("ToolApiAuthFilter processing request: {} {}", method, requestPath);
+        log.info("ToolApiAuthFilter processing request: {} {}", method, requestPath);
 
         // Check if API is enabled
         if (!toolApiConfig.isEnabled()) {
@@ -84,8 +84,21 @@ public class ToolApiAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (!providedApiKey.equals(toolApiConfig.getApiKey())) {
-            log.warn("Invalid API key for Tool API request: {} {}", method, requestPath);
+        String configuredKey = toolApiConfig.getApiKey();
+        
+        // Debug logging - show first/last 4 chars only for security
+        String providedKeyDebug = providedApiKey.length() > 8 
+            ? providedApiKey.substring(0, 4) + "..." + providedApiKey.substring(providedApiKey.length() - 4)
+            : "***";
+        String configuredKeyDebug = configuredKey != null && configuredKey.length() > 8 
+            ? configuredKey.substring(0, 4) + "..." + configuredKey.substring(configuredKey.length() - 4)
+            : "***";
+        log.info("API key validation - provided: {}, configured: {}, lengths: {}/{}", 
+            providedKeyDebug, configuredKeyDebug, 
+            providedApiKey.length(), configuredKey != null ? configuredKey.length() : 0);
+
+        if (!providedApiKey.equals(configuredKey)) {
+            log.warn("Invalid API key for Tool API request: {} {} - key mismatch", method, requestPath);
             sendErrorResponse(response, 401, "Invalid API key", "UNAUTHORIZED");
             return;
         }
@@ -99,7 +112,7 @@ public class ToolApiAuthFilter extends OncePerRequestFilter {
                 new UsernamePasswordAuthenticationToken("tool-api-client", null, authorities);
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        log.debug("Tool API request authenticated: {} {}", method, requestPath);
+        log.info("Tool API request authenticated successfully: {} {}", method, requestPath);
         filterChain.doFilter(request, response);
     }
 
