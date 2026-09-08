@@ -109,7 +109,7 @@ public class PlatformWorkflowClient {
                     request.correlationId(), 
                     response != null ? response.currentState() : "null",
                     response != null ? response.success() : false,
-                    response != null ? response.instanceId() : "null");
+                    response != null ? response.executionId() : "null");
 
             return response;
 

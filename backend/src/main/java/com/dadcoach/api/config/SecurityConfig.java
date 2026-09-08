@@ -2,6 +2,7 @@ package com.dadcoach.api.config;
 
 import com.dadcoach.api.auth.JwtAuthFilter;
 import com.dadcoach.api.context.ContextProviderAuthFilter;
+import com.dadcoach.api.profile.ProfileApiAuthFilter;
 import com.dadcoach.api.tools.ToolApiAuthFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
@@ -23,6 +24,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *   <li>{@code /webhook/**} — public (provider webhooks use their own signature verification)</li>
  *   <li>{@code /api/tools/**} — permitAll (uses X-API-Key via ToolApiAuthFilter)</li>
  *   <li>{@code /api/context/**} — permitAll (uses X-API-Key via ContextProviderAuthFilter)</li>
+ *   <li>{@code /api/profile/**} — permitAll (uses X-API-Key via ProfileApiAuthFilter)</li>
  *   <li>{@code /api/webhooks/**} — permitAll (uses X-API-Key via webhook auth)</li>
  *   <li>{@code /api/v1/admin/**} — requires ADMIN role</li>
  *   <li>{@code /api/v1/service/**} — requires SERVICE role</li>
@@ -34,6 +36,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * <ol>
  *   <li>ToolApiAuthFilter - handles /api/tools/** with X-API-Key</li>
  *   <li>ContextProviderAuthFilter - handles /api/context/** with X-API-Key</li>
+ *   <li>ProfileApiAuthFilter - handles /api/profile/** with X-API-Key</li>
  *   <li>JwtAuthFilter - handles JWT Bearer token authentication</li>
  * </ol>
  */
@@ -44,13 +47,16 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final ToolApiAuthFilter toolApiAuthFilter;
     private final ContextProviderAuthFilter contextProviderAuthFilter;
+    private final ProfileApiAuthFilter profileApiAuthFilter;
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter,
                           ToolApiAuthFilter toolApiAuthFilter,
-                          ContextProviderAuthFilter contextProviderAuthFilter) {
+                          ContextProviderAuthFilter contextProviderAuthFilter,
+                          ProfileApiAuthFilter profileApiAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.toolApiAuthFilter = toolApiAuthFilter;
         this.contextProviderAuthFilter = contextProviderAuthFilter;
+        this.profileApiAuthFilter = profileApiAuthFilter;
     }
 
     @Bean
@@ -85,6 +91,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/tools/**").permitAll()
                         // Context Provider API endpoints (use X-API-Key via ContextProviderAuthFilter)
                         .requestMatchers("/api/context/**").permitAll()
+                        // Profile API endpoints (use X-API-Key via ProfileApiAuthFilter)
+                        .requestMatchers("/api/profile/**").permitAll()
                         // Platform webhook endpoints (use X-API-Key auth)
                         .requestMatchers("/api/webhooks/**").permitAll()
                         // Onboarding endpoints (no auth required - uses invitation tokens)
@@ -104,9 +112,10 @@ public class SecurityConfig {
                         // All other requests require authentication
                         .anyRequest().authenticated()
                 )
-                // Add API key filters before JWT filter to handle /api/tools/** and /api/context/**
+                // Add API key filters before JWT filter to handle /api/tools/**, /api/context/**, and /api/profile/**
                 .addFilterBefore(toolApiAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(contextProviderAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(profileApiAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
