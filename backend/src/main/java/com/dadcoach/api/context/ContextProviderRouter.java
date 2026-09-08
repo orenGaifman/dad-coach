@@ -198,7 +198,7 @@ public class ContextProviderRouter {
         data.put("has_google_calendar_connected", father.hasGoogleCalendarConfigured());
         data.put("children_count", children.size());
 
-        log.info("Family context loaded for userId={}, childrenCount={}", request.userId(), children.size());
+        log.info("Family context loaded: fatherId={}, childrenCount={}", father.getId(), children.size());
         return ContextProviderResponse.success(data);
     }
 
@@ -251,7 +251,7 @@ public class ContextProviderRouter {
 
         // Upcoming quality time events (next 7 days)
         List<QualityTime> upcomingQts = qualityTimeRepository.findByFatherIdAndStatus(
-                request.userId(), QualityTimeStatus.SCHEDULED);
+                father.getId(), QualityTimeStatus.SCHEDULED);
         
         Instant now = Instant.now();
         Instant cutoff = now.plus(daysAhead, ChronoUnit.DAYS);
@@ -283,7 +283,7 @@ public class ContextProviderRouter {
         // Available slots (only if calendar is connected)
         if (calendarConnected) {
             try {
-                UUID fatherUuid = new UUID(0, request.userId());
+                UUID fatherUuid = new UUID(0, father.getId());
                 List<AvailableSlot> slots = systemStateLoader.loadAvailableSlots(fatherUuid, daysAhead);
                 
                 List<Map<String, Object>> slotsList = new ArrayList<>();
@@ -296,7 +296,7 @@ public class ContextProviderRouter {
                 }
                 data.put("available_slots", slotsList);
             } catch (Exception e) {
-                log.warn("Failed to load available slots for userId={}: {}", request.userId(), e.getMessage());
+                log.warn("Failed to load available slots: fatherId={}, error={}", father.getId(), e.getMessage());
                 data.put("available_slots", List.of());
                 data.put("slots_error", "Failed to load calendar slots");
             }
@@ -304,8 +304,8 @@ public class ContextProviderRouter {
             data.put("available_slots", List.of());
         }
 
-        log.info("Calendar context loaded for userId={}, upcomingCount={}, calendarConnected={}", 
-                request.userId(), upcomingList.size(), calendarConnected);
+        log.info("Calendar context loaded: fatherId={}, upcomingCount={}, calendarConnected={}", 
+                father.getId(), upcomingList.size(), calendarConnected);
         return ContextProviderResponse.success(data);
     }
 
@@ -354,7 +354,7 @@ public class ContextProviderRouter {
         data.put("dashboard_metrics", dashboardMetrics);
 
         // Weekly goal info
-        Optional<WeeklyGoal> activeGoal = weeklyGoalService.getActiveGoal(request.userId());
+        Optional<WeeklyGoal> activeGoal = weeklyGoalService.getActiveGoal(father.getId());
         Map<String, Object> weeklyGoalInfo = new LinkedHashMap<>();
         if (activeGoal.isPresent()) {
             WeeklyGoal goal = activeGoal.get();
@@ -385,7 +385,7 @@ public class ContextProviderRouter {
         }
 
         Instant cutoff = Instant.now().minus(historyDays, ChronoUnit.DAYS);
-        List<QualityTime> recentQts = qualityTimeRepository.findByFatherIdOrderByScheduledStartDesc(request.userId());
+        List<QualityTime> recentQts = qualityTimeRepository.findByFatherIdOrderByScheduledStartDesc(father.getId());
         
         List<Map<String, Object>> historyList = new ArrayList<>();
         for (QualityTime qt : recentQts) {
@@ -436,8 +436,8 @@ public class ContextProviderRouter {
             data.put("activity_suggestions", List.of());
         }
 
-        log.info("Quality time context loaded for userId={}, historyCount={}, hasGoal={}", 
-                request.userId(), historyList.size(), activeGoal.isPresent());
+        log.info("Quality time context loaded: fatherId={}, historyCount={}, hasGoal={}", 
+                father.getId(), historyList.size(), activeGoal.isPresent());
         return ContextProviderResponse.success(data);
     }
 
