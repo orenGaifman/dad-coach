@@ -154,7 +154,7 @@ tool-api:
 workflow:
   platform:
     enabled: ${WORKFLOW_PLATFORM_ENABLED:false}
-    base-url: ${WORKFLOW_PLATFORM_BASE_URL:http://localhost:8081}
+    base-url: ${WORKFLOW_PLATFORM_BASE_URL:http://localhost:8080}
     api-key: ${WORKFLOW_PLATFORM_API_KEY:}
     workflow-id: ${WORKFLOW_PLATFORM_WORKFLOW_ID:}
     connect-timeout-ms: 5000
