@@ -19,32 +19,6 @@ import java.util.UUID;
 
 /**
  * HTTP client for calling the ai-workflow-platform workflow execution API.
- *
- * <p>This client communicates with the ai-workflow-platform to execute workflows.
- * It handles:</p>
- * <ul>
- *   <li>HTTP request/response mapping</li>
- *   <li>Authentication via API key</li>
- *   <li>Retry logic with exponential backoff</li>
- *   <li>Circuit breaker for resilience</li>
- *   <li>Timeout handling</li>
- * </ul>
- *
- * <h3>Configuration</h3>
- * <pre>
- * workflow:
- *   platform:
- *     enabled: true
- *     base-url: http://localhost:8081
- *     api-key: ${WORKFLOW_PLATFORM_API_KEY}
- *     workflow-id: ${WORKFLOW_PLATFORM_WORKFLOW_ID}
- *     connect-timeout-ms: 5000
- *     read-timeout-ms: 30000
- * </pre>
- *
- * @see WorkflowExecuteRequest
- * @see WorkflowExecuteResponse
- * @see PlatformWorkflowConfig
  */
 @Component
 public class PlatformWorkflowClient {
@@ -62,8 +36,9 @@ public class PlatformWorkflowClient {
         this.config = config;
         this.webClient = buildWebClient(config);
         
-        log.info("PlatformWorkflowClient initialized: baseUrl={}, enabled={}, workflowId={}",
-                config.getBaseUrl(), config.isEnabled(), config.getWorkflowId());
+        log.info("PlatformWorkflowClient initialized: baseUrl={}, enabled={}, workflowId={}, apiKeyPresent={}",
+                config.getBaseUrl(), config.isEnabled(), config.getWorkflowId(), 
+                config.getApiKey() != null && !config.getApiKey().isEmpty());
     }
 
     private WebClient buildWebClient(PlatformWorkflowConfig config) {
@@ -77,80 +52,101 @@ public class PlatformWorkflowClient {
 
     /**
      * Executes a workflow for the given request.
-     *
-     * <p>This method calls the ai-workflow-platform's POST /api/v1/workflow/execute endpoint.
-     * It includes retry logic with exponential backoff and circuit breaker protection.</p>
-     *
-     * @param request the workflow execution request
-     * @return the workflow execution response
-     * @throws PlatformWorkflowException if the platform call fails
      */
     @CircuitBreaker(name = CIRCUIT_BREAKER_NAME, fallbackMethod = "executeWorkflowFallback")
     public WorkflowExecuteResponse executeWorkflow(WorkflowExecuteRequest request) {
         if (!config.isEnabled()) {
+            log.warn("Platform workflow integration is DISABLED - check WORKFLOW_PLATFORM_ENABLED env var");
             throw new PlatformWorkflowException("Platform workflow integration is disabled");
         }
 
-        log.info("Calling platform workflow: userId={}, correlationId={}", 
-                maskUserId(request.userId()), request.correlationId());
+        String targetUrl = config.getBaseUrl() + "/api/v1/workflow/execute";
+        log.info("Calling platform workflow: targetUrl={}, userId={}, correlationId={}, workflowId={}", 
+                targetUrl, maskUserId(request.userId()), request.correlationId(), config.getWorkflowId());
+
+        PlatformApiRequest platformRequest = buildPlatformRequest(request);
+        log.debug("Platform request payload: workflowId={}, channel={}, messageType={}, contentLength={}",
+                platformRequest.workflowId(), platformRequest.channelId(), 
+                platformRequest.messageType(), 
+                platformRequest.content() != null ? platformRequest.content().length() : 0);
 
         try {
             WorkflowExecuteResponse response = webClient.post()
                     .uri("/api/v1/workflow/execute")
-                    .bodyValue(buildPlatformRequest(request))
+                    .bodyValue(platformRequest)
                     .retrieve()
-                    .onStatus(HttpStatusCode::is4xxClientError, clientResponse ->
-                            clientResponse.bodyToMono(String.class)
+                    .onStatus(HttpStatusCode::is4xxClientError, clientResponse -> {
+                            log.error("Platform 4xx error: status={}, url={}", 
+                                    clientResponse.statusCode(), targetUrl);
+                            return clientResponse.bodyToMono(String.class)
+                                    .doOnNext(body -> log.error("Platform 4xx response body: {}", body))
                                     .map(body -> new PlatformWorkflowException(
                                             "Client error from platform: status=" + clientResponse.statusCode() 
-                                                    + ", body=" + body)))
-                    .onStatus(HttpStatusCode::is5xxServerError, clientResponse ->
-                            clientResponse.bodyToMono(String.class)
+                                                    + ", body=" + body));
+                    })
+                    .onStatus(HttpStatusCode::is5xxServerError, clientResponse -> {
+                            log.error("Platform 5xx error: status={}, url={}", 
+                                    clientResponse.statusCode(), targetUrl);
+                            return clientResponse.bodyToMono(String.class)
+                                    .doOnNext(body -> log.error("Platform 5xx response body: {}", body))
                                     .map(body -> new PlatformWorkflowException(
                                             "Server error from platform: status=" + clientResponse.statusCode() 
-                                                    + ", body=" + body)))
+                                                    + ", body=" + body));
+                    })
                     .bodyToMono(PlatformApiResponse.class)
                     .timeout(Duration.ofMillis(config.getReadTimeoutMs()))
                     .retryWhen(Retry.backoff(MAX_RETRIES, RETRY_DELAY)
                             .filter(this::isRetryableException)
                             .doBeforeRetry(signal -> 
-                                    log.warn("Retrying platform call: attempt={}, error={}", 
-                                            signal.totalRetries() + 1, signal.failure().getMessage())))
+                                    log.warn("Retrying platform call: attempt={}, error={}, errorType={}", 
+                                            signal.totalRetries() + 1, 
+                                            signal.failure().getMessage(),
+                                            signal.failure().getClass().getSimpleName())))
                     .map(this::mapToResponse)
                     .block();
 
-            log.info("Platform workflow response received: correlationId={}, state={}, success={}", 
+            log.info("Platform workflow response received: correlationId={}, state={}, success={}, instanceId={}", 
                     request.correlationId(), 
                     response != null ? response.currentState() : "null",
-                    response != null ? response.success() : false);
+                    response != null ? response.success() : false,
+                    response != null ? response.instanceId() : "null");
 
             return response;
 
         } catch (WebClientResponseException e) {
-            log.error("Platform API error: status={}, body={}", 
-                    e.getStatusCode(), e.getResponseBodyAsString());
+            log.error("Platform API HTTP error: status={}, statusText={}, body={}, url={}", 
+                    e.getStatusCode(), e.getStatusText(), e.getResponseBodyAsString(), targetUrl);
             throw new PlatformWorkflowException("Platform API error: " + e.getStatusCode(), e);
         } catch (WebClientRequestException e) {
-            log.error("Platform connection error: message={}", e.getMessage());
+            log.error("Platform connection error: message={}, url={}, cause={}", 
+                    e.getMessage(), targetUrl, e.getCause() != null ? e.getCause().getMessage() : "none");
             throw new PlatformWorkflowException("Platform connection error: " + e.getMessage(), e);
         } catch (Exception e) {
-            log.error("Unexpected error calling platform: type={}, message={}", 
-                    e.getClass().getSimpleName(), e.getMessage());
+            log.error("Unexpected error calling platform: type={}, message={}, url={}, stackTrace={}", 
+                    e.getClass().getSimpleName(), e.getMessage(), targetUrl, 
+                    e.getStackTrace().length > 0 ? e.getStackTrace()[0].toString() : "none");
             throw new PlatformWorkflowException("Unexpected platform error: " + e.getMessage(), e);
         }
     }
 
     /**
      * Fallback method when circuit breaker is open.
-     *
-     * @param request the original request
-     * @param throwable the exception that triggered the fallback
-     * @return a fallback response indicating the platform is unavailable
      */
     @SuppressWarnings("unused")
     private WorkflowExecuteResponse executeWorkflowFallback(WorkflowExecuteRequest request, Throwable throwable) {
-        log.warn("Platform workflow circuit breaker open: correlationId={}, error={}", 
-                request.correlationId(), throwable.getMessage());
+        log.error("Platform workflow FALLBACK triggered: correlationId={}, errorType={}, errorMessage={}, baseUrl={}, workflowId={}",
+                request.correlationId(), 
+                throwable.getClass().getSimpleName(),
+                throwable.getMessage(),
+                config.getBaseUrl(),
+                config.getWorkflowId());
+        
+        // Log the root cause if available
+        Throwable cause = throwable.getCause();
+        if (cause != null) {
+            log.error("Fallback root cause: type={}, message={}", 
+                    cause.getClass().getSimpleName(), cause.getMessage());
+        }
         
         return new WorkflowExecuteResponse(
                 false,
@@ -181,7 +177,12 @@ public class PlatformWorkflowClient {
      * Maps the platform API response to our internal response format.
      */
     private WorkflowExecuteResponse mapToResponse(PlatformApiResponse apiResponse) {
+        log.debug("Mapping platform response: instanceId={}, stateKey={}, responseType={}, contentLength={}",
+                apiResponse.instanceId(), apiResponse.currentStateKey(), apiResponse.responseType(),
+                apiResponse.responseContent() != null ? apiResponse.responseContent().length() : 0);
+        
         if (apiResponse.instanceId() == null) {
+            log.warn("Platform returned null instanceId - treating as error");
             return new WorkflowExecuteResponse(
                     false,
                     null,
@@ -208,20 +209,23 @@ public class PlatformWorkflowClient {
 
     /**
      * Determines if an exception is retryable.
-     * We retry on connection errors and 5xx server errors, but not on 4xx client errors.
      */
     private boolean isRetryableException(Throwable throwable) {
         if (throwable instanceof WebClientRequestException) {
-            return true;  // Connection error - retry
+            log.debug("Exception is retryable (WebClientRequestException): {}", throwable.getMessage());
+            return true;
         }
         if (throwable instanceof WebClientResponseException e) {
-            return e.getStatusCode().is5xxServerError();  // Server error - retry
+            boolean retryable = e.getStatusCode().is5xxServerError();
+            log.debug("Exception retryable={} (WebClientResponseException status={})", retryable, e.getStatusCode());
+            return retryable;
         }
+        log.debug("Exception is NOT retryable: {}", throwable.getClass().getSimpleName());
         return false;
     }
 
     /**
-     * Masks user ID for logging (shows first and last 4 characters).
+     * Masks user ID for logging.
      */
     private String maskUserId(String userId) {
         if (userId == null || userId.length() <= 8) {
@@ -232,7 +236,6 @@ public class PlatformWorkflowClient {
 
     /**
      * Internal record for the platform API request format.
-     * Maps to ai-workflow-platform's WorkflowRequest.
      */
     private record PlatformApiRequest(
             UUID workflowId,
@@ -246,7 +249,6 @@ public class PlatformWorkflowClient {
 
     /**
      * Internal record for the platform API response format.
-     * Maps from ai-workflow-platform's WorkflowResponse.
      */
     private record PlatformApiResponse(
             UUID instanceId,
