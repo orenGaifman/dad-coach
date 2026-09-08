@@ -1,5 +1,6 @@
 package com.dadcoach.api.profile;
 
+import com.dadcoach.common.PhoneValidator;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.domain.father.FatherService;
@@ -67,6 +68,9 @@ public class ProfileApiController {
      * <p>If a father with the given external_user_id (phone) exists, their profile
      * fields are updated. If not, a new father is created with the provided profile.</p>
      * 
+     * <p>The phone number is normalized to E.164 format ('+' prefix added if missing)
+     * to handle WhatsApp user IDs which typically omit the '+' prefix.</p>
+     * 
      * <p>Example request:</p>
      * <pre>
      * POST /api/profile
@@ -113,10 +117,20 @@ public class ProfileApiController {
 
         log.info("Profile upsert request: externalUserId={}", request.externalUserId());
 
-        String phone = request.externalUserId();
+        // Normalize phone to E.164 format (add '+' prefix if missing)
+        // This handles WhatsApp user IDs which typically omit the '+' prefix
+        String phone = PhoneValidator.normalizeToE164(request.externalUserId());
         
-        // Try to find existing father by phone
+        if (!phone.equals(request.externalUserId())) {
+            log.info("Normalized phone from {} to {}", request.externalUserId(), phone);
+        }
+        
+        // Try to find existing father by phone (try both normalized and original)
         Optional<Father> existingFather = fatherRepository.findByPhone(phone);
+        if (existingFather.isEmpty() && !phone.equals(request.externalUserId())) {
+            // Also try the original format in case it was stored that way
+            existingFather = fatherRepository.findByPhone(request.externalUserId());
+        }
         
         Father father;
         boolean created;
@@ -127,7 +141,7 @@ public class ProfileApiController {
             created = false;
             log.info("Updating existing father profile: fatherId={}", father.getId());
         } else {
-            // Create new father
+            // Create new father with normalized phone
             father = fatherService.createFather(phone);
             created = true;
             log.info("Created new father: fatherId={}", father.getId());

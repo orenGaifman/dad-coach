@@ -3,7 +3,7 @@ package com.dadcoach.common;
 import java.util.regex.Pattern;
 
 /**
- * Utility class for validating phone numbers.
+ * Utility class for validating and normalizing phone numbers.
  * <p>
  * Validates phone numbers against the E.164 international format:
  * - Must start with '+'
@@ -22,6 +22,12 @@ public final class PhoneValidator {
      */
     private static final Pattern E164_PATTERN = Pattern.compile("^\\+[1-9]\\d{1,14}$");
 
+    /**
+     * Pattern for phone numbers missing the + prefix but otherwise valid.
+     * Matches: non-zero digit followed by 1-14 more digits.
+     */
+    private static final Pattern DIGITS_ONLY_PATTERN = Pattern.compile("^[1-9]\\d{1,14}$");
+
     private PhoneValidator() {
         // Utility class — no instantiation
     }
@@ -37,6 +43,34 @@ public final class PhoneValidator {
             return false;
         }
         return E164_PATTERN.matcher(phone).matches();
+    }
+
+    /**
+     * Normalizes a phone number to E.164 format by adding the '+' prefix if missing.
+     * <p>
+     * This handles cases where phone numbers are provided without the '+' prefix
+     * (e.g., from WhatsApp user IDs which omit the '+').
+     *
+     * @param phone the phone number to normalize
+     * @return the normalized phone number in E.164 format, or the original if already valid or cannot be normalized
+     */
+    public static String normalizeToE164(String phone) {
+        if (phone == null) {
+            return null;
+        }
+        
+        // Already in E.164 format
+        if (isValidE164(phone)) {
+            return phone;
+        }
+        
+        // Check if it's just missing the + prefix
+        if (DIGITS_ONLY_PATTERN.matcher(phone).matches()) {
+            return "+" + phone;
+        }
+        
+        // Cannot normalize - return as-is (validation will catch it)
+        return phone;
     }
 
     /**
