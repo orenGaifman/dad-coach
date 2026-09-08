@@ -20,7 +20,7 @@ import java.util.UUID;
  *     api-key: ${WORKFLOW_PLATFORM_API_KEY:}
  *     workflow-id: ${WORKFLOW_PLATFORM_WORKFLOW_ID:}             # UUID of dad-coach workflow
  *     connect-timeout-ms: 5000
- *     read-timeout-ms: 30000
+ *     read-timeout-ms: 60000
  * </pre>
  *
  * @see PlatformWorkflowClient
@@ -67,7 +67,7 @@ public class PlatformWorkflowConfig {
      * This should be long enough to accommodate AI processing time.
      */
     @Min(value = 5000, message = "Read timeout must be at least 5000ms")
-    private int readTimeoutMs = 30000;
+    private int readTimeoutMs = 60000;
 
     // Getters and Setters
 
