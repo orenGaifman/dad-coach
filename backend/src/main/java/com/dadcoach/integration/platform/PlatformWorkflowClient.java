@@ -36,8 +36,8 @@ public class PlatformWorkflowClient {
         this.config = config;
         this.webClient = buildWebClient(config);
         
-        log.info("PlatformWorkflowClient initialized: baseUrl={}, enabled={}, workflowId={}, apiKeyPresent={}",
-                config.getBaseUrl(), config.isEnabled(), config.getWorkflowId(), 
+        log.info("PlatformWorkflowClient initialized: baseUrl={}, enabled={}, workerKey={}, workflowId={}, apiKeyPresent={}",
+                config.getBaseUrl(), config.isEnabled(), config.getWorkerKey(), config.getWorkflowId(), 
                 config.getApiKey() != null && !config.getApiKey().isEmpty());
     }
 
@@ -52,6 +52,8 @@ public class PlatformWorkflowClient {
 
     /**
      * Executes a workflow for the given request.
+     * Uses the worker API (/api/v1/worker/execute) when workerKey is configured,
+     * otherwise falls back to the legacy workflow API (/api/v1/workflow/execute).
      */
     @CircuitBreaker(name = CIRCUIT_BREAKER_NAME, fallbackMethod = "executeWorkflowFallback")
     public WorkflowExecuteResponse executeWorkflow(WorkflowExecuteRequest request) {
@@ -60,8 +62,96 @@ public class PlatformWorkflowClient {
             throw new PlatformWorkflowException("Platform workflow integration is disabled");
         }
 
+        // Determine which API to use based on configuration
+        if (config.isWorkerApiEnabled()) {
+            return executeViaWorkerApi(request);
+        } else {
+            return executeViaWorkflowApi(request);
+        }
+    }
+
+    /**
+     * Executes via the new worker-based API (/api/v1/worker/execute).
+     * This is the recommended approach - uses workerKey instead of workflowId.
+     */
+    private WorkflowExecuteResponse executeViaWorkerApi(WorkflowExecuteRequest request) {
+        String targetUrl = config.getBaseUrl() + "/api/v1/worker/execute";
+        log.info("Calling platform worker API: targetUrl={}, workerKey={}, userId={}, correlationId={}", 
+                targetUrl, config.getWorkerKey(), maskUserId(request.userId()), request.correlationId());
+
+        WorkerApiRequest workerRequest = buildWorkerRequest(request);
+        log.debug("Worker request payload: workerKey={}, channel={}, messageType={}, contentLength={}",
+                workerRequest.workerKey(), workerRequest.channelId(), 
+                workerRequest.messageType(), 
+                workerRequest.content() != null ? workerRequest.content().length() : 0);
+
+        try {
+            WorkflowExecuteResponse response = webClient.post()
+                    .uri("/api/v1/worker/execute")
+                    .bodyValue(workerRequest)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::is4xxClientError, clientResponse -> {
+                            log.error("Platform 4xx error: status={}, url={}", 
+                                    clientResponse.statusCode(), targetUrl);
+                            return clientResponse.bodyToMono(String.class)
+                                    .doOnNext(body -> log.error("Platform 4xx response body: {}", body))
+                                    .map(body -> new PlatformWorkflowException(
+                                            "Client error from platform: status=" + clientResponse.statusCode() 
+                                                    + ", body=" + body));
+                    })
+                    .onStatus(HttpStatusCode::is5xxServerError, clientResponse -> {
+                            log.error("Platform 5xx error: status={}, url={}", 
+                                    clientResponse.statusCode(), targetUrl);
+                            return clientResponse.bodyToMono(String.class)
+                                    .doOnNext(body -> log.error("Platform 5xx response body: {}", body))
+                                    .map(body -> new PlatformWorkflowException(
+                                            "Server error from platform: status=" + clientResponse.statusCode() 
+                                                    + ", body=" + body));
+                    })
+                    .bodyToMono(PlatformApiResponse.class)
+                    .timeout(Duration.ofMillis(config.getReadTimeoutMs()))
+                    .retryWhen(Retry.backoff(MAX_RETRIES, RETRY_DELAY)
+                            .filter(this::isRetryableException)
+                            .doBeforeRetry(signal -> 
+                                    log.warn("Retrying worker API call: attempt={}, error={}, errorType={}", 
+                                            signal.totalRetries() + 1, 
+                                            signal.failure().getMessage(),
+                                            signal.failure().getClass().getSimpleName())))
+                    .map(this::mapToResponse)
+                    .block();
+
+            log.info("Worker API response received: workerKey={}, correlationId={}, state={}, success={}, instanceId={}", 
+                    config.getWorkerKey(), request.correlationId(), 
+                    response != null ? response.currentState() : "null",
+                    response != null ? response.success() : false,
+                    response != null ? response.executionId() : "null");
+
+            return response;
+
+        } catch (WebClientResponseException e) {
+            log.error("Worker API HTTP error: status={}, statusText={}, body={}, url={}", 
+                    e.getStatusCode(), e.getStatusText(), e.getResponseBodyAsString(), targetUrl);
+            throw new PlatformWorkflowException("Worker API error: " + e.getStatusCode(), e);
+        } catch (WebClientRequestException e) {
+            log.error("Worker API connection error: message={}, url={}, cause={}", 
+                    e.getMessage(), targetUrl, e.getCause() != null ? e.getCause().getMessage() : "none");
+            throw new PlatformWorkflowException("Worker API connection error: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Unexpected error calling worker API: type={}, message={}, url={}, stackTrace={}", 
+                    e.getClass().getSimpleName(), e.getMessage(), targetUrl, 
+                    e.getStackTrace().length > 0 ? e.getStackTrace()[0].toString() : "none");
+            throw new PlatformWorkflowException("Unexpected worker API error: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Executes via the legacy workflow API (/api/v1/workflow/execute).
+     * @deprecated Use worker API instead by configuring workerKey.
+     */
+    @Deprecated
+    private WorkflowExecuteResponse executeViaWorkflowApi(WorkflowExecuteRequest request) {
         String targetUrl = config.getBaseUrl() + "/api/v1/workflow/execute";
-        log.info("Calling platform workflow: targetUrl={}, userId={}, correlationId={}, workflowId={}", 
+        log.info("Calling platform workflow API (legacy): targetUrl={}, userId={}, correlationId={}, workflowId={}", 
                 targetUrl, maskUserId(request.userId()), request.correlationId(), config.getWorkflowId());
 
         PlatformApiRequest platformRequest = buildPlatformRequest(request);
@@ -134,11 +224,12 @@ public class PlatformWorkflowClient {
      */
     @SuppressWarnings("unused")
     private WorkflowExecuteResponse executeWorkflowFallback(WorkflowExecuteRequest request, Throwable throwable) {
-        log.error("Platform workflow FALLBACK triggered: correlationId={}, errorType={}, errorMessage={}, baseUrl={}, workflowId={}",
+        log.error("Platform workflow FALLBACK triggered: correlationId={}, errorType={}, errorMessage={}, baseUrl={}, workerKey={}, workflowId={}",
                 request.correlationId(), 
                 throwable.getClass().getSimpleName(),
                 throwable.getMessage(),
                 config.getBaseUrl(),
+                config.getWorkerKey(),
                 config.getWorkflowId());
         
         // Log the root cause if available
@@ -159,8 +250,25 @@ public class PlatformWorkflowClient {
     }
 
     /**
-     * Builds the platform API request from our internal request format.
+     * Builds the worker API request from our internal request format.
      */
+    private WorkerApiRequest buildWorkerRequest(WorkflowExecuteRequest request) {
+        return new WorkerApiRequest(
+                config.getWorkerKey(),
+                request.userId(),
+                request.channel(),
+                request.correlationId(),
+                request.message().type(),
+                request.message().content(),
+                null  // metadata - optional
+        );
+    }
+
+    /**
+     * Builds the platform API request from our internal request format.
+     * @deprecated Use buildWorkerRequest instead.
+     */
+    @Deprecated
     private PlatformApiRequest buildPlatformRequest(WorkflowExecuteRequest request) {
         return new PlatformApiRequest(
                 config.getWorkflowId(),
@@ -235,8 +343,23 @@ public class PlatformWorkflowClient {
     }
 
     /**
-     * Internal record for the platform API request format.
+     * Internal record for the worker API request format.
      */
+    private record WorkerApiRequest(
+            String workerKey,
+            String userId,
+            String channelId,
+            String correlationId,
+            String messageType,
+            String content,
+            Object metadata
+    ) {}
+
+    /**
+     * Internal record for the platform API request format.
+     * @deprecated Use WorkerApiRequest instead.
+     */
+    @Deprecated
     private record PlatformApiRequest(
             UUID workflowId,
             String userId,

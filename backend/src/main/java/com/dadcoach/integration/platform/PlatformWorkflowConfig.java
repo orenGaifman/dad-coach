@@ -18,7 +18,8 @@ import java.util.UUID;
  *     enabled: true                                              # Feature flag
  *     base-url: ${WORKFLOW_PLATFORM_BASE_URL:http://localhost:8081}
  *     api-key: ${WORKFLOW_PLATFORM_API_KEY:}
- *     workflow-id: ${WORKFLOW_PLATFORM_WORKFLOW_ID:}             # UUID of dad-coach workflow
+ *     worker-key: ${WORKFLOW_PLATFORM_WORKER_KEY:dad-coach}      # Worker key (recommended)
+ *     workflow-id: ${WORKFLOW_PLATFORM_WORKFLOW_ID:}             # UUID of workflow (legacy)
  *     connect-timeout-ms: 5000
  *     read-timeout-ms: 60000
  * </pre>
@@ -51,9 +52,18 @@ public class PlatformWorkflowConfig {
     private String apiKey = "";
 
     /**
-     * The UUID of the dad-coach workflow definition in the platform.
-     * This is the workflow that will be executed for all dad-coach messages.
+     * The worker key for the dad-coach worker in the platform.
+     * This is the recommended way to identify the worker (uses /api/v1/worker/execute).
+     * When set, this takes precedence over workflowId.
      */
+    private String workerKey;
+
+    /**
+     * The UUID of the dad-coach workflow definition in the platform.
+     * This is the legacy way to identify the workflow (uses /api/v1/workflow/execute).
+     * @deprecated Use workerKey instead for the new worker-based API.
+     */
+    @Deprecated
     private UUID workflowId;
 
     /**
@@ -103,6 +113,22 @@ public class PlatformWorkflowConfig {
         this.workflowId = workflowId;
     }
 
+    public String getWorkerKey() {
+        return workerKey;
+    }
+
+    public void setWorkerKey(String workerKey) {
+        this.workerKey = workerKey;
+    }
+
+    /**
+     * Returns true if the new worker-based API should be used.
+     * Worker key takes precedence over workflowId.
+     */
+    public boolean isWorkerApiEnabled() {
+        return workerKey != null && !workerKey.isBlank();
+    }
+
     public int getConnectTimeoutMs() {
         return connectTimeoutMs;
     }
@@ -125,6 +151,7 @@ public class PlatformWorkflowConfig {
                 "enabled=" + enabled +
                 ", baseUrl='" + baseUrl + '\'' +
                 ", apiKey='[REDACTED]'" +
+                ", workerKey='" + workerKey + '\'' +
                 ", workflowId=" + workflowId +
                 ", connectTimeoutMs=" + connectTimeoutMs +
                 ", readTimeoutMs=" + readTimeoutMs +
