@@ -136,6 +136,9 @@ public class ToolDispatcher {
         handlers.put("connect_calendar", this::handleConnectCalendar);
         handlers.put("get_upcoming_quality_time", this::handleGetUpcomingQualityTime);
 
+        // Onboarding / Child Management Tools
+        handlers.put("add_child", this::handleAddChild);
+
         log.info("ToolDispatcher initialized with {} handlers", handlers.size());
     }
 
@@ -357,6 +360,133 @@ public class ToolDispatcher {
 
         log.info("Available slots returned: count={}, userId={}", slots.size(), request.userId());
         return ToolExecutionResponse.success(data);
+    }
+
+    // ─── Onboarding / Child Management Handlers ──────────────────────────────
+
+    /**
+     * Adds a child to the authenticated father's profile.
+     *
+     * <p>Parameters:</p>
+     * <ul>
+     *   <li>name (required) - child's name, 1-100 chars</li>
+     *   <li>age (required) - whole years, 0-25</li>
+     *   <li>gender (optional) - "boy", "girl", or "other"</li>
+     *   <li>interests (optional) - array of strings</li>
+     * </ul>
+     */
+    private ToolExecutionResponse handleAddChild(ToolApiController.ResolvedToolRequest request) {
+        // The controller has already resolved the phone/userId to a numeric father id.
+        // If it could not, the request never reaches here (returns "Father not found").
+        Long fatherId = request.userId();
+
+        String name = request.getStringParam("name");
+        Integer age = request.getIntParam("age");
+        String gender = request.getStringParam("gender");
+
+        // Validate name
+        if (name == null || name.isBlank()) {
+            return ToolExecutionResponse.invalidParameters("name is required");
+        }
+        name = name.trim();
+        if (name.length() > 100) {
+            return ToolExecutionResponse.failure("Invalid name provided", "INVALID_NAME");
+        }
+
+        // Validate age
+        if (age == null) {
+            return ToolExecutionResponse.invalidParameters("age is required");
+        }
+        if (age < 0 || age > 25) {
+            return ToolExecutionResponse.failure("Age must be between 0 and 25", "INVALID_AGE");
+        }
+
+        // Validate gender (optional)
+        if (gender != null && !gender.isBlank()) {
+            String normalized = gender.trim().toLowerCase(Locale.ROOT);
+            if (!Set.of("boy", "girl", "other").contains(normalized)) {
+                return ToolExecutionResponse.failure("Invalid gender value", "INVALID_GENDER");
+            }
+            gender = normalized;
+        } else {
+            gender = null;
+        }
+
+        // Extract interests (optional array of strings)
+        List<String> interests = extractStringList(request.parameters(), "interests");
+
+        // Look up the father (guidance: "Father not found" is a terminal auth error)
+        Father father = fatherRepository.findById(fatherId)
+                .orElseThrow(() -> new ResourceNotFoundException("Father", fatherId));
+
+        // Enforce duplicate-name rule (case-insensitive) among active children
+        final String childName = name;
+        boolean duplicate = childRepository.findByFatherIdAndStatus(fatherId, "ACTIVE").stream()
+                .anyMatch(c -> c.getName() != null && c.getName().equalsIgnoreCase(childName));
+        if (duplicate) {
+            return ToolExecutionResponse.failure("Child with this name already exists", "DUPLICATE_CHILD");
+        }
+
+        // Convert whole-year age to an approximate birth date.
+        LocalDate birthDate = LocalDate.now().minus(Period.ofYears(age));
+
+        Child child = new Child(father, name, birthDate);
+        if (gender != null) {
+            child.setGender(gender);
+        }
+        if (interests != null && !interests.isEmpty()) {
+            child.setInterests(interests);
+        }
+
+        Child saved = childRepository.save(child);
+        long childCount = childRepository.countActiveByFatherId(fatherId);
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("childId", saved.getId() != null ? saved.getId().toString() : null);
+        data.put("name", saved.getName());
+        data.put("age", saved.getAge());
+        if (saved.getGender() != null) {
+            data.put("gender", saved.getGender());
+        }
+        if (saved.getInterests() != null && !saved.getInterests().isEmpty()) {
+            data.put("interests", saved.getInterests());
+        }
+        data.put("createdAt", saved.getCreatedAt() != null ? saved.getCreatedAt().toString() : null);
+        data.put("status", "added");
+        data.put("childCount", childCount);
+
+        log.info("Child added: childId={}, fatherId={}, childCount={}", saved.getId(), fatherId, childCount);
+        return ToolExecutionResponse.success(data);
+    }
+
+    /**
+     * Extracts a list of non-blank strings from a parameter that may be a JSON array
+     * or a comma-separated string. Returns an empty list when absent or unparseable.
+     */
+    private List<String> extractStringList(Map<String, Object> parameters, String key) {
+        if (parameters == null) {
+            return List.of();
+        }
+        Object value = parameters.get(key);
+        if (value == null) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        if (value instanceof Collection<?> collection) {
+            for (Object item : collection) {
+                if (item != null && !item.toString().isBlank()) {
+                    result.add(item.toString().trim());
+                }
+            }
+        } else {
+            // Fallback: allow a comma-separated string.
+            for (String part : value.toString().split(",")) {
+                if (!part.isBlank()) {
+                    result.add(part.trim());
+                }
+            }
+        }
+        return result;
     }
 
     // ─── Weekly Goal Tool Handlers ───────────────────────────────────────────
