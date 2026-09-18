@@ -161,6 +161,12 @@ public class ToolDispatcher {
 
         try {
             return handler.execute(request);
+        } catch (com.dadcoach.calendar.CalendarIntegrationException e) {
+            // Distinct, actionable calendar integration failures (not connected / reconnect
+            // required / temporary / conflict). Each carries its own stable error code.
+            log.warn("Calendar integration failure for tool {}: type={}, message={}",
+                    toolKey, e.getErrorType(), e.getMessage());
+            return ToolExecutionResponse.failure(e.getMessage(), e.getErrorType().code());
         } catch (ResourceNotFoundException e) {
             log.warn("Resource not found during tool execution: {}", e.getMessage());
             return ToolExecutionResponse.notFound(e.getEntityType(), String.valueOf(e.getIdentifier()));

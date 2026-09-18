@@ -1,5 +1,6 @@
 package com.dadcoach.qualitytime;
 
+import com.dadcoach.calendar.CalendarIntegrationException;
 import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
@@ -124,36 +125,36 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         // Calculate end time
         Instant endTime = startTime.plus(duration);
 
+        // Google Calendar is a real, required side effect of scheduling: this creates an
+        // actual event in the user's connected calendar. If the user has not connected their
+        // calendar, fail fast with a clear, actionable error instead of silently skipping.
+        if (!father.hasGoogleCalendarConfigured()) {
+            log.warn("Cannot schedule Quality Time: Google Calendar not connected for fatherId={} "
+                            + "(googleCalendarEnabled={}, hasRefreshToken={})",
+                    fatherId, father.getGoogleCalendarEnabled(), father.getGoogleRefreshToken() != null);
+            throw CalendarIntegrationException.notConnected();
+        }
+
         // Step 2: Re-read Google Calendar before write (conflict detection per Requirement 2.6)
         // This implements the "Read Before Write" principle to detect any conflicts
         // that may have been created since the available slots were last read
-        if (father.hasGoogleCalendarConfigured()) {
-            boolean hasConflict = checkCalendarConflict(father, startTime, endTime);
-            if (hasConflict) {
-                log.warn("Calendar conflict detected for father {} at {}-{}", 
-                        fatherId, startTime, endTime);
-                throw new IllegalStateException(
-                        "Calendar conflict detected at the requested time. Please choose a different slot.");
-            }
+        boolean hasConflict = checkCalendarConflict(father, startTime, endTime);
+        if (hasConflict) {
+            log.warn("Calendar conflict detected for father {} at {}-{}",
+                    fatherId, startTime, endTime);
+            throw CalendarIntegrationException.conflict(
+                    "The requested time conflicts with an existing calendar event. "
+                            + "Please choose a different slot.");
         }
 
         // Create QualityTime entity
         QualityTime qualityTime = new QualityTime(father, child, startTime, endTime);
 
-        // Step 3 & 4: Create Google Calendar event and handle retry (Requirement 3.6)
-        String calendarEventId = null;
-        if (father.hasGoogleCalendarConfigured()) {
-            calendarEventId = createCalendarEventWithRetry(father, child, startTime, endTime);
-            if (calendarEventId != null) {
-                qualityTime.setGoogleCalendarEventId(calendarEventId);
-            } else {
-                log.warn("Calendar event creation failed for fatherId={}, calendar configured but event not created",
-                        fatherId);
-            }
-        } else {
-            log.info("Skipping calendar sync for fatherId={}: googleCalendarEnabled={}, hasRefreshToken={}",
-                    fatherId, father.getGoogleCalendarEnabled(), father.getGoogleRefreshToken() != null);
-        }
+        // Step 3 & 4: Create the real Google Calendar event (with one retry for transient errors).
+        // A distinct CalendarIntegrationException is thrown for not-connected / reconnect-required /
+        // temporary-failure cases so callers can surface the right actionable message.
+        String calendarEventId = createCalendarEventWithRetry(father, child, startTime, endTime);
+        qualityTime.setGoogleCalendarEventId(calendarEventId);
 
         // Save the Quality Time record with google_calendar_event_id
         QualityTime saved = qualityTimeRepository.save(qualityTime);
@@ -252,45 +253,40 @@ public class QualityTimeServiceImpl implements QualityTimeService {
      * @param startTime the start time
      * @param endTime the end time
      * @return the calendar event ID
-     * @throws QualityTimeSchedulingException if creation fails after retry
+     * @throws CalendarIntegrationException if creation fails (retries only transient failures)
      */
     private String createCalendarEventWithRetry(Father father, Child child, Instant startTime, Instant endTime) {
-        Exception lastException = null;
-
         // First attempt
         try {
             String eventId = createCalendarEvent(father, child, startTime, endTime);
-            if (eventId != null) {
-                log.info("Created Google Calendar event {} for Quality Time", eventId);
-                return eventId;
+            log.info("Created Google Calendar event {} for Quality Time", eventId);
+            return eventId;
+        } catch (CalendarIntegrationException e) {
+            // Only transient failures are worth retrying. Not-connected / reconnect-required are
+            // deterministic and must surface immediately with their actionable message.
+            if (e.getErrorType() != CalendarIntegrationException.CalendarErrorType.TEMPORARY_FAILURE) {
+                throw e;
             }
-        } catch (Exception e) {
-            lastException = e;
-            log.warn("First calendar event creation attempt failed: {}", e.getMessage());
+            log.warn("First calendar event creation attempt failed (transient): {}", e.getMessage());
         }
 
-        // Retry with exponential backoff (Requirement 3.6)
+        // Retry once for transient failures
         try {
             Thread.sleep(1000); // 1 second delay before retry
-            String eventId = createCalendarEvent(father, child, startTime, endTime);
-            if (eventId != null) {
-                log.info("Created Google Calendar event {} on retry", eventId);
-                return eventId;
-            }
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
-            throw new QualityTimeSchedulingException("Interrupted during calendar retry", ie);
-        } catch (Exception e) {
-            lastException = e;
-            log.error("Calendar event creation failed after retry: {}", e.getMessage());
+            throw CalendarIntegrationException.temporaryFailure("interrupted during retry", ie);
         }
 
-        // Both attempts failed - throw exception with informative message (Requirement 3.6)
-        String errorMessage = "Failed to create calendar event after retry";
-        if (lastException != null) {
-            throw new QualityTimeSchedulingException(errorMessage, lastException);
+        try {
+            String eventId = createCalendarEvent(father, child, startTime, endTime);
+            log.info("Created Google Calendar event {} on retry", eventId);
+            return eventId;
+        } catch (CalendarIntegrationException e) {
+            log.error("Calendar event creation failed after retry: type={}, message={}",
+                    e.getErrorType(), e.getMessage());
+            throw e;
         }
-        throw new QualityTimeSchedulingException(errorMessage);
     }
 
     @Override
@@ -593,40 +589,109 @@ public class QualityTimeServiceImpl implements QualityTimeService {
      * @return the calendar event ID, or null if creation fails
      */
     private String createCalendarEvent(Father father, Child child, Instant startTime, Instant endTime) {
-        String accessToken = getValidAccessToken(father);
-        if (accessToken == null) {
-            log.warn("Could not get valid access token for father {}", father.getId());
-            return null;
-        }
+        // Obtains a valid token or throws a typed CalendarIntegrationException
+        // (NOT_CONNECTED / RECONNECT_REQUIRED / TEMPORARY_FAILURE).
+        String accessToken = obtainAccessToken(father);
+
+        String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
+        String locale = father.getLocale() != null ? father.getLocale() : AppConstants.DEFAULT_LOCALE;
+
+        Map<String, Object> event = buildCalendarEvent(child.getName(), startTime, endTime, timezone, locale);
+
+        String calendarId = father.getGoogleCalendarId() != null ? father.getGoogleCalendarId() : "primary";
+        String url = GOOGLE_CALENDAR_API + "/calendars/" +
+                URLEncoder.encode(calendarId, StandardCharsets.UTF_8) + "/events";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(event, headers);
 
         try {
-            String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
-            String locale = father.getLocale() != null ? father.getLocale() : AppConstants.DEFAULT_LOCALE;
-
-            Map<String, Object> event = buildCalendarEvent(child.getName(), startTime, endTime, timezone, locale);
-
-            String calendarId = father.getGoogleCalendarId() != null ? father.getGoogleCalendarId() : "primary";
-            String url = GOOGLE_CALENDAR_API + "/calendars/" +
-                    URLEncoder.encode(calendarId, StandardCharsets.UTF_8) + "/events";
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(accessToken);
-
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(event, headers);
             ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
-
-            if (response.getStatusCode().is2xxSuccessful()) {
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 JsonNode responseJson = objectMapper.readTree(response.getBody());
                 return responseJson.get("id").asText();
             }
-
+            // Non-2xx without an exception (rare) — treat as transient.
+            throw CalendarIntegrationException.temporaryFailure(
+                    "unexpected status " + response.getStatusCode().value(), null);
+        } catch (HttpClientErrorException e) {
+            // 401/403 => auth is broken; the user must reconnect. Other 4xx are unexpected
+            // client errors from a request we control, so treat as transient rather than input.
+            if (e.getStatusCode() == HttpStatus.UNAUTHORIZED || e.getStatusCode() == HttpStatus.FORBIDDEN) {
+                log.error("Google Calendar rejected auth on event create: status={}", e.getStatusCode().value());
+                throw CalendarIntegrationException.reconnectRequired(e);
+            }
+            log.error("Google Calendar client error on event create: status={}, body={}",
+                    e.getStatusCode().value(), e.getResponseBodyAsString());
+            throw CalendarIntegrationException.temporaryFailure(
+                    "HTTP " + e.getStatusCode().value(), e);
+        } catch (CalendarIntegrationException e) {
+            throw e;
         } catch (Exception e) {
+            // 5xx (HttpServerErrorException), timeouts, network, parse errors => transient.
             log.error("Error creating calendar event: {}", e.getMessage());
-            throw new RuntimeException("Calendar event creation failed", e);
+            throw CalendarIntegrationException.temporaryFailure(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Obtains a valid Google access token for the father, refreshing if necessary.
+     *
+     * @throws CalendarIntegrationException with a specific error type:
+     *   NOT_CONNECTED (no refresh token / calendar disabled),
+     *   RECONNECT_REQUIRED (refresh rejected — token revoked/invalid),
+     *   TEMPORARY_FAILURE (transient error refreshing the token)
+     */
+    private String obtainAccessToken(Father father) {
+        if (!father.hasGoogleCalendarConfigured()) {
+            throw CalendarIntegrationException.notConnected();
+        }
+        if (!father.needsTokenRefresh()) {
+            return father.getGoogleAccessToken();
         }
 
-        return null;
+        try {
+            MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+            params.add("client_id", clientId);
+            params.add("client_secret", clientSecret);
+            params.add("refresh_token", father.getGoogleRefreshToken());
+            params.add("grant_type", "refresh_token");
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    GOOGLE_TOKEN_URL, request, String.class);
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                JsonNode tokens = objectMapper.readTree(response.getBody());
+                String newAccessToken = tokens.get("access_token").asText();
+                int expiresIn = tokens.get("expires_in").asInt();
+
+                father.setGoogleAccessToken(newAccessToken);
+                father.setGoogleTokenExpiresAt(Instant.now().plusSeconds(expiresIn));
+                fatherRepository.save(father);
+
+                return newAccessToken;
+            }
+            throw CalendarIntegrationException.temporaryFailure(
+                    "token endpoint returned " + response.getStatusCode().value(), null);
+        } catch (HttpClientErrorException e) {
+            // Google returns 400 invalid_grant (or 401) when the refresh token is expired/revoked.
+            log.error("Google token refresh rejected for father {}: status={}, body={}",
+                    father.getId(), e.getStatusCode().value(), e.getResponseBodyAsString());
+            throw CalendarIntegrationException.reconnectRequired(e);
+        } catch (CalendarIntegrationException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Transient error refreshing access token for father {}: {}",
+                    father.getId(), e.getMessage());
+            throw CalendarIntegrationException.temporaryFailure(e.getMessage(), e);
+        }
     }
 
     /**
@@ -715,46 +780,18 @@ public class QualityTimeServiceImpl implements QualityTimeService {
     }
 
     /**
-     * Gets a valid access token for the father, refreshing if necessary.
+     * Lenient access-token accessor for non-critical calendar operations (conflict check,
+     * delete, sync verification). Returns {@code null} on any failure so those best-effort
+     * flows can degrade gracefully. Scheduling uses {@link #obtainAccessToken(Father)} instead,
+     * which throws typed {@link CalendarIntegrationException}s so failures surface clearly.
      */
     private String getValidAccessToken(Father father) {
-        if (!father.needsTokenRefresh()) {
-            return father.getGoogleAccessToken();
-        }
-
-        // Refresh the token
         try {
-            MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
-            params.add("client_id", clientId);
-            params.add("client_secret", clientSecret);
-            params.add("refresh_token", father.getGoogleRefreshToken());
-            params.add("grant_type", "refresh_token");
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
-            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
-            ResponseEntity<String> response = restTemplate.postForEntity(
-                    GOOGLE_TOKEN_URL, request, String.class);
-
-            if (response.getStatusCode().is2xxSuccessful()) {
-                JsonNode tokens = objectMapper.readTree(response.getBody());
-
-                String newAccessToken = tokens.get("access_token").asText();
-                int expiresIn = tokens.get("expires_in").asInt();
-
-                father.setGoogleAccessToken(newAccessToken);
-                father.setGoogleTokenExpiresAt(Instant.now().plusSeconds(expiresIn));
-                fatherRepository.save(father);
-
-                return newAccessToken;
-            }
-
-        } catch (Exception e) {
-            log.error("Failed to refresh access token for father {}: {}",
-                    father.getId(), e.getMessage());
+            return obtainAccessToken(father);
+        } catch (CalendarIntegrationException e) {
+            log.warn("Access token unavailable for father {} ({}): {}",
+                    father.getId(), e.getErrorType(), e.getMessage());
+            return null;
         }
-
-        return null;
     }
 }
