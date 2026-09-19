@@ -17,7 +17,10 @@ spring:
     ignore-migration-patterns: "*:missing"
 
 server:
-  port: ${SERVER_PORT:8080}
+  # Bind to the platform-provided port. Render (and most PaaS) inject PORT; fall back to
+  # SERVER_PORT (used by other envs/local), then 8080. Using the wrong port makes the platform's
+  # health/port scan fail with "No open ports detected" even though the app started fine.
+  port: ${PORT:${SERVER_PORT:8080}}
   tomcat:
     max-http-form-post-size: 262144  # 256 KB
 
