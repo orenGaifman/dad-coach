@@ -1,0 +1,8 @@
+{
+  "name": "Daily coach check",
+  "targetStateKey": "ACTIVE_COACHING",
+  "scheduleType": "DAILY",
+  "timeOfDay": "09:00",
+  "timezoneSource": "INSTANCE",
+  "enabled": true
+}

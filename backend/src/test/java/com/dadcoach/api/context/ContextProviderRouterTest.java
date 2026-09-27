@@ -51,7 +51,8 @@ class ContextProviderRouterTest {
         assertThat(providers).containsExactlyInAnyOrder(
                 "family_context",
                 "calendar_context",
-                "quality_time_context"
+                "quality_time_context",
+                "weekly_plan_context"
         );
     }
 
@@ -66,5 +67,13 @@ class ContextProviderRouterTest {
         
         assertThat(response.success()).isFalse();
         assertThat(response.errorCode()).isEqualTo("PROVIDER_NOT_FOUND");
+    }
+
+    @Test
+    @DisplayName("Channel-qualified identities resolve to the stored E.164 phone")
+    void shouldNormalizeChannelQualifiedPhone() {
+        assertThat(ContextProviderRouter.normalizePhone("whatsapp:+972501234567")).isEqualTo("+972501234567");
+        assertThat(ContextProviderRouter.normalizePhone("whatsapp:972501234567")).isEqualTo("+972501234567");
+        assertThat(ContextProviderRouter.normalizePhone("+972501234567")).isEqualTo("+972501234567");
     }
 }

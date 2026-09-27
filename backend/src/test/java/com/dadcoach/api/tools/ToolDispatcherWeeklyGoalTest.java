@@ -94,4 +94,27 @@ class ToolDispatcherWeeklyGoalTest {
         assertThat(response.data().get("target_hours")).isEqualTo(3);
         assertThat(response.data().get("status")).isEqualTo("ACTIVE");
     }
+
+    @Test
+    void repeatingThisWeeksGoalWithTheSameTargetIsIdempotent() {
+        when(weeklyGoalService.getCurrentWeekGoal(FATHER_ID)).thenReturn(java.util.Optional.of(activeGoal(3)));
+
+        ToolExecutionResponse response = dispatcher.dispatch("set_weekly_goal", request(Map.of("target_hours", 3)));
+
+        assertThat(response.success()).isTrue();
+        assertThat(response.data()).containsEntry("already_existed", true).containsEntry("status", "ACTIVE");
+        verify(weeklyGoalService, never()).createAndActivateWeeklyGoal(anyLong(), anyInt());
+    }
+
+    @Test
+    void aDifferentTargetForAnExistingGoalIsRejectedWithoutChangingIt() {
+        when(weeklyGoalService.getCurrentWeekGoal(FATHER_ID)).thenReturn(java.util.Optional.of(activeGoal(3)));
+
+        ToolExecutionResponse response = dispatcher.dispatch("set_weekly_goal", request(Map.of("target_hours", 5)));
+
+        assertThat(response.success()).isFalse();
+        assertThat(response.errorCode()).isEqualTo("INVALID_STATE");
+        assertThat(response.errorMessage()).contains("3 hours").contains("cannot be changed this week");
+        verify(weeklyGoalService, never()).createAndActivateWeeklyGoal(anyLong(), anyInt());
+    }
 }

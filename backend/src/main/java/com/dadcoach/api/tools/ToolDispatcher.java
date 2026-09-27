@@ -10,6 +10,7 @@ import com.dadcoach.calendar.GoogleCalendarService;
 import com.dadcoach.qualitytime.QualityTime;
 import com.dadcoach.qualitytime.QualityTimeRepository;
 import com.dadcoach.qualitytime.QualityTimeService;
+import com.dadcoach.qualitytime.QualityTimeStatus;
 import com.dadcoach.qualitytime.dto.CompleteQualityTimeResult;
 import com.dadcoach.qualitytime.dto.ScheduleQualityTimeResult;
 import com.dadcoach.qualitytime.dto.UpcomingQualityTimeDto;
@@ -17,6 +18,8 @@ import com.dadcoach.systemstate.AvailableSlot;
 import com.dadcoach.systemstate.SystemStateLoader;
 import com.dadcoach.weeklygoal.WeeklyGoal;
 import com.dadcoach.weeklygoal.WeeklyGoalService;
+import com.dadcoach.weeklygoal.WeeklyGoalStatus;
+import com.dadcoach.weeklyplan.SessionTimerPlanner;
 import com.dadcoach.workflow.dto.ActivityIdeaDto;
 import com.dadcoach.workflow.message.MessageContext;
 import com.dadcoach.workflow.message.MessageContext.ActivityIdea;
@@ -92,6 +95,37 @@ public class ToolDispatcher {
 
     @Value("${app.dashboard.base-url:https://dadcoach.app}")
     private String dashboardBaseUrl;
+
+    private java.time.Clock clock = java.time.Clock.systemUTC();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setClock(java.time.Clock clock) {
+        this.clock = clock;
+    }
+
+    private com.dadcoach.weeklyplan.WeeklyPlanContextBuilder weeklyPlanContextBuilder;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setWeeklyPlanContextBuilder(com.dadcoach.weeklyplan.WeeklyPlanContextBuilder builder) {
+        this.weeklyPlanContextBuilder = builder;
+    }
+
+    /**
+     * Adds the father's current-week coverage AFTER this tool's change (same figures as the
+     * weekly_plan_context), so the agent reports coverage instead of computing it.
+     */
+    private void putWeekCoverage(Map<String, Object> data, Long fatherId) {
+        if (weeklyPlanContextBuilder == null) {
+            return;
+        }
+        fatherRepository.findById(fatherId).ifPresent(father -> {
+            try {
+                data.put("week_coverage", weeklyPlanContextBuilder.build(father).get("coverage"));
+            } catch (Exception e) {
+                log.warn("Could not compute week coverage for father {}: {}", fatherId, e.getMessage());
+            }
+        });
+    }
 
     public ToolDispatcher(
             QualityTimeService qualityTimeService,
@@ -219,9 +253,61 @@ public class ToolDispatcher {
         data.put("start_time", result.startTime().toString());
         data.put("end_time", result.endTime().toString());
         data.put("status", result.status().name());
+        putSessionTimers(data, request.userId(), result.startTime(), result.endTime());
+        putWeekCoverage(data, request.userId());
 
         log.info("Quality Time scheduled: qualityTimeId={}", result.qualityTimeId());
         return ToolExecutionResponse.success(data);
+    }
+
+    /**
+     * Adds the session's local time and its reminder instants (Dad Coach's reminder policy, see
+     * {@link SessionTimerPlanner}) so the workflow can arm its timers without any time arithmetic.
+     */
+    private void putSessionTimers(Map<String, Object> data, Long fatherId, Instant start, Instant end) {
+        fatherRepository.findById(fatherId).ifPresent(father -> {
+            java.time.ZoneId zone = weeklyGoalService.zoneFor(father);
+            java.time.ZonedDateTime localStart = start.atZone(zone);
+            data.put("timezone", zone.getId());
+            data.put("local_date", localStart.toLocalDate().toString());
+            data.put("local_start", localStart.toLocalTime().withSecond(0).withNano(0).toString());
+            data.put("timers", SessionTimerPlanner.plan(start, end, zone, clock.instant()));
+        });
+    }
+
+    /** The father's session with this id, or null when the id is malformed, unknown or someone else's. */
+    private QualityTime findOwnedSession(Long fatherId, String qualityTimeIdStr) {
+        UUID id;
+        try {
+            id = UUID.fromString(qualityTimeIdStr.trim());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+        return qualityTimeRepository.findById(id)
+                .filter(qt -> fatherId.equals(qt.getFatherId()))
+                .orElse(null);
+    }
+
+    /**
+     * NOT_FOUND that lists the father's still-scheduled sessions with their ids, so an agent that used a
+     * wrong id can correct itself in the same turn instead of giving up.
+     */
+    private ToolExecutionResponse unknownSessionResponse(Long fatherId, String badId) {
+        java.time.ZoneId zone = fatherRepository.findById(fatherId)
+                .map(weeklyGoalService::zoneFor)
+                .orElse(com.dadcoach.common.AppConstants.DEFAULT_ZONE_ID);
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("EEEE yyyy-MM-dd HH:mm");
+        Instant now = clock.instant();
+        String sessions = qualityTimeRepository.findByFatherIdAndStatus(fatherId, QualityTimeStatus.SCHEDULED).stream()
+                .sorted(java.util.Comparator.comparing(QualityTime::getScheduledStart))
+                .map(qt -> qt.getId() + " (" + qt.getScheduledStart().atZone(zone).format(fmt)
+                        + (qt.getScheduledEnd().isAfter(now) ? ", upcoming" : ", already ended") + ")")
+                .collect(java.util.stream.Collectors.joining("; "));
+        return ToolExecutionResponse.failure(
+                "Unknown quality_time_id '" + badId + "' - that id does not exist. The father's scheduled sessions are: "
+                        + (sessions.isEmpty() ? "none" : sessions)
+                        + ". Call this tool again now with the exact id of the session you meant.",
+                "NOT_FOUND");
     }
 
     private ToolExecutionResponse handleRescheduleQualityTime(ToolApiController.ResolvedToolRequest request) {
@@ -236,17 +322,14 @@ public class ToolDispatcher {
             return ToolExecutionResponse.invalidParameters("new_start_time is required");
         }
 
-        UUID qualityTimeId = UUID.fromString(qualityTimeIdStr);
         Instant newStartTime = Instant.parse(newStartTimeStr);
 
-        // Get the existing quality time to find child
-        QualityTime existing = qualityTimeRepository.findById(qualityTimeId)
-                .orElseThrow(() -> new ResourceNotFoundException("QualityTime", qualityTimeId));
-
-        // Verify ownership
-        if (!existing.getFatherId().equals(request.userId())) {
-            throw new ResourceNotFoundException("QualityTime", qualityTimeId);
+        // Get the existing quality time to find child, verifying ownership
+        QualityTime existing = findOwnedSession(request.userId(), qualityTimeIdStr);
+        if (existing == null) {
+            return unknownSessionResponse(request.userId(), qualityTimeIdStr);
         }
+        UUID qualityTimeId = existing.getId();
 
         // Cancel the old one
         qualityTimeService.cancelQualityTime(qualityTimeId);
@@ -268,6 +351,8 @@ public class ToolDispatcher {
         data.put("new_start_time", result.startTime().toString());
         data.put("new_end_time", result.endTime().toString());
         data.put("status", result.status().name());
+        putSessionTimers(data, request.userId(), result.startTime(), result.endTime());
+        putWeekCoverage(data, request.userId());
 
         log.info("Quality Time rescheduled: old={}, new={}", qualityTimeIdStr, result.qualityTimeId());
         return ToolExecutionResponse.success(data);
@@ -280,21 +365,19 @@ public class ToolDispatcher {
             return ToolExecutionResponse.invalidParameters("quality_time_id is required");
         }
 
-        UUID qualityTimeId = UUID.fromString(qualityTimeIdStr);
-
         // Verify ownership before cancelling
-        QualityTime existing = qualityTimeRepository.findById(qualityTimeId)
-                .orElseThrow(() -> new ResourceNotFoundException("QualityTime", qualityTimeId));
-
-        if (!existing.getFatherId().equals(request.userId())) {
-            throw new ResourceNotFoundException("QualityTime", qualityTimeId);
+        QualityTime existing = findOwnedSession(request.userId(), qualityTimeIdStr);
+        if (existing == null) {
+            return unknownSessionResponse(request.userId(), qualityTimeIdStr);
         }
+        UUID qualityTimeId = existing.getId();
 
         qualityTimeService.cancelQualityTime(qualityTimeId);
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("quality_time_id", qualityTimeIdStr);
         data.put("status", "CANCELLED");
+        putWeekCoverage(data, request.userId());
 
         log.info("Quality Time cancelled: qualityTimeId={}", qualityTimeId);
         return ToolExecutionResponse.success(data);
@@ -308,15 +391,12 @@ public class ToolDispatcher {
             return ToolExecutionResponse.invalidParameters("quality_time_id is required");
         }
 
-        UUID qualityTimeId = UUID.fromString(qualityTimeIdStr);
-
         // Verify ownership before completing
-        QualityTime existing = qualityTimeRepository.findById(qualityTimeId)
-                .orElseThrow(() -> new ResourceNotFoundException("QualityTime", qualityTimeId));
-
-        if (!existing.getFatherId().equals(request.userId())) {
-            throw new ResourceNotFoundException("QualityTime", qualityTimeId);
+        QualityTime existing = findOwnedSession(request.userId(), qualityTimeIdStr);
+        if (existing == null) {
+            return unknownSessionResponse(request.userId(), qualityTimeIdStr);
         }
+        UUID qualityTimeId = existing.getId();
 
         CompleteQualityTimeResult result = qualityTimeService.completeQualityTime(qualityTimeId, notes);
 
@@ -329,6 +409,7 @@ public class ToolDispatcher {
         if (result.beltEarned() != null) {
             data.put("belt_earned", result.beltEarned().name());
         }
+        putWeekCoverage(data, request.userId());
 
         log.info("Quality Time completed: qualityTimeId={}, newStreak={}", qualityTimeId, result.newStreak());
         return ToolExecutionResponse.success(data);
@@ -504,14 +585,36 @@ public class ToolDispatcher {
             return ToolExecutionResponse.invalidParameters("target_hours must be at least 1");
         }
 
+        // Create-only, but idempotent: repeating the call for this week's existing goal with the same
+        // target succeeds without creating anything; a different target is rejected (a goal cannot be
+        // changed once created).
+        Optional<WeeklyGoal> existing = weeklyGoalService.getCurrentWeekGoal(request.userId());
+        if (existing.isPresent()) {
+            WeeklyGoal current = existing.get();
+            if (current.getTargetHours() != targetHours || current.getStatus() != WeeklyGoalStatus.ACTIVE) {
+                return ToolExecutionResponse.failure(
+                        "This week's goal already exists (" + current.getTargetHours() + " hours, "
+                                + current.getStatus() + ") and cannot be changed this week; a different target "
+                                + "can be set for next week in Sunday's check-in.",
+                        "INVALID_STATE");
+            }
+        }
+        boolean alreadyExisted = existing.isPresent();
+
         // Same lifecycle as the original engine's set_weekly_goal: create, then activate.
-        WeeklyGoal goal = weeklyGoalService.createAndActivateWeeklyGoal(request.userId(), targetHours);
+        WeeklyGoal goal = alreadyExisted
+                ? existing.get()
+                : weeklyGoalService.createAndActivateWeeklyGoal(request.userId(), targetHours);
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("goal_id", goal.getId());
         data.put("week_start_date", goal.getWeekStartDate().toString());
         data.put("target_hours", goal.getTargetHours());
         data.put("status", goal.getStatus().name());
+        data.put("already_existed", alreadyExisted);
+        putWeekCoverage(data, request.userId());
+        fatherRepository.findById(request.userId())
+                .ifPresent(father -> data.put("timezone", weeklyGoalService.zoneFor(father).getId()));
 
         log.info("Weekly goal set: goalId={}, targetHours={}", goal.getId(), targetHours);
         return ToolExecutionResponse.success(data);

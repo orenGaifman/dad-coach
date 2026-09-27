@@ -1,5 +1,6 @@
 package com.dadcoach.api.context;
 
+import com.dadcoach.common.PhoneValidator;
 import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
@@ -12,6 +13,7 @@ import com.dadcoach.systemstate.AvailableSlot;
 import com.dadcoach.systemstate.SystemStateLoader;
 import com.dadcoach.weeklygoal.WeeklyGoal;
 import com.dadcoach.weeklygoal.WeeklyGoalService;
+import com.dadcoach.weeklyplan.WeeklyPlanContextBuilder;
 import com.dadcoach.workflow.message.MessageContext.ActivityIdea;
 
 import org.slf4j.Logger;
@@ -54,18 +56,21 @@ public class ContextProviderRouter {
     private final QualityTimeRepository qualityTimeRepository;
     private final WeeklyGoalService weeklyGoalService;
     private final SystemStateLoader systemStateLoader;
+    private final WeeklyPlanContextBuilder weeklyPlanContextBuilder;
 
     public ContextProviderRouter(
             FatherRepository fatherRepository,
             ChildRepository childRepository,
             QualityTimeRepository qualityTimeRepository,
             WeeklyGoalService weeklyGoalService,
-            SystemStateLoader systemStateLoader) {
+            SystemStateLoader systemStateLoader,
+            WeeklyPlanContextBuilder weeklyPlanContextBuilder) {
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.qualityTimeRepository = qualityTimeRepository;
         this.weeklyGoalService = weeklyGoalService;
         this.systemStateLoader = systemStateLoader;
+        this.weeklyPlanContextBuilder = weeklyPlanContextBuilder;
     }
 
     @PostConstruct
@@ -73,6 +78,7 @@ public class ContextProviderRouter {
         handlers.put("family_context", this::handleFamilyContext);
         handlers.put("calendar_context", this::handleCalendarContext);
         handlers.put("quality_time_context", this::handleQualityTimeContext);
+        handlers.put("weekly_plan_context", this::handleWeeklyPlanContext);
 
         log.info("ContextProviderRouter initialized with {} handlers", handlers.size());
     }
@@ -133,13 +139,50 @@ public class ContextProviderRouter {
         // Fall back to phone lookup from config
         String phone = request.getStringConfig("phone");
         if (phone != null && !phone.isBlank()) {
-            log.debug("Looking up father by phone from config: phone={}", phone);
-            return fatherRepository.findByPhone(phone);
+            String normalized = normalizePhone(phone);
+            log.debug("Looking up father by phone from config: phone={}", normalized);
+            return fatherRepository.findByPhone(normalized);
         }
         
         // No valid identifier provided
         log.warn("No valid userId or phone provided for father lookup");
         return Optional.empty();
+    }
+
+    /**
+     * Accepts a channel-qualified identity ({@code whatsapp:+9725...}, as carried by Workflow Platform
+     * instances and sent by DB-configured HTTP providers) as well as a bare phone number, and returns the
+     * E.164 form fathers are stored with.
+     */
+    static String normalizePhone(String phone) {
+        String identifier = phone.trim();
+        java.util.regex.Matcher channelQualified = CHANNEL_QUALIFIED.matcher(identifier);
+        if (channelQualified.matches()) {
+            identifier = channelQualified.group(2);
+        }
+        return PhoneValidator.normalizeToE164(identifier);
+    }
+
+    private static final java.util.regex.Pattern CHANNEL_QUALIFIED =
+            java.util.regex.Pattern.compile("^([A-Za-z][A-Za-z0-9_.-]*):(.+)$");
+
+    // ─── Weekly Plan Context Provider ────────────────────────────────────────
+
+    /**
+     * The father's current Sunday-Saturday week: goal, coverage, sessions and their phases, previous
+     * week, in his timezone. See {@link WeeklyPlanContextBuilder}.
+     */
+    private ContextProviderResponse handleWeeklyPlanContext(ContextProviderRequest request) {
+        Optional<Father> fatherOpt = lookupFather(request);
+        if (fatherOpt.isEmpty()) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("father_found", false);
+            return ContextProviderResponse.success(data);
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("father_found", true);
+        data.putAll(weeklyPlanContextBuilder.build(fatherOpt.get()));
+        return ContextProviderResponse.success(data);
     }
 
     // ─── Family Context Provider ─────────────────────────────────────────────

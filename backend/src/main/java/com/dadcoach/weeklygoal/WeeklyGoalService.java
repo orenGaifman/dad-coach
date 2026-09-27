@@ -349,6 +349,14 @@ public class WeeklyGoalService {
             .with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
     }
 
+    /**
+     * The father's own timezone, as used for his Sunday-Saturday week (falls back to the default zone
+     * when unset or invalid).
+     */
+    public ZoneId zoneFor(Father father) {
+        return zoneOf(father);
+    }
+
     private static ZoneId zoneOf(Father father) {
         String timezone = father.getTimezone();
         if (timezone != null && !timezone.isBlank()) {
