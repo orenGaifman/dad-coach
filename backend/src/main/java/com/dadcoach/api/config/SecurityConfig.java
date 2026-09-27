@@ -4,6 +4,7 @@ import com.dadcoach.api.auth.JwtAuthFilter;
 import com.dadcoach.api.context.ContextProviderAuthFilter;
 import com.dadcoach.api.profile.ProfileApiAuthFilter;
 import com.dadcoach.api.tools.ToolApiAuthFilter;
+import com.dadcoach.integration.platform.scheduled.ScheduledResponseAuthFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,16 +48,19 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final ToolApiAuthFilter toolApiAuthFilter;
     private final ContextProviderAuthFilter contextProviderAuthFilter;
+    private final ScheduledResponseAuthFilter scheduledResponseAuthFilter;
     private final ProfileApiAuthFilter profileApiAuthFilter;
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter,
                           ToolApiAuthFilter toolApiAuthFilter,
                           ContextProviderAuthFilter contextProviderAuthFilter,
-                          ProfileApiAuthFilter profileApiAuthFilter) {
+                          ProfileApiAuthFilter profileApiAuthFilter,
+                          ScheduledResponseAuthFilter scheduledResponseAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.toolApiAuthFilter = toolApiAuthFilter;
         this.contextProviderAuthFilter = contextProviderAuthFilter;
         this.profileApiAuthFilter = profileApiAuthFilter;
+        this.scheduledResponseAuthFilter = scheduledResponseAuthFilter;
     }
 
     @Bean
@@ -95,6 +99,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/profile/**").permitAll()
                         // Platform webhook endpoints (use X-API-Key auth)
                         .requestMatchers("/api/webhooks/**").permitAll()
+                        // Workflow Platform callbacks (use X-API-Key via ScheduledResponseAuthFilter)
+                        .requestMatchers("/api/integration/**").permitAll()
                         // Onboarding endpoints (no auth required - uses invitation tokens)
                         .requestMatchers("/api/v1/onboarding/**").permitAll()
                         .requestMatchers("/api/v1/invitations/**").permitAll()
@@ -116,6 +122,7 @@ public class SecurityConfig {
                 .addFilterBefore(toolApiAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(contextProviderAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(profileApiAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(scheduledResponseAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }

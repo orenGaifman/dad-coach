@@ -93,6 +93,7 @@ public class WorkflowScheduler {
     private final WeeklyGoalService weeklyGoalService;
     private final BeltPromotionNotifier beltPromotionNotifier;
     private final MessageLogService messageLogService;
+    private final ProactiveMessageOwnership proactiveMessageOwnership;
 
     /**
      * Constructs a new WorkflowScheduler with required dependencies.
@@ -118,7 +119,8 @@ public class WorkflowScheduler {
             SchedulerConfig schedulerConfig,
             WeeklyGoalService weeklyGoalService,
             BeltPromotionNotifier beltPromotionNotifier,
-            MessageLogService messageLogService) {
+            MessageLogService messageLogService,
+            ProactiveMessageOwnership proactiveMessageOwnership) {
         this.qualityTimeRepository = qualityTimeRepository;
         this.fatherRepository = fatherRepository;
         this.workflowEngine = workflowEngine;
@@ -129,6 +131,7 @@ public class WorkflowScheduler {
         this.weeklyGoalService = weeklyGoalService;
         this.beltPromotionNotifier = beltPromotionNotifier;
         this.messageLogService = messageLogService;
+        this.proactiveMessageOwnership = proactiveMessageOwnership;
         
         log.info("WorkflowScheduler initialized with config: morningReminderCron={}, followUpIntervalMs={}, " +
                 "staleDetectionIntervalMs={}, batchSize={}",
@@ -145,6 +148,21 @@ public class WorkflowScheduler {
      * 
      * @return the configured batch size
      */
+    /**
+     * When the Workflow Platform owns proactive messages (Dad Coach 3), a job that would duplicate
+     * them records a completed no-op run (the job log keeps SchedulerHealthIndicator green) and
+     * sends nothing.
+     */
+    private boolean platformOwnsProactiveMessages(SchedulerJobLog jobLog) {
+        if (proactiveMessageOwnership.localSchedulerSends()) {
+            return false;
+        }
+        log.info("Skipping job {}: proactive messages are owned by the Workflow Platform", jobLog.getJobName());
+        jobLog.markCompleted(0, 0);
+        jobLogRepository.save(jobLog);
+        return true;
+    }
+
     int getBatchSize() {
         return schedulerConfig.batchSize();
     }
@@ -172,6 +190,9 @@ public class WorkflowScheduler {
             log.info("Starting morning reminder job");
             SchedulerJobLog jobLog = new SchedulerJobLog("morning_reminder");
             jobLogRepository.save(jobLog);
+            if (platformOwnsProactiveMessages(jobLog)) {
+                return;
+            }
             
             int processedCount = 0;
             int errorCount = 0;
@@ -381,6 +402,9 @@ public class WorkflowScheduler {
             
             SchedulerJobLog jobLog = new SchedulerJobLog("pre_qt_reminder");
             jobLogRepository.save(jobLog);
+            if (platformOwnsProactiveMessages(jobLog)) {
+                return;
+            }
             
             int processedCount = 0;
             int errorCount = 0;
@@ -731,6 +755,9 @@ public class WorkflowScheduler {
             
             SchedulerJobLog jobLog = new SchedulerJobLog(JOB_NAME_STALE_STATE_DETECTION);
             jobLogRepository.save(jobLog);
+            if (platformOwnsProactiveMessages(jobLog)) {
+                return;
+            }
             
             int processedCount = 0;
             int errorCount = 0;
@@ -946,6 +973,9 @@ public class WorkflowScheduler {
             
             SchedulerJobLog jobLog = new SchedulerJobLog("inactivity_nudge");
             jobLogRepository.save(jobLog);
+            if (platformOwnsProactiveMessages(jobLog)) {
+                return;
+            }
             
             int processedCount = 0;
             int errorCount = 0;
@@ -1099,6 +1129,9 @@ public class WorkflowScheduler {
             log.info("Starting weekly goal prompt job");
             SchedulerJobLog jobLog = new SchedulerJobLog("weekly_goal_prompt");
             jobLogRepository.save(jobLog);
+            if (platformOwnsProactiveMessages(jobLog)) {
+                return;
+            }
             
             int processedCount = 0;
             int errorCount = 0;

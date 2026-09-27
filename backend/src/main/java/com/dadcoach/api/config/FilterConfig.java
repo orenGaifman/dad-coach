@@ -3,6 +3,7 @@ package com.dadcoach.api.config;
 import com.dadcoach.api.context.ContextProviderAuthFilter;
 import com.dadcoach.api.profile.ProfileApiAuthFilter;
 import com.dadcoach.api.tools.ToolApiAuthFilter;
+import com.dadcoach.integration.platform.scheduled.ScheduledResponseAuthFilter;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -50,6 +51,18 @@ public class FilterConfig {
     public FilterRegistrationBean<ProfileApiAuthFilter> profileApiAuthFilterRegistration(
             ProfileApiAuthFilter filter) {
         FilterRegistrationBean<ProfileApiAuthFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    /**
+     * Disable automatic servlet registration for ScheduledResponseAuthFilter.
+     * The filter is registered in the Security filter chain instead.
+     */
+    @Bean
+    public FilterRegistrationBean<ScheduledResponseAuthFilter> scheduledResponseAuthFilterRegistration(
+            ScheduledResponseAuthFilter filter) {
+        FilterRegistrationBean<ScheduledResponseAuthFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setEnabled(false);
         return registration;
     }

@@ -12,6 +12,7 @@ import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.workspace.commitment.QualityTimeCommitment.CommitmentStatus;
 import com.dadcoach.workspace.magiclink.DashboardLinkAppender;
 import com.dadcoach.workspace.magiclink.DashboardLinkAppender.DashboardLinkContext;
+import com.dadcoach.workflow.scheduler.ProactiveMessageOwnership;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -43,17 +44,20 @@ public class CommitmentReminderScheduler {
     private final ChildRepository childRepository;
     private final DeliveryService deliveryService;
     private final DashboardLinkAppender dashboardLinkAppender;
+    private final ProactiveMessageOwnership proactiveMessageOwnership;
 
     public CommitmentReminderScheduler(QualityTimeCommitmentRepository repository,
                                         FatherRepository fatherRepository,
                                         ChildRepository childRepository,
                                         DeliveryService deliveryService,
-                                        DashboardLinkAppender dashboardLinkAppender) {
+                                        DashboardLinkAppender dashboardLinkAppender,
+                                        ProactiveMessageOwnership proactiveMessageOwnership) {
         this.repository = repository;
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.deliveryService = deliveryService;
         this.dashboardLinkAppender = dashboardLinkAppender;
+        this.proactiveMessageOwnership = proactiveMessageOwnership;
     }
 
     /**
@@ -63,6 +67,10 @@ public class CommitmentReminderScheduler {
     @Scheduled(fixedRate = 5 * 60 * 1000) // Every 5 minutes
     @Transactional
     public void sendCommitmentReminders() {
+        if (!proactiveMessageOwnership.localSchedulerSends()) {
+            // Session reminders come from the Workflow Platform workflow (Dad Coach 3).
+            return;
+        }
         log.debug("Checking for commitments needing reminders...");
         
         Instant now = Instant.now();
@@ -105,8 +113,11 @@ public class CommitmentReminderScheduler {
             repository.save(commitment);
             missedCount++;
             
-            // Optionally send a follow-up message
-            sendMissedFollowUp(commitment);
+            // Optionally send a follow-up message - unless the Workflow Platform workflow owns
+            // post-session follow-up (Dad Coach 3). The MISSED status update above still applies.
+            if (proactiveMessageOwnership.localSchedulerSends()) {
+                sendMissedFollowUp(commitment);
+            }
         }
         
         if (missedCount > 0) {

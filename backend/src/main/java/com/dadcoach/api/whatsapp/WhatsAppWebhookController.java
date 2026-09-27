@@ -2,6 +2,7 @@ package com.dadcoach.api.whatsapp;
 
 import com.dadcoach.channel.ChannelRouter;
 import com.dadcoach.channel.ChannelAdapter;
+import com.dadcoach.channel.session.InboundSessionTracker;
 import com.dadcoach.channel.dto.InboundMessageDto;
 import com.dadcoach.channel.dto.OutboundMessageDto;
 import com.dadcoach.config.WhatsAppProperties;
@@ -46,6 +47,7 @@ public class WhatsAppWebhookController {
     private final ActivationListener activationListener;
     private final ObjectMapper objectMapper;
     private final WorkflowIdempotencyService idempotencyService;
+    private final InboundSessionTracker inboundSessionTracker;
 
     public WhatsAppWebhookController(WhatsAppSignatureVerifier signatureVerifier,
                                      WhatsAppProperties properties,
@@ -53,7 +55,8 @@ public class WhatsAppWebhookController {
                                      WorkflowEngine workflowEngine,
                                      ActivationListener activationListener,
                                      ObjectMapper objectMapper,
-                                     WorkflowIdempotencyService idempotencyService) {
+                                     WorkflowIdempotencyService idempotencyService,
+                                     InboundSessionTracker inboundSessionTracker) {
         this.signatureVerifier = signatureVerifier;
         this.properties = properties;
         this.channelRouter = channelRouter;
@@ -61,6 +64,7 @@ public class WhatsAppWebhookController {
         this.activationListener = activationListener;
         this.objectMapper = objectMapper;
         this.idempotencyService = idempotencyService;
+        this.inboundSessionTracker = inboundSessionTracker;
     }
 
     @GetMapping
@@ -144,6 +148,9 @@ public class WhatsAppWebhookController {
         }
         
         try {
+            // A message from the father opens/extends his 24h WhatsApp window.
+            inboundSessionTracker.onInboundWhatsAppMessage(sender);
+
             // Check if this is an ONBOARDING father - intercept for activation flow
             // This handles the first message after onboarding completion
             if (activationListener.interceptByPhoneIfOnboarding(sender, content)) {

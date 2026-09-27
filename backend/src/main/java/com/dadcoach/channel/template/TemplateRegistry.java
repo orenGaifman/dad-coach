@@ -49,6 +49,18 @@ public class TemplateRegistry {
     }
 
     /**
+     * The language a template is sent in, derived from its name suffix ({@code _he} or {@code _en},
+     * default {@code en}) - the convention {@code WhatsAppMessageFormatter} uses when building the
+     * WhatsApp payload, so the approval lookup and the actual send agree on the language.
+     */
+    public static String languageForTemplateName(String templateName) {
+        if (templateName != null && templateName.endsWith("_he")) {
+            return "he";
+        }
+        return DEFAULT_LANGUAGE;
+    }
+
+    /**
      * Look up an approved template by name and language.
      *
      * @param templateName the unique template name

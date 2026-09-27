@@ -5,6 +5,7 @@ import com.dadcoach.common.MaskingUtils;
 import com.dadcoach.domain.conversation.MessageLogService;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
+import com.dadcoach.integration.platform.PlatformUserResolver;
 import com.dadcoach.whatsapp.WhatsAppService;
 import com.dadcoach.workflow.WorkflowState;
 import com.dadcoach.workflow.logging.WorkflowLoggingContext;
@@ -50,16 +51,19 @@ public class TriggerNotificationController {
     private final WhatsAppService whatsAppService;
     private final FallbackMessages fallbackMessages;
     private final MessageLogService messageLogService;
+    private final PlatformUserResolver platformUserResolver;
 
     public TriggerNotificationController(
             FatherRepository fatherRepository,
             WhatsAppService whatsAppService,
             FallbackMessages fallbackMessages,
-            MessageLogService messageLogService) {
+            MessageLogService messageLogService,
+            PlatformUserResolver platformUserResolver) {
         this.fatherRepository = fatherRepository;
         this.whatsAppService = whatsAppService;
         this.fallbackMessages = fallbackMessages;
         this.messageLogService = messageLogService;
+        this.platformUserResolver = platformUserResolver;
     }
 
     /**
@@ -327,27 +331,7 @@ public class TriggerNotificationController {
      * <p>User ID format: "channel:identifier" (e.g., "whatsapp:+972501234567")</p>
      */
     private Father findFatherByUserId(String userId) {
-        if (userId == null || userId.isBlank()) {
-            return null;
-        }
-
-        // Parse user ID format: "channel:identifier"
-        String[] parts = userId.split(":", 2);
-        if (parts.length != 2) {
-            log.warn("Invalid user ID format: {}", userId);
-            return null;
-        }
-
-        String channel = parts[0];
-        String identifier = parts[1];
-
-        // For WhatsApp, the identifier is the phone number
-        if ("whatsapp".equalsIgnoreCase(channel)) {
-            return fatherRepository.findByPhone(identifier).orElse(null);
-        }
-
-        log.warn("Unsupported channel: {}", channel);
-        return null;
+        return platformUserResolver.resolve(userId).orElse(null);
     }
 
     // ─── DTOs ─────────────────────────────────────────────────────────────

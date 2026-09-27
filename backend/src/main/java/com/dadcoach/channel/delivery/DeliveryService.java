@@ -34,10 +34,10 @@ public class DeliveryService {
 
     private static final Logger log = LoggerFactory.getLogger(DeliveryService.class);
 
-    static final String SESSION_CLOSED = "SESSION_CLOSED";
-    static final String TEMPLATE_UNAVAILABLE = "TEMPLATE_UNAVAILABLE";
-    static final String ENDPOINT_NOT_FOUND = "ENDPOINT_NOT_FOUND";
-    static final String UNSUPPORTED_TYPE = "UNSUPPORTED_TYPE";
+    public static final String SESSION_CLOSED = "SESSION_CLOSED";
+    public static final String TEMPLATE_UNAVAILABLE = "TEMPLATE_UNAVAILABLE";
+    public static final String ENDPOINT_NOT_FOUND = "ENDPOINT_NOT_FOUND";
+    public static final String UNSUPPORTED_TYPE = "UNSUPPORTED_TYPE";
 
     private final CommunicationEndpointRepository endpointRepository;
     private final SessionWindowService sessionWindowService;
@@ -136,7 +136,8 @@ public class DeliveryService {
             return DeliveryResult.rejected(TEMPLATE_UNAVAILABLE);
         }
 
-        var template = templateRegistry.findApprovedTemplate(message.templateName());
+        var template = templateRegistry.findApprovedTemplate(
+                message.templateName(), TemplateRegistry.languageForTemplateName(message.templateName()));
         if (template.isEmpty()) {
             log.warn("Template '{}' not found or not APPROVED for message {}",
                     message.templateName(), message.messageId());
