@@ -105,7 +105,7 @@ states:
 
     ═══ A. PROACTIVE TURNS (message starts with "[SCHEDULED TRANSITION EXECUTED]") ═══
 
-    A1. Session timers (morning reminder, 1-hour reminder, post-session follow-up) run in their own pass-through states and come back here; the father's answer to a follow-up ('נו, איך היה?') is handled by section D.
+    A1. Session timers (morning reminder, 1-hour reminder, post-session follow-up) run in their own one-shot states and the platform brings the conversation back here; the father's answer to a follow-up ('נו, איך היה?') is handled by section D.
 
     A2. No "Transition:" line - the DAILY CHECK (every morning in his timezone). It is an awareness check, not a message slot. Walk through these in order, act on the FIRST that applies, and otherwise reply exactly [[SUPPRESS_RESPONSE]]:
       1. father_found is false, or family context has no child - call change_state with target ONBOARDING and reply [[SUPPRESS_RESPONSE]].
@@ -340,57 +340,45 @@ states:
       \ onboarding)."
 - stateKey: SESSION_MORNING_REMINDER
   name: Session Morning Reminder
-  description: "Pass-through state entered by a session's morning timer. Sends one\
-    \ short reminder when the session is still valid, otherwise suppresses, and always\
-    \ returns to ACTIVE_COACHING in the same turn."
+  description: "Scheduled one-shot state entered by a session's morning timer. Sends\
+    \ one short reminder when the session is still valid, otherwise suppresses; the\
+    \ platform then returns the conversation to ACTIVE_COACHING (AFTER_SCHEDULED_TURN)."
   stateObjective: "Send ONE short, warm reminder about today's still-valid quality-time\
-    \ session(s), or suppress when there is nothing valid to remind about; always\
-    \ return to ACTIVE_COACHING in the same turn."
+    \ session(s), or suppress when there is nothing valid to remind about."
   advancedBehaviorGuidance: |-
     You were woken by the platform ("[SCHEDULED TRANSITION EXECUTED]", Transition: session_morning_reminder).
 
     1. Look at sessions_today in the weekly plan (still-valid sessions later today, local time). If it is "none", the session was cancelled, moved to another day, or already done - reply exactly [[SUPPRESS_RESPONSE]]. Also suppress if this conversation already reminded him today about these sessions.
     2. Otherwise send one short, warm line naming the child and the local time, e.g. 'היום ב-17:00 זה הזמן שלך ושל [child] 🙂'. Several sessions today - mention them together once. No questions, no pressure.
-    3. In the SAME turn, always call change_state with target ACTIVE_COACHING - also when you suppress.
 
-    If the father writes while the conversation is still here, call change_state with target ACTIVE_COACHING and answer him briefly and helpfully.
+    After this turn the platform returns the conversation to ACTIVE_COACHING by itself; his reply is handled there.
   displayOrder: 2
   contextProviders:
   - providerKey: weekly_plan_context
     executionOrder: 0
     required: false
-  behaviorRules:
-  - name: Always return to coaching
-    ruleStrength: REQUIRED
-    conditionType: ALWAYS
-    actionType: GUIDE_AI
-    actionInstruction: "Call change_state with target ACTIVE_COACHING in this same\
-      \ turn, whether you send the reminder or reply [[SUPPRESS_RESPONSE]]. Session\
-      \ timers only fire while the conversation is in ACTIVE_COACHING."
-    displayOrder: 0
   transitions:
   - transitionKey: morning_reminder_done
     targetStateKey: ACTIVE_COACHING
-    description: Back to the coaching hub right after the morning reminder
+    description: Back to the coaching hub once the morning reminder was sent or suppressed
     displayOrder: 0
-    triggerType: CUSTOM
-    triggerCondition: "Always, in the same turn as the reminder or the suppression."
+    triggerType: AFTER_SCHEDULED_TURN
 - stateKey: SESSION_REMINDER_1H
   name: Session Reminder (1 hour before)
-  description: "Pass-through state entered by a session's one-hour timer. Sends a\
-    \ short reminder (optionally with activity ideas) when the session is still valid,\
-    \ otherwise suppresses, and always returns to ACTIVE_COACHING in the same turn."
+  description: "Scheduled one-shot state entered by a session's one-hour timer. Sends\
+    \ a short reminder (optionally with activity ideas) when the session is still valid,\
+    \ otherwise suppresses; the platform then returns the conversation to ACTIVE_COACHING\
+    \ (AFTER_SCHEDULED_TURN)."
   stateObjective: "Send ONE short reminder that the session starts in about an hour\
     \ (with a light question or 2-3 concrete activity ideas), or suppress when it\
-    \ is no longer valid; always return to ACTIVE_COACHING in the same turn."
+    \ is no longer valid."
   advancedBehaviorGuidance: |-
     You were woken by the platform ("[SCHEDULED TRANSITION EXECUTED]", Transition: session_reminder_1h).
 
     1. Look at next_session in the weekly plan. Remind only if it is UPCOMING and "starts in N min" with N between about 30 and 90. Otherwise ("none", cancelled, moved to another time, already done, or nothing close) reply exactly [[SUPPRESS_RESPONSE]]. Also suppress if you already sent a reminder about this session within the last hour.
     2. Otherwise send a short reminder with one light question, e.g. 'עוד שעה הזמן שלך ושל [child]. יש לך כבר רעיון מה תעשו?' If he has no plan yet or it would clearly help, call get_activity_ideas for that child and offer 2-3 ideas that fit the session length (prefer what worked before, from completion notes).
-    3. In the SAME turn, always call change_state with target ACTIVE_COACHING - also when you suppress. His reply is handled there.
 
-    If the father writes while the conversation is still here, call change_state with target ACTIVE_COACHING and answer him briefly and helpfully.
+    After this turn the platform returns the conversation to ACTIVE_COACHING by itself; his reply is handled there.
   displayOrder: 3
   tools:
   - toolKey: get_activity_ideas
@@ -413,56 +401,34 @@ states:
   - providerKey: weekly_plan_context
     executionOrder: 1
     required: false
-  behaviorRules:
-  - name: Always return to coaching
-    ruleStrength: REQUIRED
-    conditionType: ALWAYS
-    actionType: GUIDE_AI
-    actionInstruction: "Call change_state with target ACTIVE_COACHING in this same\
-      \ turn, whether you send the reminder or reply [[SUPPRESS_RESPONSE]]. Session\
-      \ timers only fire while the conversation is in ACTIVE_COACHING."
-    displayOrder: 0
   transitions:
   - transitionKey: hour_reminder_done
     targetStateKey: ACTIVE_COACHING
-    description: Back to the coaching hub right after the 1-hour reminder
+    description: Back to the coaching hub once the 1-hour reminder was sent or suppressed
     displayOrder: 0
-    triggerType: CUSTOM
-    triggerCondition: "Always, in the same turn as the reminder or the suppression."
+    triggerType: AFTER_SCHEDULED_TURN
 - stateKey: SESSION_FOLLOW_UP
   name: Session Follow-up
-  description: "Pass-through state entered by a session's follow-up timer. Asks how\
-    \ the session went when it really ended and was not confirmed yet, otherwise suppresses,\
-    \ and always returns to ACTIVE_COACHING in the same turn."
+  description: "Scheduled one-shot state entered by a session's follow-up timer. Asks\
+    \ how the session went when it really ended and was not confirmed yet, otherwise\
+    \ suppresses; the platform then returns the conversation to ACTIVE_COACHING (AFTER_SCHEDULED_TURN)."
   stateObjective: "Ask ONE short, natural question about how a session that just ended\
-    \ went, or suppress when there is no such session; always return to ACTIVE_COACHING\
-    \ in the same turn."
+    \ went, or suppress when there is no such session."
   advancedBehaviorGuidance: |-
     You were woken by the platform ("[SCHEDULED TRANSITION EXECUTED]", Transition: session_follow_up).
 
     1. Decide ONLY from awaiting_confirmation in the weekly plan. If it is "none", or it has no session that "ended N min ago" with N up to about 180, reply exactly [[SUPPRESS_RESPONSE]]: the session was cancelled, moved or already completed. This holds even if the conversation mentioned or reminded him about that session a moment ago - never ask how a cancelled, moved or not-yet-ended session went. Also suppress if he already told you how that session went.
     2. Otherwise ask briefly and naturally how it went, naming the child, e.g. 'נו, איך היה לכם עם [child]?' - nothing else.
-    3. In the SAME turn, always call change_state with target ACTIVE_COACHING - also when you suppress. His answer is handled there.
 
-    If the father writes while the conversation is still here, call change_state with target ACTIVE_COACHING and answer him briefly and helpfully.
+    After this turn the platform returns the conversation to ACTIVE_COACHING by itself; his answer is handled there.
   displayOrder: 4
   contextProviders:
   - providerKey: weekly_plan_context
     executionOrder: 0
     required: false
-  behaviorRules:
-  - name: Always return to coaching
-    ruleStrength: REQUIRED
-    conditionType: ALWAYS
-    actionType: GUIDE_AI
-    actionInstruction: "Call change_state with target ACTIVE_COACHING in this same\
-      \ turn, whether you ask how it went or reply [[SUPPRESS_RESPONSE]]. Session timers\
-      \ only fire while the conversation is in ACTIVE_COACHING."
-    displayOrder: 0
   transitions:
   - transitionKey: follow_up_done
     targetStateKey: ACTIVE_COACHING
-    description: Back to the coaching hub right after the follow-up question
+    description: Back to the coaching hub once the follow-up question was asked or suppressed
     displayOrder: 0
-    triggerType: CUSTOM
-    triggerCondition: "Always, in the same turn as the question or the suppression."
+    triggerType: AFTER_SCHEDULED_TURN

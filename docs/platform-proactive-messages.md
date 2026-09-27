@@ -98,8 +98,14 @@ The platform process needs `DAD_COACH_BASE_URL` and `DAD_COACH_API_KEY` in its *
 
 timers already in the past are omitted. The workflow copies each entry into `schedule_state_transition` with `reference_type=quality_time`, `reference_id=<session id>`, and clears a session's timers with one `cancel_scheduled_transition` by reference when it is cancelled, rescheduled or completed.
 
-Each timer enters its own small pass-through state - `SESSION_MORNING_REMINDER`, `SESSION_REMINDER_1H`, `SESSION_FOLLOW_UP` - which re-checks the session against `weekly_plan_context` when it fires (a session cancelled, moved or completed since, including outside the chat, is suppressed), sends at most one message and returns to `ACTIVE_COACHING`, where the father's reply is handled. The daily check targets `ACTIVE_COACHING` itself.
+Each timer enters its own scheduled one-shot state - `SESSION_MORNING_REMINDER`, `SESSION_REMINDER_1H`, `SESSION_FOLLOW_UP` - which re-checks the session against `weekly_plan_context` when it fires (a session cancelled, moved or completed since, including outside the chat, is suppressed) and sends at most one message. The daily check targets `ACTIVE_COACHING` itself.
 
-### Known limitation: returning from the pass-through states
+### Returning from the one-shot states
 
-The return to `ACTIVE_COACHING` is the agent's own `change_state` call in the same turn (a REQUIRED rule in each state), not a deterministic platform step. It has held in every test, but if a turn fails for good (all retries) or the model skips the call, the instance stays in the pass-through state: the father's next message is handled there (each state then returns him), and session timers - which fire only from `ACTIVE_COACHING` - wait or fail until it returns. The daily check moves him back to `ACTIVE_COACHING` from any state. Big Boss's scheduled summary/check-in states have the same shape. The generic fix belongs in the Workflow Platform: a transient scheduled state that the platform returns from deterministically after its execution (follow-up task).
+Each one-shot state has an `AFTER_SCHEDULED_TURN` transition to `ACTIVE_COACHING` (Workflow Platform `e81539c`, migration V81 - the platform must be at or after that commit before this workflow is imported). The platform applies it deterministically, never the model:
+
+- after the scheduled turn completes - response generated or suppressed - in the same transaction;
+- a failed turn rolls back and stays in the state so the platform's retry runs there again; once the trigger fails permanently the platform leaves the state;
+- a father's message that finds the conversation still in a one-shot state is handled in `ACTIVE_COACHING`.
+
+So session timers (which fire only from `ACTIVE_COACHING`) never wait on an agent's `change_state`.
