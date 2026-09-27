@@ -9,8 +9,7 @@ import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.qualitytime.QualityTime;
 import com.dadcoach.qualitytime.QualityTimeRepository;
 import com.dadcoach.weeklygoal.WeeklyGoal;
-import com.dadcoach.weeklygoal.WeeklyGoalRepository;
-import com.dadcoach.weeklygoal.WeeklyGoalStatus;
+import com.dadcoach.weeklygoal.WeeklyGoalService;
 import com.dadcoach.workflow.Belt;
 
 import org.slf4j.Logger;
@@ -38,19 +37,19 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
     private final FatherRepository fatherRepository;
     private final ChildRepository childRepository;
     private final QualityTimeRepository qualityTimeRepository;
-    private final WeeklyGoalRepository weeklyGoalRepository;
+    private final WeeklyGoalService weeklyGoalService;
     private final GoogleCalendarService googleCalendarService;
     
     public SystemStateLoaderImpl(
             FatherRepository fatherRepository,
             ChildRepository childRepository,
             QualityTimeRepository qualityTimeRepository,
-            WeeklyGoalRepository weeklyGoalRepository,
+            WeeklyGoalService weeklyGoalService,
             GoogleCalendarService googleCalendarService) {
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
         this.qualityTimeRepository = qualityTimeRepository;
-        this.weeklyGoalRepository = weeklyGoalRepository;
+        this.weeklyGoalService = weeklyGoalService;
         this.googleCalendarService = googleCalendarService;
     }
     
@@ -284,8 +283,8 @@ public class SystemStateLoaderImpl implements SystemStateLoader {
     }
     
     private SystemState.WeeklyGoalInfo loadWeeklyGoalInfo(Long fatherId) {
-        Optional<WeeklyGoal> activeGoal = weeklyGoalRepository.findByFatherIdAndStatus(
-                fatherId, WeeklyGoalStatus.ACTIVE);
+        // This week's ACTIVE goal (week-aware; unambiguous across a Sunday boundary).
+        Optional<WeeklyGoal> activeGoal = weeklyGoalService.getActiveGoal(fatherId);
         
         if (activeGoal.isPresent()) {
             WeeklyGoal goal = activeGoal.get();

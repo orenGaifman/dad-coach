@@ -336,7 +336,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
 
         // Record completed minutes to weekly goal
         int durationMinutes = calculateDurationMinutes(qualityTime);
-        weeklyGoalService.recordCompletedQualityTime(father.getId(), durationMinutes);
+        weeklyGoalService.recordCompletedQualityTime(father.getId(), qualityTime.getScheduledStart(), durationMinutes);
         log.info("Recorded {} minutes to weekly goal for father {}", durationMinutes, father.getId());
 
         log.info("Quality Time {} completed. Streak: {}, Total: {}, Belt: {}", 

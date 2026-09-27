@@ -9,7 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
@@ -35,10 +37,12 @@ public class WeeklyGoalService {
 
     private final WeeklyGoalRepository weeklyGoalRepository;
     private final FatherRepository fatherRepository;
+    private final Clock clock;
 
-    public WeeklyGoalService(WeeklyGoalRepository weeklyGoalRepository, FatherRepository fatherRepository) {
+    public WeeklyGoalService(WeeklyGoalRepository weeklyGoalRepository, FatherRepository fatherRepository, Clock clock) {
         this.weeklyGoalRepository = weeklyGoalRepository;
         this.fatherRepository = fatherRepository;
+        this.clock = clock;
     }
 
     // ─── Goal Creation ──────────────────────────────────────────────────────────
@@ -53,11 +57,40 @@ public class WeeklyGoalService {
      */
     @Transactional
     public WeeklyGoal createWeeklyGoal(Long fatherId, int targetHours) {
+        WeeklyGoal goal = weeklyGoalRepository.save(newGoalForCurrentWeek(fatherId, targetHours));
+
+        log.info("Created weekly goal for father {}: {} hours, starting belt {}",
+                 fatherId, targetHours, goal.getStartingBelt());
+
+        return goal;
+    }
+
+    /**
+     * Creates the father's goal for his current week and activates it - the lifecycle the
+     * {@code set_weekly_goal} tool had in the original in-process engine (createWeeklyGoal, then
+     * activateGoal immediately). Built, activated and inserted in a single step inside one
+     * transaction, so this path never leaves a goal persisted as PENDING.
+     *
+     * @throws IllegalStateException if a goal already exists for the father's current week
+     */
+    @Transactional
+    public WeeklyGoal createAndActivateWeeklyGoal(Long fatherId, int targetHours) {
+        WeeklyGoal goal = newGoalForCurrentWeek(fatherId, targetHours);
+        goal.activate();
+        goal = weeklyGoalRepository.save(goal);
+
+        log.info("Created and activated weekly goal {} for father {}: {} hours, week starting {}",
+                 goal.getId(), fatherId, targetHours, goal.getWeekStartDate());
+
+        return goal;
+    }
+
+    private WeeklyGoal newGoalForCurrentWeek(Long fatherId, int targetHours) {
         Father father = fatherRepository.findById(fatherId)
             .orElseThrow(() -> new IllegalArgumentException("Father not found: " + fatherId));
 
-        LocalDate weekStart = getCurrentWeekStart();
-        
+        LocalDate weekStart = weekStartFor(father, clock.instant());
+
         // Check if goal already exists for this week
         if (weeklyGoalRepository.findByFatherIdAndWeekStartDate(fatherId, weekStart).isPresent()) {
             throw new IllegalStateException("A weekly goal already exists for week starting " + weekStart);
@@ -66,13 +99,7 @@ public class WeeklyGoalService {
         // Get current belt from father's metrics or default to WHITE
         Belt currentBelt = getCurrentBelt(father);
 
-        WeeklyGoal goal = new WeeklyGoal(father, weekStart, targetHours, currentBelt);
-        goal = weeklyGoalRepository.save(goal);
-
-        log.info("Created weekly goal for father {}: {} hours, starting belt {}", 
-                 fatherId, targetHours, currentBelt);
-
-        return goal;
+        return new WeeklyGoal(father, weekStart, targetHours, currentBelt);
     }
 
     /**
@@ -97,25 +124,37 @@ public class WeeklyGoalService {
     // ─── Progress Tracking ──────────────────────────────────────────────────────
 
     /**
-     * Records completed quality time minutes for the current week's goal.
-     * 
+     * Records completed quality time minutes against the goal of the week the session belongs to
+     * (the father-local Sunday-Saturday week containing its scheduled start), only if that goal
+     * is ACTIVE. A session is never credited to a different week's goal, and a week that was
+     * already finalized is not modified.
+     *
      * @param fatherId the father's database ID
+     * @param sessionStart the session's scheduled start (null = now)
      * @param minutes the minutes of quality time completed
      */
     @Transactional
-    public void recordCompletedQualityTime(Long fatherId, int minutes) {
-        Optional<WeeklyGoal> activeGoal = getActiveGoal(fatherId);
-        
-        if (activeGoal.isPresent()) {
-            WeeklyGoal goal = activeGoal.get();
+    public void recordCompletedQualityTime(Long fatherId, Instant sessionStart, int minutes) {
+        Father father = fatherRepository.findById(fatherId).orElse(null);
+        if (father == null) {
+            log.warn("Father {} not found when recording {} completed minutes", fatherId, minutes);
+            return;
+        }
+
+        LocalDate sessionWeek = weekStartFor(father, sessionStart != null ? sessionStart : clock.instant());
+        Optional<WeeklyGoal> weekGoal = weeklyGoalRepository.findByFatherIdAndWeekStartDate(fatherId, sessionWeek)
+            .filter(goal -> goal.getStatus() == WeeklyGoalStatus.ACTIVE);
+
+        if (weekGoal.isPresent()) {
+            WeeklyGoal goal = weekGoal.get();
             goal.addCompletedMinutes(minutes);
             weeklyGoalRepository.save(goal);
 
-            log.info("Recorded {} minutes for father {}: now {} minutes (target: {} hours)", 
-                     minutes, fatherId, goal.getActualMinutes(), goal.getTargetHours());
+            log.info("Recorded {} minutes for father {} to week {}: now {} minutes (target: {} hours)",
+                     minutes, fatherId, sessionWeek, goal.getActualMinutes(), goal.getTargetHours());
         } else {
-            log.warn("No active weekly goal found for father {} when recording {} minutes", 
-                     fatherId, minutes);
+            log.warn("No active weekly goal for father {} in the session's week {} when recording {} minutes",
+                     fatherId, sessionWeek, minutes);
         }
     }
 
@@ -214,18 +253,25 @@ public class WeeklyGoalService {
     // ─── Queries ────────────────────────────────────────────────────────────────
 
     /**
-     * Gets the active weekly goal for a father.
+     * Gets the father's ACTIVE goal for his current week.
+     *
+     * <p>Looked up by (father, current week) - unique - rather than "the father's ACTIVE goal": across
+     * a Sunday boundary the previous week's goal stays ACTIVE until the weekly completion job
+     * finalizes it, and it must neither be reported as this week's goal nor make the lookup
+     * ambiguous.</p>
      */
     public Optional<WeeklyGoal> getActiveGoal(Long fatherId) {
-        return weeklyGoalRepository.findByFatherIdAndStatus(fatherId, WeeklyGoalStatus.ACTIVE);
+        return getCurrentWeekGoal(fatherId)
+            .filter(goal -> goal.getStatus() == WeeklyGoalStatus.ACTIVE);
     }
 
     /**
      * Gets the current week's goal (any status) for a father.
      */
     public Optional<WeeklyGoal> getCurrentWeekGoal(Long fatherId) {
-        LocalDate weekStart = getCurrentWeekStart();
-        return weeklyGoalRepository.findByFatherIdAndWeekStartDate(fatherId, weekStart);
+        return fatherRepository.findById(fatherId)
+            .flatMap(father -> weeklyGoalRepository.findByFatherIdAndWeekStartDate(
+                fatherId, weekStartFor(father, clock.instant())));
     }
 
     /**
@@ -285,10 +331,34 @@ public class WeeklyGoalService {
     // ─── Helper Methods ─────────────────────────────────────────────────────────
 
     /**
-     * Returns the start of the current week (Sunday).
+     * Returns the start of the current week (Sunday) in the default (Israel) zone. Used by the
+     * weekly scheduler jobs; per-father goal logic uses {@link #weekStartFor(Father, Instant)}.
      */
     public LocalDate getCurrentWeekStart() {
         return LocalDate.now(ISRAEL_ZONE).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
+    }
+
+    /**
+     * The Sunday that starts the father's Sunday-Saturday week containing {@code instant}, in the
+     * father's own timezone ({@link Father#getTimezone()}, falling back to the default zone when
+     * unset or invalid). This is the single week definition for creating, finding and crediting
+     * goals; weekly_goal.week_start_date holds this date.
+     */
+    public LocalDate weekStartFor(Father father, Instant instant) {
+        return instant.atZone(zoneOf(father)).toLocalDate()
+            .with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
+    }
+
+    private static ZoneId zoneOf(Father father) {
+        String timezone = father.getTimezone();
+        if (timezone != null && !timezone.isBlank()) {
+            try {
+                return ZoneId.of(timezone);
+            } catch (Exception e) {
+                log.warn("Invalid timezone '{}' for father {}, using default", timezone, father.getId());
+            }
+        }
+        return ISRAEL_ZONE;
     }
 
     /**

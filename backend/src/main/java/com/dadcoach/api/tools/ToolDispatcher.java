@@ -504,7 +504,8 @@ public class ToolDispatcher {
             return ToolExecutionResponse.invalidParameters("target_hours must be at least 1");
         }
 
-        WeeklyGoal goal = weeklyGoalService.createWeeklyGoal(request.userId(), targetHours);
+        // Same lifecycle as the original engine's set_weekly_goal: create, then activate.
+        WeeklyGoal goal = weeklyGoalService.createAndActivateWeeklyGoal(request.userId(), targetHours);
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("goal_id", goal.getId());
