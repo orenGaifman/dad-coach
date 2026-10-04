@@ -166,6 +166,29 @@ class PlatformIntegrationTest {
         }
 
         @Test
+        @DisplayName("worker API: a known father's person ref goes with the turn; an unknown sender's turn has none")
+        void workerApiSendsThePersonRef() {
+            wireMockServer.stubFor(post(urlPathEqualTo("/api/v1/worker/execute"))
+                    .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json")
+                            .withBody("{\"instanceId\": \"123e4567-e89b-12d3-a456-426614174000\", \"currentStateKey\": \"HOME\","
+                                    + " \"responseContent\": \"hi\", \"responseType\": \"text\", \"isDuplicate\": false}")));
+            config.setWorkerKey("dad_3");
+            config.setWorkflowKey("dad-coach-3");
+            String ref = com.dadcoach.integration.platform.lifecycle.PersonRefs.of(42L);
+
+            new PlatformWorkflowClient(config).executeWorkflow(new WorkflowExecuteRequest("dad-coach", USER_ID, "whatsapp", "corr-ref",
+                    new WorkflowExecuteRequest.MessagePayload("text", "hi"), ref));
+            wireMockServer.verify(postRequestedFor(urlPathEqualTo("/api/v1/worker/execute"))
+                    .withRequestBody(containing("\"personRef\":\"" + ref + "\"")));
+            assertThat(ref).isEqualTo("00000000-0000-0000-0000-00000000002a");
+
+            wireMockServer.resetRequests();
+            new PlatformWorkflowClient(config).executeWorkflow(WorkflowExecuteRequest.textMessage(USER_ID, "whatsapp", "corr-noref", "hi"));
+            wireMockServer.verify(postRequestedFor(urlPathEqualTo("/api/v1/worker/execute"))
+                    .withRequestBody(WireMock.notContaining("personRef")));
+        }
+
+        @Test
         @DisplayName("should include correlation ID in request")
         void shouldIncludeCorrelationIdInRequest() {
             // Arrange

@@ -43,7 +43,10 @@ public class PlatformUserResolver {
 
         // For WhatsApp, the identifier is the phone number
         if ("whatsapp".equalsIgnoreCase(channel)) {
-            return fatherRepository.findByPhone(identifier);
+            // A deleted father is nobody's recipient any more: no scheduled message reaches him while his
+            // data is being deleted (the platform also stops his scheduled turns).
+            return fatherRepository.findByPhone(identifier)
+                    .filter(father -> father.getStatus() != com.dadcoach.father.FatherStatus.DELETED);
         }
 
         log.warn("Unsupported channel: {}", channel);

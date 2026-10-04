@@ -261,7 +261,8 @@ public class PlatformWorkflowClient {
                 request.message().type(),
                 request.message().content(),
                 null,  // metadata - optional
-                config.getWorkflowKey()  // the workflow to run; null = the worker's default (not sent)
+                config.getWorkflowKey(),  // the workflow to run; null = the worker's default (not sent)
+                request.personRef()  // the father's person ref (person lifecycle); null for an unknown sender
         );
     }
 
@@ -356,7 +357,10 @@ public class PlatformWorkflowClient {
             Object metadata,
             // left out of the body when not configured, so the request is exactly what it was before
             @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-            String workflowKey
+            String workflowKey,
+            // multi-tenancy: the father's id on the platform, so his person can be deleted by it (not sent when unknown)
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            String personRef
     ) {}
 
     /**

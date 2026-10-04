@@ -62,13 +62,14 @@ public class WorkflowEngineConfig {
     @ConditionalOnProperty(name = "workflow.platform.enabled", havingValue = "true")
     public WorkflowEngine platformWorkflowEngine(
             PlatformWorkflowClient platformClient,
-            PlatformWorkflowConfig config) {
+            PlatformWorkflowConfig config,
+            com.dadcoach.domain.father.FatherRepository fatherRepository) {
         
         log.info("Platform workflow integration ENABLED - using PlatformWorkflowEngine");
         log.info("Platform configuration: baseUrl={}, workflowId={}", 
                 config.getBaseUrl(), config.getWorkflowId());
         
-        return new PlatformWorkflowEngine(platformClient, config);
+        return new PlatformWorkflowEngine(platformClient, config, fatherRepository);
     }
 
     /**

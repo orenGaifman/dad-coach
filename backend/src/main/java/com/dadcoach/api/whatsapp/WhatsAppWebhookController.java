@@ -48,6 +48,8 @@ public class WhatsAppWebhookController {
     private final ObjectMapper objectMapper;
     private final WorkflowIdempotencyService idempotencyService;
     private final InboundSessionTracker inboundSessionTracker;
+    private final com.dadcoach.integration.platform.lifecycle.DeletedSenders deletedSenders;
+    private final com.dadcoach.integration.platform.lifecycle.WhatsAppDeletionRequests deletionRequests;
 
     public WhatsAppWebhookController(WhatsAppSignatureVerifier signatureVerifier,
                                      WhatsAppProperties properties,
@@ -56,7 +58,9 @@ public class WhatsAppWebhookController {
                                      ActivationListener activationListener,
                                      ObjectMapper objectMapper,
                                      WorkflowIdempotencyService idempotencyService,
-                                     InboundSessionTracker inboundSessionTracker) {
+                                     InboundSessionTracker inboundSessionTracker,
+                                     com.dadcoach.integration.platform.lifecycle.DeletedSenders deletedSenders,
+                                     com.dadcoach.integration.platform.lifecycle.WhatsAppDeletionRequests deletionRequests) {
         this.signatureVerifier = signatureVerifier;
         this.properties = properties;
         this.channelRouter = channelRouter;
@@ -65,6 +69,8 @@ public class WhatsAppWebhookController {
         this.objectMapper = objectMapper;
         this.idempotencyService = idempotencyService;
         this.inboundSessionTracker = inboundSessionTracker;
+        this.deletedSenders = deletedSenders;
+        this.deletionRequests = deletionRequests;
     }
 
     @GetMapping
@@ -148,6 +154,19 @@ public class WhatsAppWebhookController {
         }
         
         try {
+            // A deleted father's messages never reach the AI: not while he is DELETED, and not while the
+            // platform has not yet confirmed deleting his old conversation (he would resume it).
+            if (deletedSenders != null && deletedSenders.isDeleted(sender)) {
+                log.info("Message from a deleted father dropped: {}", com.dadcoach.common.MaskingUtils.maskPhone(sender));
+                return;
+            }
+            // "DELETE MY DATA" (the public data-deletion page) is a deletion request - handled here, never by the AI
+            if (deletionRequests != null && com.dadcoach.integration.platform.lifecycle.WhatsAppDeletionRequests.isRequest(content)) {
+                String reply = deletionRequests.handle(sender);
+                adapter.sendMessage(new OutboundMessageDto(java.util.UUID.randomUUID(), null, null, com.dadcoach.channel.dto.MessageType.TEXT, reply,
+                        null, false, null, null, com.dadcoach.channel.dto.MessagePriority.IMMEDIATE, java.time.Instant.now()), sender);
+                return;
+            }
             // A message from the father opens/extends his 24h WhatsApp window.
             inboundSessionTracker.onInboundWhatsAppMessage(sender);
 

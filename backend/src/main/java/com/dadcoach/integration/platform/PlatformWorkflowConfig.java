@@ -86,6 +86,12 @@ public class PlatformWorkflowConfig {
     @Min(value = 5000, message = "Read timeout must be at least 5000ms")
     private int readTimeoutMs = 60000;
 
+    /**
+     * Dad Coach's one tenant on the platform (a single-tenant product, created by the platform's V99). Named by the
+     * person lifecycle API (registering and deleting a father's person).
+     */
+    private java.util.UUID tenantId = java.util.UUID.fromString("20082bcd-a7bf-57a8-a382-4bad32144b2f");
+
     // Getters and Setters
 
     public boolean isEnabled() {
@@ -150,6 +156,14 @@ public class PlatformWorkflowConfig {
 
     public void setConnectTimeoutMs(int connectTimeoutMs) {
         this.connectTimeoutMs = connectTimeoutMs;
+    }
+
+    public java.util.UUID getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(java.util.UUID tenantId) {
+        this.tenantId = tenantId;
     }
 
     public int getReadTimeoutMs() {

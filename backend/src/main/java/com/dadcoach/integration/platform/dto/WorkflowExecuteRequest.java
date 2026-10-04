@@ -8,14 +8,21 @@ package com.dadcoach.integration.platform.dto;
  * @param channel the communication channel (e.g., "whatsapp", "web")
  * @param correlationId unique message ID for idempotency
  * @param message the user's message payload
+ * @param personRef the father's id as the platform knows him (multi-tenancy person ref), when he is known
  */
 public record WorkflowExecuteRequest(
         String workflowKey,
         String userId,
         String channel,
         String correlationId,
-        MessagePayload message
+        MessagePayload message,
+        String personRef
 ) {
+    public WorkflowExecuteRequest(String workflowKey, String userId, String channel, String correlationId,
+                                  MessagePayload message) {
+        this(workflowKey, userId, channel, correlationId, message, null);
+    }
+
     /**
      * Creates a new request with validation.
      */

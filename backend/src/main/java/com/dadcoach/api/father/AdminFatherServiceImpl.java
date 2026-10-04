@@ -3,18 +3,10 @@ package com.dadcoach.api.father;
 import com.dadcoach.common.MaskingUtils;
 import com.dadcoach.common.ResourceNotFoundException;
 import com.dadcoach.api.pagination.CursorPageResponse;
-import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.domain.father.Father;
+import com.dadcoach.domain.father.FatherDataPurger;
 import com.dadcoach.domain.father.FatherRepository;
-import com.dadcoach.domain.goal.GoalRepository;
-import com.dadcoach.domain.memory.MemoryRepository;
-import com.dadcoach.channel.CommunicationEndpointRepository;
-import com.dadcoach.onboarding.provisioning.ActivationRecordRepository;
-import com.dadcoach.onboarding.provisioning.AiProfileRepository;
-import com.dadcoach.onboarding.provisioning.CommunicationPreferenceRepository;
-import com.dadcoach.onboarding.provisioning.FamilyRepository;
-import com.dadcoach.onboarding.provisioning.LanguagePreferenceRepository;
-import com.dadcoach.workspace.commitment.QualityTimeCommitmentRepository;
+import com.dadcoach.integration.platform.lifecycle.PlatformPersonDeletions;
 import com.dadcoach.workspace.magiclink.MagicLinkService;
 
 import org.slf4j.Logger;
@@ -37,43 +29,19 @@ public class AdminFatherServiceImpl implements AdminFatherService {
     private static final Logger log = LoggerFactory.getLogger(AdminFatherServiceImpl.class);
 
     private final FatherRepository fatherRepository;
-    private final ChildRepository childRepository;
-    private final GoalRepository goalRepository;
-    private final MemoryRepository memoryRepository;
-    private final CommunicationEndpointRepository communicationEndpointRepository;
-    private final FamilyRepository familyRepository;
-    private final LanguagePreferenceRepository languagePreferenceRepository;
-    private final CommunicationPreferenceRepository communicationPreferenceRepository;
-    private final AiProfileRepository aiProfileRepository;
-    private final ActivationRecordRepository activationRecordRepository;
     private final MagicLinkService magicLinkService;
-    private final QualityTimeCommitmentRepository qualityTimeCommitmentRepository;
+    private final FatherDataPurger purger;
+    private final PlatformPersonDeletions platformDeletions;
 
     public AdminFatherServiceImpl(
             FatherRepository fatherRepository,
-            ChildRepository childRepository,
-            GoalRepository goalRepository,
-            MemoryRepository memoryRepository,
-            CommunicationEndpointRepository communicationEndpointRepository,
-            FamilyRepository familyRepository,
-            LanguagePreferenceRepository languagePreferenceRepository,
-            CommunicationPreferenceRepository communicationPreferenceRepository,
-            AiProfileRepository aiProfileRepository,
-            ActivationRecordRepository activationRecordRepository,
             MagicLinkService magicLinkService,
-            QualityTimeCommitmentRepository qualityTimeCommitmentRepository) {
+            FatherDataPurger purger,
+            PlatformPersonDeletions platformDeletions) {
         this.fatherRepository = fatherRepository;
-        this.childRepository = childRepository;
-        this.goalRepository = goalRepository;
-        this.memoryRepository = memoryRepository;
-        this.communicationEndpointRepository = communicationEndpointRepository;
-        this.familyRepository = familyRepository;
-        this.languagePreferenceRepository = languagePreferenceRepository;
-        this.communicationPreferenceRepository = communicationPreferenceRepository;
-        this.aiProfileRepository = aiProfileRepository;
-        this.activationRecordRepository = activationRecordRepository;
         this.magicLinkService = magicLinkService;
-        this.qualityTimeCommitmentRepository = qualityTimeCommitmentRepository;
+        this.purger = purger;
+        this.platformDeletions = platformDeletions;
     }
 
     @Override
@@ -101,50 +69,21 @@ public class AdminFatherServiceImpl implements AdminFatherService {
             .map(this::toDetailDto);
     }
 
+    /**
+     * Deletes the father for good: his Dad Coach data now ({@link FatherDataPurger}), and - in the same transaction -
+     * a request to the AI Workflow Platform to delete his person and conversations, sent after commit and retried
+     * until it is done ({@link PlatformPersonDeletions}). Admin only.
+     */
     @Override
     @Transactional
     public void deleteFather(Long fatherId) {
         Father father = fatherRepository.findById(fatherId)
             .orElseThrow(() -> new ResourceNotFoundException("Father", fatherId));
-
-        log.info("Deleting father: id={}, phone={}", fatherId, MaskingUtils.maskPhone(father.getPhone()));
-
-        UUID fatherUuid = new UUID(0L, fatherId);
-
-        // Delete related entities in order (due to foreign key constraints)
-        // 1. Delete memories (must be deleted before father due to FK constraint)
-        memoryRepository.deleteByFatherId(fatherId);
-        
-        // 2. Delete quality time commitments (must be deleted before children due to FK constraint on child_id)
-        qualityTimeCommitmentRepository.deleteByFatherId(fatherId);
-        
-        // 3. Delete children
-        childRepository.deleteByFatherId(fatherId);
-        
-        // 4. Delete goals
-        goalRepository.deleteByFatherId(fatherId);
-        
-        // 5. Delete communication endpoints
-        communicationEndpointRepository.deleteByFatherId(fatherUuid);
-        
-        // 6. Delete family
-        familyRepository.deleteByFatherId(fatherUuid);
-        
-        // 7. Delete language preference
-        languagePreferenceRepository.deleteByFatherId(fatherUuid);
-        
-        // 8. Delete communication preference
-        communicationPreferenceRepository.deleteByFatherId(fatherUuid);
-        
-        // 9. Delete AI profile
-        aiProfileRepository.deleteByFatherId(fatherUuid);
-        
-        // 10. Delete activation record
-        activationRecordRepository.deleteByFatherId(fatherUuid);
-        
-        // 11. Finally delete the father
-        fatherRepository.delete(father);
-        
+        String phone = father.getPhone();
+        log.info("Deleting father: id={}, phone={}", fatherId, MaskingUtils.maskPhone(phone));
+        fatherRepository.flush();
+        platformDeletions.request(fatherId, phone, false);
+        purger.purge(fatherId);
         log.info("Deleted father and all related data: id={}", fatherId);
     }
 

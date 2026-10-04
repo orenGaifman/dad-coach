@@ -36,4 +36,13 @@ class PlatformUserResolverTest {
         assertThat(resolver.resolve("sms:+972501234567")).isEmpty();
         verifyNoInteractions(fatherRepository);
     }
+
+    @Test
+    void aDeletedFatherIsNobodysRecipient() {
+        Father father = new Father("+972501234568");
+        father.setStatus(com.dadcoach.father.FatherStatus.DELETED);
+        when(fatherRepository.findByPhone("+972501234568")).thenReturn(Optional.of(father));
+
+        assertThat(new PlatformUserResolver(fatherRepository).resolve("whatsapp:+972501234568")).isEmpty();
+    }
 }

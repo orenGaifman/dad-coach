@@ -174,7 +174,7 @@ class DadCoachE2ETester:
             # This endpoint may not exist - skip if 404
             response = self.session.get(
                 urljoin(self.config.base_url, f"/api/v1/admin/fathers?phone={phone}"),
-                headers={"Authorization": f"Bearer {self.config.admin_token}"} if self.config.admin_token else {},
+                headers={"X-API-Key": self.config.admin_token} if self.config.admin_token else {},
                 timeout=10,
             )
             if response.status_code == 200:
@@ -184,7 +184,7 @@ class DadCoachE2ETester:
                     # Delete the user
                     delete_response = self.session.delete(
                         urljoin(self.config.base_url, f"/api/v1/admin/fathers/{father_id}"),
-                        headers={"Authorization": f"Bearer {self.config.admin_token}"} if self.config.admin_token else {},
+                        headers={"X-API-Key": self.config.admin_token} if self.config.admin_token else {},
                         timeout=10,
                     )
                     if delete_response.status_code in [200, 204]:
@@ -510,7 +510,7 @@ def main():
     parser.add_argument("--phone", required=True, help="Phone number to test with")
     parser.add_argument("--env", choices=["local", "dev", "prod"], default="local", help="Environment")
     parser.add_argument("--base-url", help="Override base URL")
-    parser.add_argument("--admin-token", help="Admin JWT token for cleanup")
+    parser.add_argument("--admin-token", help="The admin API key (DADCOACH_ADMIN_API_KEY) for cleanup")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     args = parser.parse_args()
 

@@ -50,17 +50,20 @@ public class SecurityConfig {
     private final ContextProviderAuthFilter contextProviderAuthFilter;
     private final ScheduledResponseAuthFilter scheduledResponseAuthFilter;
     private final ProfileApiAuthFilter profileApiAuthFilter;
+    private final AdminApiKeyAuthFilter adminApiKeyAuthFilter;
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter,
                           ToolApiAuthFilter toolApiAuthFilter,
                           ContextProviderAuthFilter contextProviderAuthFilter,
                           ProfileApiAuthFilter profileApiAuthFilter,
-                          ScheduledResponseAuthFilter scheduledResponseAuthFilter) {
+                          ScheduledResponseAuthFilter scheduledResponseAuthFilter,
+                          AdminApiKeyAuthFilter adminApiKeyAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.toolApiAuthFilter = toolApiAuthFilter;
         this.contextProviderAuthFilter = contextProviderAuthFilter;
         this.profileApiAuthFilter = profileApiAuthFilter;
         this.scheduledResponseAuthFilter = scheduledResponseAuthFilter;
+        this.adminApiKeyAuthFilter = adminApiKeyAuthFilter;
     }
 
     @Bean
@@ -109,10 +112,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/calendar/**").permitAll()
                         // Magic link auth (token is the credential)
                         .requestMatchers("/api/v1/auth/magic-link/**").permitAll()
-                        // TODO: SECURITY - Admin endpoints are currently public.
-                        // Production deployment should implement admin authentication before enabling.
-                        // Options: OAuth2, API key validation, or IP whitelist.
-                        .requestMatchers("/api/v1/admin/**").permitAll()
+                        // Admin endpoints (list, read, permanently delete fathers; search; memories): operators only,
+                        // with the admin API key (AdminApiKeyAuthFilter) - never a JWT
+                        .requestMatchers("/api/v1/admin/**").hasRole(AdminApiKeyAuthFilter.ROLE)
                         // Dev endpoints (protected by DevEnvironmentGuard - blocks in production)
                         .requestMatchers("/api/v1/dev/**").permitAll()
                         // All other requests require authentication
@@ -123,6 +125,7 @@ public class SecurityConfig {
                 .addFilterBefore(contextProviderAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(profileApiAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(scheduledResponseAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(adminApiKeyAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }

@@ -46,6 +46,7 @@ public class PlatformWorkflowEngine implements WorkflowEngine {
 
     private final PlatformWorkflowClient platformClient;
     private final PlatformWorkflowConfig config;
+    private final com.dadcoach.domain.father.FatherRepository fatherRepository;
 
     /**
      * Creates a new PlatformWorkflowEngine.
@@ -54,6 +55,16 @@ public class PlatformWorkflowEngine implements WorkflowEngine {
      * @param config the platform configuration
      */
     public PlatformWorkflowEngine(PlatformWorkflowClient platformClient, PlatformWorkflowConfig config) {
+        this(platformClient, config, null);
+    }
+
+    /**
+     * @param fatherRepository finds the sender's father, whose id goes to the platform as the person ref (so the
+     *                         person lifecycle - deletion - can address him); null leaves it out
+     */
+    public PlatformWorkflowEngine(PlatformWorkflowClient platformClient, PlatformWorkflowConfig config,
+                                  com.dadcoach.domain.father.FatherRepository fatherRepository) {
+        this.fatherRepository = fatherRepository;
         this.platformClient = platformClient;
         this.config = config;
         log.info("PlatformWorkflowEngine initialized: workflowId={}", config.getWorkflowId());
@@ -115,8 +126,25 @@ public class PlatformWorkflowEngine implements WorkflowEngine {
                 userId,
                 message.channel(),
                 message.messageId().toString(),
-                new WorkflowExecuteRequest.MessagePayload(messageType, content)
+                new WorkflowExecuteRequest.MessagePayload(messageType, content),
+                personRef(message)
         );
+    }
+
+    /** The sender's father as the platform's person ref, when the sender is a known father. */
+    private String personRef(InboundMessageDto message) {
+        if (fatherRepository == null || message.fatherChannelIdentity() == null
+                || !"whatsapp".equalsIgnoreCase(message.channel())) {
+            return null;
+        }
+        try {
+            return fatherRepository.findByPhone(message.fatherChannelIdentity())
+                    .map(father -> com.dadcoach.integration.platform.lifecycle.PersonRefs.of(father.getId()))
+                    .orElse(null);
+        } catch (RuntimeException e) {
+            log.warn("Could not look up the sender's father for the person ref: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**

@@ -66,4 +66,15 @@ public class FilterConfig {
         registration.setEnabled(false);
         return registration;
     }
+
+    /**
+     * Disables auto-registration of AdminApiKeyAuthFilter as a servlet filter.
+     * The filter is registered in the Security filter chain instead.
+     */
+    @Bean
+    public FilterRegistrationBean<AdminApiKeyAuthFilter> adminApiKeyAuthFilterRegistration(AdminApiKeyAuthFilter filter) {
+        FilterRegistrationBean<AdminApiKeyAuthFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
 }
