@@ -136,6 +136,36 @@ class PlatformIntegrationTest {
         }
 
         @Test
+        @DisplayName("worker API: names the configured workflow (workflowKey) and leaves it out when none is configured")
+        void workerApiNamesTheConfiguredWorkflow() {
+            wireMockServer.stubFor(post(urlPathEqualTo("/api/v1/worker/execute"))
+                    .willReturn(aResponse()
+                            .withStatus(200)
+                            .withHeader("Content-Type", "application/json")
+                            .withBody("""
+                                    {"instanceId": "123e4567-e89b-12d3-a456-426614174000", "currentStateKey": "HOME",
+                                     "responseContent": "היי", "responseType": "text", "isDuplicate": false,
+                                     "workflowKey": "dad-coach-3", "workflowSelection": "EXPLICIT"}
+                                    """)));
+            config.setWorkerKey("dad_3");
+            config.setWorkflowKey("dad-coach-3");
+
+            WorkflowExecuteResponse response = new PlatformWorkflowClient(config).executeWorkflow(
+                    WorkflowExecuteRequest.textMessage(USER_ID, "whatsapp", "corr-wf", "היי"));
+
+            assertThat(response.success()).isTrue();
+            wireMockServer.verify(postRequestedFor(urlPathEqualTo("/api/v1/worker/execute"))
+                    .withRequestBody(containing("\"workerKey\":\"dad_3\""))
+                    .withRequestBody(containing("\"workflowKey\":\"dad-coach-3\"")));
+
+            wireMockServer.resetRequests();
+            config.setWorkflowKey("  ");
+            new PlatformWorkflowClient(config).executeWorkflow(WorkflowExecuteRequest.textMessage(USER_ID, "whatsapp", "corr-nk", "היי"));
+            wireMockServer.verify(postRequestedFor(urlPathEqualTo("/api/v1/worker/execute"))
+                    .withRequestBody(WireMock.notContaining("workflowKey")));
+        }
+
+        @Test
         @DisplayName("should include correlation ID in request")
         void shouldIncludeCorrelationIdInRequest() {
             // Arrange

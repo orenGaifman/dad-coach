@@ -260,7 +260,8 @@ public class PlatformWorkflowClient {
                 request.correlationId(),
                 request.message().type(),
                 request.message().content(),
-                null  // metadata - optional
+                null,  // metadata - optional
+                config.getWorkflowKey()  // the workflow to run; null = the worker's default (not sent)
         );
     }
 
@@ -352,7 +353,10 @@ public class PlatformWorkflowClient {
             String correlationId,
             String messageType,
             String content,
-            Object metadata
+            Object metadata,
+            // left out of the body when not configured, so the request is exactly what it was before
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            String workflowKey
     ) {}
 
     /**

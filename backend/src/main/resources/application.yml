@@ -164,6 +164,9 @@ workflow:
     base-url: ${WORKFLOW_PLATFORM_BASE_URL:http://localhost:8080}
     api-key: ${WORKFLOW_PLATFORM_API_KEY:}
     worker-key: ${WORKFLOW_PLATFORM_WORKER_KEY:dad_2}
+    # The worker's workflow every message runs (production: dad-coach-3 with worker dad_3). Blank = not sent
+    # (the platform runs the worker's default workflow). The platform validates it belongs to the worker.
+    workflow-key: ${WORKFLOW_PLATFORM_WORKFLOW_KEY:}
     # Receiver for the platform's scheduled-response callback (proactive messages written by the
     # workflow, e.g. Dad Coach 3 reminders). Disabled by default; the key must match the platform's
     # route api-key for this worker.

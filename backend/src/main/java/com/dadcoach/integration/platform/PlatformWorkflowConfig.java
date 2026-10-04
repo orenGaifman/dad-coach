@@ -19,6 +19,7 @@ import java.util.UUID;
  *     base-url: ${WORKFLOW_PLATFORM_BASE_URL:http://localhost:8081}
  *     api-key: ${WORKFLOW_PLATFORM_API_KEY:}
  *     worker-key: ${WORKFLOW_PLATFORM_WORKER_KEY:dad-coach}      # Worker key (recommended)
+ *     workflow-key: ${WORKFLOW_PLATFORM_WORKFLOW_KEY:}           # The worker's workflow to run (sent as workflowKey)
  *     workflow-id: ${WORKFLOW_PLATFORM_WORKFLOW_ID:}             # UUID of workflow (legacy)
  *     connect-timeout-ms: 5000
  *     read-timeout-ms: 60000
@@ -57,6 +58,13 @@ public class PlatformWorkflowConfig {
      * When set, this takes precedence over workflowId.
      */
     private String workerKey;
+
+    /**
+     * The workflow of that worker every message runs (e.g. {@code dad-coach-3}), sent as workflowKey: the
+     * platform executes exactly that workflow and never chooses one (multi-workflow migration P2). Blank =
+     * not sent, and the platform runs the worker's default workflow as before.
+     */
+    private String workflowKey;
 
     /**
      * The UUID of the dad-coach workflow definition in the platform.
@@ -115,6 +123,14 @@ public class PlatformWorkflowConfig {
 
     public String getWorkerKey() {
         return workerKey;
+    }
+
+    public String getWorkflowKey() {
+        return workflowKey == null || workflowKey.isBlank() ? null : workflowKey.strip();
+    }
+
+    public void setWorkflowKey(String workflowKey) {
+        this.workflowKey = workflowKey;
     }
 
     public void setWorkerKey(String workerKey) {
