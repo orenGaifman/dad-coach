@@ -32,3 +32,9 @@ same number writing again is a new contact with a new conversation - the old one
 Production also refuses to start with the public development `JWT_SECRET` (`JwtSecretGuard`).
 The dev page `dad-coach-web/app/dev/invite` (list/delete fathers) no longer works without the key - it is a
 development tool; `scripts/test_e2e.py --admin-token` now sends the key.
+
+**Production (2026-10-04 ~22:10 UTC):** `1dc2708` live (Flyway V22 applied). `JWT_SECRET` (63 chars) and
+`DADCOACH_ADMIN_API_KEY` set on Render before the deploy (values only there and in the owner-only
+`~/.config/dad-coach/production-secrets.env`). Admin API: 401 without the key for GET and DELETE, 200 with it. The
+platform accepts Dad Coach's key for its own tenant only (Big Boss tenant: 403). The one Dad Coach person on the
+platform is a +1999…9001 test number from 2026-10-04 - left as it is.
