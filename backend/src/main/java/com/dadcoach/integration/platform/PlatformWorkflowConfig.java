@@ -18,8 +18,8 @@ import java.util.UUID;
  *     enabled: true                                              # Feature flag
  *     base-url: ${WORKFLOW_PLATFORM_BASE_URL:http://localhost:8081}
  *     api-key: ${WORKFLOW_PLATFORM_API_KEY:}
- *     worker-key: ${WORKFLOW_PLATFORM_WORKER_KEY:dad-coach}      # Worker key (recommended)
- *     workflow-key: ${WORKFLOW_PLATFORM_WORKFLOW_KEY:}           # The worker's workflow to run (sent as workflowKey)
+ *     worker-key: ${WORKFLOW_PLATFORM_WORKER_KEY:dad_3}          # Worker key (recommended)
+ *     workflow-key: ${WORKFLOW_PLATFORM_WORKFLOW_KEY:dad-coach-3} # The worker's workflow to run (workflowKey, required)
  *     workflow-id: ${WORKFLOW_PLATFORM_WORKFLOW_ID:}             # UUID of workflow (legacy)
  *     connect-timeout-ms: 5000
  *     read-timeout-ms: 60000
@@ -61,8 +61,7 @@ public class PlatformWorkflowConfig {
 
     /**
      * The workflow of that worker every message runs (e.g. {@code dad-coach-3}), sent as workflowKey: the
-     * platform executes exactly that workflow and never chooses one (multi-workflow migration P2). Blank =
-     * not sent, and the platform runs the worker's default workflow as before.
+     * platform executes exactly that workflow and never chooses one, and refuses a request without it.
      */
     private String workflowKey;
 
