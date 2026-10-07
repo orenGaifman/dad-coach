@@ -245,3 +245,15 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   credit; too long; silent; Meta 404; platform down; spoken deletion; typed text untouched), `VoiceNotesAdminTest` (on by
   default, off and on again, 400, a father / a visitor / no CSRF refused, the key never in the answer). Local check with
   the real ElevenLabs: a Hebrew note (macOS Carmit, ogg/opus 16 kHz) was written down word for word in 2.1 s.
+
+## D-030 Belts come only from sessions; one name per thing (2026-10-08)
+- **Belts:** `Belt.fromCompletionCount` on every completed session is the only rule (site, dashboard and coach all say
+  so). The Sunday weekly completion still promoted one belt per met week - the old 7-week program - so a father with 4
+  sessions could jump to ORANGE (10) and drop back on his next session, and the message spoke of "סיימת את התוכנית",
+  "עוד 5 שבועות", "🔥 רצף" and "אתה אבא מדהים!". `WeeklyGoal.complete()` no longer moves the belt (status and streak
+  only); `BeltPromotionNotifier`'s text is calm and factual if it is ever used. `BeltPromotionTest` pins it.
+- **Names:** the dashboard is "הדף האישי" (as "כניסה לדף שלי" on WhatsApp and the menu), a booked session "מתוכנן",
+  a confirmed one "היה", "יומן גוגל"; the deletion phrase "מחק את המידע שלי" everywhere, one email subject.
+- **Site claims fixed to the product:** a cancellation never lowers a belt but can break the weekly streak; no
+  "replaced by" view; children by message or on the page; no stop word exists (silence does not stop the Sunday and
+  goal invites - see the open item); the footer starts with the signup because an unclaimed number is dropped.
