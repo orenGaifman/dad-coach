@@ -88,10 +88,51 @@ Work streams: DC-A backend (branch align-backend), DC-B dashboard, DC-C workflow
   save_activity_idea, connect_calendar, get_dashboard_link, show_weekly_summary; calendar_context,
   quality_time_context) — `HttpToolRegistrationConfig.DAD_COACH_HTTP_TOOLS` + catalog migrations. A call to one
   now answers 404.
-- [ ] DC-A28 WS-C: dad-coach-3 guidance still says booking needs Google Calendar — align with D-007/D-013/D-014.
+- [x] DC-A28 WS-C: dad-coach-3 guidance still says booking needs Google Calendar — align with D-007/D-013/D-014.
 - [ ] DC-A29 Delivery ledger (message_delivery with receipts, undelivered list for the admin) - the standard's
   §34 ledger; today only scheduled_response_delivery records outcomes.
-- [ ] DC-A30 Main session: remove the env vars listed in DEPLOYMENT.md from Render after the merge; set WEB_BASE_URL.
+- [x] DC-A30 Main session: remove the env vars listed in DEPLOYMENT.md from Render after the merge; set WEB_BASE_URL.
+  Done 2026-10-07: 6 removed (the rest were never set); WEB_BASE_URL = dad-coach-ui, SITE_ORIGINS = dad-coach-site.
+
+## WS-C — Workflow, provisioning, lab (main session)
+- [x] DC-C01 provisioning/config/dad-coach-3-workflow.yaml is the source of truth (moved from docs/dad-coach-3); every
+  state: keyed REQUIRED/PROHIBITED rules + advancedBehaviorGuidance, legacy behaviorGuidance empty; globalPrompt
+  5,557 → ~2,200 chars; tone in conversationStyle; session timers fireFromAnyState. Validation: test_manifests (11).
+- [x] DC-C02 provision_platform.py (Tair/Big Boss: drift baseline ~/.config/dad-coach/provision-baseline, change flow,
+  publish-on-change, instance upgrade) + test_provision_*. Validation: 18 tests; a re-run is a no-op (lab + prod).
+- [x] DC-C03 Worker display name "Dad Coach" (fathers read "❤️ dad_3:" on every message). Validation: lab + prod.
+- [x] DC-C04 qa-lab: fake Meta + platform jar + backend jar + real model; fire() moves the AI-armed trigger to now
+  (the platform's own pipeline runs it). Scenarios s1–s7, prompt_preview.py, findings.md.
+- [x] DC-C05 Platform V114: weekly_plan_context from source (PR orenGaifman/ai-workflow-platform#8, merged 3626034;
+  suite 4319/4319). V112 was reserved but V113 landed first.
+- [x] DC-C06 Lab before/after: before = no booking possible (finding 1); after v5 = the whole core loop, web-cancel
+  timers suppressed 2/2, goal change refused 3/3, returning father 1/1, onboarding sets the goal in one turn.
+- [x] DC-C07 deployed_smoke_test.py (self-cleaning, 33 checks) + seed_demo_father.py + render_create_services.py.
+- [ ] DC-C08 Cross-repo: deactivate the platform catalog rows of the tools/providers Dad Coach no longer handles
+  (DC-A27; they are bound nowhere, a call answers 404).
+- [ ] DC-C09 The morning reminder and the Sunday check-in were never fired in the lab (timing) - add lab scenarios
+  that time-travel to 08:00 / Sunday and verify both.
+
+## Production record — the alignment cut-over (2026-10-07)
+1. Security hotfixes first (before any other work): dev API off (DADCOACH_DEV_ENABLED=false), test-send/debug-config
+   removed, admin test console + invitation writes behind the admin key, calendar status/events need the father's
+   token, connect + OAuth state HMAC-signed, trigger-notification removed, tool key rotated on both services
+   (an 18-char default), constant-time compares. Commits 756d14f, 4edef1d; Vercel d4a1f70. Probes 401/403/404.
+2. Backup: full pg_dump of production before V23 → ~/.config/dad-coach/backups/ (owner-only, 2.4 MB, 38 tables).
+3. Platform: VIEWER_API_KEY set (the admin's read-only platform panel), PR #8 merged (V114).
+4. dad-coach main → 0f36973: build failed (Render's service root is backend/, the cleanup had deleted
+   backend/Dockerfile) - the old version kept serving; fc4ef06 restored it: migrations V23, V24, V30–V32, V40 applied
+   ("now at version v40"), then the new version refused to start: WHATSAPP_VERIFY_TOKEN was a public development
+   default (the startup guard working) → rotated → live, health UP.
+5. New Render services dad-coach-ui (srv-db34hv6gekts739f34qg) and dad-coach-site (srv-db34hvl9fdbs739uuh70);
+   WEB_BASE_URL/SITE_ORIGINS set; backend redeployed.
+6. Provisioned production: dad-coach-3 v2 (24 rules), worker "Dad Coach", the one test instance upgraded; re-run no-op.
+7. Production smoke 33/33 (closed routes, claim, real onboarding turns, tools + replay, callback + replay, dashboard
+   through the UI proxy, delete through the platform outbox).
+8. The Tair session wired the gateway claim (ROUTES_1_CLAIMURL/CLAIMAPIKEY) and verified it in production.
+9. Obsolete env vars removed; dad-coach-web (Vercel) now only redirects (bc50e59).
+10. Demo father יואב (+19995551000) seeded through the tool API (4 sessions done, 1 upcoming, yellow belt);
+   the owner is a dashboard admin (ops bootstrap-admin).
 
 ## Production runbooks & records
 (append numbered sections for every production operation: plan, rehearsal, execution record, verification)

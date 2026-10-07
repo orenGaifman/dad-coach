@@ -142,3 +142,19 @@ Dad Coach still uses its own number today; the claim lets the shared gateway rou
 - **D-B09 Cookies are Dad Coach's own** (`DADCOACH_SESSION`, `DADCOACH_XSRF`) - localhost cookies ignore the port, and Big Boss / Tair use `XSRF-TOKEN`.
 - **D-B10 Admin API paths keep the brief's names** (`/api/admin/**`) but exclude the legacy `/api/admin/test/**` console, which keeps the admin-key chain.
 - **D-B11 No PII in URLs**: the login page never takes `?phone=`; the token travels in the URL fragment (`/auth/consume#token=`), which no server logs.
+
+## D-020 The shared number's claim includes site signups (2026-10-07)
+The WhatsApp number is shared and invite-only: the platform gateway drops a sender no product claims. Dad Coach claims
+a father it knows (not deleted, no deletion pending) and a phone that signed up on the site in the last 30 days - that
+is how a new father reaches the coach. So the site's start is the signup (name + mobile) on every device, then
+WhatsApp. A father's site signup is deleted with his data.
+
+## D-021 One Dockerfile: backend/Dockerfile (2026-10-07)
+Render's dad-coach service builds with root directory backend/. compose uses the same file.
+
+## D-022 dad-coach-web (Vercel) retired by redirects (2026-10-07)
+Every old address answers 308: legal pages to the site, the rest to the dashboard's /login, belt images to the
+dashboard's /belts - old WhatsApp links and the Meta app settings keep working.
+
+## D-023 Training videos on the owner's existing Bunny zone, under dad-coach/ (2026-10-07)
+The catalog names dad-coach/training/v1/father-<slug>.mp4/.jpg; signed URLs (TRAINING_MEDIA_TOKEN_KEY) like Big Boss.
