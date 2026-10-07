@@ -1,0 +1,5 @@
+/* the ad reuses the training films' look (training/film/style.css); only the ad's own moments are here */
+.hero-art { position: absolute; left: 90px; right: 90px; border-radius: 48px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
+.hero-art img { display: block; width: 100%; }
+.motto { font-size: 104px; font-weight: 800; line-height: 1.1; color: var(--cream); }
+.motto .g { color: var(--gold-500); }

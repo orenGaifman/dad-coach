@@ -1,0 +1,84 @@
+<meta charset="utf-8">
+<title>Dad Coach Training Library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700;800&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a review sheet in the brand's night-and-paper look - a short navy brief, a shelf of portrait players
+   (the father's library, then the ad), then the review notes. Gold only marks the primary video. */
+:root {
+  --paper: #FAF7F1; --surface: #FFFFFF; --ink: #1F1B16; --muted: #6B6358; --line: #E4DCCD;
+  --night: #101C32; --night-ink: #E6E9F0; --night-muted: #C9D0DE;
+  --gold: #DAAC5F; --gold-ink: #7F5B1C; --gold-soft: #F7EEDC; --ok: #3F7D4E; --ok-soft: #E3F0E5; --warn: #8A5A12; --warn-soft: #F7EEDC;
+  --sans: "Assistant", "Arial Hebrew", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0B1424; --surface: #15223B; --ink: #E6E9F0; --muted: #A9B3C7; --line: #24365A;
+  --night: #101C32; --night-ink: #E6E9F0; --night-muted: #C9D0DE;
+  --gold: #DAAC5F; --gold-ink: #EBCB91; --gold-soft: #2E2814; --ok: #7DC08E; --ok-soft: #16301F; --warn: #EBCB91; --warn-soft: #2E2814; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #0B1424; --surface: #15223B; --ink: #E6E9F0; --muted: #A9B3C7; --line: #24365A;
+  --night: #101C32; --night-ink: #E6E9F0; --night-muted: #C9D0DE;
+  --gold: #DAAC5F; --gold-ink: #EBCB91; --gold-soft: #2E2814; --ok: #7DC08E; --ok-soft: #16301F; --warn: #EBCB91; --warn-soft: #2E2814; color-scheme: dark }
+body { background: var(--paper); color: var(--ink); font: 16px/1.6 var(--sans); }
+.band { background: var(--night); color: var(--night-ink); padding-inline: 20px; }
+.band .in { max-width: 1180px; margin: 0 auto; padding-block: 40px 36px; display: grid; gap: 12px; }
+.eyebrow { font: 500 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+h1 { font: 800 clamp(30px, 4.4vw, 44px)/1.1 var(--sans); margin: 0; text-wrap: balance; }
+h2 { font: 700 22px/1.2 var(--sans); margin: 0; text-wrap: balance; }
+h3 { font: 700 20px/1.3 var(--sans); margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.lede { color: var(--night-muted); max-width: 70ch; font-size: 17px; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 15px; color: var(--night-muted); }
+.facts b { color: var(--night-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 36px 64px; display: grid; gap: 44px; }
+section { display: grid; gap: 18px; }
+.shelf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.shelf-head span { color: var(--muted); font-size: 15px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 22px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+.card.primary { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
+video { width: 100%; max-width: 100%; aspect-ratio: 9 / 16; display: block; background: var(--night); object-fit: cover; }
+.meta { padding: 14px 16px 18px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tag { font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: var(--gold-soft); color: var(--gold-ink); }
+.tag.quiet { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.len { font: 500 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.desc { font-size: 16px; }
+.shows { color: var(--muted); font-size: 14px; }
+.file { font: 500 12px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.adrow .card { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); grid-template-rows: none; max-width: 860px; }
+@media (max-width: 640px) { .adrow .card { grid-template-columns: minmax(0, 1fr); } }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+.note { border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; background: var(--surface); min-width: 0; }
+.note ul { margin: 0; padding-inline-start: 18px; display: grid; gap: 6px; font-size: 15px; }
+.note code { font: 500 13px var(--mono); overflow-wrap: anywhere; }
+.state { justify-self: start; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; }
+.state.ok { background: var(--ok-soft); color: var(--ok); }
+.state.warn { background: var(--warn-soft); color: var(--warn); }
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+</style>
+
+<div class="band"><div class="in">
+  <div class="eyebrow">Dad Coach · father onboarding · v1</div>
+  <h1>The training library and the ad</h1>
+  <p class="lede">Five short videos that show a father the product in his own WhatsApp and on his dashboard, and the 9:16 ad
+    for the campaign. Everything on screen comes from the lab on the real workflow.</p>
+  <div class="facts"><span><b>{{COUNT}}</b> videos</span><span><b>{{TOTAL}}</b> in all</span><span>1080 × 1920, 30 fps, captions burned in</span><span>Voice: amit</span></div>
+</div></div>
+
+<main class="wrap">
+  <section>
+    <div class="shelf-head"><h2>For fathers</h2><span>In the dashboard's training area, in catalog order</span></div>
+    <div class="grid">{{CARDS}}
+    </div>
+  </section>
+  <section>
+    <div class="shelf-head"><h2>The ad</h2><span>Instagram and Facebook Reels, Stories, WhatsApp status</span></div>
+    <div class="adrow">{{AD}}</div>
+  </section>
+  <section>
+    <div class="shelf-head"><h2>Review notes</h2><span>What was checked, and what is still open</span></div>
+    <div class="notes">{{NOTES}}</div>
+  </section>
+</main>

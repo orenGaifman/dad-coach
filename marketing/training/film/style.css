@@ -1,0 +1,124 @@
+/* Dad Coach films: one portrait frame (1080x1920) - a short line on top, the product in a phone, captions at the bottom.
+   Colours and type from site/src/styles/tokens.css (brand sheet: navy night background, cream cards, gold only for
+   earned moments and the one action). Assistant for our own words; Heebo inside WhatsApp (closest to the phone's font). */
+@font-face { font-family: Assistant; font-weight: 200 800; src: url(assets/fonts/assistant-hebrew.woff2) format('woff2'); unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Assistant; font-weight: 200 800; src: url(assets/fonts/assistant-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: Heebo; font-weight: 400; src: url(../../node_modules/@fontsource/heebo/files/heebo-hebrew-400-normal.woff2) format('woff2'); unicode-range: U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Heebo; font-weight: 400; src: url(../../node_modules/@fontsource/heebo/files/heebo-latin-400-normal.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F; }
+@font-face { font-family: Heebo; font-weight: 700; src: url(../../node_modules/@fontsource/heebo/files/heebo-hebrew-700-normal.woff2) format('woff2'); unicode-range: U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Heebo; font-weight: 700; src: url(../../node_modules/@fontsource/heebo/files/heebo-latin-700-normal.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F; }
+
+:root {
+  --navy-950: #0B1424; --navy-900: #101C32; --navy-800: #1D2B4B; --navy-700: #2A3D66; --navy-500: #5A6A8C; --navy-200: #C9D0DE; --navy-100: #E6E9F0;
+  --gold-700: #7F5B1C; --gold-600: #B3893F; --gold-500: #DAAC5F; --gold-300: #EBCB91; --gold-100: #F7EEDC;
+  --cream: #FAF7F1; --sand-100: #F2ECE1; --ink-900: #1F1B16; --ink-700: #4A443C; --ink-500: #6B6358;
+  --success-600: #3F7D4E; --success-100: #E3F0E5;
+  --wa-bg: #EFE7DD; --wa-in: #FFFFFF; --wa-out: #D9FDD3; --wa-text: #111b21; --wa-meta: #667781; --wa-head: #f0f2f5; --wa-green: #008069;
+  --bg: var(--navy-900);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); }
+body { font-family: Assistant, Heebo, "Apple Color Emoji", sans-serif; -webkit-font-smoothing: antialiased; color: var(--cream); }
+#stage { position: relative; width: 1080px; height: 1920px; overflow: hidden;
+  background: radial-gradient(1100px 760px at 50% -8%, #22345a 0%, rgba(34,52,90,0) 72%), radial-gradient(900px 600px at 50% 112%, #1a2a49 0%, rgba(26,42,73,0) 70%), var(--navy-900); }
+.num { unicode-bidi: isolate; direction: ltr; display: inline-block; }
+.wm { unicode-bidi: isolate; }
+
+/* top line: what this moment is about */
+.ost { position: absolute; top: 56px; left: 50%; direction: rtl; white-space: nowrap; z-index: 20;
+  background: var(--cream); color: var(--navy-900); font-weight: 800; font-size: 52px; line-height: 1; padding: 26px 48px 28px; border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.28); }
+.ost.gold { background: var(--gold-500); color: var(--navy-950); }
+
+/* the phone */
+.device { position: absolute; left: 111px; top: 182px; width: 1128px; height: 1968px; transform: scale(0.76); transform-origin: 0 0;
+  border: 24px solid #05080f; border-radius: 150px; overflow: hidden; background: #000;
+  box-shadow: 0 0 0 4px rgba(201,208,222,0.16), 0 50px 110px rgba(0,0,0,0.5); }
+.device .screen { position: absolute; inset: 0; overflow: hidden; }
+.device .cam { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; transform-origin: 0 0; }
+
+/* captions: the voice-over, burned in, in their own band under the phone */
+.caption { position: absolute; left: 60px; right: 60px; top: 1700px; height: 196px; display: flex; align-items: center; justify-content: center; z-index: 30; }
+.caption span:first-child { direction: rtl; text-align: center; font-weight: 700; font-size: 56px; line-height: 1.28; color: var(--cream); text-wrap: balance; }
+
+/* the dashboard: a real capture of the Dad Coach SPA (lab demo data) under a phone status bar */
+.dash { position: absolute; inset: 0; background: var(--cream); }
+.dash img { position: absolute; left: 0; width: 1080px; }
+.shot-status { position: absolute; top: 0; left: 0; right: 0; height: 110px; display: flex; align-items: flex-end; justify-content: space-between;
+  padding: 0 70px 16px; font-family: Heebo; font-weight: 700; font-size: 42px; color: #111; background: #fff; direction: ltr; z-index: 4; }
+.shot-status .demo { font-family: Assistant; direction: rtl; font-size: 34px; font-weight: 800; color: var(--gold-700); background: var(--gold-100);
+  border: 2px solid var(--gold-300); padding: 4px 22px 6px; border-radius: 999px; margin-bottom: -4px; }
+.bat { width: 62px; height: 30px; border: 3px solid #111; border-radius: 9px; position: relative; display: inline-block; }
+.bat::after { content: ''; position: absolute; inset: 3px; right: 14px; background: #111; border-radius: 4px; }
+.hl { position: absolute; border: 9px solid var(--gold-500); border-radius: 44px; box-shadow: 0 0 0 4000px rgba(11,20,36,0.42), 0 0 40px rgba(218,172,95,0.6); z-index: 3; }
+.hl.soft { box-shadow: 0 0 40px rgba(218,172,95,0.6); }
+
+/* WhatsApp chat */
+.phone { position: absolute; inset: 0; background: var(--wa-bg); direction: rtl; overflow: hidden; font-family: Heebo, "Apple Color Emoji", sans-serif; }
+.phone .status { height: 110px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 70px 16px; font-weight: 700; font-size: 42px; color: #111; background: var(--wa-head); direction: ltr; }
+.phone .status .icons { display: flex; gap: 16px; align-items: center; }
+.phone .head { height: 170px; background: var(--wa-head); display: flex; align-items: center; gap: 26px; padding: 0 36px; border-bottom: 2px solid #e2e5e8; }
+.phone .head .back { font-size: 64px; color: #027eb5; width: 40px; transform: scaleX(-1); }
+.phone .head .av { width: 112px; height: 112px; border-radius: 50%; flex: none; overflow: hidden; background: var(--navy-900); }
+.phone .head .av img { width: 100%; height: 100%; }
+.phone .head .nm { font-size: 50px; font-weight: 700; color: var(--wa-text); line-height: 1.1; text-align: right; }
+.phone .head .sub { font-size: 36px; color: var(--wa-meta); margin-top: 4px; }
+.phone .head .sub.typing { color: var(--wa-green); }
+.phone .chat { position: absolute; top: 280px; left: 0; right: 0; bottom: 170px; padding: 24px 34px; display: flex; flex-direction: column; justify-content: flex-end; gap: 16px; overflow: hidden; }
+.phone .day { align-self: center; background: #fff; color: var(--wa-meta); font-size: 34px; padding: 8px 26px; border-radius: 14px; box-shadow: 0 1px 1px rgba(0,0,0,0.08); margin: 8px 0; flex: none; }
+.msg { max-width: 88%; padding: 18px 28px 12px; border-radius: 26px; font-size: 46px; line-height: 1.34; color: var(--wa-text); box-shadow: 0 1px 1.5px rgba(0,0,0,0.13);
+  position: relative; white-space: pre-wrap; overflow-wrap: anywhere; flex: none; unicode-bidi: plaintext; text-align: start; }
+.msg.out { align-self: flex-end; background: var(--wa-out); border-top-left-radius: 8px; }
+.msg.in { align-self: flex-start; background: var(--wa-in); border-top-right-radius: 8px; }
+.msg .meta { display: flex; justify-content: flex-end; gap: 8px; align-items: center; font-size: 30px; color: var(--wa-meta); margin-top: 2px; direction: ltr; }
+.msg .ticks { color: #53bdeb; font-size: 32px; letter-spacing: -10px; margin-right: 10px; }
+.msg .ticks.grey { color: #8696a0; }
+.msg.glow { box-shadow: 0 0 0 8px rgba(218,172,95,0.95), 0 0 50px rgba(218,172,95,0.55); }
+.phone .compose { position: absolute; bottom: 0; left: 0; right: 0; height: 170px; background: var(--wa-head); display: flex; align-items: center; gap: 22px; padding: 0 30px 40px; }
+.phone .compose .field { flex: 1; min-height: 96px; background: #fff; border-radius: 48px; font-size: 42px; padding: 20px 36px; color: var(--wa-text); white-space: nowrap; overflow: hidden; display: flex; align-items: center; }
+.phone .compose .field .ph { color: #8696a0; }
+.phone .compose .caret { display: inline-block; width: 4px; height: 52px; background: var(--wa-green); margin-inline-start: 4px; }
+.phone .compose .send { width: 96px; height: 96px; border-radius: 50%; background: var(--wa-green); display: grid; place-items: center; color: #fff; font-size: 46px; flex: none; }
+.notif { position: absolute; top: 128px; left: 28px; right: 28px; z-index: 5; direction: rtl; background: rgba(250,250,252,0.97); border-radius: 44px; padding: 28px 34px;
+  display: flex; gap: 26px; align-items: center; box-shadow: 0 18px 50px rgba(0,0,0,0.25); font-family: Heebo, sans-serif; }
+.notif .ic { width: 96px; height: 96px; border-radius: 24px; background: var(--navy-900); overflow: hidden; flex: none; }
+.notif .ic img { width: 100%; height: 100%; }
+.notif .t { font-size: 40px; font-weight: 700; color: #111; text-align: right; }
+.notif .b { font-size: 40px; color: #333; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* our own moments between the screens */
+.center { position: absolute; left: 0; right: 0; direction: rtl; text-align: center; }
+.title { font-size: 96px; font-weight: 800; line-height: 1.12; color: var(--cream); text-wrap: balance; }
+.title .g { color: var(--gold-500); }
+.lede { font-size: 52px; font-weight: 600; color: var(--navy-200); margin-top: 26px; }
+.logo { width: 300px; height: 300px; border-radius: 50%; margin: 0 auto; overflow: hidden; box-shadow: 0 0 0 6px rgba(218,172,95,0.35), 0 30px 80px rgba(0,0,0,0.45); }
+.logo img { width: 100%; height: 100%; }
+.wordmark { font-size: 120px; font-weight: 800; color: var(--cream); direction: ltr; letter-spacing: -1px; }
+.card { position: absolute; background: var(--cream); border-radius: 48px; box-shadow: 0 30px 80px rgba(0,0,0,0.4); direction: rtl; color: var(--ink-900); overflow: hidden; }
+.card img { display: block; width: 100%; }
+.cta { display: inline-flex; align-items: center; gap: 22px; background: var(--gold-500); color: var(--navy-950); font-weight: 800; font-size: 60px; padding: 30px 70px 34px; border-radius: 999px; box-shadow: 0 20px 50px rgba(218,172,95,0.3); }
+.site { font-size: 50px; font-weight: 700; color: var(--navy-200); direction: ltr; margin-top: 34px; }
+.step { position: absolute; left: 140px; right: 140px; height: 150px; border-radius: 40px; background: rgba(250,247,241,0.08); border: 2px solid rgba(201,208,222,0.18);
+  display: flex; align-items: center; gap: 34px; padding: 0 44px; font-size: 56px; font-weight: 700; color: var(--cream); direction: rtl; }
+.step .n { width: 86px; height: 86px; border-radius: 50%; background: var(--gold-500); color: var(--navy-950); display: grid; place-items: center; font-weight: 800; font-size: 46px; flex: none; }
+.belt-row { position: absolute; left: 60px; right: 60px; display: flex; justify-content: center; gap: 14px; direction: rtl; }
+.belt-row .b { width: 128px; text-align: center; font-size: 30px; font-weight: 700; color: var(--navy-200); }
+.belt-row .b img { width: 128px; height: 128px; border-radius: 26px; object-fit: cover; display: block; margin-bottom: 10px; }
+.belt-row .b.dim img { filter: grayscale(1) brightness(0.7); opacity: 0.55; }
+.belt-row .b.on img { box-shadow: 0 0 0 6px var(--gold-500), 0 0 40px rgba(218,172,95,0.6); }
+
+/* the week (our drawing, not the product's UI): the pain and the punchline */
+.week { position: absolute; left: 90px; right: 90px; top: 300px; height: 1240px; background: rgba(250,247,241,0.06); border: 2px solid rgba(201,208,222,0.16); border-radius: 48px; direction: rtl; }
+.week .hd { position: absolute; top: 40px; right: 50px; left: 50px; display: flex; justify-content: space-between; font-size: 46px; font-weight: 800; color: var(--cream); }
+.week .hd span:last-child { color: var(--navy-200); font-weight: 600; }
+.week .days { position: absolute; top: 140px; right: 30px; left: 30px; display: flex; gap: 10px; }
+.week .days div { flex: 1; text-align: center; font-size: 38px; font-weight: 700; color: var(--navy-200); }
+.week .col { position: absolute; top: 210px; bottom: 30px; width: 118px; border-radius: 22px; background: rgba(250,247,241,0.04); }
+.week .blk { position: absolute; left: 6px; right: 6px; border-radius: 18px; display: grid; place-items: center; text-align: center; font-size: 30px; font-weight: 700; line-height: 1.12; padding: 6px; }
+.week .blk.work { background: #2b3a5c; color: var(--navy-200); }
+.week .blk.kid { background: var(--gold-100); color: var(--navy-950); border: 3px dashed var(--gold-600); }
+.week .blk.kid.done { background: var(--gold-500); border: 3px solid var(--gold-300); box-shadow: 0 0 30px rgba(218,172,95,0.6); }
+.week .stamp { position: absolute; left: 50%; transform: translateX(-50%) rotate(-6deg); white-space: nowrap; font-size: 64px; font-weight: 800; padding: 14px 44px; border-radius: 24px; }
+.week .stamp.next { color: var(--navy-200); border: 5px solid var(--navy-200); background: rgba(16,28,50,0.85); }
+.week .stamp.ok { color: var(--navy-950); background: var(--gold-500); }
+.fade { position: absolute; inset: 0; z-index: 50; pointer-events: none; }

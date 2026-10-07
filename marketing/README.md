@@ -9,7 +9,8 @@ Dad Coach's launch kit documents (playbook §58.1). Reference: `~/repos/tair/mar
 | `brand-sheet.md` | Colors, type, logo and image usage for the site, the ad and the videos (from dad-coach-web `docs/design`). |
 | `campaign-plan.md` | Meta campaign for Israeli fathers 28–45: structure, budget tiers, KPIs (WhatsApp conversation → onboarded → first session completed), measurement. |
 | `training-plan.md` | The father onboarding video library (6 videos ≤ 60 s), what each shows, voice-over drafts. |
-| `ad/`, `training/` | Production (later session, WS-E): HTML film + Playwright render + ElevenLabs VO, like `tair/marketing/ad`. |
+| `training/`, `ad/` | The father video library (5 videos) and the 9:16 ad, built from the lab and the real dashboard. See **Videos** below. |
+| `review/` | `make_page.py` builds the review page of all six films (`review/index.html`). |
 
 The site lives in `../site` (see its README).
 
@@ -59,4 +60,54 @@ The site lives in `../site` (see its README).
 | DC-D06 | Admin page "הרשמות מהאתר" on `recentSignups(days)` | OPEN (WS-B) |
 | DC-D07 | Replace draft demo lines with qa-lab transcripts | OPEN (WS-C → WS-D) |
 | DC-D08 | Domain, placeholders, lawyer review, `VITE_SIGNUP_ENDPOINT` + `SITE_ORIGINS` | OPEN (owner + main) |
-| DC-D09 | Ad + training videos from the lab and the real dashboard | OPEN (WS-E) |
+| DC-D09 | Ad + training videos from the lab and the real dashboard | DONE v1 (upload to Bunny + the ad's site address open) |
+
+## Videos (v1)
+
+Five father videos (catalog `backend/src/main/resources/training/catalog.json`) and one ad, all 1080×1920, 30 fps,
+captions burned in, voice "amit" (the site intro's voice).
+
+| Slug | Title | What it shows |
+|---|---|---|
+| `welcome` (primary) | ברוך הבא ל-Dad Coach | site card → first message → name, child, confirm → weekly goal → offered slots |
+| `book-a-session` | קובעים זמן עם הילדים | offered slots → a booking in one message → confirmation → "איך אני עומד השבוע?" |
+| `reminders` | התזכורות | the morning promise → 1 h reminder with ideas → "נו, איך היה?" → answer recorded → the note on the dashboard |
+| `when-cancelled` | כשמשהו מתבטל | cancel → replacement slots → rebooked → "לא הספקנו" without guilt → the belt card |
+| `my-dashboard` | הלוח האישי שלך | login, home, next session and belt, awaiting card, sessions, progress, settings |
+| ad | הזמן שתכננת. הפעם הוא קורה. | pain → brand → book → reminder → follow-up → dashboard → missed → setup → covered week → CTA |
+
+Sources: every WhatsApp bubble is copied from qa-lab transcripts v4-s1 and v4-s2 (`training/film/msgs.js`; three
+bubbles shortened by whole sentences, each marked `cut:`); every dashboard is a capture of the real SPA on the lab's demo
+data (`training/film/assets/screens`, labelled "הדגמה"); the site card is the real site (`training/capture/site.mjs`).
+Not in v1: logging time that happened without a booking (no tool yet) and the calendar video (after D-007). No morning
+reminder or Sunday check-in fired in the lab, so the reminders video shows the coach's promise, not a morning message.
+
+### Build
+
+Needs ffmpeg, Python 3, and Playwright: `marketing/node_modules` is a symlink to an existing install
+(`ln -s ~/repos/big-boss-ad/node_modules marketing/node_modules`). The films are served from `marketing/` on
+127.0.0.1:8788 (`build.sh` starts the server if it is not up).
+
+```sh
+cd marketing/training
+node film/sheet.mjs <slug>          # contact sheet out/qa/<slug>_sheet_<n>.jpg - check a film before rendering it
+./build.sh welcome book-a-session reminders when-cancelled my-dashboard ad
+node film/posters.mjs               # release/training/v1/father-<slug>.jpg + ../ad/release/dad-coach-ad-v1.jpg
+python3 release.py                  # release/media.json, checked against the catalog
+./qa.sh welcome ad                  # length, size, loudness, a frame scan in out/qa
+python3 ../review/make_page.py      # the review page
+```
+
+`build.sh` renders each frame straight into ffmpeg (no frames on disk), mixes the sound (`audio/mix.py`: voice,
+UI sounds, ducked music bed; −16 LUFS for the videos, −14 LUFS for the ad), writes `out/<v>_master.mp4` (archive,
+not in git) and the web file, removes the intermediates, and stops when less than 700 MB is free. The voice is
+regenerated with `audio/vo.py` (ElevenLabs; `--wav` rebuilds the ignored wavs from the committed mp3s), the music with
+`audio/music.py`. The ad's end card takes the site address as `?site=` (`ad/film/index.html?site=www.example`); until
+the domain is chosen it shows "‹כתובת האתר›".
+
+### Release and upload
+
+`training/release/training/v1/father-<slug>.mp4|.jpg` go to the Bunny zone (shared with Big Boss) as
+`dad-coach/training/v1/father-<slug>.mp4|.jpg`, the paths the catalog names; `release/media.json` lists each file with
+its size, sha256 and length. The dashboard shows them once `TRAINING_MEDIA_BASE_URL` and the token key are set. The ad
+is `ad/release/dad-coach-ad-v1.mp4` (+ `.jpg`), for the campaign, not the CDN.

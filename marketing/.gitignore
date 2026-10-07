@@ -1,0 +1,9 @@
+# a symlink to a Playwright install (big-boss-ad/node_modules); see README "Videos"
+node_modules
+# render intermediates, masters (the archive, kept on the machine), timelines, logs, contact sheets
+training/out/
+ad/out/
+# rebuilt from the committed mp3s: python3 training/audio/vo.py --wav
+training/audio/vo/*.wav
+# hard links to the release files, made by review/make_page.py
+review/media/
