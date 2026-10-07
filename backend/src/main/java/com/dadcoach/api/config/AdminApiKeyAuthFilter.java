@@ -31,6 +31,8 @@ public class AdminApiKeyAuthFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(AdminApiKeyAuthFilter.class);
     static final String API_KEY_HEADER = "X-API-Key";
     static final String PATH_PREFIX = "/api/v1/admin/";
+    /** The tool/context test console ({@code AdminToolTestController}) is operator-only too. */
+    static final String TEST_CONSOLE_PREFIX = "/api/admin/";
     public static final String ROLE = "ADMIN_API";
 
     private final String adminApiKey;
@@ -41,7 +43,8 @@ public class AdminApiKeyAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith(PATH_PREFIX) && !request.getRequestURI().equals("/api/v1/admin");
+        String uri = request.getRequestURI();
+        return !uri.startsWith(PATH_PREFIX) && !uri.equals("/api/v1/admin") && !uri.startsWith(TEST_CONSOLE_PREFIX);
     }
 
     @Override

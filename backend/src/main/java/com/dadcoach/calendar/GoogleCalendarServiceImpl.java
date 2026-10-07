@@ -62,6 +62,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     private final MissionRepository missionRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final CalendarLinkSigner linkSigner;
 
     @Value("${google.calendar.client-id:}")
     private String clientId;
@@ -75,8 +76,10 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     public GoogleCalendarServiceImpl(FatherRepository fatherRepository,
                                      ChildRepository childRepository,
                                      MissionRepository missionRepository,
-                                     RestTemplate restTemplate) {
+                                     RestTemplate restTemplate,
+                                     CalendarLinkSigner linkSigner) {
         this.fatherRepository = fatherRepository;
+        this.linkSigner = linkSigner;
         this.childRepository = childRepository;
         this.missionRepository = missionRepository;
         this.restTemplate = restTemplate;
@@ -369,11 +372,9 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
     @Override
     public String getAuthorizationUrl(Long fatherId, String redirectUrl) {
-        // State format: "fatherId" or "fatherId|redirectUrl"
-        String state = redirectUrl != null && !redirectUrl.isEmpty() 
-            ? fatherId + "|" + redirectUrl
-            : String.valueOf(fatherId);
-            
+        // Signed (CalendarLinkSigner): the callback only accepts a state it issued, for that father, unexpired.
+        String state = linkSigner.state(fatherId, redirectUrl);
+
         return GOOGLE_AUTH_URL + "?" +
             "client_id=" + URLEncoder.encode(clientId, StandardCharsets.UTF_8) +
             "&redirect_uri=" + URLEncoder.encode(this.redirectUri, StandardCharsets.UTF_8) +

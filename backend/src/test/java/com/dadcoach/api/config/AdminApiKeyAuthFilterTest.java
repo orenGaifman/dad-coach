@@ -27,6 +27,9 @@ class AdminApiKeyAuthFilterTest {
         assertThat(run(new AdminApiKeyAuthFilter("admin-secret-key"), "GET", "/api/v1/admin/fathers", "wrong").getStatus()).isEqualTo(401);
         assertThat(run(new AdminApiKeyAuthFilter(""), "GET", "/api/v1/admin/fathers", "").getStatus()).isEqualTo(401);
         assertThat(run(new AdminApiKeyAuthFilter(null), "GET", "/api/v1/admin/memories", "anything").getStatus()).isEqualTo(401);
+        // the tool/context test console runs real tools - it was reachable with any father's token before
+        assertThat(run(new AdminApiKeyAuthFilter("admin-secret-key"), "POST", "/api/admin/test/tools/run-all", null).getStatus()).isEqualTo(401);
+        assertThat(run(new AdminApiKeyAuthFilter("admin-secret-key"), "GET", "/api/admin/test/context-providers", "wrong").getStatus()).isEqualTo(401);
     }
 
     @Test

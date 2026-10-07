@@ -1,5 +1,7 @@
 package com.dadcoach.api.calendar;
 
+import com.dadcoach.api.auth.JwtAuthFilter.JwtPrincipal;
+import com.dadcoach.calendar.CalendarLinkSigner;
 import com.dadcoach.calendar.GoogleCalendarService;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
@@ -14,6 +16,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -28,7 +32,8 @@ import java.util.Optional;
  * <p>Provides endpoints for initiating calendar connection and handling OAuth callbacks.
  * The flow is:
  * <ol>
- *   <li>Frontend/WhatsApp sends user to GET /api/v1/calendar/connect/{fatherId}</li>
+ *   <li>The signed-in father gets a signed link from GET /api/v1/calendar/status/{fatherId} (or the AI tool
+ *       connect_google_calendar gets a Google URL with a signed state) and opens GET /api/v1/calendar/connect/{fatherId}</li>
  *   <li>User authorizes the app on Google</li>
  *   <li>Google redirects to GET /api/v1/calendar/callback with code and state</li>
  *   <li>We exchange the code for tokens and store them</li>
@@ -45,14 +50,20 @@ public class CalendarOAuthController {
 
     private final GoogleCalendarService googleCalendarService;
     private final FatherRepository fatherRepository;
-
-    @Value("${dad-coach.web.base-url:http://localhost:3000}")
-    private String webBaseUrl;
+    private final CalendarLinkSigner linkSigner;
 
     public CalendarOAuthController(GoogleCalendarService googleCalendarService,
-                                   FatherRepository fatherRepository) {
+                                   FatherRepository fatherRepository,
+                                   CalendarLinkSigner linkSigner) {
         this.googleCalendarService = googleCalendarService;
         this.fatherRepository = fatherRepository;
+        this.linkSigner = linkSigner;
+    }
+
+    /** True only for a signed-in father acting on his own id (anything else answers 404, never 403). */
+    private static boolean isSelf(Long fatherId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getPrincipal() instanceof JwtPrincipal p && fatherId.equals(p.fatherId());
     }
 
     /**
@@ -119,27 +130,14 @@ public class CalendarOAuthController {
             @RequestParam(required = false) String state,
             @RequestParam(required = false) String error) {
         
-        // Parse state to get fatherId and redirectUrl
-        Long fatherId = null;
-        String redirectUrl = webBaseUrl + "/dashboard"; // Default redirect
-        
-        if (state != null) {
-            try {
-                // State format: "fatherId" or "fatherId|redirectUrl"
-                if (state.contains("|")) {
-                    String[] parts = state.split("\\|", 2);
-                    fatherId = Long.parseLong(parts[0]);
-                    if (parts.length > 1 && !parts[1].isEmpty()) {
-                        redirectUrl = parts[1];
-                    }
-                } else {
-                    fatherId = Long.parseLong(state);
-                }
-            } catch (NumberFormatException e) {
-                log.error("Invalid state parameter: {}", state);
-            }
+        // The state is signed (CalendarLinkSigner): an unsigned, altered or expired state never connects anyone
+        Optional<CalendarLinkSigner.State> signed = linkSigner.verifyState(state);
+        Long fatherId = signed.map(CalendarLinkSigner.State::fatherId).orElse(null);
+        String redirectUrl = signed.map(CalendarLinkSigner.State::redirectUrl).orElse(linkSigner.defaultRedirect());
+        if (state != null && signed.isEmpty()) {
+            log.warn("Calendar OAuth callback with an invalid state");
         }
-        
+
         // Handle user denial or errors
         if (error != null) {
             log.warn("Google OAuth error for state {}: {}", state, error);
@@ -202,7 +200,7 @@ public class CalendarOAuthController {
     public ResponseEntity<Map<String, Object>> getCalendarStatus(
             @Parameter(description = "Father ID") @PathVariable Long fatherId) {
         
-        Optional<Father> fatherOpt = fatherRepository.findById(fatherId);
+        Optional<Father> fatherOpt = isSelf(fatherId) ? fatherRepository.findById(fatherId) : Optional.empty();
         if (fatherOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -212,7 +210,7 @@ public class CalendarOAuthController {
         
         Map<String, Object> response = Map.of(
             "connected", connected,
-            "connect_url", connected ? "" : "/api/v1/calendar/connect/" + fatherId
+            "connect_url", connected ? "" : "/api/v1/calendar/connect/" + fatherId + "?" + linkSigner.connectQuery(fatherId)
         );
         
         return ResponseEntity.ok(response);
@@ -242,7 +240,7 @@ public class CalendarOAuthController {
             @Parameter(description = "Return all events, not just Dad Coach related") 
             @RequestParam(defaultValue = "false") boolean allEvents) {
         
-        Optional<Father> fatherOpt = fatherRepository.findById(fatherId);
+        Optional<Father> fatherOpt = isSelf(fatherId) ? fatherRepository.findById(fatherId) : Optional.empty();
         if (fatherOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }

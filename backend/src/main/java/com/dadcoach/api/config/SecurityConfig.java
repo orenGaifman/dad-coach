@@ -109,12 +109,13 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/invitations/**").permitAll()
                         .requestMatchers("/api/v1/activation/**").permitAll()
                         // Calendar OAuth endpoints (public - OAuth flow handles auth)
-                        .requestMatchers("/api/v1/calendar/**").permitAll()
+                        // Only the OAuth hops are public (both verify a signature); status/events need the father's token
+                        .requestMatchers("/api/v1/calendar/connect/**", "/api/v1/calendar/callback").permitAll()
                         // Magic link auth (token is the credential)
                         .requestMatchers("/api/v1/auth/magic-link/**").permitAll()
                         // Admin endpoints (list, read, permanently delete fathers; search; memories): operators only,
                         // with the admin API key (AdminApiKeyAuthFilter) - never a JWT
-                        .requestMatchers("/api/v1/admin/**").hasRole(AdminApiKeyAuthFilter.ROLE)
+                        .requestMatchers("/api/v1/admin/**", "/api/admin/**").hasRole(AdminApiKeyAuthFilter.ROLE)
                         // Dev endpoints (protected by DevEnvironmentGuard - blocks in production)
                         .requestMatchers("/api/v1/dev/**").permitAll()
                         // All other requests require authentication
