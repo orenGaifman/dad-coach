@@ -294,6 +294,50 @@ def e12(tag):
     snap(p, "after name correction")
 
 
+def e13(tag):
+    """The daily check on an uncovered week; "not this week, I'm swamped"; the next daily check must not nag."""
+    qa.start_transcript(f"{tag}-e13-daily-check", "e13 · בדיקה יומית ושבוע עמוס")
+    p = father("גיא")
+    qa.wa(p, "היי, גיא, אבא של אלה בת 8")
+    qa.wa(p, "כן")
+    qa.wa(p, "3 שעות")
+    qa.wa(p, "אחר כך נקבע")
+    snap(p, "goal, nothing booked")
+    qa.fire(p, "daily")
+    qa.wa(p, "השבוע אני ממש עמוס, לא אצליח. שבוע הבא")
+    snap(p, "after 'not this week'")
+    qa.fire(p, "daily")
+    qa.show_timers(p)
+
+
+def e15(tag):
+    """Three kids: a session with all of them, then one kid only; limits - 5 minutes, a 10-hour goal, 0 hours."""
+    qa.start_transcript(f"{tag}-e15-family-limits", "e15 · כל הילדים + גבולות")
+    p = father("אבי")
+    qa.wa(p, "שלום, אני אבי. יש לי שלושה: יואב 12, מיה 9, ותום 4")
+    qa.wa(p, "נכון")
+    qa.wa(p, "10 שעות בשבוע")
+    qa.wa(p, "טוב אז 7")
+    snap(p, "after goal")
+    qa.wa(p, "תקבע מחר ב-18 עם כולם, טיול אופניים שעתיים")
+    snap(p, "after 'with all of them'")
+    qa.wa(p, "ותוסיף ביום שישי 5 דקות עם תום לפני השינה")
+    qa.wa(p, "בעצם לא חשוב, תמחק את היעד, 0 שעות")
+    snap(p, "end")
+
+
+def e16(tag):
+    """Abroad: a father in New York this week books in his local time; the dashboard must show the right hour."""
+    qa.start_transcript(f"{tag}-e16-abroad", "e16 · אבא בחו\"ל")
+    p = father("רן")
+    qa.wa(p, "היי, רן, אבא של שקד בת 6")
+    qa.wa(p, "כן")
+    qa.wa(p, "2 שעות")
+    qa.wa(p, "אני בניו יורק עד שבוע הבא, אז נעשה שיחת וידאו. תקבע מחר ב-18:00 שעון ניו יורק, חצי שעה")
+    snap(p, "after booking in NY time")
+    qa.show_timers(p)
+
+
 if __name__ == "__main__":
     tag = sys.argv[1]
     for name in sys.argv[2:]:
