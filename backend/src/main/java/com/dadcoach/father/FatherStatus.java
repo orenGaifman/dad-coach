@@ -22,9 +22,9 @@ public enum FatherStatus {
     public Set<FatherStatus> getValidTransitions() {
         switch (this) {
             case NOT_STARTED:
-                return EnumSet.of(ONBOARDING);
+                return EnumSet.of(ONBOARDING, DELETED);
             case ONBOARDING:
-                return EnumSet.of(ACTIVE);
+                return EnumSet.of(ACTIVE, DELETED);
             case ACTIVE:
                 return EnumSet.of(PAUSED, CHURNED, DELETED);
             case PAUSED:

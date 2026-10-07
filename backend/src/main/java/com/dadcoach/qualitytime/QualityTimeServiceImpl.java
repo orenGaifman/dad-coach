@@ -11,8 +11,6 @@ import com.dadcoach.qualitytime.dto.ScheduleQualityTimeResult;
 import com.dadcoach.qualitytime.dto.UpcomingQualityTimeDto;
 import com.dadcoach.weeklygoal.WeeklyGoalService;
 import com.dadcoach.workflow.Belt;
-import com.dadcoach.workflow.metrics.WorkflowMetrics;
-import com.dadcoach.workspace.commitment.CommitmentService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -56,11 +54,12 @@ public class QualityTimeServiceImpl implements QualityTimeService {
     private final QualityTimeRepository qualityTimeRepository;
     private final FatherRepository fatherRepository;
     private final ChildRepository childRepository;
-    private final WorkflowMetrics workflowMetrics;
-    private final CommitmentService commitmentService;
     private final WeeklyGoalService weeklyGoalService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final Clock clock;
+    /** How far ahead a session may be booked. */
+    static final Duration MAX_BOOKING_AHEAD = Duration.ofDays(90);
 
     @Value("${google.calendar.client-id:}")
     private String clientId;
@@ -72,15 +71,13 @@ public class QualityTimeServiceImpl implements QualityTimeService {
             QualityTimeRepository qualityTimeRepository,
             FatherRepository fatherRepository,
             ChildRepository childRepository,
-            WorkflowMetrics workflowMetrics,
-            CommitmentService commitmentService,
             WeeklyGoalService weeklyGoalService,
-            RestTemplate restTemplate) {
+            RestTemplate restTemplate,
+            Clock clock) {
+        this.clock = clock;
         this.qualityTimeRepository = qualityTimeRepository;
         this.fatherRepository = fatherRepository;
         this.childRepository = childRepository;
-        this.workflowMetrics = workflowMetrics;
-        this.commitmentService = commitmentService;
         this.weeklyGoalService = weeklyGoalService;
         this.restTemplate = restTemplate;
         this.objectMapper = new ObjectMapper();
@@ -125,58 +122,45 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         // Calculate end time
         Instant endTime = startTime.plus(duration);
 
-        // Google Calendar is a real, required side effect of scheduling: this creates an
-        // actual event in the user's connected calendar. If the user has not connected their
-        // calendar, fail fast with a clear, actionable error instead of silently skipping.
-        if (!father.hasGoogleCalendarConfigured()) {
-            log.warn("Cannot schedule Quality Time: Google Calendar not connected for fatherId={} "
-                            + "(googleCalendarEnabled={}, hasRefreshToken={})",
-                    fatherId, father.getGoogleCalendarEnabled(), father.getGoogleRefreshToken() != null);
-            throw CalendarIntegrationException.notConnected();
+        // A session may start in the past - a father reporting time he spent but never booked gets credit - but only
+        // inside his current Sunday-Saturday week (his timezone); never before it, and never absurdly far ahead.
+        Instant now = clock.instant();
+        java.time.LocalDate thisWeek = weeklyGoalService.weekStartFor(father, now);
+        if (weeklyGoalService.weekStartFor(father, startTime).isBefore(thisWeek)) {
+            throw new com.dadcoach.common.BusinessRuleViolationException("ONLY_THIS_WEEK",
+                    "A session can be recorded only from this week (since " + thisWeek + ", Sunday) - earlier weeks are closed.");
+        }
+        if (startTime.isAfter(now.plus(MAX_BOOKING_AHEAD))) {
+            throw new com.dadcoach.common.BusinessRuleViolationException("TOO_FAR_AHEAD",
+                    "A session can be booked at most " + MAX_BOOKING_AHEAD.toDays() + " days ahead.");
+        }
+        boolean inThePast = !startTime.isAfter(now);
+
+        // D-007: the session lives in Dad Coach; Google Calendar is optional (and never touched for a past session). Without a connected calendar the
+        // session is booked with no calendar event. With one, a conflicting event refuses the slot (read before
+        // write), and the event is created; if creating it fails the booking still stands (calendarEventId null)
+        // and the result says why, so the coach can tell the father.
+        String calendarEventId = null;
+        String calendarError = null;
+        if (father.hasGoogleCalendarConfigured() && !inThePast) {
+            if (checkCalendarConflict(father, startTime, endTime)) {
+                log.warn("Calendar conflict detected for father {} at {}-{}", fatherId, startTime, endTime);
+                throw CalendarIntegrationException.conflict(
+                        "The requested time conflicts with an existing calendar event. "
+                                + "Please choose a different slot.");
+            }
+            try {
+                calendarEventId = createCalendarEventWithRetry(father, child, startTime, endTime);
+            } catch (CalendarIntegrationException e) {
+                calendarError = e.getErrorType().code();
+                log.warn("Quality Time booked without a calendar event: fatherId={}, reason={}", fatherId, calendarError);
+            }
         }
 
-        // Step 2: Re-read Google Calendar before write (conflict detection per Requirement 2.6)
-        // This implements the "Read Before Write" principle to detect any conflicts
-        // that may have been created since the available slots were last read
-        boolean hasConflict = checkCalendarConflict(father, startTime, endTime);
-        if (hasConflict) {
-            log.warn("Calendar conflict detected for father {} at {}-{}",
-                    fatherId, startTime, endTime);
-            throw CalendarIntegrationException.conflict(
-                    "The requested time conflicts with an existing calendar event. "
-                            + "Please choose a different slot.");
-        }
-
-        // Create QualityTime entity
         QualityTime qualityTime = new QualityTime(father, child, startTime, endTime);
-
-        // Step 3 & 4: Create the real Google Calendar event (with one retry for transient errors).
-        // A distinct CalendarIntegrationException is thrown for not-connected / reconnect-required /
-        // temporary-failure cases so callers can surface the right actionable message.
-        String calendarEventId = createCalendarEventWithRetry(father, child, startTime, endTime);
         qualityTime.setGoogleCalendarEventId(calendarEventId);
-
-        // Save the Quality Time record with google_calendar_event_id
         QualityTime saved = qualityTimeRepository.save(qualityTime);
-        log.info("Quality Time {} scheduled successfully with calendar event {}", 
-                saved.getId(), calendarEventId);
-
-        // Also create a commitment record for dashboard display
-        try {
-            commitmentService.createCommitment(
-                fatherId,
-                childId,
-                startTime,
-                "QUALITY_TIME",
-                "זמן איכות עם " + child.getName(),
-                "WHATSAPP",
-                null  // No conversation ID in this context
-            );
-            log.info("Created commitment for quality time {} display on dashboard", saved.getId());
-        } catch (Exception e) {
-            log.warn("Failed to create commitment for quality time {}: {}", saved.getId(), e.getMessage());
-            // Don't fail the whole scheduling if commitment creation fails
-        }
+        log.info("Quality Time {} scheduled (calendar event: {})", saved.getId(), calendarEventId != null);
 
         return ScheduleQualityTimeResult.success(
                 saved.getId(),
@@ -184,7 +168,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
                 child.getName(),
                 startTime,
                 endTime
-        );
+        ).withCalendarError(calendarError);
     }
 
     /**
@@ -331,9 +315,6 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         qualityTimeRepository.save(qualityTime);
         fatherRepository.save(father);
         
-        // Record Quality Time completion metric (Requirement 16.2)
-        workflowMetrics.recordQualityTimeCompletion();
-
         // Record completed minutes to weekly goal
         int durationMinutes = calculateDurationMinutes(qualityTime);
         weeklyGoalService.recordCompletedQualityTime(father.getId(), qualityTime.getScheduledStart(), durationMinutes);

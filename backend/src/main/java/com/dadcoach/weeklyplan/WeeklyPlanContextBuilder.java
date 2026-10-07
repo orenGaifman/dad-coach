@@ -10,7 +10,6 @@ import com.dadcoach.weeklygoal.WeeklyGoal;
 import com.dadcoach.weeklygoal.WeeklyGoalRepository;
 import com.dadcoach.weeklygoal.WeeklyGoalService;
 import com.dadcoach.weeklygoal.WeeklyGoalStatus;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -67,15 +66,16 @@ public class WeeklyPlanContextBuilder {
     private final WeeklyGoalService weeklyGoalService;
     private final Clock clock;
 
-    @Value("${app.dashboard.base-url:https://dadcoach.app}")
-    private String dashboardBaseUrl = "https://dadcoach.app";
+    private final com.dadcoach.common.DashboardLinks dashboardLinks;
 
     public WeeklyPlanContextBuilder(
             QualityTimeRepository qualityTimeRepository,
             ChildRepository childRepository,
             WeeklyGoalRepository weeklyGoalRepository,
             WeeklyGoalService weeklyGoalService,
-            Clock clock) {
+            Clock clock,
+            com.dadcoach.common.DashboardLinks dashboardLinks) {
+        this.dashboardLinks = dashboardLinks;
         this.qualityTimeRepository = qualityTimeRepository;
         this.childRepository = childRepository;
         this.weeklyGoalRepository = weeklyGoalRepository;
@@ -248,7 +248,7 @@ public class WeeklyPlanContextBuilder {
         progress.put("current_streak_weeks", father.getCurrentStreakWeeks());
         data.put("progress", progress);
 
-        data.put("dashboard_url", dashboardBaseUrl + "/dashboard?fatherId=" + father.getId());
+        data.put("dashboard_url", dashboardLinks.loginUrl());
 
         return data;
     }

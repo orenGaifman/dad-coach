@@ -58,14 +58,19 @@ public class ScheduledResponseController {
 
         Optional<Father> father = userResolver.resolve(request.userId());
         if (father.isEmpty()) {
-            log.warn("Scheduled response for unknown recipient: triggerId={}", request.triggerId());
+            log.atInfo().setMessage("proactive.callback.result").addKeyValue("triggerId", request.triggerId())
+                    .addKeyValue("status", "REJECTED").addKeyValue("reason", "UNKNOWN_RECIPIENT").log();
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new ScheduledResponseResult("REJECTED", "Unknown recipient"));
         }
 
         ScheduledResponseResult result = deliveryService.deliver(father.get(), request, expectedKey);
-        log.info("Scheduled response callback processed: triggerId={}, targetStateKey={}, status={}",
-                request.triggerId(), request.targetStateKey(), result.status());
+        log.atInfo().setMessage("proactive.callback.result")
+                .addKeyValue("triggerId", request.triggerId())
+                .addKeyValue("targetStateKey", request.targetStateKey())
+                .addKeyValue("fatherId", father.get().getId())
+                .addKeyValue("status", result.status())
+                .log();
         return ResponseEntity.ok(result);
     }
 

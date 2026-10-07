@@ -50,11 +50,6 @@ public interface WeeklyGoalRepository extends JpaRepository<WeeklyGoal, Long> {
     List<WeeklyGoal> findGoalsToComplete(@Param("currentWeekStart") LocalDate currentWeekStart);
 
     /**
-     * Count completed goals (met target) for a father.
-     */
-    long countByFatherIdAndStatus(Long fatherId, WeeklyGoalStatus status);
-
-    /**
      * Count consecutive weeks where goal was met, going back from a given week.
      */
     @Query(value = """
@@ -80,9 +75,4 @@ public interface WeeklyGoalRepository extends JpaRepository<WeeklyGoal, Long> {
            "AND wg.status IN ('COMPLETED', 'MISSED') " +
            "ORDER BY wg.weekStartDate DESC LIMIT 1")
     Optional<WeeklyGoal> findLastCompletedOrMissedGoal(@Param("fatherId") Long fatherId);
-
-    /**
-     * Find all goals for a father ordered by creation date descending.
-     */
-    List<WeeklyGoal> findByFatherIdOrderByCreatedAtDesc(Long fatherId);
 }

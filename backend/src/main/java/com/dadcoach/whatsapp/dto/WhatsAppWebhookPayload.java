@@ -70,7 +70,15 @@ public record WhatsAppWebhookPayload(
         MediaBody document,
         LocationBody location,
         ReactionBody reaction,
-        InteractiveReply interactive
+        InteractiveReply interactive,
+        TemplateButton button
+    ) {}
+
+    /** A tap on a template's quick-reply button (type "button"). */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record TemplateButton(
+        String payload,
+        String text
     ) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)

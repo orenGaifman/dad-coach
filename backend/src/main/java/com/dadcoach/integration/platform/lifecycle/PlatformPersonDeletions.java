@@ -1,7 +1,7 @@
 package com.dadcoach.integration.platform.lifecycle;
 
 import com.dadcoach.domain.father.FatherDataPurger;
-import com.dadcoach.integration.platform.PlatformWorkflowConfig;
+import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import jakarta.annotation.PreDestroy;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -54,7 +54,9 @@ public class PlatformPersonDeletions {
 
     @Autowired
     public PlatformPersonDeletions(JdbcTemplate jdbc, PlatformTenancyClient platform, FatherDataPurger purger,
-                                   PlatformWorkflowConfig config) {
+                                   WorkflowPlatformProperties config,
+                                   @org.springframework.beans.factory.annotation.Value("${dadcoach.platform-person-deletion.send-after-commit:true}")
+                                   boolean sendAfterCommit) {
         this.jdbc = jdbc;
         this.platform = platform;
         this.purger = purger;
@@ -65,7 +67,8 @@ public class PlatformPersonDeletions {
             thread.setDaemon(true);
             return thread;
         });
-        this.executor = ownedExecutor::execute;
+        // tests switch the immediate send off and drive sendDue() themselves (no background race)
+        this.executor = sendAfterCommit ? ownedExecutor::execute : task -> { };
     }
 
     /** For tests: switched on or off, a given clock, and the after-commit send on the given executor. */

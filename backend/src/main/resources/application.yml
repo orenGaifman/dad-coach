@@ -1,3 +1,6 @@
+# Dad Coach backend. Every value comes from an environment variable (names in docs/implementation/DEPLOYMENT.md);
+# the defaults are for local development only - a deployed instance refuses to start without its secrets
+# (ProductionStartupGuard).
 spring:
   application:
     name: dad-coach-backend
@@ -7,66 +10,41 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/dadcoach}
     username: ${DB_USERNAME:dadcoach}
     password: ${DB_PASSWORD:dadcoach}
+  autoconfigure:
+    # no form login / generated password: every surface authenticates with its own filter chain
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   jpa:
     open-in-view: false
     hibernate:
       ddl-auto: validate
   flyway:
     enabled: true
+    # Parallel work streams own separate version ranges (V23-V29, V30-V39, V40-V49) and may land out of order.
     out-of-order: true
-    ignore-migration-patterns: "*:missing"
+    # A fresh, empty database is built from the V23 baseline (FlywayBaselineStrategy, DECISIONS D-011);
+    # an existing one (production) migrates normally. V1-V22 are the history production ran.
+    baseline-version: 23
+    baseline-description: "baseline - production schema after V23"
 
 server:
-  # Bind to the platform-provided port. Render (and most PaaS) inject PORT; fall back to
-  # SERVER_PORT (used by other envs/local), then 8080. Using the wrong port makes the platform's
-  # health/port scan fail with "No open ports detected" even though the app started fine.
+  # Render injects PORT; fall back to SERVER_PORT, then 8080.
   port: ${PORT:${SERVER_PORT:8080}}
   tomcat:
-    max-http-form-post-size: 262144  # 256 KB
-
-spring.servlet.multipart:
-  max-request-size: 256KB
-  max-file-size: 256KB
-
-spring.codec:
-  max-in-memory-size: 262144  # 256 KB
+    max-http-form-post-size: 262144
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health
   endpoint:
     health:
       probes:
         enabled: true
-      show-details: when_authorized
+      show-details: never
       group:
-        liveness:
-          include: livenessState
-          show-details: never
         readiness:
           include: readinessState,db
-          show-details: never
-        # Custom workflow health group for detailed monitoring
-        workflow:
-          include: workflowEngine,googleCalendar,whatsApp,scheduler
-          show-details: always
-    metrics:
-      enabled: true
-    prometheus:
-      enabled: true
-  metrics:
-    tags:
-      application: ${spring.application.name}
-    export:
-      prometheus:
-        enabled: true
-  health:
-    livenessstate:
-      enabled: true
-    readinessstate:
-      enabled: true
 
 google:
   calendar:
@@ -76,123 +54,57 @@ google:
 
 dad-coach:
   web:
+    # The dashboard (D-006): the coach's dashboard_url is <WEB_BASE_URL>/login; belt images live under /belts.
     base-url: ${WEB_BASE_URL:http://localhost:3000}
   security:
-    jwt:
-      secret: ${JWT_SECRET:default-dev-secret-change-in-production-must-be-at-least-256-bits-long!!}
-      issuer: ${JWT_ISSUER:dad-coach}
-    # The admin API (/api/v1/admin/**) needs this key in X-API-Key; unset = closed to everyone.
+    # HMAC secret for the Google Calendar connect links and OAuth state (historical env name).
+    link-secret: ${JWT_SECRET:local-development-link-secret-not-for-production}
+    # The operator API (/api/v1/admin/**) needs this key in X-API-Key; unset = closed to everyone.
     admin-api-key: ${DADCOACH_ADMIN_API_KEY:}
-    cors:
-      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   whatsapp:
-    api-base-url: https://graph.facebook.com
+    api-base-url: ${WHATSAPP_API_BASE_URL:https://graph.facebook.com}
     api-version: ${WHATSAPP_API_VERSION:v25.0}
     phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
     waba-id: ${WHATSAPP_WABA_ID:}
-    phone-number: ${WHATSAPP_PHONE_NUMBER:+972501234567}
     access-token: ${WHATSAPP_ACCESS_TOKEN:}
     verify-token: ${WHATSAPP_VERIFY_TOKEN:}
     webhook-secret: ${WHATSAPP_WEBHOOK_SECRET:}
-  ai:
-    openai:
-      api-key: ${OPENAI_API_KEY:}
-      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
-      timeout-seconds: 10
-    anthropic:
-      api-key: ${ANTHROPIC_API_KEY:}
-      base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
-      timeout-seconds: 30
-      api-version: "2023-06-01"
-    cost:
-      daily-token-budget: ${AI_DAILY_TOKEN_BUDGET:50000}
+    # true = a turn runs on the webhook thread (tests only); production answers Meta first.
+    inbound-sync: false
 
 dadcoach:
-  features:
-    ai-message-generation: true          # Toggle AI vs fallback template messages
-    morning-reminders: true              # Toggle morning reminder scheduler job for Quality Time
   scheduler:
-    # Morning reminder job - runs at 7:50 AM UTC, sends at 8 AM local time
-    morning-reminder-cron: "0 50 7 * * *"
-    # Follow-up transition job - checks for ended Quality Time events (every 15 minutes)
-    follow-up-interval-ms: 900000
-    # Stale state detection job - checks for fathers stuck in follow-up state (every 1 hour)
-    stale-detection-interval-ms: 3600000
-    # Weekly goal completion job - runs every Sunday at 6 AM Israel time
+    # Weekly goals completed and belts announced: Sunday 06:00 UTC (09:00 Israel).
     weekly-goal-completion-cron: "0 0 6 * * SUN"
-    # Batch size for processing fathers to avoid overwhelming WhatsApp rate limits
-    batch-size: 100
-    # Who sends proactive messages (session reminders, follow-ups, weekly prompts, nudges):
-    # LOCAL = these jobs (Dad Coach 2 behavior); PLATFORM = the Workflow Platform workflow
-    # (Dad Coach 3), in which case overlapping jobs stand down. Switch together with the worker key.
-    proactive-messages-owner: ${DADCOACH_PROACTIVE_MESSAGES_OWNER:LOCAL}
-  workflow:
-    # Maximum message exchanges before forcing summary/exit (Requirement 5.6)
-    max-exchanges-per-state: 5
-    # Days ahead to look in Google Calendar for slots (Requirement 2.3)
-    calendar-lookahead-days: 7
-    # Minimum Quality Time slot duration in minutes (Requirement 2.3)
-    min-slot-duration-minutes: 30
-    # AI message generation timeout in milliseconds (Requirement 10.6)
-    message-generator-timeout-ms: 5000
-    # Maximum exchanges for follow-up conversations (Requirement 7.5)
-    max-follow-up-exchanges: 3
 
-onboarding:
-  rate-limit:
-    enabled: true
-  security:
-    wizard-data-encryption-key: ${WIZARD_DATA_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
-
-api:
-  rate-limit:
-    enabled: true
-    window-seconds: 60
-    limits:
-      FATHER: 60
-      ADMIN: 300
-      SERVICE: 1000
-
-# Tool API configuration for ai-workflow-platform integration
+# The key the platform sends on /api/tools/** and /api/context/** (the platform's DAD_COACH_API_KEY).
 tool-api:
-  api-key: ${TOOL_API_KEY:e76625b0ee030a88400a68b3dd9bf23fe24e657455f1dd08b295991073d439f6}
-  enabled: true
+  api-key: ${TOOL_API_KEY:}
 
-# ai-workflow-platform integration for delegated workflow execution
-# When enabled, workflow processing is delegated to the centralized platform
 workflow:
   platform:
     enabled: ${WORKFLOW_PLATFORM_ENABLED:false}
-    base-url: ${WORKFLOW_PLATFORM_BASE_URL:http://localhost:8080}
+    base-url: ${WORKFLOW_PLATFORM_BASE_URL:http://localhost:8081}
     api-key: ${WORKFLOW_PLATFORM_API_KEY:}
     worker-key: ${WORKFLOW_PLATFORM_WORKER_KEY:dad_3}
-    # The worker's workflow every message runs. Required by the platform, which runs exactly the workflow the
-    # caller names (it never chooses one) and validates that it belongs to the worker.
+    # The workflow every message runs (the caller selects; the platform never chooses one).
     workflow-key: ${WORKFLOW_PLATFORM_WORKFLOW_KEY:dad-coach-3}
-    # Receiver for the platform's scheduled-response callback (proactive messages written by the
-    # workflow, e.g. Dad Coach 3 reminders). Disabled by default; the key must match the platform's
-    # route api-key for this worker.
+    connect-timeout-ms: 5000
+    read-timeout-ms: 90000
+    # Receiver for the platform's scheduled-response callback (/api/integration/workflow/scheduled-response).
     scheduled-response:
       enabled: ${WORKFLOW_PLATFORM_CALLBACK_ENABLED:false}
       api-key: ${WORKFLOW_PLATFORM_CALLBACK_API_KEY:}
-      # Approved WhatsApp template (body "{{1}}" = the message) used outside the 24h window.
-      # Blank = messages outside the window are not sent (recorded FAILED: SESSION_CLOSED).
+      # Approved WhatsApp template (body "{{1}}" = the message) used outside the 24h window; blank = not sent.
       template-name: ${WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME:}
-    workflow-id: ${WORKFLOW_PLATFORM_WORKFLOW_ID:}
-    connect-timeout-ms: 5000
-    read-timeout-ms: 90000
 
-# Belt images for promotion notifications
-# Default URLs point to the dad-coach-web Vercel deployment
 belt:
   images:
-    # Base URL for belt images (defaults to Vercel frontend)
-    base-url: ${BELT_IMAGES_BASE_URL:https://dad-coach-web.vercel.app/belts}
-    # Individual belt image paths (relative to base-url)
-    white: ${BELT_IMAGE_WHITE:white-belt.webp}
-    yellow: ${BELT_IMAGE_YELLOW:yellow-belt.webp}
-    orange: ${BELT_IMAGE_ORANGE:orange-belt.webp}
-    green: ${BELT_IMAGE_GREEN:green-belt.webp}
-    blue: ${BELT_IMAGE_BLUE:blue-belt.webp}
-    brown: ${BELT_IMAGE_BROWN:brown-belt.webp}
-    black: ${BELT_IMAGE_BLACK:black-belt.webp}
+    base-url: ${BELT_IMAGES_BASE_URL:${dad-coach.web.base-url}/belts}
+    white: white-belt.webp
+    yellow: yellow-belt.webp
+    orange: orange-belt.webp
+    green: green-belt.webp
+    blue: blue-belt.webp
+    brown: brown-belt.webp
+    black: black-belt.webp

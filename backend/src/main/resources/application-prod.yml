@@ -1,33 +1,12 @@
-# Production environment profile
-# JSON logging, env-var DB resolution, Swagger disabled
-
+# Production (Render). JSON logs; small pool for the Supabase database.
 spring:
-  main:
-    # Enable lazy initialization for faster startup on resource-constrained environments
-    lazy-initialization: true
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     hikari:
-      # Reduce initial pool connections to speed up startup
       minimum-idle: 1
       maximum-pool-size: 5
 
-# Explicitly bind to 0.0.0.0 for container/cloud environments
 server:
   address: 0.0.0.0
-
-management:
-  endpoint:
-    health:
-      show-details: never
-
-logging:
-  config: classpath:logback-spring.xml
-
-springdoc:
-  swagger-ui:
-    enabled: false
-  api-docs:
-    enabled: false

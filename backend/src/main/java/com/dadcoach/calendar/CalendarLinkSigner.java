@@ -28,7 +28,7 @@ public class CalendarLinkSigner {
     private final String webBaseUrl;
     private final Clock clock;
 
-    public CalendarLinkSigner(@Value("${dad-coach.security.jwt.secret}") String secret,
+    public CalendarLinkSigner(@Value("${dad-coach.security.link-secret}") String secret,
                               @Value("${dad-coach.web.base-url:http://localhost:3000}") String webBaseUrl,
                               Optional<Clock> clock) {
         this.key = ("calendar-link:" + secret).getBytes(StandardCharsets.UTF_8);

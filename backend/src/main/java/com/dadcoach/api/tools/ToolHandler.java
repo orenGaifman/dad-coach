@@ -1,24 +1,18 @@
 package com.dadcoach.api.tools;
 
+import java.util.Map;
+
 /**
- * Functional interface for tool handlers.
- * 
- * <p>Each tool implementation provides a handler that processes the
- * request and returns a response. Handlers are registered with the
- * {@link ToolDispatcher} and invoked when the corresponding tool key
- * is requested.</p>
- * 
- * @see ToolDispatcher
- * @see ToolApiController
+ * One AI tool bound in the dad-coach-3 workflow. Implementations call the domain services the dashboard uses -
+ * never a parallel implementation of a rule. A business rejection is thrown (ApiException, a business-rule or
+ * calendar exception); the controller turns it into success:false and rolls back what the tool did.
  */
-@FunctionalInterface
 public interface ToolHandler {
 
-    /**
-     * Executes the tool with the given request.
-     *
-     * @param request the resolved tool execution request containing fatherId and parameters
-     * @return the tool execution response with success/failure and data
-     */
-    ToolExecutionResponse execute(ToolApiController.ResolvedToolRequest request);
+    String toolKey();
+
+    /** Side-effecting tools run once per idempotency key (reserve → execute → replay). */
+    boolean sideEffecting();
+
+    Map<String, Object> handle(ToolActor actor, ToolParams params);
 }

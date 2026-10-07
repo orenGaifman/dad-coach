@@ -335,7 +335,7 @@ public class WeeklyGoalService {
      * weekly scheduler jobs; per-father goal logic uses {@link #weekStartFor(Father, Instant)}.
      */
     public LocalDate getCurrentWeekStart() {
-        return LocalDate.now(ISRAEL_ZONE).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
+        return LocalDate.ofInstant(clock.instant(), ISRAEL_ZONE).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
     }
 
     /**

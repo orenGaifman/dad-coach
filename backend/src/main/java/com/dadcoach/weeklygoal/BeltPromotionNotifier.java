@@ -1,5 +1,10 @@
 package com.dadcoach.weeklygoal;
 
+import com.dadcoach.channel.WhatsAppEndpoints;
+import com.dadcoach.channel.delivery.ProactiveSender;
+import com.dadcoach.channel.session.SessionWindowService;
+import com.dadcoach.integration.platform.SentMessageRecorder;
+
 import com.dadcoach.config.BeltImageConfig;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
@@ -11,13 +16,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Map;
 
 /**
- * Service for sending belt promotion notifications via WhatsApp.
- * 
- * <p>When a father completes their weekly goal and earns a belt promotion,
- * this service sends a congratulatory message with the new belt image.</p>
+ * Tells a father who earned a new belt (the weekly completion job): the belt image while his 24-hour window is open
+ * (images cannot go in a template), then the congratulation text through the channel layer ({@link ProactiveSender}:
+ * free-form in the window, the approved template outside it). A sent congratulation is recorded into his platform
+ * conversation (playbook §10.2), so "כן" to "רוצה לקבוע יעד לשבוע הבא?" is understood.
  */
 @Service
 public class BeltPromotionNotifier {
@@ -28,117 +32,64 @@ public class BeltPromotionNotifier {
     private final WhatsAppMessageFormatter messageFormatter;
     private final BeltImageConfig beltImageConfig;
     private final FatherRepository fatherRepository;
+    private final ProactiveSender sender;
+    private final SentMessageRecorder recorder;
+    private final WhatsAppEndpoints endpoints;
+    private final SessionWindowService sessionWindows;
 
-    public BeltPromotionNotifier(
-            WhatsAppApiClient whatsAppApiClient,
-            WhatsAppMessageFormatter messageFormatter,
-            BeltImageConfig beltImageConfig,
-            FatherRepository fatherRepository) {
+    public BeltPromotionNotifier(WhatsAppApiClient whatsAppApiClient, WhatsAppMessageFormatter messageFormatter,
+                                 BeltImageConfig beltImageConfig, FatherRepository fatherRepository, ProactiveSender sender,
+                                 SentMessageRecorder recorder, WhatsAppEndpoints endpoints, SessionWindowService sessionWindows) {
         this.whatsAppApiClient = whatsAppApiClient;
         this.messageFormatter = messageFormatter;
         this.beltImageConfig = beltImageConfig;
         this.fatherRepository = fatherRepository;
+        this.sender = sender;
+        this.recorder = recorder;
+        this.endpoints = endpoints;
+        this.sessionWindows = sessionWindows;
     }
 
-    /**
-     * Sends a belt promotion notification to a father.
-     *
-     * @param result the belt promotion result from goal completion
-     */
     public void sendPromotionNotification(WeeklyGoalService.BeltPromotionResult result) {
         if (!result.promoted()) {
-            log.debug("No promotion for father {}, skipping notification", result.fatherId());
             return;
         }
-
-        Father father = fatherRepository.findById(result.fatherId())
-            .orElse(null);
-        
-        if (father == null || father.getPhone() == null) {
-            log.warn("Cannot send promotion notification - father not found or no phone: {}", result.fatherId());
+        Father father = fatherRepository.findById(result.fatherId()).orElse(null);
+        if (father == null || father.getPhone() == null || father.getStatus() == com.dadcoach.father.FatherStatus.DELETED) {
             return;
         }
-
-        String phoneNumber = father.getPhone();
         Belt newBelt = result.newBelt();
-        Belt previousBelt = result.previousBelt();
-
         try {
-            // First, send the belt image if configured
-            String imageUrl = beltImageConfig.getImageUrl(newBelt);
-            if (beltImageConfig.hasImage(newBelt)) {
-                String caption = String.format(
-                    "🎉 מזל טוב! עלית ל%s!",
-                    newBelt.getDisplayName("he")
-                );
-                
-                Map<String, Object> imagePayload = messageFormatter.formatImageMessage(
-                    phoneNumber, 
-                    imageUrl, 
-                    caption
-                );
-                
-                var imageResult = whatsAppApiClient.sendMessage(imagePayload);
-                if (imageResult.success()) {
-                    log.info("Sent belt promotion image to father {}: {} -> {}", 
-                             result.fatherId(), previousBelt, newBelt);
-                } else {
-                    log.warn("Failed to send belt image, will send text only: {}", imageResult.errorDetail());
+            boolean windowOpen = sessionWindows.isOpen(endpoints.ensure(father));
+            if (windowOpen && beltImageConfig.hasImage(newBelt)) {
+                String caption = String.format("🎉 מזל טוב! עלית ל%s!", newBelt.getDisplayName("he"));
+                var image = whatsAppApiClient.sendMessage(messageFormatter.formatImageMessage(
+                        father.getPhone(), beltImageConfig.getImageUrl(newBelt), caption));
+                if (!image.success()) {
+                    log.warn("Belt image not sent (text follows): fatherId={}", father.getId());
                 }
             }
-
-            // Then send the congratulatory text message
-            String textMessage = buildPromotionMessage(result);
-            
-            // Use the simple text formatting method directly
-            Map<String, Object> textPayload = new java.util.LinkedHashMap<>();
-            textPayload.put("messaging_product", "whatsapp");
-            textPayload.put("recipient_type", "individual");
-            textPayload.put("to", phoneNumber.startsWith("+") ? phoneNumber.substring(1) : phoneNumber);
-            textPayload.put("type", "text");
-            
-            Map<String, Object> textBody = new java.util.LinkedHashMap<>();
-            textBody.put("preview_url", false);
-            textBody.put("body", textMessage);
-            textPayload.put("text", textBody);
-
-            var textResult = whatsAppApiClient.sendMessage(textPayload);
-            if (textResult.success()) {
-                log.info("Sent belt promotion notification to father {}", result.fatherId());
-            } else {
-                log.error("Failed to send belt promotion text to father {}: {}", 
-                         result.fatherId(), textResult.errorDetail());
+            String text = buildPromotionMessage(result);
+            ProactiveSender.Outcome outcome = sender.send(father, text);
+            log.atInfo().setMessage("whatsapp.delivery.result")
+                    .addKeyValue("kind", "BELT_PROMOTION")
+                    .addKeyValue("fatherId", father.getId())
+                    .addKeyValue("mode", outcome.mode())
+                    .addKeyValue("status", outcome.result().status())
+                    .addKeyValue("failure", outcome.result().failureReason())
+                    .log();
+            if (outcome.result().isSuccessful()) {
+                recorder.recordSent(father, text, "belt-promotion:" + father.getId() + ":" + newBelt.name());
             }
-
-        } catch (Exception e) {
-            log.error("Error sending belt promotion notification to father {}", result.fatherId(), e);
+        } catch (RuntimeException e) {
+            log.error("Belt promotion notification failed: fatherId={}", father.getId(), e);
         }
     }
 
-    /**
-     * Sends promotion notifications for multiple fathers (batch operation).
-     *
-     * @param results the list of promotion results
-     */
     public void sendBatchPromotionNotifications(List<WeeklyGoalService.BeltPromotionResult> results) {
-        log.info("Sending {} belt promotion notifications", results.size());
-        
-        for (WeeklyGoalService.BeltPromotionResult result : results) {
-            try {
-                sendPromotionNotification(result);
-                // Small delay to avoid rate limiting
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.warn("Batch promotion notifications interrupted");
-                break;
-            }
-        }
+        results.forEach(this::sendPromotionNotification);
     }
 
-    /**
-     * Builds the promotion message text.
-     */
     private String buildPromotionMessage(WeeklyGoalService.BeltPromotionResult result) {
         Belt newBelt = result.newBelt();
         Belt previousBelt = result.previousBelt();

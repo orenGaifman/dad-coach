@@ -1,22 +1,15 @@
 package com.dadcoach.integration.platform.scheduled;
 
 import com.dadcoach.channel.delivery.DeliveryResult;
-import com.dadcoach.channel.delivery.DeliveryService;
-import com.dadcoach.channel.dto.MessagePriority;
-import com.dadcoach.channel.dto.MessageType;
-import com.dadcoach.channel.dto.OutboundMessageDto;
+import com.dadcoach.channel.delivery.ProactiveSender;
 import com.dadcoach.common.MaskingUtils;
-import com.dadcoach.domain.conversation.MessageLogService;
 import com.dadcoach.domain.father.Father;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Delivers a Workflow Platform proactive message to a father over WhatsApp, exactly once per
@@ -38,19 +31,16 @@ public class ScheduledResponseDeliveryService {
     private static final Logger log = LoggerFactory.getLogger(ScheduledResponseDeliveryService.class);
 
     private final ScheduledResponseDeliveryRepository repository;
-    private final DeliveryService deliveryService;
-    private final MessageLogService messageLogService;
-    private final ScheduledResponseCallbackConfig config;
+    private final ProactiveSender sender;
+    private final com.dadcoach.channel.WhatsAppEndpoints endpoints;
 
     public ScheduledResponseDeliveryService(
             ScheduledResponseDeliveryRepository repository,
-            DeliveryService deliveryService,
-            MessageLogService messageLogService,
-            ScheduledResponseCallbackConfig config) {
+            ProactiveSender sender,
+            com.dadcoach.channel.WhatsAppEndpoints endpoints) {
+        this.endpoints = endpoints;
         this.repository = repository;
-        this.deliveryService = deliveryService;
-        this.messageLogService = messageLogService;
-        this.config = config;
+        this.sender = sender;
     }
 
     public ScheduledResponseResult deliver(Father father, ScheduledResponseRequest request, String idempotencyKey) {
@@ -74,27 +64,14 @@ public class ScheduledResponseDeliveryService {
             return ScheduledResponseResult.of(winner, true);
         }
 
-        UUID fatherUuid = new UUID(0L, father.getId());
         String content = request.responseContent();
-        ScheduledResponseDelivery.Mode mode = ScheduledResponseDelivery.Mode.FREE_FORM;
-        DeliveryResult result;
-        try {
-            result = deliveryService.deliver(freeForm(fatherUuid, content));
-            if (!result.isSuccessful() && DeliveryService.SESSION_CLOSED.equals(result.failureReason())) {
-                if (hasTemplate()) {
-                    mode = ScheduledResponseDelivery.Mode.TEMPLATE;
-                    result = deliveryService.deliver(template(fatherUuid, config.getTemplateName(), content));
-                } else {
-                    result = DeliveryResult.failed(DeliveryService.SESSION_CLOSED
-                            + ": 24h window closed and no approved template configured; not sent");
-                }
-            }
-        } catch (Exception e) {
-            result = DeliveryResult.failed("Delivery error: " + e.getMessage());
-        }
+        endpoints.ensure(father); // F1: fathers onboarded on WhatsApp before the fix have no endpoint row yet
+        ProactiveSender.Outcome outcome = sender.send(father, content);
+        DeliveryResult result = outcome.result();
+        ScheduledResponseDelivery.Mode mode = outcome.mode() == ProactiveSender.Mode.TEMPLATE
+                ? ScheduledResponseDelivery.Mode.TEMPLATE : ScheduledResponseDelivery.Mode.FREE_FORM;
 
         if (result.isSuccessful()) {
-            messageLogService.logOutbound(father.getId(), content);
             delivery.markDelivered(mode);
             log.info("Scheduled response delivered: triggerId={}, targetStateKey={}, mode={}, father={}",
                     request.triggerId(), request.targetStateKey(), mode, MaskingUtils.maskPhone(father.getPhone()));
@@ -106,25 +83,4 @@ public class ScheduledResponseDeliveryService {
         return ScheduledResponseResult.of(delivery, false);
     }
 
-    private boolean hasTemplate() {
-        return config.getTemplateName() != null && !config.getTemplateName().isBlank();
-    }
-
-    private static OutboundMessageDto freeForm(UUID fatherUuid, String content) {
-        return new OutboundMessageDto(UUID.randomUUID(), fatherUuid, null, MessageType.TEXT, content,
-                null, false, null, null, MessagePriority.IMMEDIATE, Instant.now());
-    }
-
-    private static OutboundMessageDto template(UUID fatherUuid, String templateName, String content) {
-        return new OutboundMessageDto(UUID.randomUUID(), fatherUuid, null, MessageType.TEXT, content,
-                null, true, templateName, Map.of("1", asTemplateParameter(content)), MessagePriority.IMMEDIATE, Instant.now());
-    }
-
-    /**
-     * WhatsApp rejects template text parameters containing newlines, tabs or more than four
-     * consecutive spaces; flatten the message into a single line.
-     */
-    static String asTemplateParameter(String content) {
-        return content.replaceAll("\\s*[\\r\\n\\t]+\\s*", " ").replaceAll(" {4,}", "   ").trim();
-    }
 }

@@ -1,36 +1,19 @@
-# Local development profile
-# Plain-text logging, Swagger enabled, default database values
-
+# Local development (docker-compose postgres on 5432). Flyway builds the schema from the baseline.
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/dadcoach
-    username: postgres
-    password: postgres
-  jpa:
-    hibernate:
-      ddl-auto: update
-  flyway:
-    enabled: false
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/dadcoach}
+    username: ${DB_USERNAME:dadcoach}
+    password: ${DB_PASSWORD:dadcoach}
 
 management:
   endpoint:
     health:
       show-details: always
 
-logging:
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
-
 dad-coach:
   whatsapp:
-    verify-token: dad-coach-local-dev
+    verify-token: ${WHATSAPP_VERIFY_TOKEN:dad-coach-local-dev}
 
-springdoc:
-  swagger-ui:
-    enabled: true
-  api-docs:
-    enabled: true
-
-# Use port 8081 to avoid conflict with ai-workflow-platform on 8080
+# 8080 is the platform's default port locally
 server:
-  port: 8081
+  port: ${PORT:8081}

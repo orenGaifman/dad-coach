@@ -1,6 +1,6 @@
 package com.dadcoach.integration.platform.lifecycle;
 
-import com.dadcoach.integration.platform.PlatformWorkflowConfig;
+import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
@@ -18,9 +18,9 @@ import org.springframework.web.reactive.function.client.WebClient;
 public class PlatformTenancyClient {
 
     private final WebClient webClient;
-    private final PlatformWorkflowConfig config;
+    private final WorkflowPlatformProperties config;
 
-    public PlatformTenancyClient(PlatformWorkflowConfig config) {
+    public PlatformTenancyClient(WorkflowPlatformProperties config) {
         this.config = config;
         this.webClient = WebClient.builder()
                 .baseUrl(config.getBaseUrl())

@@ -1,0 +1,152 @@
+package com.dadcoach.whatsapp.inbound;
+
+import com.dadcoach.api.error.PlatformUnavailableException;
+import com.dadcoach.channel.WhatsAppEndpoints;
+import com.dadcoach.channel.dto.InboundMessageDto;
+import com.dadcoach.channel.dto.MessagePriority;
+import com.dadcoach.channel.dto.MessageType;
+import com.dadcoach.channel.dto.OutboundMessageDto;
+import com.dadcoach.channel.delivery.DeliveryResult;
+import com.dadcoach.common.MaskingUtils;
+import com.dadcoach.domain.father.Father;
+import com.dadcoach.domain.father.FatherRepository;
+import com.dadcoach.integration.platform.FatherTimezones;
+import com.dadcoach.integration.platform.WorkerExecuteRequest;
+import com.dadcoach.integration.platform.WorkerExecuteResponse;
+import com.dadcoach.integration.platform.WorkflowPlatformClient;
+import com.dadcoach.integration.platform.WorkflowPlatformProperties;
+import com.dadcoach.integration.platform.lifecycle.DeletedSenders;
+import com.dadcoach.integration.platform.lifecycle.PersonRefs;
+import com.dadcoach.integration.platform.lifecycle.WhatsAppDeletionRequests;
+import com.dadcoach.whatsapp.WhatsAppAdapter;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+/**
+ * One inbound WhatsApp message, in order (playbook §34):
+ * <ol>
+ *   <li>a DELETED father, or a number whose platform deletion is not confirmed yet: dropped, nothing reaches the AI;</li>
+ *   <li>"DELETE MY DATA": the deletion request, handled here, never by the AI;</li>
+ *   <li>a known father: his WhatsApp endpoint is ensured and his 24-hour window opened (F1);</li>
+ *   <li>a voice note or file without words: one fixed line (the coach reads text only);</li>
+ *   <li>the turn: worker + workflow named by the caller, correlation id = Meta's message id, the father's timezone,
+ *       person ref and name in the request; a new number is onboarded by the workflow itself (D-002);</li>
+ *   <li>the reply goes out as written; a SUPPRESSED, duplicate or blank reply sends nothing; the platform down or
+ *       refusing: one short Hebrew line, never English, never silence.</li>
+ * </ol>
+ */
+@Component
+public class InboundMessageHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(InboundMessageHandler.class);
+    static final String PLATFORM_DOWN_REPLY = "משהו השתבש אצלי, נסה שוב עוד רגע 🙏";
+    static final String MEDIA_REPLY = "אני עדיין לא יכול לשמוע הקלטות או לראות קבצים 🙏 אפשר לכתוב לי במילים?";
+
+    private final FatherRepository fathers;
+    private final WhatsAppEndpoints endpoints;
+    private final DeletedSenders deletedSenders;
+    private final WhatsAppDeletionRequests deletionRequests;
+    private final WorkflowPlatformClient platform;
+    private final WorkflowPlatformProperties platformProperties;
+    private final WhatsAppAdapter whatsapp;
+    private final WhatsAppInboundRateLimiter rateLimiter;
+    private final Clock clock;
+
+    public InboundMessageHandler(FatherRepository fathers, WhatsAppEndpoints endpoints, DeletedSenders deletedSenders,
+                                 WhatsAppDeletionRequests deletionRequests, WorkflowPlatformClient platform,
+                                 WorkflowPlatformProperties platformProperties, WhatsAppAdapter whatsapp,
+                                 WhatsAppInboundRateLimiter rateLimiter, Clock clock) {
+        this.fathers = fathers;
+        this.endpoints = endpoints;
+        this.deletedSenders = deletedSenders;
+        this.deletionRequests = deletionRequests;
+        this.platform = platform;
+        this.platformProperties = platformProperties;
+        this.whatsapp = whatsapp;
+        this.rateLimiter = rateLimiter;
+        this.clock = clock;
+    }
+
+    public void handle(InboundMessageDto in, Instant receivedAt) {
+        Instant started = clock.instant();
+        String phone = in.fatherChannelIdentity();
+        if (deletedSenders.isDeleted(phone)) {
+            log.atInfo().setMessage("whatsapp.inbound.ignored").addKeyValue("reason", "DELETED_FATHER").log();
+            return;
+        }
+        if (WhatsAppDeletionRequests.isRequest(in.textContent())) {
+            send(phone, deletionRequests.handle(phone));
+            return;
+        }
+        Optional<Father> father = fathers.findByPhone(phone);
+        father.ifPresent(endpoints::recordInbound);
+        if (in.textContent() == null || in.textContent().isBlank()) {
+            send(phone, MEDIA_REPLY);
+            return;
+        }
+        if (!rateLimiter.tryAcquire(phone)) {
+            log.atWarn().setMessage("whatsapp.inbound.rate_limited").addKeyValue("sender", MaskingUtils.maskPhone(phone)).log();
+            return;
+        }
+        runTurn(in, father, receivedAt, started);
+    }
+
+    private void runTurn(InboundMessageDto in, Optional<Father> father, Instant receivedAt, Instant started) {
+        String phone = in.fatherChannelIdentity();
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("timezone", FatherTimezones.of(father.orElse(null)).getId());
+        father.ifPresent(f -> metadata.put("productUserId", String.valueOf(f.getId())));
+        Instant platformStart = clock.instant();
+        Instant deliveryStart = platformStart;
+        String outcome = "REPLIED";
+        try {
+            WorkerExecuteResponse response = platform.execute(new WorkerExecuteRequest(platformProperties.getWorkerKey(),
+                    PersonRefs.whatsappId(phone), "whatsapp", in.idempotencyKey(),
+                    in.messageType() == MessageType.INTERACTIVE ? "button_reply" : "text", in.textContent(), metadata,
+                    platformProperties.getTenantId(), father.map(f -> PersonRefs.of(f.getId())).orElse(null),
+                    father.map(Father::getDisplayName).orElse(null), platformProperties.getWorkflowKey()));
+            deliveryStart = clock.instant();
+            String text = response.responseContent();
+            if (response.suppressed() || response.isDuplicate() || text == null || text.isBlank()) {
+                outcome = response.suppressed() ? "SUPPRESSED" : response.isDuplicate() ? "DUPLICATE" : "BLANK";
+                return;
+            }
+            send(phone, text.strip());
+        } catch (PlatformUnavailableException | WorkflowPlatformClient.PlatformRejectedException e) {
+            outcome = "PLATFORM_FAILED";
+            log.atWarn().setMessage("whatsapp.turn.platform_failed").addKeyValue("error", e.getMessage()).log();
+            deliveryStart = clock.instant();
+            send(phone, PLATFORM_DOWN_REPLY);
+        } finally {
+            Instant end = clock.instant();
+            log.atInfo().setMessage("whatsapp.turn.timing")
+                    .addKeyValue("correlationId", in.idempotencyKey())
+                    .addKeyValue("fatherId", father.map(Father::getId).orElse(null))
+                    .addKeyValue("outcome", outcome)
+                    .addKeyValue("queueWaitMs", Duration.between(receivedAt, started).toMillis())
+                    .addKeyValue("preTurnMs", Duration.between(started, platformStart).toMillis())
+                    .addKeyValue("platformMs", Duration.between(platformStart, deliveryStart).toMillis())
+                    .addKeyValue("deliveryMs", Duration.between(deliveryStart, end).toMillis())
+                    .log();
+        }
+    }
+
+    /** A reply inside the conversation the father just opened (the 24-hour window is open by definition). */
+    private void send(String phone, String text) {
+        DeliveryResult result = whatsapp.sendMessage(new OutboundMessageDto(UUID.randomUUID(), null, WhatsAppEndpoints.CHANNEL,
+                MessageType.TEXT, text, null, false, null, Map.of(), MessagePriority.IMMEDIATE, clock.instant()), phone);
+        log.atInfo().setMessage("whatsapp.delivery.result")
+                .addKeyValue("kind", "CONVERSATIONAL_REPLY")
+                .addKeyValue("status", result.status())
+                .addKeyValue("failure", result.failureReason())
+                .log();
+    }
+}

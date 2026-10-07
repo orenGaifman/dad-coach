@@ -210,7 +210,7 @@ public class WhatsAppMessageParser {
             case "document" -> MessageType.DOCUMENT;
             case "location" -> MessageType.LOCATION;
             case "reaction" -> MessageType.REACTION;
-            case "interactive" -> MessageType.INTERACTIVE;
+            case "interactive", "button" -> MessageType.INTERACTIVE;
             default -> null;
         };
     }
@@ -231,7 +231,7 @@ public class WhatsAppMessageParser {
             case AUDIO -> null; // audio messages don't have text content
             case LOCATION -> formatLocation(msg.location());
             case REACTION -> msg.reaction() != null ? msg.reaction().emoji() : null;
-            case INTERACTIVE -> extractInteractiveText(msg.interactive());
+            case INTERACTIVE -> msg.button() != null ? msg.button().text() : extractInteractiveText(msg.interactive());
         };
     }
 

@@ -1,298 +1,86 @@
 package com.dadcoach.api.calendar;
 
-import com.dadcoach.api.auth.JwtAuthFilter.JwtPrincipal;
 import com.dadcoach.calendar.CalendarLinkSigner;
 import com.dadcoach.calendar.GoogleCalendarService;
-import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
-
+import com.dadcoach.father.FatherStatus;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
- * REST controller for Google Calendar OAuth flow.
- * 
- * <p>Provides endpoints for initiating calendar connection and handling OAuth callbacks.
- * The flow is:
+ * The Google Calendar OAuth hops (public in the security config; each verifies an HMAC signature itself):
  * <ol>
- *   <li>The signed-in father gets a signed link from GET /api/v1/calendar/status/{fatherId} (or the AI tool
- *       connect_google_calendar gets a Google URL with a signed state) and opens GET /api/v1/calendar/connect/{fatherId}</li>
- *   <li>User authorizes the app on Google</li>
- *   <li>Google redirects to GET /api/v1/calendar/callback with code and state</li>
- *   <li>We exchange the code for tokens and store them</li>
- *   <li>User is redirected to the dashboard with success message</li>
+ *   <li>{@code GET /api/v1/calendar/connect/{fatherId}?exp&sig} - a link the dashboard gives the signed-in father
+ *       ({@link CalendarLinkSigner#connectQuery}); without a valid, unexpired signature nothing happens (404), so
+ *       nobody can attach a calendar to someone else's account. Redirects to Google with a signed state.</li>
+ *   <li>{@code GET /api/v1/calendar/callback} - Google's redirect; only a valid signed state connects anyone. Ends
+ *       on the dashboard ({@code WEB_BASE_URL} + a local path) with calendar_connected / calendar_error.</li>
  * </ol>
- * </p>
+ * The calendar is optional (D-007): sessions work without it.
  */
 @RestController
-@RequestMapping("/api/v1/calendar")
-@Tag(name = "Calendar", description = "Google Calendar OAuth endpoints")
 public class CalendarOAuthController {
 
     private static final Logger log = LoggerFactory.getLogger(CalendarOAuthController.class);
 
-    private final GoogleCalendarService googleCalendarService;
-    private final FatherRepository fatherRepository;
-    private final CalendarLinkSigner linkSigner;
+    private final GoogleCalendarService calendar;
+    private final FatherRepository fathers;
+    private final CalendarLinkSigner signer;
 
-    public CalendarOAuthController(GoogleCalendarService googleCalendarService,
-                                   FatherRepository fatherRepository,
-                                   CalendarLinkSigner linkSigner) {
-        this.googleCalendarService = googleCalendarService;
-        this.fatherRepository = fatherRepository;
-        this.linkSigner = linkSigner;
+    public CalendarOAuthController(GoogleCalendarService calendar, FatherRepository fathers, CalendarLinkSigner signer) {
+        this.calendar = calendar;
+        this.fathers = fathers;
+        this.signer = signer;
     }
 
-    /** True only for a signed-in father acting on his own id (anything else answers 404, never 403). */
-    private static boolean isSelf(Long fatherId) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return auth != null && auth.getPrincipal() instanceof JwtPrincipal p && fatherId.equals(p.fatherId());
-    }
-
-    /**
-     * Initiates Google Calendar OAuth flow by redirecting to Google's authorization page.
-     * 
-     * @param fatherId the ID of the father connecting their calendar
-     * @param redirectUrl optional URL to redirect to after OAuth completes (defaults to dashboard)
-     * @return redirect to Google OAuth authorization page
-     */
-    @GetMapping("/connect/{fatherId}")
-    @Operation(
-        summary = "Start Google Calendar connection",
-        description = "Redirects the user to Google's OAuth authorization page to connect their calendar"
-    )
-    @ApiResponse(responseCode = "302", description = "Redirect to Google OAuth")
-    @ApiResponse(responseCode = "404", description = "Father not found")
-    public ResponseEntity<Void> connectCalendar(
-            @Parameter(description = "Father ID") @PathVariable Long fatherId,
-            @Parameter(description = "URL to redirect after OAuth completes") 
-            @RequestParam(required = false) String redirectUrl) {
-        
-        log.info("Starting Google Calendar OAuth flow for father {}", fatherId);
-        
-        // Verify father exists
-        Optional<Father> father = fatherRepository.findById(fatherId);
-        if (father.isEmpty()) {
-            log.warn("Father {} not found for calendar connection", fatherId);
+    @GetMapping("/api/v1/calendar/connect/{fatherId}")
+    public ResponseEntity<Void> connect(@PathVariable long fatherId,
+                                        @RequestParam(required = false) Long exp,
+                                        @RequestParam(required = false) String sig,
+                                        @RequestParam(required = false) String redirectUrl) {
+        if (!signer.verifyConnect(fatherId, exp, sig)
+                || fathers.findById(fatherId).filter(f -> f.getStatus() != FatherStatus.DELETED).isEmpty()) {
+            log.warn("Calendar connect refused: invalid or expired link");
             return ResponseEntity.notFound().build();
         }
-        
-        String authUrl = googleCalendarService.getAuthorizationUrl(fatherId, redirectUrl);
-        log.debug("Redirecting father {} to Google OAuth: {}", fatherId, authUrl);
-        
-        return ResponseEntity.status(HttpStatus.FOUND)
-                .location(URI.create(authUrl))
-                .build();
+        return redirect(calendar.getAuthorizationUrl(fatherId, redirectUrl));
     }
 
-    /**
-     * Handles OAuth callback from Google after user authorization.
-     * 
-     * <p>Google redirects here with either:
-     * <ul>
-     *   <li>code + state (success) - we exchange code for tokens</li>
-     *   <li>error + state (failure) - user denied access or error occurred</li>
-     * </ul>
-     * </p>
-     * 
-     * <p>The state parameter contains JSON with fatherId and optional redirectUrl.</p>
-     * 
-     * @param code the authorization code from Google (if successful)
-     * @param state JSON containing fatherId and optional redirectUrl
-     * @param error the error code if user denied access
-     * @return redirect to dashboard or specified redirectUrl with success/failure message
-     */
-    @GetMapping("/callback")
-    @Operation(
-        summary = "Handle Google OAuth callback",
-        description = "Receives the authorization code from Google and exchanges it for access tokens"
-    )
-    @ApiResponse(responseCode = "302", description = "Redirect to dashboard")
-    public ResponseEntity<Void> handleCallback(
-            @RequestParam(required = false) String code,
-            @RequestParam(required = false) String state,
-            @RequestParam(required = false) String error) {
-        
-        // The state is signed (CalendarLinkSigner): an unsigned, altered or expired state never connects anyone
-        Optional<CalendarLinkSigner.State> signed = linkSigner.verifyState(state);
-        Long fatherId = signed.map(CalendarLinkSigner.State::fatherId).orElse(null);
-        String redirectUrl = signed.map(CalendarLinkSigner.State::redirectUrl).orElse(linkSigner.defaultRedirect());
-        if (state != null && signed.isEmpty()) {
-            log.warn("Calendar OAuth callback with an invalid state");
-        }
-
-        // Handle user denial or errors
+    @GetMapping("/api/v1/calendar/callback")
+    public ResponseEntity<Void> callback(@RequestParam(required = false) String code,
+                                         @RequestParam(required = false) String state,
+                                         @RequestParam(required = false) String error) {
+        Optional<CalendarLinkSigner.State> signed = signer.verifyState(state);
+        String back = signed.map(CalendarLinkSigner.State::redirectUrl).orElse(signer.defaultRedirect());
         if (error != null) {
-            log.warn("Google OAuth error for state {}: {}", state, error);
-            String finalRedirect = appendQueryParam(redirectUrl, "calendar_error", error);
-            return ResponseEntity.status(HttpStatus.FOUND)
-                    .location(URI.create(finalRedirect))
-                    .build();
+            return redirect(withParam(back, "calendar_error", error));
         }
-        
-        // Validate required params
-        if (code == null || fatherId == null) {
-            log.error("Missing code or fatherId in OAuth callback");
-            String finalRedirect = appendQueryParam(redirectUrl, "calendar_error", "missing_params");
-            return ResponseEntity.status(HttpStatus.FOUND)
-                    .location(URI.create(finalRedirect))
-                    .build();
+        if (code == null || signed.isEmpty()) {
+            log.warn("Calendar OAuth callback without a code or with an invalid state");
+            return redirect(withParam(back, "calendar_error", "missing_params"));
         }
-        
-        log.info("Processing Google OAuth callback for father {}", fatherId);
-        
-        // Exchange code for tokens
-        boolean success = googleCalendarService.handleOAuthCallback(code, fatherId);
-        
-        if (success) {
-            log.info("Successfully connected Google Calendar for father {}", fatherId);
-            String finalRedirect = appendQueryParam(redirectUrl, "calendar_connected", "true");
-            return ResponseEntity.status(HttpStatus.FOUND)
-                    .location(URI.create(finalRedirect))
-                    .build();
-        } else {
-            log.error("Failed to exchange OAuth code for father {}", fatherId);
-            String finalRedirect = appendQueryParam(redirectUrl, "calendar_error", "token_exchange_failed");
-            return ResponseEntity.status(HttpStatus.FOUND)
-                    .location(URI.create(finalRedirect))
-                    .build();
-        }
-    }
-    
-    /**
-     * Appends a query parameter to a URL.
-     */
-    private String appendQueryParam(String url, String key, String value) {
-        String separator = url.contains("?") ? "&" : "?";
-        return url + separator + key + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8);
+        boolean connected = calendar.handleOAuthCallback(code, signed.get().fatherId());
+        log.atInfo().setMessage("calendar.connect.result").addKeyValue("fatherId", signed.get().fatherId())
+                .addKeyValue("connected", connected).log();
+        return redirect(connected ? withParam(back, "calendar_connected", "true")
+                : withParam(back, "calendar_error", "token_exchange_failed"));
     }
 
-    /**
-     * Returns the calendar connection status for a father.
-     * 
-     * @param fatherId the father ID
-     * @return connection status and connect URL if not connected
-     */
-    @GetMapping("/status/{fatherId}")
-    @Operation(
-        summary = "Get calendar connection status",
-        description = "Returns whether the father's Google Calendar is connected"
-    )
-    @ApiResponse(responseCode = "200", description = "Status returned")
-    @ApiResponse(responseCode = "404", description = "Father not found")
-    public ResponseEntity<Map<String, Object>> getCalendarStatus(
-            @Parameter(description = "Father ID") @PathVariable Long fatherId) {
-        
-        Optional<Father> fatherOpt = isSelf(fatherId) ? fatherRepository.findById(fatherId) : Optional.empty();
-        if (fatherOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        Father father = fatherOpt.get();
-        boolean connected = father.hasGoogleCalendarConfigured();
-        
-        Map<String, Object> response = Map.of(
-            "connected", connected,
-            "connect_url", connected ? "" : "/api/v1/calendar/connect/" + fatherId + "?" + linkSigner.connectQuery(fatherId)
-        );
-        
-        return ResponseEntity.ok(response);
+    private static ResponseEntity<Void> redirect(String url) {
+        return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(url)).build();
     }
 
-    /**
-     * Fetches upcoming events from the father's Google Calendar.
-     * 
-     * Returns events from the calendar that can be displayed on the dashboard.
-     * By default, only returns Dad Coach related events (missions, quality time).
-     * 
-     * @param fatherId the father ID
-     * @param days number of days ahead to fetch (default: 7)
-     * @param allEvents if true, return all events, not just Dad Coach related
-     * @return list of upcoming calendar events
-     */
-    @GetMapping("/events/{fatherId}")
-    @Operation(
-        summary = "Get upcoming calendar events",
-        description = "Fetches upcoming events from the father's Google Calendar"
-    )
-    @ApiResponse(responseCode = "200", description = "Events returned")
-    @ApiResponse(responseCode = "404", description = "Father not found")
-    public ResponseEntity<CalendarEventsResponse> getUpcomingEvents(
-            @Parameter(description = "Father ID") @PathVariable Long fatherId,
-            @Parameter(description = "Days ahead to fetch") @RequestParam(defaultValue = "7") int days,
-            @Parameter(description = "Return all events, not just Dad Coach related") 
-            @RequestParam(defaultValue = "false") boolean allEvents) {
-        
-        Optional<Father> fatherOpt = isSelf(fatherId) ? fatherRepository.findById(fatherId) : Optional.empty();
-        if (fatherOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        Father father = fatherOpt.get();
-        
-        if (!father.hasGoogleCalendarConfigured()) {
-            return ResponseEntity.ok(new CalendarEventsResponse(
-                false, 
-                java.util.Collections.emptyList(),
-                "Calendar not connected"
-            ));
-        }
-        
-        java.time.Instant from = java.time.Instant.now();
-        java.time.Instant to = from.plus(days, java.time.temporal.ChronoUnit.DAYS);
-        
-        java.util.List<GoogleCalendarService.CalendarEvent> events = 
-            googleCalendarService.getUpcomingEvents(father, from, to, !allEvents);
-        
-        java.util.List<CalendarEventDto> eventDtos = events.stream()
-            .map(e -> new CalendarEventDto(
-                e.eventId(),
-                e.title(),
-                e.description(),
-                e.startTime(),
-                e.endTime(),
-                e.location()
-            ))
-            .toList();
-        
-        return ResponseEntity.ok(new CalendarEventsResponse(true, eventDtos, null));
+    private static String withParam(String url, String key, String value) {
+        return url + (url.contains("?") ? "&" : "?") + key + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
-
-    /**
-     * Response DTO for calendar events.
-     */
-    public record CalendarEventsResponse(
-        boolean connected,
-        java.util.List<CalendarEventDto> events,
-        String error
-    ) {}
-
-    /**
-     * DTO for a single calendar event.
-     */
-    public record CalendarEventDto(
-        String eventId,
-        String title,
-        String description,
-        java.time.Instant startTime,
-        java.time.Instant endTime,
-        String location
-    ) {}
 }

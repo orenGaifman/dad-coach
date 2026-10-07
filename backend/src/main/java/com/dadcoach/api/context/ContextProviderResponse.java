@@ -80,9 +80,6 @@ public record ContextProviderResponse(
      * @param userId the user ID that was not found
      * @return a failure response with USER_NOT_FOUND error code
      */
-    public static ContextProviderResponse userNotFound(Long userId) {
-        return failure("User not found: " + userId, "USER_NOT_FOUND");
-    }
 
     /**
      * Creates a "provider not found" error response.

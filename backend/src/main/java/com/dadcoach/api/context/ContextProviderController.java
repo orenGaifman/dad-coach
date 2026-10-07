@@ -1,191 +1,139 @@
 package com.dadcoach.api.context;
 
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
-import jakarta.validation.Valid;
+import com.dadcoach.common.PhoneValidator;
+import com.dadcoach.domain.child.Child;
+import com.dadcoach.domain.child.ChildRepository;
+import com.dadcoach.domain.father.Father;
+import com.dadcoach.domain.father.FatherRepository;
+import com.dadcoach.father.FatherStatus;
+import com.dadcoach.integration.platform.FatherTimezones;
+import com.dadcoach.weeklyplan.WeeklyPlanContextBuilder;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
- * REST API controller for context providers that ai-workflow-platform can call.
- * 
- * <p>This controller provides endpoints for loading context data that the AI workflow
- * platform uses to make decisions. Each context provider aggregates data from multiple
- * sources into a single response.</p>
- * 
- * <h2>Authentication</h2>
- * <p>All requests must include a valid API key in the X-API-Key header.
- * The API key is the same as configured for the Tool API (tool-api.api-key).</p>
- * 
- * <h2>Available Context Providers</h2>
- * <ul>
- *   <li><code>family_context</code> - Father profile and children information</li>
- *   <li><code>calendar_context</code> - Calendar events and available time slots</li>
- *   <li><code>quality_time_context</code> - Quality time history and dashboard metrics</li>
- * </ul>
- * 
- * @see ContextProviderRouter
- * @see ContextProviderRequest
- * @see ContextProviderResponse
+ * {@code POST /api/context/{providerKey}} - the two providers bound in dad-coach-3 (playbook §12), loaded fresh on
+ * every turn: {@code family_context} (profile + children) and {@code weekly_plan_context} (this week in his
+ * timezone, {@link WeeklyPlanContextBuilder}). The father is identified only by his WhatsApp number in
+ * {@code config.phone} (how the platform's Dad Coach context client sends a channel identity); a numeric user_id is
+ * never trusted. An unknown or deleted father is a legitimate empty answer (200, father_found=false), not an error.
+ * The envelope {success, data, error_code, error_message} is what the platform's client parses.
  */
 @RestController
-@RequestMapping("/api/context")
-@Tag(name = "Context Provider API", description = "Context loading endpoints for ai-workflow-platform integration")
-@SecurityRequirement(name = "apiKey")
 public class ContextProviderController {
 
     private static final Logger log = LoggerFactory.getLogger(ContextProviderController.class);
+    private static final Pattern CHANNEL_QUALIFIED = Pattern.compile("^([A-Za-z][A-Za-z0-9_.-]*):(.+)$");
 
-    private final ContextProviderRouter contextProviderRouter;
+    private final FatherRepository fathers;
+    private final ChildRepository children;
+    private final WeeklyPlanContextBuilder weeklyPlan;
 
-    public ContextProviderController(ContextProviderRouter contextProviderRouter) {
-        this.contextProviderRouter = contextProviderRouter;
+    public ContextProviderController(FatherRepository fathers, ChildRepository children, WeeklyPlanContextBuilder weeklyPlan) {
+        this.fathers = fathers;
+        this.children = children;
+        this.weeklyPlan = weeklyPlan;
     }
 
-    /**
-     * Load context data from a specific provider.
-     * 
-     * <p>This is the main endpoint for context loading. The provider key is specified
-     * in the path, and the request body contains the userId and optional config.</p>
-     * 
-     * <h3>Example: Family Context</h3>
-     * <pre>
-     * POST /api/context/family_context
-     * X-API-Key: your-api-key
-     * Content-Type: application/json
-     * 
-     * {
-     *   "user_id": 1
-     * }
-     * </pre>
-     * 
-     * <h3>Example: Calendar Context with Config</h3>
-     * <pre>
-     * POST /api/context/calendar_context
-     * X-API-Key: your-api-key
-     * Content-Type: application/json
-     * 
-     * {
-     *   "user_id": 1,
-     *   "config": {
-     *     "days_ahead": 14
-     *   }
-     * }
-     * </pre>
-     *
-     * @param providerKey the context provider identifier (e.g., "family_context")
-     * @param request the context request with userId and optional config
-     * @return 200 OK with context data on success, or error response on failure
-     */
-    @PostMapping("/{providerKey}")
-    @Operation(
-            summary = "Load context from a provider",
-            description = "Loads context data from the specified provider for the given user"
-    )
-    @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "Context loaded successfully",
-                    content = @Content(schema = @Schema(implementation = ContextProviderResponse.class))
-            ),
-            @ApiResponse(
-                    responseCode = "400",
-                    description = "Invalid request parameters",
-                    content = @Content(schema = @Schema(implementation = ContextProviderResponse.class))
-            ),
-            @ApiResponse(
-                    responseCode = "401",
-                    description = "Missing or invalid API key",
-                    content = @Content(schema = @Schema(implementation = ContextProviderResponse.class))
-            ),
-            @ApiResponse(
-                    responseCode = "404",
-                    description = "Provider not found",
-                    content = @Content(schema = @Schema(implementation = ContextProviderResponse.class))
-            )
-    })
-    public ResponseEntity<ContextProviderResponse> loadContext(
-            @Parameter(description = "Context provider identifier", example = "family_context")
-            @PathVariable("providerKey") String providerKey,
-            @Valid @RequestBody ContextProviderRequest request) {
-
-        log.info("Context provider request: providerKey={}, userId={}",
-                providerKey, request.userId());
-
-        ContextProviderResponse response = contextProviderRouter.dispatch(providerKey, request);
-
-        log.info("Context provider response: providerKey={}, userId={}, success={}",
-                providerKey, request.userId(), response.success());
-
-        return ResponseEntity.ok(response);
+    @PostMapping("/api/context/{providerKey}")
+    public ContextProviderResponse load(@PathVariable String providerKey, @RequestBody ContextProviderRequest request) {
+        Instant started = Instant.now();
+        String result = "SUCCESS";
+        try {
+            Optional<Father> father = lookup(request);
+            ContextProviderResponse response = switch (providerKey) {
+                case "family_context" -> ContextProviderResponse.success(family(father));
+                case "weekly_plan_context" -> ContextProviderResponse.success(weekly(father));
+                default -> {
+                    result = "PROVIDER_NOT_FOUND";
+                    yield ContextProviderResponse.providerNotFound(providerKey);
+                }
+            };
+            if (father.isEmpty() && response.success()) {
+                result = "EMPTY";
+            }
+            return response;
+        } catch (RuntimeException e) {
+            result = "ERROR";
+            log.atError().setMessage("context.provider.failed").setCause(e).addKeyValue("providerKey", providerKey).log();
+            return ContextProviderResponse.failure("Context unavailable", "INTERNAL_ERROR");
+        } finally {
+            log.atInfo().setMessage("context.provider.result")
+                    .addKeyValue("providerKey", providerKey)
+                    .addKeyValue("result", result)
+                    .addKeyValue("durationMs", Duration.between(started, Instant.now()).toMillis())
+                    .log();
+        }
     }
 
-    /**
-     * List all available context providers.
-     * 
-     * <p>Returns a list of all registered context provider keys that can be called
-     * via the POST /{providerKey} endpoint.</p>
-     *
-     * @return 200 OK with list of available providers
-     */
-    @GetMapping
-    @Operation(
-            summary = "List available context providers",
-            description = "Returns a list of all registered context provider keys"
-    )
-    @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "List of available providers"
-            ),
-            @ApiResponse(
-                    responseCode = "401",
-                    description = "Missing or invalid API key"
-            )
-    })
-    public ResponseEntity<Map<String, Object>> listProviders() {
-        Set<String> providers = contextProviderRouter.getAvailableProviders();
-
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("providers", providers);
-        response.put("count", providers.size());
-
-        log.debug("Listed {} available context providers", providers.size());
-        return ResponseEntity.ok(response);
+    Optional<Father> lookup(ContextProviderRequest request) {
+        String phone = request.getStringConfig("phone");
+        if (phone == null || phone.isBlank()) {
+            return Optional.empty();
+        }
+        String identifier = phone.trim();
+        Matcher m = CHANNEL_QUALIFIED.matcher(identifier);
+        if (m.matches()) {
+            identifier = m.group(2);
+        }
+        String e164 = PhoneValidator.normalizeToE164(identifier);
+        return fathers.findByPhone(e164).filter(f -> f.getStatus() != FatherStatus.DELETED);
     }
 
-    /**
-     * Health check endpoint for the Context Provider API.
-     * 
-     * <p>Returns a simple health status. This endpoint can be used for
-     * monitoring and load balancer health checks.</p>
-     *
-     * @return 200 OK with health status
-     */
-    @GetMapping("/health")
-    @Operation(
-            summary = "Health check",
-            description = "Returns health status of the Context Provider API"
-    )
-    public ResponseEntity<Map<String, Object>> health() {
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("status", "healthy");
-        response.put("service", "context-provider-api");
-        response.put("providers_count", contextProviderRouter.getAvailableProviders().size());
+    private Map<String, Object> family(Optional<Father> found) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        if (found.isEmpty()) {
+            data.put("father_profile", null);
+            data.put("children", List.of());
+            data.put("has_multiple_children", false);
+            data.put("has_google_calendar_connected", false);
+            data.put("children_count", 0);
+            return data;
+        }
+        Father father = found.get();
+        List<Child> active = children.findByFatherIdAndStatus(father.getId(), "ACTIVE");
+        Map<String, Object> profile = new LinkedHashMap<>();
+        profile.put("father_id", father.getId());
+        profile.put("display_name", father.getDisplayName());
+        profile.put("locale", father.getLocale() != null ? father.getLocale() : "he");
+        profile.put("timezone", FatherTimezones.of(father).getId());
+        profile.put("status", father.getStatus().name());
+        data.put("father_profile", profile);
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Child child : active) {
+            Map<String, Object> c = new LinkedHashMap<>();
+            c.put("child_id", child.getId());
+            c.put("name", child.getName());
+            c.put("age", child.getAge());
+            c.put("gender", child.getGender());
+            c.put("interests", child.getInterests() != null ? child.getInterests() : List.of());
+            c.put("developmental_bracket", child.getDevelopmentalBracket().name());
+            list.add(c);
+        }
+        data.put("children", list);
+        data.put("has_multiple_children", active.size() > 1);
+        data.put("has_google_calendar_connected", father.hasGoogleCalendarConfigured());
+        data.put("children_count", active.size());
+        return data;
+    }
 
-        return ResponseEntity.ok(response);
+    private Map<String, Object> weekly(Optional<Father> found) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("father_found", found.isPresent());
+        found.ifPresent(f -> data.putAll(weeklyPlan.build(f)));
+        return data;
     }
 }

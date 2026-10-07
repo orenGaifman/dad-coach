@@ -2,7 +2,6 @@ package com.dadcoach.integration.platform.lifecycle;
 
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
-import com.dadcoach.father.FatherStatus;
 import java.util.Locale;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -13,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * The public data-deletion page tells a father to send "DELETE MY DATA" on WhatsApp. That exact message (case,
  * spacing and a closing period or "!" aside) from a known father is his deletion request: the same path as
- * deleting his account in the app - DELETED at once, then the platform deletes his conversations and his Dad Coach
+ * deleting his account in the dashboard - DELETED at once (at any stage, also mid-onboarding), then the platform deletes his conversations and his Dad Coach
  * data is purged ({@link PlatformPersonDeletions}). It never reaches the AI. Anything else is an ordinary message.
  */
 @Component
@@ -26,13 +25,11 @@ public class WhatsAppDeletionRequests {
             + "conversation history and preferences - are being deleted now. This is the last message you will get from us.";
     static final String NO_ACCOUNT = "We received your request. There is no Dad Coach account for this number. "
             + "To delete anything else we may hold, email oren26g@gmail.com with the subject \"Data Deletion Request\".";
-    static final String MANUAL = "We received your request and will delete your Dad Coach data within 30 days. "
-            + "You will get a confirmation once it is done.";
 
     private final FatherRepository fathers;
-    private final PlatformPersonDeletions deletions;
+    private final com.dadcoach.domain.father.FatherDeletionService deletions;
 
-    public WhatsAppDeletionRequests(FatherRepository fathers, PlatformPersonDeletions deletions) {
+    public WhatsAppDeletionRequests(FatherRepository fathers, com.dadcoach.domain.father.FatherDeletionService deletions) {
         this.fathers = fathers;
         this.deletions = deletions;
     }
@@ -54,14 +51,7 @@ public class WhatsAppDeletionRequests {
             return NO_ACCOUNT;
         }
         Father father = found.get();
-        if (!father.getStatus().canTransitionTo(FatherStatus.DELETED)) {
-            // e.g. still onboarding: kept for an operator (admin delete), never guessed
-            log.warn("WhatsApp deletion request needs an operator: fatherId={}, status={}", father.getId(), father.getStatus());
-            return MANUAL;
-        }
-        father.transitionTo(FatherStatus.DELETED);
-        fathers.save(father);
-        deletions.request(father.getId(), father.getPhone(), true);
+        deletions.requestByFather(father);
         log.info("WhatsApp deletion request accepted: fatherId={}", father.getId());
         return CONFIRMATION;
     }
