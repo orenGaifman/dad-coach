@@ -123,12 +123,14 @@ class VoiceNoteWebhookTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void theSpokenDeletionPhraseDeletesLikeTheTypedOne() throws Exception {
+    void theSpokenDeletionPhraseNeverDeletesHeIsAskedToTypeIt() throws Exception {
+        // deleting everything cannot be undone, so it never rests on a machine transcription
         Father father = data.activeFather("+19995550208");
         fake.onSpeechToText(c -> FakeServers.Reply.json("{\"text\":\"מחק את המידע שלי.\"}"));
         webhook(Webhooks.audio(father.getPhone(), "wamid.voice-del")).andExpect(status().isOk());
         assertThat(fake.turns()).isEmpty();
-        assertThat(jdbc.queryForObject("SELECT status FROM father WHERE id = ?", String.class, father.getId())).isEqualTo("DELETED");
+        assertThat(jdbc.queryForObject("SELECT status FROM father WHERE id = ?", String.class, father.getId())).isNotEqualTo("DELETED");
+        assertThat(sentText(0)).contains("🎙️ שמעתי").contains("לא נעשית מהקלטה").contains("כתוב לי במילים: מחק את המידע שלי");
     }
 
     @Test

@@ -58,6 +58,8 @@ public class InboundMessageHandler {
 
     private static final Logger log = LoggerFactory.getLogger(InboundMessageHandler.class);
     static final String PLATFORM_DOWN_REPLY = "משהו השתבש אצלי, נסה שוב עוד רגע 🙏";
+    static final String SPOKEN_DELETION_REPLY = "מחיקת כל המידע שלך היא פעולה שאי אפשר לבטל, ולכן היא לא נעשית מהקלטה. "
+            + "אם זה מה שאתה רוצה - כתוב לי במילים: מחק את המידע שלי";
     static final String MEDIA_REPLY = "אני עדיין לא יכול לשמוע הקלטות או לראות קבצים 🙏 אפשר לכתוב לי במילים?";
 
     private final FatherRepository fathers;
@@ -100,7 +102,7 @@ public class InboundMessageHandler {
             return;
         }
         String text = in.textContent();
-        // D-027: a voice note is heard, and from here on read like the same words typed (a spoken deletion phrase too).
+        // D-027: a voice note is heard, and from here on read like the same words typed - except a deletion request.
         String heard = null;
         boolean admitted = false;
         if (in.messageType() == MessageType.AUDIO && in.mediaId() != null && voiceNotes.active()) {
@@ -123,6 +125,11 @@ public class InboundMessageHandler {
             }
         }
         if (WhatsAppDeletionRequests.isRequest(text)) {
+            if (heard != null) {
+                // deleting everything cannot be undone - it never rests on a machine transcription; he types it
+                send(phone, VoiceNoteReplies.withHeard(SPOKEN_DELETION_REPLY, heard));
+                return;
+            }
             send(phone, deletionRequests.handle(phone));
             return;
         }

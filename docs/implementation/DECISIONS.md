@@ -195,7 +195,7 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   it (`GET <WHATSAPP_API_BASE_URL>/<version>/<media-id>`, then the file, with `WHATSAPP_ACCESS_TOKEN` - the shared
   number's gateway forwards audio unchanged) and sends it to ElevenLabs speech to text (`POST /v1/speech-to-text`,
   `scribe_v2`, Hebrew, no sound tags, no timings). The words then go through everything typed text goes through: the
-  deletion phrase (a spoken "מחק את המידע שלי" deletes, as typed), the rate limit (before the transcription, so a flood
+  deletion phrase (a spoken "מחק את המידע שלי" never deletes - deleting cannot be undone, so he is asked to type it), the rate limit (before the transcription, so a flood
   spends no credit), the father's own turn (message type `text`). The coach reads them after a Hebrew note -
   `[הודעה קולית, תומללה אוטומטית - שמות ומספרים עלולים להישמע לא נכון]` - Hebrew so it does not invite English (D-024).
 - **What the father sees:** the reply opens, under "❤️ דאד קואץ׳:", with `🎙️ שמעתי: "..."` (up to 200 characters), so a
