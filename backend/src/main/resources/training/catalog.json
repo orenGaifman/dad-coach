@@ -1,0 +1,26 @@
+[
+  {
+    "slug": "welcome", "primary": true, "order": 0,
+    "title": "ברוך הבא ל-Dad Coach",
+    "description": "איך זה עובד: יעד שבועי, זמן עם כל ילד, תזכורות בוואטסאפ, והחגורה שעולה איתך.",
+    "durationSeconds": 90, "video": null, "poster": null, "active": true
+  },
+  {
+    "slug": "plan-the-week", "primary": false, "order": 1,
+    "title": "מתכננים שבוע בוואטסאפ",
+    "description": "כותבים למאמן כמה שעות השבוע ומתי, והוא קובע את המפגשים בשבילך.",
+    "durationSeconds": 60, "video": null, "poster": null, "active": true
+  },
+  {
+    "slug": "my-week", "primary": false, "order": 2,
+    "title": "הלוח שלך: השבוע שלי",
+    "description": "איפה רואים כמה כבר עשית, מה מתוכנן, ומה מחכה לאישור.",
+    "durationSeconds": 50, "video": null, "poster": null, "active": true
+  },
+  {
+    "slug": "belts", "primary": false, "order": 3,
+    "title": "חגורות והישגים",
+    "description": "כל מפגש שקרה באמת מקדם אותך: מלבנה עד שחורה.",
+    "durationSeconds": 45, "video": null, "poster": null, "active": true
+  }
+]

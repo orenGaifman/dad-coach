@@ -1,0 +1,111 @@
+/* The father's screens. */
+
+/* goal */
+.goal { display: grid; gap: var(--dc-sp-4); background: linear-gradient(180deg, var(--dc-surface), var(--dc-navy-050)); }
+.goalHead { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--dc-sp-3); flex-wrap: wrap; }
+.goalLabel { font-size: var(--dc-fs-sm); font-weight: 600; color: var(--dc-ink-500); }
+.goalNumbers { margin-block-start: 2px; }
+.goalDone { font-size: var(--dc-fs-2xl); font-weight: 800; color: var(--dc-navy-800); line-height: 1.1; }
+.goalOf { font-size: var(--dc-fs-lg); color: var(--dc-ink-500); font-weight: 600; }
+.bar {
+  display: flex; block-size: 14px; border-radius: var(--dc-r-pill); overflow: hidden;
+  background: var(--dc-ink-100);
+}
+.barDone { background: var(--dc-navy-800); transition: inline-size .4s ease; }
+.barPlanned {
+  background: repeating-linear-gradient(135deg, var(--dc-gold-500) 0 6px, var(--dc-gold-200) 6px 12px);
+  transition: inline-size .4s ease;
+}
+.legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--dc-sp-2) var(--dc-sp-5); font-size: var(--dc-fs-sm); color: var(--dc-ink-700); }
+.legend li { display: inline-flex; align-items: center; gap: 6px; }
+.keyDone, .keyPlanned, .keyAwaiting { inline-size: 12px; block-size: 12px; border-radius: 3px; display: inline-block; }
+.keyDone { background: var(--dc-navy-800); }
+.keyPlanned { background: var(--dc-gold-500); }
+.keyAwaiting { background: var(--dc-warning-100); border: 1px solid var(--dc-warning-600); }
+.goalLine { color: var(--dc-ink-700); }
+.goalEmpty { display: flex; gap: var(--dc-sp-5); align-items: center; }
+.goalArt { inline-size: 160px; border-radius: var(--dc-r-md); flex: 0 0 auto; }
+
+/* awaiting */
+.awaiting { border-color: var(--dc-gold-200); background: var(--dc-gold-100); }
+
+/* next session */
+.next { display: flex; gap: var(--dc-sp-3); align-items: flex-start; }
+.nextIcon { display: grid; place-items: center; inline-size: 44px; block-size: 44px; border-radius: var(--dc-r-md); background: var(--dc-navy-100); color: var(--dc-navy-800); flex: 0 0 auto; }
+.nextWho { font-size: var(--dc-fs-lg); color: var(--dc-ink-900); }
+.nextWhen { font-weight: 600; color: var(--dc-ink-900); }
+
+/* belt */
+.belt { display: flex; gap: var(--dc-sp-4); align-items: center; }
+.beltArt { inline-size: 120px; block-size: 120px; object-fit: cover; border-radius: var(--dc-r-md); background: var(--dc-navy-800); flex: 0 0 auto; }
+.beltBody { display: grid; gap: var(--dc-sp-2); min-inline-size: 0; flex: 1; }
+.beltBar { block-size: 10px; border-radius: var(--dc-r-pill); background: var(--dc-ink-100); overflow: hidden; }
+.beltBar span { display: block; block-size: 100%; background: linear-gradient(90deg, var(--dc-gold-500), var(--dc-gold-600)); border-radius: var(--dc-r-pill); }
+
+/* sessions */
+.sessions { list-style: none; margin: 0; padding: 0; display: grid; }
+.session { display: flex; gap: var(--dc-sp-3); align-items: flex-start; padding-block: var(--dc-sp-3); border-block-end: 1px solid var(--dc-ink-100); flex-wrap: wrap; }
+.session:last-child { border-block-end: none; }
+.sessionDot { inline-size: 10px; block-size: 10px; border-radius: 50%; margin-block-start: 9px; background: var(--dc-ink-300); flex: 0 0 auto; }
+.dotUPCOMING { background: var(--dc-navy-500); }
+.dotIN_PROGRESS { background: var(--dc-gold-500); }
+.dotAWAITING_CONFIRMATION { background: var(--dc-warning-600); }
+.dotCOMPLETED { background: var(--dc-success-600); }
+.dotCANCELLED, .dotMISSED { background: var(--dc-ink-300); }
+.sessionMain { flex: 1 1 220px; min-inline-size: 0; display: grid; gap: 2px; }
+.sessionTop { display: flex; gap: var(--dc-sp-2); align-items: center; flex-wrap: wrap; }
+.sessionTop strong { color: var(--dc-ink-900); font-size: var(--dc-fs-md); }
+.sessionWhen { color: var(--dc-ink-700); font-size: var(--dc-fs-sm); }
+.sessionNote { color: var(--dc-ink-500); font-size: var(--dc-fs-sm); font-style: italic; }
+.sessionActions { display: flex; gap: var(--dc-sp-2); align-items: center; }
+
+/* hints and prompts */
+.emptyHint { display: grid; gap: var(--dc-sp-2); color: var(--dc-ink-700); }
+.prompt {
+  display: inline-flex; gap: var(--dc-sp-2); align-items: flex-start;
+  background: var(--dc-navy-050); border: 1px dashed var(--dc-navy-200); color: var(--dc-ink-900);
+  border-radius: var(--dc-r-md); padding: var(--dc-sp-2) var(--dc-sp-3); font-size: var(--dc-fs-sm); justify-self: start;
+}
+.prompt svg { color: var(--dc-navy-500); margin-block-start: 4px; flex: 0 0 auto; }
+.prompt q { font-weight: 700; }
+
+/* coach */
+.coach { display: flex; gap: var(--dc-sp-5); align-items: center; background: var(--dc-navy-800); color: var(--dc-navy-100); border-color: var(--dc-navy-800); }
+.coach h2 { color: var(--dc-surface); }
+.coachArt { inline-size: 150px; border-radius: var(--dc-r-md); flex: 0 0 auto; }
+.coachBody { display: grid; gap: var(--dc-sp-3); justify-items: start; }
+
+/* children */
+.kids { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--dc-sp-3); }
+.kid { display: flex; gap: var(--dc-sp-3); align-items: center; }
+.kidAvatar {
+  display: grid; place-items: center; inline-size: 48px; block-size: 48px; border-radius: 50%;
+  background: var(--dc-gold-100); color: var(--dc-gold-700); font-weight: 800; font-size: var(--dc-fs-lg); flex: 0 0 auto;
+}
+.kidBody { flex: 1; min-inline-size: 0; }
+.kidBody strong { display: block; color: var(--dc-ink-900); font-size: var(--dc-fs-lg); }
+
+/* progress */
+.ladder { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--dc-sp-2); }
+.rung { display: grid; justify-items: center; gap: 6px; text-align: center; font-size: var(--dc-fs-xs); color: var(--dc-ink-500); }
+.rung img { inline-size: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--dc-r-md); background: var(--dc-navy-800); }
+.rungLocked img { filter: grayscale(1) brightness(.85); opacity: .45; }
+.rungCurrent img { outline: 3px solid var(--dc-gold-500); outline-offset: 2px; }
+.rungCurrent { color: var(--dc-ink-900); font-weight: 700; }
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--dc-sp-3); }
+.badge { display: grid; gap: 4px; text-align: center; justify-items: center; padding: var(--dc-sp-3); border-radius: var(--dc-r-md); border: 1px solid var(--dc-ink-100); background: var(--dc-surface); }
+.badge img { inline-size: 96px; block-size: 96px; object-fit: cover; border-radius: var(--dc-r-md); }
+.badge strong { color: var(--dc-ink-900); }
+.badgeLocked img { filter: grayscale(1); opacity: .4; }
+.badgeLocked { background: var(--dc-bg); }
+
+@media (max-width: 767px) {
+  .goalEmpty { flex-direction: column; align-items: flex-start; }
+  .goalArt { inline-size: 100%; max-block-size: 160px; object-fit: cover; }
+  .coach { flex-direction: column; align-items: stretch; }
+  .coachArt { inline-size: 100%; max-block-size: 150px; object-fit: cover; }
+  .coachBody a { inline-size: 100%; }
+  .beltArt { inline-size: 88px; block-size: 88px; }
+  .ladder { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .sessionActions { inline-size: 100%; padding-inline-start: 22px; }
+}
