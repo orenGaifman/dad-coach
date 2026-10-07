@@ -40,7 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * The internal Dad Coach admin (/api/admin/**, playbook §40): the team only (a coded 403 for anyone else, checked
  * on every call); a father who does not exist is a 404. Integrations are observability only, with one switch the
- * owner asked for (D-027): voice notes on or off.
+ * owner asked for (D-029): voice notes on or off.
  */
 @RestController
 @RequestMapping("/api/admin")
@@ -205,7 +205,7 @@ public class AdminController {
         return body;
     }
 
-    /** D-027: voice notes on or off for every father - the admin's one switch on this screen. */
+    /** D-029: voice notes on or off for every father - the admin's one switch on this screen. */
     @PutMapping("/integrations/voice-notes")
     public Map<String, Object> setVoiceNotes(@AuthenticationPrincipal DashboardPrincipal p, @RequestBody VoiceNotesRequest request) {
         Areas.requireStaff(p);

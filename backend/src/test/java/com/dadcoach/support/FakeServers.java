@@ -17,7 +17,7 @@ import java.util.function.Function;
 /**
  * One JDK HttpServer standing in for everything Dad Coach calls (no @MockBean, playbook §50): the AI Workflow
  * Platform (turns, outbound recording, tenancy person lifecycle), Meta's Graph API (sends, voice-note media) and
- * ElevenLabs speech to text (D-027). Every request is recorded; the platform's turn answer, the media and the
+ * ElevenLabs speech to text (D-029). Every request is recorded; the platform's turn answer, the media and the
  * transcript are programmable per test.
  */
 public final class FakeServers {
@@ -52,6 +52,7 @@ public final class FakeServers {
     private final AtomicReference<Function<Call, Reply>> tenancy = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> media = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> speechToText = new AtomicReference<>();
+    private final AtomicReference<Function<Call, Reply>> meta = new AtomicReference<>();
 
     private FakeServers() {
         try {
@@ -71,11 +72,12 @@ public final class FakeServers {
 
     public void reset() {
         calls.clear();
+        meta.set(c -> Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"wamid.out." + sent.incrementAndGet() + "\"}]}"));
         turn.set(c -> Reply.json(turnReply("שלום! מה שלומך?", "GENERATED")));
         tenancy.set(c -> c.method().equals("DELETE")
                 ? Reply.json("{\"outcome\":\"DELETED\",\"workflowInstances\":1,\"messages\":3}")
                 : Reply.json("{\"created\":1,\"conflicts\":[]}"));
-        // Meta media (D-027): GET /<version>/<media-id> names the file, GET /media-files/<media-id> is the file
+        // Meta media (D-029): GET /<version>/<media-id> names the file, GET /media-files/<media-id> is the file
         media.set(c -> c.path().startsWith("/media-files/")
                 ? Reply.bytes(new byte[] {79, 103, 103, 83, 1, 2, 3}, "audio/ogg")
                 : Reply.json("{\"url\":\"" + baseUrl() + "/media-files/" + c.path().substring(c.path().lastIndexOf('/') + 1)
@@ -117,6 +119,11 @@ public final class FakeServers {
                 && (c.path().startsWith("/media-files/") || c.path().matches("/v[0-9.]+/[^/]+"))).toList();
     }
 
+    /** How Meta's Graph API answers a send (default: accepted with a new wamid). */
+    public void onMetaSend(Function<Call, Reply> answer) {
+        meta.set(answer);
+    }
+
     public List<Call> calls(String pathPrefix) {
         return calls.stream().filter(c -> c.path().startsWith(pathPrefix)).toList();
     }
@@ -152,7 +159,7 @@ public final class FakeServers {
         } else if (call.method().equals("GET") && (path.startsWith("/media-files/") || path.matches("/v[0-9.]+/[^/]+"))) {
             reply = media.get().apply(call);
         } else if (path.endsWith("/messages")) {
-            reply = Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"wamid.out." + sent.incrementAndGet() + "\"}]}");
+            reply = meta.get().apply(call);
         } else {
             reply = new Reply(404, "{}");
         }

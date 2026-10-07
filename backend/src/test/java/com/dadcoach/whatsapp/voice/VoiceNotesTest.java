@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** D-027: when a voice note is heard, and what the admin sees when one is not. */
+/** D-029: when a voice note is heard, and what the admin sees when one is not. */
 class VoiceNotesTest {
 
     private VoiceNoteSettings settings;

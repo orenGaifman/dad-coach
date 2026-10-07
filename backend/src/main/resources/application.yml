@@ -71,7 +71,7 @@ dad-coach:
     webhook-secret: ${WHATSAPP_WEBHOOK_SECRET:}
     # true = a turn runs on the webhook thread (tests only); production answers Meta first.
     inbound-sync: false
-  # D-027 (Big Boss D-176): a WhatsApp voice note is transcribed by ElevenLabs and read like a typed message. Turned
+  # D-029 (Big Boss D-176): a WhatsApp voice note is transcribed by ElevenLabs and read like a typed message. Turned
   # on and off in the admin's integrations screen (on unless the admin turned it off); without a key it stays off.
   voice-notes:
     elevenlabs-api-key: ${ELEVENLABS_API_KEY:}

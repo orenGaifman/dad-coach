@@ -29,7 +29,8 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
  * keeps every other path). Matched on real HTTP paths:
  * <ol>
  *   <li>{@code /api/ops/**} - the operator key (DADCOACH_OPS_API_KEY); unset = closed.</li>
- *   <li>{@code /api/auth/request-link}, {@code /api/auth/consume-link} - how a session begins: open.</li>
+ *   <li>{@code /api/auth/request-link}, {@code /api/auth/consume-link}, {@code /api/auth/sign-in-info} - how a
+ *       session begins: open.</li>
  *   <li>{@code /api/auth/**}, {@code /api/me}, {@code /api/father/**}, {@code /api/admin/**} - the session cookie +
  *       CSRF double submit (cookie DADCOACH_XSRF, header X-XSRF-TOKEN). Area checks (father / staff) are in the
  *       controllers, so a wrong area is a coded 403 and someone else's object a 404.</li>
@@ -57,7 +58,7 @@ public class DashboardSecurityConfig {
     @Bean
     @Order(2)
     SecurityFilterChain dashboardPreAuth(HttpSecurity http) throws Exception {
-        http.securityMatcher("/api/auth/request-link", "/api/auth/consume-link")
+        http.securityMatcher("/api/auth/request-link", "/api/auth/consume-link", "/api/auth/sign-in-info")
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

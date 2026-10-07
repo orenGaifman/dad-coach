@@ -137,6 +137,7 @@ public class AdminQueries {
     public List<Map<String, Object>> loginLinksOf(long fatherId, int limit) {
         return jdbc.queryForList("""
                 SELECT created_at AS "createdAt", expires_at AS "expiresAt", used_at AS "usedAt",
+                       last_used_at AS "lastUsedAt", use_count AS "useCount", revoked_at AS "revokedAt",
                        delivery_status AS "deliveryStatus", delivery_error AS "deliveryError"
                 FROM login_link WHERE father_id = ? ORDER BY created_at DESC LIMIT ?""", fatherId, limit);
     }

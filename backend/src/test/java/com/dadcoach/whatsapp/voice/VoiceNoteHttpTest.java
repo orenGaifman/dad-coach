@@ -16,7 +16,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
 
-/** D-027: the requests to Meta (media) and ElevenLabs (speech to text), against a local HTTP server. */
+/** D-029: the requests to Meta (media) and ElevenLabs (speech to text), against a local HTTP server. */
 class VoiceNoteHttpTest {
 
     private HttpServer server;

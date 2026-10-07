@@ -16,7 +16,7 @@ export const useDeletions = () => useQuery({
 })
 export const useAdminTraining = () => useQuery({ queryKey: ['admin', 'training'], queryFn: () => api<AdminTraining>('/admin/training') })
 
-/** D-027: voice notes on or off for every father; the integrations screen shows the answer at once. */
+/** D-029: voice notes on or off for every father; the integrations screen shows the answer at once. */
 export function useSetVoiceNotes() {
   const qc = useQueryClient()
   return useMutation({

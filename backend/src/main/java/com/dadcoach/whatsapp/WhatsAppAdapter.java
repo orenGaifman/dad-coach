@@ -115,7 +115,18 @@ public class WhatsAppAdapter implements ChannelAdapter {
 
         try {
             Map<String, Object> payload = formatter.format(message, channelIdentity);
-            SendResponse response = apiClient.sendMessage(payload);
+            SendResponse response;
+            try {
+                response = apiClient.sendMessage(payload);
+            } catch (WhatsAppApiException refused) {
+                // A URL button Meta refuses for good (a 4xx: shape, policy) goes out as text with the link on its
+                // own line (D-027); a passing failure (5xx) stays a failure, as for every other message.
+                if (message.linkButton() == null || refused.getHttpStatus() >= 500) {
+                    throw refused;
+                }
+                log.warn("Link button refused (HTTP {}), sending the link as text", refused.getHttpStatus());
+                response = apiClient.sendMessage(formatter.format(message.withLinkAsText(), channelIdentity));
+            }
 
             if (response.success() && response.messageId() != null) {
                 onDeliverySuccess();

@@ -1,5 +1,5 @@
 {
-  "_comment": "Mirror of the Dad Coach tools and context providers in the platform catalog (platform Flyway V18, V38, V62, V69, V73 and the weekly_plan_context provider created through the admin API on 2026-09-28 - see TASKS DC-C05 for the migration that makes it reproducible). Every key here has a handler in Dad Coach: tools in api/tools/ToolDispatcher (POST /api/tools/{key}), providers in api/context/ContextProviderRouter (POST /api/context/{key}). The manifest tests keep the YAML and this list in step.",
+  "_comment": "Mirror of the Dad Coach tools and context providers in the platform catalog (platform Flyway V18, V38, V62, V69, V73, V115 (dad_dashboard_link) and the weekly_plan_context provider created through the admin API on 2026-09-28 - see TASKS DC-C05 for the migration that makes it reproducible). Every key here has a handler in Dad Coach: tools in api/tools/ToolDispatcher (POST /api/tools/{key}), providers in api/context/ContextProviderRouter (POST /api/context/{key}). The manifest tests keep the YAML and this list in step.",
   "tools": [
     {"key": "save_user_profile", "sideEffect": true},
     {"key": "add_child", "sideEffect": true},
@@ -9,7 +9,8 @@
     {"key": "complete_quality_time", "sideEffect": true},
     {"key": "show_available_slots", "sideEffect": false},
     {"key": "set_weekly_goal", "sideEffect": true},
-    {"key": "get_activity_ideas", "sideEffect": false}
+    {"key": "get_activity_ideas", "sideEffect": false},
+    {"key": "dad_dashboard_link", "sideEffect": true}
   ],
   "providers": [
     {"key": "family_context"},

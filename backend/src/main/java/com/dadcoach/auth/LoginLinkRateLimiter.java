@@ -10,7 +10,8 @@ import java.util.concurrent.ConcurrentMap;
 import org.springframework.stereotype.Component;
 
 /**
- * Login links are real WhatsApp messages to real people. At most {@link #PER_SUBJECT} links per person per
+ * Sign-in links are real WhatsApp messages to real people. A link is reusable (D-027), so a person rarely needs a
+ * second one: the budget is gentle and never blocks normal use. At most {@link #PER_SUBJECT} links per person per
  * {@link #WINDOW} - checked only after the phone resolved, so a rate-limited person and an unknown number stay
  * indistinguishable - and at most {@link #PER_CLIENT} requests per client address per window, counted before
  * anything is looked up (the same for every number). In memory: one instance.
@@ -18,7 +19,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class LoginLinkRateLimiter {
 
-    static final int PER_SUBJECT = 3;
+    static final int PER_SUBJECT = 5;
     static final int PER_CLIENT = 20;
     static final Duration WINDOW = Duration.ofMinutes(15);
 

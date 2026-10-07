@@ -1,5 +1,5 @@
 /**
- * D-027 (Big Boss D-176): why the last voice note was not heard, as the owner can act on it. The backend sends a
+ * D-029 (Big Boss D-176): why the last voice note was not heard, as the owner can act on it. The backend sends a
  * safe code only (never the key, the audio or the words); a code this table does not know is shown as it came.
  */
 export function explainVoiceNoteError(code: string): string {

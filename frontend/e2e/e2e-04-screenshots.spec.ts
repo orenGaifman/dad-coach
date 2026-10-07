@@ -46,9 +46,10 @@ for (const size of SIZES) {
 
     await page.goto('/login')
     await shoot(page, dir, '01-login')
+    await page.getByRole('button', { name: 'לשלוח את הכפתור לפי מספר טלפון' }).click()
     await page.getByLabel('מספר טלפון').fill('050-1234567')
-    await page.getByRole('button', { name: 'שלחו לי קישור כניסה' }).click()
-    await expect(page.getByRole('heading', { name: 'הקישור בדרך אליך' })).toBeVisible()
+    await page.getByRole('button', { name: 'שלחו לי כפתור כניסה' }).click()
+    await expect(page.getByRole('heading', { name: 'הכפתור בדרך אליך' })).toBeVisible()
     await shoot(page, dir, '02-login-sent')
 
     await signIn(page, yoav.phone)

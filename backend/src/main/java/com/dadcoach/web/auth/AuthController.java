@@ -18,13 +18,14 @@ import java.util.Map;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** D-005 magic-link sign-in: a short-lived single-use link becomes a long-lived, revocable server session. */
+/** D-005 sign-in: a reusable WhatsApp link (D-027) opens a long-lived, revocable server session on each use. */
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -52,6 +53,14 @@ public class AuthController {
         this.properties = properties;
     }
 
+    /** What the sign-in page shows before anything is asked (D-027): the coach's WhatsApp number, to write "דשבורד". */
+    @GetMapping("/sign-in-info")
+    public Map<String, Object> signInInfo() {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("whatsappNumber", publicNumber());
+        return body;
+    }
+
     /**
      * Always 200 with the same body, whatever happened - the answer never reveals whether a number is registered.
      * The body carries Dad Coach's public WhatsApp number: whoever got no link writes to it first (a link outside
@@ -62,16 +71,20 @@ public class AuthController {
         links.requestLink(request.phone(), request.next(), clientAddress(http));
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("status", "SENT_IF_REGISTERED");
-        String number = properties.getWhatsappPublicNumber();
-        body.put("whatsappNumber", number == null || number.isBlank() ? null : number.strip());
+        body.put("whatsappNumber", publicNumber());
         return body;
+    }
+
+    private String publicNumber() {
+        String number = properties.getWhatsappPublicNumber();
+        return number == null || number.isBlank() ? null : number.strip();
     }
 
     @PostMapping("/consume-link")
     public MeResponse consumeLink(@Valid @RequestBody ConsumeLinkRequest request, HttpServletRequest http,
                                   HttpServletResponse response) {
-        var subject = links.consume(request.token()).orElseThrow(() ->
-                new WebException(HttpStatus.UNAUTHORIZED, "INVALID_LOGIN_LINK", "invalid, expired or used link"));
+        var subject = links.use(request.token()).orElseThrow(() ->
+                new WebException(HttpStatus.UNAUTHORIZED, "INVALID_LOGIN_LINK", "invalid, expired or revoked link"));
         DashboardPrincipal principal = policy.resolve(null, subject).orElseThrow(() ->
                 new WebException(HttpStatus.UNAUTHORIZED, "INVALID_LOGIN_LINK", "this account cannot sign in"));
         // One browser, one session: whatever it was signed in as before is revoked, not orphaned.

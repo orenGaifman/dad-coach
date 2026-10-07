@@ -10,7 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 
-/** D-027: the admin's voice-notes card - on by default (no row), off and on again, the team only, never the key. */
+/** D-029: the admin's voice-notes card - on by default (no row), off and on again, the team only, never the key. */
 class VoiceNotesAdminTest extends AbstractWebIntegrationTest {
 
     private String setting() {

@@ -14,19 +14,27 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Magic-link sign-in (D-005, Tair's LoginLinkService). {@link #requestLink} never reveals whether a phone is
- * registered: unknown, invalid, deactivated, deleted and rate-limited all end the same silent way. {@link #consume}
- * atomically validates and spends the token. The link carries the token in the URL fragment, so it never reaches a
- * server log.
+ * Sign-in links (D-005, reusable since D-027). A link is a button on WhatsApp that always works: valid for
+ * {@link #LINK_TTL}, not spent on use, ended only by expiry or revocation ("log out everywhere", deactivation,
+ * deletion - {@link SessionService}). Every use re-checks that its person may still sign in and opens a normal
+ * dashboard session. Only the token's hash is stored, and the link carries the token in the URL fragment, so it never
+ * reaches a server log.
+ *
+ * <p>{@link #requestLink} (the login page) never reveals whether a phone is registered: unknown, invalid,
+ * deactivated, deleted and rate-limited all end the same silent way. {@link #sendTo} is the coach's
+ * {@code dad_dashboard_link} tool: the father is known, so it says what happened.
  */
 @Service
 public class LoginLinkService {
 
     private static final Logger log = LoggerFactory.getLogger(LoginLinkService.class);
-    public static final Duration TOKEN_TTL = Duration.ofMinutes(15);
+    public static final Duration LINK_TTL = Duration.ofDays(365);
 
     public record IssuedLink(String url, Instant expiresAt) {
     }
+
+    /** What {@link #sendTo} did: SENT, RATE_LIMITED (a button went out moments ago), NOT_ALLOWED, FAILED. */
+    public enum SendOutcome { SENT, RATE_LIMITED, NOT_ALLOWED, FAILED }
 
     private final LoginLinkRepository links;
     private final SignInPolicy policy;
@@ -65,13 +73,29 @@ public class LoginLinkService {
             log.info("auth.login_link.rate_limited scope=person");
             return;
         }
-        String raw = TokenHashing.newRawToken();
-        LoginLink link = save(subject.get(), raw);
-        DeliveryResult result = delivery.send(subject.get(), phone.get(), url(raw, next));
-        link.recordDelivery(result.isSuccessful(), result.failureReason());
-        links.save(link);
+        DeliveryResult result = issueAndSend(subject.get(), phone.get(), next);
         log.info("auth.login_link.requested delivered={} reason={}", result.isSuccessful(),
                 result.isSuccessful() ? "" : result.failureReason());
+    }
+
+    /**
+     * The coach's dashboard button (D-027): a link for the person who owns this WhatsApp number - father, team member
+     * or both - sent to him as a button. The token never leaves Dad Coach except inside that WhatsApp message.
+     */
+    @Transactional
+    public SendOutcome sendTo(String e164) {
+        Optional<SignInSubject> subject = policy.forPhone(e164);
+        if (subject.isEmpty()) {
+            return SendOutcome.NOT_ALLOWED;
+        }
+        if (!rateLimiter.trySubject(subject.get())) {
+            log.info("auth.login_link.rate_limited scope=person source=coach");
+            return SendOutcome.RATE_LIMITED;
+        }
+        DeliveryResult result = issueAndSend(subject.get(), e164, null);
+        log.info("auth.login_link.sent source=coach delivered={} reason={}", result.isSuccessful(),
+                result.isSuccessful() ? "" : result.failureReason());
+        return result.isSuccessful() ? SendOutcome.SENT : SendOutcome.FAILED;
     }
 
     /** A link for someone who may sign in, without sending it (the ops API: the owner, the lab, e2e tests). */
@@ -84,22 +108,31 @@ public class LoginLinkService {
         });
     }
 
-    /** Spends the token and returns whose it was; the caller re-checks the sign-in policy. */
+    /** Counts one use of a valid link and returns whose it is; the caller re-checks the sign-in policy. */
     @Transactional
-    public Optional<SignInSubject> consume(String rawToken) {
+    public Optional<SignInSubject> use(String rawToken) {
         if (rawToken == null || rawToken.isBlank()) {
             return Optional.empty();
         }
         String hash = TokenHashing.sha256Hex(rawToken);
-        if (links.consumeIfValid(hash, clock.instant()) == 0) {
+        if (links.useIfValid(hash, clock.instant()) == 0) {
             return Optional.empty();
         }
         return links.findByTokenHash(hash).map(l -> new SignInSubject(l.getFatherId(), l.getStaffUserId()));
     }
 
+    private DeliveryResult issueAndSend(SignInSubject subject, String phone, String next) {
+        String raw = TokenHashing.newRawToken();
+        LoginLink link = save(subject, raw);
+        DeliveryResult result = delivery.send(subject, phone, url(raw, next));
+        link.recordDelivery(result.isSuccessful(), result.failureReason());
+        links.save(link);
+        return result;
+    }
+
     private LoginLink save(SignInSubject subject, String raw) {
         Instant now = clock.instant();
-        return links.save(new LoginLink(subject, TokenHashing.sha256Hex(raw), now, now.plus(TOKEN_TTL)));
+        return links.save(new LoginLink(subject, TokenHashing.sha256Hex(raw), now, now.plus(LINK_TTL)));
     }
 
     private String url(String raw, String next) {

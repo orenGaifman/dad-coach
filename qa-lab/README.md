@@ -36,7 +36,7 @@ covered week, s4 stale timer after a cancellation, s5 goal locked, s6 returning 
 Driver `qa.py`: `wa(phone, text)`, `fire(phone, transition_key | 'daily')`, `timers(phone)`, `state_of(phone)`,
 `psql(sql)`, `fresh_phone()` (+1999…).
 
-Voice notes (D-027): `export ELEVENLABS_API_KEY=…` before `./run-backend.sh` (real ElevenLabs, shared owner credits -
+Voice notes (D-029): `export ELEVENLABS_API_KEY=…` before `./run-backend.sh` (real ElevenLabs, shared owner credits -
 keep it short), then `qa.voice(phone, "note.ogg")`; fake_meta.py serves the file as Meta media from `.run/media/`.
 A Hebrew sample: `say -v Carmit -o n.aiff "..." && ffmpeg -i n.aiff -c:a libopus -b:a 16k -ar 16000 -ac 1 note.ogg`.
 

@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
-/** D-005 sign-in: links single use and short-lived, sessions revocable, no enumeration, rate limits, CSRF. */
+/** D-005 sign-in: links reusable for a year and revocable (D-027), sessions revocable, no enumeration, rate limits, CSRF. */
 class AuthFlowTest extends AbstractWebIntegrationTest {
 
     @Test
@@ -26,8 +26,8 @@ class AuthFlowTest extends AbstractWebIntegrationTest {
     }
 
     @Test
-    @DisplayName("a link signs in once: HttpOnly SameSite cookie, /api/me answers; the same link again is refused")
-    void linkIsSingleUse() throws Exception {
+    @DisplayName("a link signs in, and again (D-027): HttpOnly SameSite cookie, /api/me answers, each use counted")
+    void linkIsReusable() throws Exception {
         long father = newFather("יואב");
         String token = issueToken(phoneOf(father));
         MvcResult first = mvc.perform(post("/api/auth/consume-link").contentType(MediaType.APPLICATION_JSON)
@@ -42,12 +42,40 @@ class AuthFlowTest extends AbstractWebIntegrationTest {
         Cookie session = first.getResponse().getCookie("DADCOACH_SESSION");
         mvc.perform(get("/api/me").cookie(session)).andExpect(status().isOk()).andExpect(jsonPath("$.fatherId").value(father));
 
-        mvc.perform(post("/api/auth/consume-link").contentType(MediaType.APPLICATION_JSON).content("{\"token\":\"" + token + "\"}"))
-                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("INVALID_LOGIN_LINK"));
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM login_link WHERE father_id = ? AND used_at IS NOT NULL", Long.class, father))
-                .isEqualTo(1);
+        clock.advance(java.time.Duration.ofDays(200));
+        MvcResult again = mvc.perform(post("/api/auth/consume-link").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"" + token + "\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.fatherId").value(father)).andReturn();
+        mvc.perform(get("/api/me").cookie(again.getResponse().getCookie("DADCOACH_SESSION"))).andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT use_count FROM login_link WHERE father_id = ?", Integer.class, father)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT expires_at - created_at FROM login_link WHERE father_id = ?", String.class, father))
+                .as("valid for a year").startsWith("365 days");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM login_link WHERE token_hash = ?", Long.class, token))
                 .as("only the hash is stored").isZero();
+    }
+
+    @Test
+    @DisplayName("logout everywhere revokes his links too; a deactivated father's link stops working at once")
+    void linksAreRevoked() throws Exception {
+        long father = newFather("נדב");
+        String token = issueToken(phoneOf(father));
+        Browser browser = signInFather(father);
+        mvc.perform(browser.on(post("/api/auth/logout-all"))).andExpect(status().isNoContent());
+        consume(token).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("INVALID_LOGIN_LINK"));
+        assertThat(jdbc.queryForObject("SELECT revoked_reason FROM login_link WHERE token_hash = ?", String.class,
+                com.dadcoach.auth.TokenHashing.sha256Hex(token))).isEqualTo("LOGOUT_ALL");
+
+        long other = newFather("עידו");
+        String otherToken = issueToken(phoneOf(other));
+        jdbc.update("UPDATE father SET status = 'PAUSED' WHERE id = ?", other);
+        consume(otherToken).andExpect(status().isUnauthorized());
+        jdbc.update("UPDATE father SET status = 'ACTIVE' WHERE id = ?", other);
+        consume(otherToken).andExpect(status().isOk());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions consume(String token) throws Exception {
+        return mvc.perform(post("/api/auth/consume-link").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"" + token + "\"}"));
     }
 
     @Test
@@ -75,14 +103,14 @@ class AuthFlowTest extends AbstractWebIntegrationTest {
     }
 
     @Test
-    @DisplayName("at most 3 links per person per 15 minutes - silently")
+    @DisplayName("at most 5 links per person per 15 minutes - silently")
     void rateLimited() throws Exception {
         long father = newFather("עמית");
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 7; i++) {
             mvc.perform(post("/api/auth/request-link").contentType(MediaType.APPLICATION_JSON)
                     .content("{\"phone\":\"" + phoneOf(father) + "\"}")).andExpect(status().isOk());
         }
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM login_link WHERE father_id = ?", Long.class, father)).isEqualTo(3);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM login_link WHERE father_id = ?", Long.class, father)).isEqualTo(5);
     }
 
     @Test

@@ -3,7 +3,7 @@ package com.dadcoach.whatsapp.voice;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Backs {@code dad-coach.voice-notes.*} (D-027, as Big Boss D-176). Without an ElevenLabs key voice notes stay off,
+ * Backs {@code dad-coach.voice-notes.*} (D-029, as Big Boss D-176). Without an ElevenLabs key voice notes stay off,
  * whatever the admin chose.
  */
 @ConfigurationProperties(prefix = "dad-coach.voice-notes")

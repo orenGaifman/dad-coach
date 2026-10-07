@@ -30,7 +30,7 @@ stops, showing the difference, when the platform's workflow is no longer that.
 The first run against a platform records its current workflows as the baseline.
 
 The tool/context-provider catalog itself is not provisioned here - it ships as
-platform Flyway migrations (V18, V38, V62, V69 + the weekly_plan_context provider); provisioning/catalog/
+platform Flyway migrations (V18, V38, V62, V69, V114 weekly_plan_context, V115 dad_dashboard_link); provisioning/catalog/
 dad-coach-catalog.json mirrors it so manifest tests catch a missing key.
 
 Usage:

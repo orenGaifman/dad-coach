@@ -32,7 +32,7 @@ export async function ensureAdmin() {
   await ops('/api/ops/bootstrap-admin', { phone: ADMIN_PHONE, name: ADMIN_NAME })
 }
 
-/** Signs the page in through a real one-time login link (issued by the ops API, opened like the WhatsApp link). */
+/** Signs the page in through a real login link (issued by the ops API, opened like the WhatsApp button). */
 export async function signIn(page: Page, phone: string) {
   const { loginUrl } = await ops<{ loginUrl: string }>('/api/ops/login-links', { phone })
   const u = new URL(loginUrl)

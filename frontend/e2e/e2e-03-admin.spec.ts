@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { ADMIN_PHONE, ensureAdmin, seedYoav, signIn, sql } from './fixtures'
+import { ADMIN_PHONE, ensureAdmin, ops, seedYoav, signIn, sql } from './fixtures'
 
 test.beforeAll(ensureAdmin)
 
@@ -7,6 +7,23 @@ test('a father cannot open the admin area', async ({ page }) => {
   const yoav = seedYoav()
   await signIn(page, yoav.phone)
   await page.goto('/admin')
+  await expect(page).toHaveURL(/\/home$/)
+})
+
+test('a father on the team lands on his own page; the admin is in the account menu, and back (D-028)', async ({ page }) => {
+  const yoav = seedYoav()
+  await ops('/api/ops/bootstrap-admin', { phone: yoav.phone, name: 'יואב' })
+  await signIn(page, yoav.phone)
+  await expect(page).toHaveURL(/\/home$/)
+  await expect(page.getByRole('heading', { name: 'שלום, יואב' })).toBeVisible()
+  await page.getByRole('button', { name: /תפריט חשבון/ }).click()
+  await page.getByRole('menuitem', { name: 'ניהול דאד קואץ׳' }).click()
+  await expect(page).toHaveURL(/\/admin$/)
+  await expect(page.getByRole('heading', { name: 'סקירה' })).toBeVisible()
+  await page.getByRole('button', { name: /תפריט חשבון/ }).click()
+  await page.getByRole('menuitem', { name: 'הדף שלי' }).click()
+  await expect(page).toHaveURL(/\/home$/)
+  await page.goto('/')
   await expect(page).toHaveURL(/\/home$/)
 })
 

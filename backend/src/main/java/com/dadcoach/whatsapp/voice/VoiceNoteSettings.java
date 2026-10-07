@@ -4,7 +4,7 @@ import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-/** D-027: the admin's on/off for voice notes, for the whole product. On until the admin turns it off (no row = on). */
+/** D-029: the admin's on/off for voice notes, for the whole product. On until the admin turns it off (no row = on). */
 @Repository
 public class VoiceNoteSettings {
 

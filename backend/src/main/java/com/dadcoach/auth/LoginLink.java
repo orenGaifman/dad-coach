@@ -7,7 +7,10 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-/** A one-time, short-lived sign-in link; consumed atomically ({@link LoginLinkRepository#consumeIfValid}). */
+/**
+ * A sign-in link (D-027): reusable until it expires ({@link LoginLinkService#LINK_TTL}) or is revoked; each use is
+ * counted atomically ({@link LoginLinkRepository#useIfValid}) and opens a normal dashboard session.
+ */
 @Entity
 @Table(name = "login_link")
 public class LoginLink {
@@ -37,6 +40,18 @@ public class LoginLink {
     @Column(name = "used_at")
     private Instant usedAt;
 
+    @Column(name = "last_used_at")
+    private Instant lastUsedAt;
+
+    @Column(name = "use_count", nullable = false)
+    private int useCount;
+
+    @Column(name = "revoked_at")
+    private Instant revokedAt;
+
+    @Column(name = "revoked_reason", length = 40)
+    private String revokedReason;
+
     @Column(name = "delivery_status", nullable = false, length = 20)
     private String deliveryStatus = ISSUED;
 
@@ -61,6 +76,9 @@ public class LoginLink {
     public Instant getExpiresAt() { return expiresAt; }
     public String getDeliveryStatus() { return deliveryStatus; }
     public String getDeliveryError() { return deliveryError; }
+    public Instant getLastUsedAt() { return lastUsedAt; }
+    public int getUseCount() { return useCount; }
+    public Instant getRevokedAt() { return revokedAt; }
 
     public void recordDelivery(boolean sent, String error) {
         this.deliveryStatus = sent ? SENT : FAILED;

@@ -85,7 +85,7 @@ export function FatherDetailPage() {
             <tbody>
               {d.deliveries.map((r, i) => <tr key={`d${i}`}><td>{dateTime(r.at)}</td><td>{DELIVERY_KIND[r.kind]} <span className="ltr">{r.what ?? ''}</span></td>
                 <td className={r.status === 'FAILED' ? styles.bad : styles.ok}>{DELIVERY_STATUS[r.status] ?? r.status}</td><td>{reasonLabel(r.reason)}</td></tr>)}
-              {d.loginLinks.map((l, i) => <tr key={`l${i}`}><td>{dateTime(l.createdAt)}</td><td>קישור כניסה{l.usedAt ? ' (נוצל)' : ''}</td>
+              {d.loginLinks.map((l, i) => <tr key={`l${i}`}><td>{dateTime(l.createdAt)}</td><td>{linkLabel(l)}</td>
                 <td className={l.deliveryStatus === 'FAILED' ? styles.bad : styles.ok}>{l.deliveryStatus}</td><td>{reasonLabel(l.deliveryError)}</td></tr>)}
             </tbody>
           </table></div>
@@ -219,3 +219,9 @@ function Lifecycle({ d }: { d: FatherDetail }) {
   )
 }
 
+/** A sign-in link is reusable (D-027): how often it was used, and whether it was revoked. */
+function linkLabel(l: FatherDetail['loginLinks'][number]): string {
+  if (l.revokedAt) return 'כפתור כניסה (בוטל)'
+  if (l.useCount > 0) return `כפתור כניסה (נוצל ${l.useCount === 1 ? 'פעם אחת' : `${l.useCount} פעמים`})`
+  return 'כפתור כניסה'
+}

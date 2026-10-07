@@ -1,15 +1,17 @@
 import { expect, test } from '@playwright/test'
-import { ADMIN_PHONE, ensureAdmin, seedYoav, signIn, testPhone } from './fixtures'
+import { ADMIN_PHONE, BACKEND, ensureAdmin, seedYoav, signIn, testPhone } from './fixtures'
 
 test.beforeAll(ensureAdmin)
 
-test('the login page asks for a phone and answers the same for anyone', async ({ page }) => {
+test('the login page sends him to the coach for a button; the phone form is the second way', async ({ page }) => {
   await page.goto('/login')
-  await expect(page.getByRole('heading', { name: 'כניסה ללוח שלך' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'כניסה לדף שלך' })).toBeVisible()
+  await expect(page.getByRole('link', { name: /לכתוב "דשבורד" למאמן/ })).toHaveAttribute('href', /wa\.me\/.*text=/)
+  await expect(page.getByText('10 דקות')).toHaveCount(0)
+  await page.getByRole('button', { name: 'לשלוח את הכפתור לפי מספר טלפון' }).click()
   await page.getByLabel('מספר טלפון').fill(testPhone())
-  await page.getByRole('button', { name: 'שלחו לי קישור כניסה' }).click()
-  await expect(page.getByRole('heading', { name: 'הקישור בדרך אליך' })).toBeVisible()
-  await expect(page.getByText('לא הגיע? כתוב לנו בוואטסאפ')).toBeVisible()
+  await page.getByRole('button', { name: 'שלחו לי כפתור כניסה' }).click()
+  await expect(page.getByRole('heading', { name: 'הכפתור בדרך אליך' })).toBeVisible()
   expect(page.url()).not.toContain('phone')
 })
 
@@ -26,9 +28,10 @@ test('a login link signs the father in to his week; logout signs him out', async
   await expect(page).toHaveURL(/\/login\?next=%2Fhome/)
 })
 
-test('a used link does not work twice', async ({ page, request }) => {
-  const r = await request.post('http://localhost:8491/api/ops/login-links', {
-    headers: { 'X-API-Key': process.env.E2E_OPS_KEY ?? 'local-ops-key-0123456789abcdef' }, data: { phone: ADMIN_PHONE },
+test('the button keeps working: the same link signs in again after the browser forgets the session', async ({ page }) => {
+  const r = await fetch(BACKEND + '/api/ops/login-links', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-Key': process.env.E2E_OPS_KEY ?? 'local-ops-key-0123456789abcdef' },
+    body: JSON.stringify({ phone: ADMIN_PHONE }),
   })
   const { loginUrl } = await r.json()
   const u = new URL(loginUrl)
@@ -36,5 +39,14 @@ test('a used link does not work twice', async ({ page, request }) => {
   await expect(page).toHaveURL(/\/admin$/)
   await page.context().clearCookies()
   await page.goto(u.pathname + u.hash)
-  await expect(page.getByRole('heading', { name: 'לא הצלחתי להכניס אותך' })).toBeVisible()
+  await expect(page).toHaveURL(/\/admin$/)
+})
+
+test('a button that no longer works: signed in here -> his page; otherwise how to get a new one', async ({ page }) => {
+  await page.goto('/auth/consume#token=not-a-real-token')
+  await expect(page.getByRole('heading', { name: 'הכפתור הזה כבר לא פעיל' })).toBeVisible()
+  const yoav = seedYoav()
+  await signIn(page, yoav.phone)
+  await page.goto('/auth/consume#token=not-a-real-token')
+  await expect(page).toHaveURL(/\/home$/)
 })

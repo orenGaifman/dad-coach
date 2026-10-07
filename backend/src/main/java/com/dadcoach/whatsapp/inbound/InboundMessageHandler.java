@@ -39,7 +39,7 @@ import org.springframework.stereotype.Component;
  * One inbound WhatsApp message, in order (playbook §34):
  * <ol>
  *   <li>a DELETED father, or a number whose platform deletion is not confirmed yet: dropped, nothing reaches the AI;</li>
- *   <li>a voice note, when voice notes are on (D-027): heard (ElevenLabs) and from here on read like the same words
+ *   <li>a voice note, when voice notes are on (D-029): heard (ElevenLabs) and from here on read like the same words
  *       typed - the reply opens with "🎙️ שמעתי: ..."; a note too long, silent or not heard gets its own line, no AI
  *       turn;</li>
  *   <li>"DELETE MY DATA": the deletion request, handled here, never by the AI;</li>
@@ -102,7 +102,7 @@ public class InboundMessageHandler {
             return;
         }
         String text = in.textContent();
-        // D-027: a voice note is heard, and from here on read like the same words typed - except a deletion request.
+        // D-029: a voice note is heard, and from here on read like the same words typed - except a deletion request.
         String heard = null;
         boolean admitted = false;
         if (in.messageType() == MessageType.AUDIO && in.mediaId() != null && voiceNotes.active()) {
@@ -164,7 +164,7 @@ public class InboundMessageHandler {
         runTurn(in, text, heard, father, receivedAt, started);
     }
 
-    /** @param heard the words of the voice note this message was (D-027), or null for typed text */
+    /** @param heard the words of the voice note this message was (D-029), or null for typed text */
     private void runTurn(InboundMessageDto in, String text, String heard, Optional<Father> father, Instant receivedAt,
                          Instant started) {
         String phone = in.fatherChannelIdentity();

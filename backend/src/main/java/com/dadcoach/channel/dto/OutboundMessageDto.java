@@ -22,6 +22,7 @@ import java.util.UUID;
  * @param priority           IMMEDIATE (conversation reply) or SCHEDULED (proactive notification)
  * @param requestedAt        timestamp when the Conversation_Engine requested delivery
  * @param buttons            reply buttons of an INTERACTIVE message (up to 3, every id starts with "dc:"); empty otherwise
+ * @param linkButton         the one URL button of an INTERACTIVE message (WhatsApp "cta_url"); null otherwise
  */
 public record OutboundMessageDto(
     UUID messageId,
@@ -35,7 +36,8 @@ public record OutboundMessageDto(
     Map<String, String> templateParameters,
     MessagePriority priority,
     Instant requestedAt,
-    List<ReplyButton> buttons
+    List<ReplyButton> buttons,
+    LinkButton linkButton
 ) {
 
     public OutboundMessageDto {
@@ -44,12 +46,54 @@ public record OutboundMessageDto(
 
     public OutboundMessageDto(UUID messageId, UUID fatherId, String channel, MessageType messageType, String textContent,
                               UUID mediaReference, boolean isTemplate, String templateName,
+                              Map<String, String> templateParameters, MessagePriority priority, Instant requestedAt,
+                              List<ReplyButton> buttons) {
+        this(messageId, fatherId, channel, messageType, textContent, mediaReference, isTemplate, templateName,
+                templateParameters, priority, requestedAt, buttons, null);
+    }
+
+    public OutboundMessageDto(UUID messageId, UUID fatherId, String channel, MessageType messageType, String textContent,
+                              UUID mediaReference, boolean isTemplate, String templateName,
                               Map<String, String> templateParameters, MessagePriority priority, Instant requestedAt) {
         this(messageId, fatherId, channel, messageType, textContent, mediaReference, isTemplate, templateName,
-                templateParameters, priority, requestedAt, List.of());
+                templateParameters, priority, requestedAt, List.of(), null);
+    }
+
+    /** A message whose text sits above one URL button (D-027: the dashboard button). */
+    public static OutboundMessageDto withLinkButton(UUID fatherId, String text, LinkButton button, Instant requestedAt) {
+        return new OutboundMessageDto(UUID.randomUUID(), fatherId, null, MessageType.INTERACTIVE, text, null, false, null,
+                null, MessagePriority.IMMEDIATE, requestedAt, List.of(), button);
+    }
+
+    /** The same message as plain text, the link on its own line (where a URL button cannot be shown). */
+    public OutboundMessageDto withLinkAsText() {
+        return new OutboundMessageDto(messageId, fatherId, channel, MessageType.TEXT,
+                linkButton == null ? textContent : linkButton.asText(textContent), null, false, null, null, priority,
+                requestedAt, List.of(), null);
     }
 
     /** One WhatsApp reply button: the id comes back on a tap, the title is what the father sees (up to 20 characters). */
     public record ReplyButton(String id, String title) {
+    }
+
+    /**
+     * One WhatsApp URL button: {@code label} on the button (up to 20 characters), {@code url} behind it, an optional
+     * small {@code footer} under the text (up to 60). It carries no id - nothing comes back on a tap.
+     */
+    public record LinkButton(String label, String url, String footer) {
+        public LinkButton {
+            if (label == null || label.isBlank() || url == null || url.isBlank()) {
+                throw new IllegalArgumentException("A link button needs a label and a url");
+            }
+        }
+
+        /** The text with the link on its own line, then the footer. */
+        public String asText(String text) {
+            StringBuilder b = new StringBuilder(text == null ? "" : text.strip()).append('\n').append(url);
+            if (footer != null && !footer.isBlank()) {
+                b.append("\n\n").append(footer);
+            }
+            return b.toString();
+        }
     }
 }

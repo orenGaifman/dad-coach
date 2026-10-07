@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
-/** D-027: the echo of what was heard, and the lines for a note that was not. */
+/** D-029: the echo of what was heard, and the lines for a note that was not. */
 class VoiceNoteRepliesTest {
 
     @Test

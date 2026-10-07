@@ -8,7 +8,7 @@ import ui from '../../shared/ui.module.css'
 import styles from './Admin.module.css'
 
 /**
- * D-027 (Big Boss D-176): the one setting on the integrations screen - whether the coach listens to WhatsApp voice
+ * D-029 (Big Boss D-176): the one setting on the integrations screen - whether the coach listens to WhatsApp voice
  * notes. On unless the team turned it off; whether an ElevenLabs key is set (never the key); the last note heard and
  * the last one that was not.
  */

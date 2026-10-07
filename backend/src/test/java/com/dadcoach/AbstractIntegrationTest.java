@@ -52,7 +52,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
         "dadcoach.dashboard.ops-api-key=" + AbstractIntegrationTest.OPS_KEY,
         "dadcoach.dashboard.cookie-secure=false",
         "dadcoach.dashboard.whatsapp-public-number=+19995550100",
-        // voice notes (D-027) are on in tests: ElevenLabs is FakeServers too
+        // voice notes (D-029) are on in tests: ElevenLabs is FakeServers too
         "dad-coach.voice-notes.elevenlabs-api-key=" + AbstractIntegrationTest.ELEVENLABS_KEY,
         "dad-coach.voice-notes.timeout-ms=5000"
 })

@@ -187,7 +187,31 @@ The callback names only the state, so the session is picked the way the weekly p
 Every fixed reply starts with "❤️ דאד קואץ׳:" and is recorded in the platform conversation (/messages/outbound), so the
 coach knows about it on the next turn.
 
-## D-027 The coach hears WhatsApp voice notes - ElevenLabs writes down the words; on/off in the admin (owner, 2026-10-07)
+## D-027 The dashboard is a button that always works (owner, 2026-10-07)
+Owner: no link valid for minutes, no phone number to type - whoever asks for the dashboard gets a nice button that
+always works, like Big Boss. Production showed why: "תן לי דשבורד" got a bare `/login` URL and "sign in with your phone".
+- The coach has a tool, `dad_dashboard_link` (platform V115, a generic HTTP tool like Tair's `tair_dashboard_link`),
+  bound in ACTIVE_COACHING and ONBOARDING. It sends the button as its own WhatsApp message (cta_url: "📊 הדף שלך
+  בדאד קואץ׳" + [כניסה לדף שלי], footer "הכפתור אישי, לא להעביר הלאה") and returns only a note - the token never
+  reaches the platform or the model. The YAML says: call it, one short line, never write a link (not even dashboard_url).
+- Every sign-in link Dad Coach sends (the tool, the login page's request, the ops API) is reusable for 365 days
+  (`LoginLinkService.LINK_TTL`): not spent on use; each use re-checks the sign-in policy and opens a normal session;
+  use counted (V33: last_used_at, use_count, revoked_at). "Log out everywhere", deactivation and deletion revoke the
+  person's links with his sessions (SessionService); deletion also cascades. Only the hash is stored, as before.
+- Budget: 5 links per person per 15 minutes (was 3) - a reusable link rarely needs a second one. A sixth request from
+  the coach tells him to tap the recent button.
+- Delivery: the button inside the 24-hour window; a button Meta refuses for good (4xx) or one over Meta's limits goes
+  out as text with the link on its own line; outside the window the general template carries the link (a dedicated
+  template with a URL button is drafted in marketing/whatsapp-templates.md).
+- The dashboard: `/login` leads with "write 'דשבורד' to the coach" (wa.me), the phone form only behind a link; a button
+  that no longer works sends someone signed in on that device to his page, anyone else to that same short way.
+
+## D-028 A father lands on his own page; the admin is in the account menu (owner, 2026-10-07)
+Like Big Boss: a person with a father profile - also when he is on the team - lands on his page (`/`, after sign-in);
+the account menu (his name / avatar in the top bar) has "ניהול דאד קואץ׳", and in the admin "הדף שלי" back. A team
+member who is not a father lands on the admin (`homeFor` in frontend/src/lib/session.ts).
+
+## D-029 The coach hears WhatsApp voice notes - ElevenLabs writes down the words; on/off in the admin (owner, 2026-10-07)
 The owner: "the ability to hear a recording exists in Big Boss; put it in Dad Coach too, with the ability to turn it
 off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, same env var).
 - **Until now** a voice note got "אני עדיין לא יכול לשמוע הקלטות או לראות קבצים 🙏 אפשר לכתוב לי במילים?". Now, when

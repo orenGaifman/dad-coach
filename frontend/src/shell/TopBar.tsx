@@ -76,8 +76,8 @@ function AccountMenu() {
           </div>
           {can(me, 'admin') && can(me, 'father') && (
             pathname.startsWith('/admin')
-              ? <Link role="menuitem" className={styles.item} to="/home"><Icon name="home" size={18} /> השבוע שלי</Link>
-              : <Link role="menuitem" className={styles.item} to="/admin"><Icon name="grid" size={18} /> ניהול</Link>
+              ? <Link role="menuitem" className={styles.item} to="/home"><Icon name="home" size={18} /> הדף שלי</Link>
+              : <Link role="menuitem" className={styles.item} to="/admin"><Icon name="grid" size={18} /> ניהול דאד קואץ׳</Link>
           )}
           <button role="menuitem" type="button" className={styles.item} disabled={busy} onClick={() => logout(false)}>
             <Icon name="logout" size={18} /> יציאה
