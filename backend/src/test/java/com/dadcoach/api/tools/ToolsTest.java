@@ -167,6 +167,7 @@ class ToolsTest extends AbstractIntegrationTest {
         assertThat(d.path("child_name").asText()).isEqualTo("נועה");
         assertThat(d.path("local_date").asText()).isEqualTo("2026-11-04");
         assertThat(d.path("local_start").asText()).isEqualTo("17:30");
+        assertThat(d.path("when_label").asText()).endsWith("יום רביעי 4.11 ב-17:30");
         assertThat(d.path("timezone").asText()).isEqualTo("Asia/Jerusalem");
         assertThat(d.path("timers").path("session_morning_reminder").asText()).isEqualTo("2026-11-04T06:00:00Z");
         assertThat(d.path("timers").path("session_reminder_1h").asText()).isEqualTo("2026-11-04T14:30:00Z");

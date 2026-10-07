@@ -372,6 +372,91 @@ def e18(tag):
     qa.wa(p, "2 hours a week")
 
 
+def e19(tag):
+    """The morning reminder of today's session; he answers "I'm sick today" -> cancelled with no guilt, a replacement
+    offered; the 1h reminder and the follow-up of that session must not come."""
+    qa.start_transcript(f"{tag}-e19-sick-today", "e19 · חולה היום")
+    p = father("יניב")
+    qa.wa(p, "היי, יניב, אבא של אורי בן 5")
+    qa.wa(p, "כן")
+    qa.wa(p, "2 שעות")
+    qa.wa(p, "תקבע מחר ב-17:00 עם אורי שעה")
+    qa.show_timers(p)
+    qa.fire(p, "session_morning_reminder")
+    qa.wa(p, "אני חולה היום, עם חום. לא אוכל")
+    snap(p, "after 'sick'")
+    qa.show_timers(p)
+    qa.fire(p, "session_reminder_1h")
+    qa.wa(p, "תודה, נקבע ביום שבת במקום")
+    snap(p, "end")
+
+
+def e20(tag):
+    """כפתורים ישנים: מפגש שבוטל בלוח הבקרה אחרי תזכורת השעה - הוא לוחץ [רוצה רעיונות]; ואז מוחק את המידע שלו מלוח
+    הבקרה וכותב שוב בוואטסאפ."""
+    qa.start_transcript(f"{tag}-e20-stale-button-web-delete", "e20 · כפתור ישן ומחיקה מלוח הבקרה")
+    p = father("שלומי")
+    qa.wa(p, "היי, שלומי, אבא של גאיה בת 7")
+    qa.wa(p, "כן")
+    qa.wa(p, "2 שעות")
+    qa.wa(p, f"תקבע היום ב-{local_in(75)} עם גאיה שעה")
+    qa.fire(p, "session_reminder_1h")
+    s = sessions(p)
+    up = [x for x in s.get("upcoming", []) if x.get("canCancel")]
+    if up:
+        st, r = dash.post(p, f"/father/sessions/{up[0]['id']}/cancel")
+        qa.note(f"ביטל את המפגש בלוח הבקרה → {st}")
+    qa.tap(p, "רוצה רעיונות")
+    snap(p, "אחרי לחיצה על כפתור של מפגש שבוטל")
+    st, r = dash.post(p, "/father/delete-my-data", {"confirmation": "מחיקה"})
+    qa.note(f"מחיקה מלוח הבקרה → {st} {str(r)[:200]}")
+    st, body = dash.get(p, "/father/home")
+    qa.note(f"לוח הבקרה אחרי המחיקה: {st}")
+    qa.note("שורות אב: " + str(qa.psql(f"select count(*) from father where phone = '{p}'")))
+    qa.wa(p, "היי, מה קורה עם המפגש של היום?")
+
+
+def e21(tag):
+    """שיחה ארוכה עם קפיצות נושא: שני מפגשים, רעיונות, בדיחה, חגורות, הזזה, "מה קבוע", הודעה עם שגיאות כתיב, לילה טוב."""
+    qa.start_transcript(f"{tag}-e21-long-chat", "e21 · שיחה ארוכה")
+    p = father("אורי")
+    for t in ["אהלן, אורי פה, אבא של ליבי בת 4 ושל בן בן 8", "נכון", "4 שעות",
+              "תקבע מחר ב-17:00 עם בן כדורגל שעה, ובשישי ב-10 עם ליבי שעה וחצי",
+              "מה אפשר לעשות עם ילדה בת 4 שעה וחצי בלי מסכים?",
+              "חחח היא בטח תרצה רק לצבוע את הקירות",
+              "איך מקבלים חגורה כתומה?",
+              "תזיז את הכדורגל של בן לשבת בבוקר באותה שעה",
+              "מה קבוע לי השבוע בסוף?",
+              "תוסיף עוד שעה עם שניהם ביחד בשבת אחהצ, נלך לגינה",
+              "אחי אתה תותח, תודה",
+              "רגע, כמה דקות נשארו לי ליעד?",
+              "לילה טוב"]:
+        qa.wa(p, t)
+    snap(p, "סוף השיחה")
+
+
+def e22(tag):
+    """אחרי חצות: "תקבע מחר ב-17" ב-00:0x - שאלה אחת או אישור עם יום ותאריך שמתאים ללוח הבקרה."""
+    qa.start_transcript(f"{tag}-e22-after-midnight", "e22 · אחרי חצות")
+    p = father("טל")
+    qa.wa(p, "היי, טל, אבא של רומי בן 9")
+    qa.wa(p, "כן")
+    qa.wa(p, "2 שעות")
+    qa.wa(p, "תקבע מחר ב-17:00 עם רומי שעה")
+    qa.wa(p, "כן, לחמישי")
+    snap(p, "אחרי הקביעה")
+
+
+def e23(tag):
+    """חגורות: "איך מקבלים חגורה צהובה/כתומה?" - תשובה מהעובדות."""
+    qa.start_transcript(f"{tag}-e23-belts", "e23 · חגורות")
+    p = father("ניר")
+    qa.wa(p, "היי, ניר, אבא של עדן בן 6")
+    qa.wa(p, "כן")
+    qa.wa(p, "2 שעות")
+    qa.wa(p, "איך מקבלים חגורה צהובה? ואחרי זה כתומה?")
+
+
 if __name__ == "__main__":
     tag = sys.argv[1]
     for name in sys.argv[2:]:
