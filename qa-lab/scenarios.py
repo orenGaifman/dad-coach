@@ -126,7 +126,23 @@ def s6(tag):
     qa.out(f"\n> state after: {qa.state_of(p)}")
 
 
-ALL = {"s1": s1, "s2": s2, "s3": s3, "s4": s4, "s5": s5, "s6": s6}
+def s7(tag):
+    qa.start_transcript(f"{tag}-s7-web-cancel", "s7 · מפגש שבוטל בלוח - התזכורת שותקת")
+    p = father("גל")
+    onboard(p, "גל", "רומי", "8")
+    qa.wa(p, "שעתיים")
+    qa.wa(p, f"היום ב-{local_in(75)} עם רומי, שעה")
+    qa.show_timers(p)
+    fid = father_id(p)
+    qa.psql(f"update quality_time set status = 'CANCELLED' where father_id = {fid}")
+    qa.note("lab: the session was cancelled from the dashboard (the web does not clear the AI's timers)")
+    qa.fire(p, "session_reminder_1h")
+    time_travel_session(p)
+    qa.psql(f"update quality_time set status = 'CANCELLED' where father_id = {fid}")
+    qa.fire(p, "session_follow_up")
+
+
+ALL = {"s7": s7, "s1": s1, "s2": s2, "s3": s3, "s4": s4, "s5": s5, "s6": s6}
 
 if __name__ == "__main__":
     tag = sys.argv[1]

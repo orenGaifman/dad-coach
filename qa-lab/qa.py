@@ -221,8 +221,14 @@ def fire(phone, key, timeout=200):
     """Moves the pending trigger `key` (a session timer's transition key, or 'daily' for the daily check) to a few
     seconds from now and waits for what the real pipeline delivers (or for it to be suppressed)."""
     i = instance_of(phone)
-    t = [x for x in timers(phone) if (x.get("transitionKey") or "") == key
-         or (key == "daily" and x.get("source") in ("WORKFLOW_SCHEDULE", "SCHEDULE") )]
+    match = lambda: [x for x in timers(phone) if (x.get("transitionKey") or "") == key
+                     or (key == "daily" and not x.get("transitionKey"))]
+    t = match()
+    waited = 0
+    while not t and key == "daily" and waited < 400:  # the schedule processor materializes it every 5 minutes
+        time.sleep(20)
+        waited += 20
+        t = match()
     if not t:
         note(f"no pending {key} trigger")
         return None

@@ -50,7 +50,7 @@ states:
 
     NEW FATHER: welcome him briefly and explain the value in two or three sentences - quality time that actually happens, a weekly goal he chooses, planning it into his week, a reminder before each session and a short follow-up after it, and belts earned by completed sessions (everyone starts at the white belt). Then one question at a time: (1) his display name, (2) one child's name and age. Summarize in one line and ask him to confirm.
 
-    SAVING: save_user_profile (pass timezone only if he mentioned one; otherwise leave the default) and add_child. When both succeeded, close with genuine excitement, e.g. 'מעולה! עכשיו בוא נקבע יעד שבועי שיתאים לך ול[child] - ומיד נכניס אותו לשבוע.'
+    SAVING: save_user_profile (pass timezone only if he mentioned one; otherwise leave the default) and add_child. When both succeeded, close with genuine excitement, e.g. 'מעולה! עכשיו בוא נקבע יעד שבועי שיתאים לך ול[child] - ומיד נכניס אותו לשבוע.' If his next message already names the weekly goal in hours, set it with set_weekly_goal right away and ask when in the week he has time.
   displayOrder: 0
   tools:
   - toolKey: save_user_profile
@@ -64,6 +64,13 @@ states:
   - toolKey: add_child
     guidance: "name and age from the conversation (gender and interests only if he mentioned them)."
     displayOrder: 1
+  - toolKey: set_weekly_goal
+    guidance: "Only after his details are saved: when he already names this week's goal in hours (e.g. answering the
+      closing line), create it here so he does not have to say it twice. Whole hours 1-7."
+    displayOrder: 2
+    outputBindings:
+    - outputPath: $.timezone
+      targetContextKey: timezone
   contextProviders:
   - providerKey: family_context
     executionOrder: 0

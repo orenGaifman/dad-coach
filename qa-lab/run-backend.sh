@@ -16,6 +16,6 @@ export WHATSAPP_WEBHOOK_SECRET=qa-webhook-secret WHATSAPP_PHONE_NUMBER=+97255296
 export WEB_BASE_URL=${WEB_BASE_URL:-http://localhost:5397}
 exec "$JAVA_HOME/bin/java" -jar "$HERE/.run/backend.jar" \
   --spring.datasource.url=$DB_URL --spring.datasource.username=postgres --spring.datasource.password=postgres \
+  --spring.flyway.enabled=true --spring.jpa.hibernate.ddl-auto=validate \
   --server.port=8397 --dad-coach.whatsapp.verify-token=qa-verify \
-  --spring.flyway.enabled=false --spring.jpa.hibernate.ddl-auto=none \
   --dad-coach.whatsapp.api-base-url=http://localhost:9399 --spring.main.lazy-initialization=false

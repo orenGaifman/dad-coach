@@ -7,4 +7,5 @@ SRC=${BACKEND_SRC:-$HERE/../backend}
 COPY=${TMPDIR:-/tmp}/dc-lab-build
 rsync -a --delete --exclude target "$SRC"/ "$COPY"/
 (cd "$COPY" && JAVA_HOME=${JAVA_HOME:-/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home} ./mvnw -q -DskipTests package)
-mkdir -p "$HERE/.run" && cp "$COPY"/target/*.jar "$HERE/.run/backend.jar" && echo "built $(cd "$SRC" && git log --oneline -1)"
+JAR=$(ls -t "$COPY"/target/*.jar | grep -v -- '-plain' | head -1)
+mkdir -p "$HERE/.run" && cp "$JAR" "$HERE/.run/backend.jar" && rm -rf "$COPY/target" && echo "built $(cd "$SRC" && git log --oneline -1)"
