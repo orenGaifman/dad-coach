@@ -442,13 +442,28 @@ public class WhatsAppMessageFormatter {
     // ─── DTOs for Interactive Messages ──────────────────────────────────────────
 
     /**
+     * A template's quick-reply button component ({"type":"button","sub_type":"quick_reply","index":i,"parameters":
+     * [{"type":"payload","payload":...}]}). The payload must start with {@link ButtonIds#PREFIX}.
+     */
+    public static Map<String, Object> quickReplyButton(int index, String payload) {
+        ButtonIds.require(payload, "Template quick-reply");
+        Map<String, Object> parameter = new LinkedHashMap<>();
+        parameter.put("type", "payload");
+        parameter.put("payload", payload);
+        Map<String, Object> button = new LinkedHashMap<>();
+        button.put("type", "button");
+        button.put("sub_type", "quick_reply");
+        button.put("index", String.valueOf(index));
+        button.put("parameters", List.of(parameter));
+        return button;
+    }
+
+    /**
      * Represents a button in an interactive button message.
      */
     public record InteractiveButton(String id, String title) {
         public InteractiveButton {
-            if (id == null || id.isBlank()) {
-                throw new IllegalArgumentException("Button id must not be empty");
-            }
+            ButtonIds.require(id, "Button");
             if (title == null || title.isBlank()) {
                 throw new IllegalArgumentException("Button title must not be empty");
             }
@@ -475,9 +490,7 @@ public class WhatsAppMessageFormatter {
         }
 
         public InteractiveRow {
-            if (id == null || id.isBlank()) {
-                throw new IllegalArgumentException("Row id must not be empty");
-            }
+            ButtonIds.require(id, "List row");
             if (title == null || title.isBlank()) {
                 throw new IllegalArgumentException("Row title must not be empty");
             }
