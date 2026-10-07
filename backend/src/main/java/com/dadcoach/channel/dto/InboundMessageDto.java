@@ -18,6 +18,7 @@ import java.util.UUID;
  * @param receivedAt            timestamp when the provider received the message from the father
  * @param ingestedAt            timestamp when the system accepted the message
  * @param buttonId              the tapped button's id (reply button, list row or template quick reply); null otherwise
+ * @param mediaId               a voice note's Meta media id (D-027), to download and hear it; null otherwise
  */
 public record InboundMessageDto(
     UUID messageId,
@@ -29,5 +30,15 @@ public record InboundMessageDto(
     UUID mediaReference,
     Instant receivedAt,
     Instant ingestedAt,
-    String buttonId
-) {}
+    String buttonId,
+    String mediaId
+) {
+
+    /** Without a media id - every message but a voice note. */
+    public InboundMessageDto(UUID messageId, String idempotencyKey, String fatherChannelIdentity, String channel,
+                             MessageType messageType, String textContent, UUID mediaReference, Instant receivedAt,
+                             Instant ingestedAt, String buttonId) {
+        this(messageId, idempotencyKey, fatherChannelIdentity, channel, messageType, textContent, mediaReference,
+                receivedAt, ingestedAt, buttonId, null);
+    }
+}

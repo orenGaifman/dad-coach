@@ -184,6 +184,27 @@ def wa(phone, text, timeout=180):
     return new
 
 
+def voice(phone, audio_path, timeout=180):
+    """The father sends a WhatsApp voice note (an ogg/opus file); returns what Dad Coach sent him (D-027).
+    fake_meta.py serves the file by its media id from .run/media/."""
+    out(f"\n**{PEOPLE.get(phone, phone)}:** 🎙️ _{os.path.basename(audio_path)}_")
+    media_id = f"lab-media-{uuid.uuid4().hex[:12]}"
+    os.makedirs(f"{LAB}/.run/media", exist_ok=True)
+    with open(audio_path, "rb") as src, open(f"{LAB}/.run/media/{media_id}", "wb") as dst:
+        dst.write(src.read())
+    before = len(sent_lines())
+    msg = {"from": phone.lstrip("+"), "id": f"wamid.in-{uuid.uuid4()}", "timestamp": str(int(time.time())),
+           "type": "audio", "audio": {"id": media_id, "mime_type": "audio/ogg; codecs=opus", "voice": True}}
+    started = time.time()
+    _post(phone, msg)
+    new = _settle(before, phone, timeout)
+    show(new)
+    out(f"      _({time.time() - started:.1f}s)_")
+    if not new:
+        note("no reply")
+    return new
+
+
 def buttons_of(phone):
     """The reply buttons ({title: id}) of the last interactive message sent to this phone."""
     for e in reversed(sent_lines()):

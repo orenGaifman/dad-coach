@@ -109,12 +109,14 @@ The SPA and its `/api` are one origin (nginx), so cookies are SameSite and there
 | `TRAINING_MEDIA_BASE_URL` | optional | Media host for training videos. Unset = no training anywhere ("soon"). |
 | `TRAINING_MEDIA_TOKEN_KEY` | with the base URL | Bunny pull zone "URL Token Authentication Key" (signed, 2 h URLs). |
 | `TRAINING_MEDIA_UNSIGNED` | local only | `true` serves unsigned URLs (lab). |
+| `ELEVENLABS_API_KEY` | optional (secret) | ElevenLabs speech to text for WhatsApp voice notes (D-027; the owner's key, as Big Boss's). Unset = a voice note is answered "אפשר לכתוב לי במילים?", whatever the admin's switch says. On/off is the admin's ("אינטגרציות" -> "הודעות קוליות"), not an env var. Optional: `VOICE_NOTES_MODEL` (`scribe_v2`), `VOICE_NOTES_LANGUAGE` (`heb`; blank = detect), `VOICE_NOTES_MAX_BYTES` (3 MB ≈ 25 min), `VOICE_NOTES_TIMEOUT_MS` (60000), `ELEVENLABS_BASE_URL`. |
 | `DADCOACH_COOKIE_SECURE` | never in prod | Defaults to `true`; `false` only for http localhost (refused on Render). |
 | `WEB_BASE_URL` | yes | Change to the `dad-coach-ui` URL at cut-over: login links, calendar OAuth return and (WS-A) `dashboard_url` use it. |
 | `BELT_IMAGES_BASE_URL` | at cut-over | `<WEB_BASE_URL>/belts` (today it defaults to the Vercel app). |
 
 Migrations: V30 (`staff_user`, `login_link`, `dashboard_session`), V31 (`training_progress`), V32
-(`father_deactivation`) - additive only; expect "now at version v32" (or higher with WS-A's).
+(`father_deactivation`) - additive only; expect "now at version v32" (or higher with WS-A's). V43 (`system_setting`, D-027) starts empty
+(voice notes on).
 
 ### First admin (after deploy)
 

@@ -51,7 +51,10 @@ import org.testcontainers.containers.PostgreSQLContainer;
         // the dashboard (com.dadcoach.auth / web / ops)
         "dadcoach.dashboard.ops-api-key=" + AbstractIntegrationTest.OPS_KEY,
         "dadcoach.dashboard.cookie-secure=false",
-        "dadcoach.dashboard.whatsapp-public-number=+19995550100"
+        "dadcoach.dashboard.whatsapp-public-number=+19995550100",
+        // voice notes (D-027) are on in tests: ElevenLabs is FakeServers too
+        "dad-coach.voice-notes.elevenlabs-api-key=" + AbstractIntegrationTest.ELEVENLABS_KEY,
+        "dad-coach.voice-notes.timeout-ms=5000"
 })
 public abstract class AbstractIntegrationTest {
 
@@ -61,6 +64,7 @@ public abstract class AbstractIntegrationTest {
     public static final String WEBHOOK_SECRET = "test-only-webhook-secret";
     public static final String TEMPLATE = "dad_coach_message_he";
     public static final String OPS_KEY = "test-ops-key-0123456789abcdef";
+    public static final String ELEVENLABS_KEY = "test-elevenlabs-key";
     public static final Instant TUESDAY_NOON_IL = Instant.parse("2026-11-03T10:00:00Z");
 
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine")
@@ -77,6 +81,7 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("workflow.platform.base-url", FakeServers.INSTANCE::baseUrl);
         registry.add("dad-coach.whatsapp.api-base-url", FakeServers.INSTANCE::baseUrl);
+        registry.add("dad-coach.voice-notes.elevenlabs-base-url", FakeServers.INSTANCE::baseUrl);
     }
 
     public static PostgreSQLContainer<?> postgres() {
@@ -92,7 +97,7 @@ public abstract class AbstractIntegrationTest {
     void cleanSlate() {
         jdbc.execute("TRUNCATE quality_time, weekly_goal, goal, message_log, scheduled_response_delivery, child, "
                 + "communication_endpoints, platform_person_deletion, tool_idempotency, template_messages, site_signup, "
-                + "login_link, dashboard_session, father_deactivation, training_progress, staff_user, father "
+                + "login_link, dashboard_session, father_deactivation, training_progress, staff_user, father, system_setting "
                 + "RESTART IDENTITY CASCADE");
         jdbc.update("INSERT INTO template_messages (template_name, language, category, body, status, max_variables) "
                 + "VALUES (?, 'he', 'UTILITY', '{{1}}', 'APPROVED', 1)", TEMPLATE);

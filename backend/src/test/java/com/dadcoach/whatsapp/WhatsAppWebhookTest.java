@@ -136,9 +136,11 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void aVoiceNoteGetsTheFixedLineAndNoTurn() throws Exception {
+    void aVoiceNoteWithVoiceNotesTurnedOffGetsTheFixedLineAndNoTurn() throws Exception {
+        jdbc.update("INSERT INTO system_setting (key, value) VALUES ('voice_notes.enabled', 'false')");
         webhook(Webhooks.audio(NEW_NUMBER, "wamid.voice")).andExpect(status().isOk());
         assertThat(fake.turns()).isEmpty();
+        assertThat(fake.mediaCalls()).isEmpty();
         assertThat(sentText(0)).contains("אפשר לכתוב לי במילים");
     }
 

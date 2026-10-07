@@ -16,8 +16,9 @@ import java.util.function.Function;
 
 /**
  * One JDK HttpServer standing in for everything Dad Coach calls (no @MockBean, playbook §50): the AI Workflow
- * Platform (turns, outbound recording, tenancy person lifecycle) and Meta's Graph API (sends). Every request is
- * recorded; the platform's turn answer is programmable per test.
+ * Platform (turns, outbound recording, tenancy person lifecycle), Meta's Graph API (sends, voice-note media) and
+ * ElevenLabs speech to text (D-027). Every request is recorded; the platform's turn answer, the media and the
+ * transcript are programmable per test.
  */
 public final class FakeServers {
 
@@ -28,9 +29,17 @@ public final class FakeServers {
         }
     }
 
-    public record Reply(int status, String body) {
+    public record Reply(int status, String body, String contentType, byte[] raw) {
+        public Reply(int status, String body) {
+            this(status, body, "application/json", null);
+        }
+
         public static Reply json(String body) {
             return new Reply(200, body);
+        }
+
+        public static Reply bytes(byte[] raw, String contentType) {
+            return new Reply(200, "", contentType, raw);
         }
     }
 
@@ -41,6 +50,8 @@ public final class FakeServers {
     private final AtomicInteger sent = new AtomicInteger();
     private final AtomicReference<Function<Call, Reply>> turn = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> tenancy = new AtomicReference<>();
+    private final AtomicReference<Function<Call, Reply>> media = new AtomicReference<>();
+    private final AtomicReference<Function<Call, Reply>> speechToText = new AtomicReference<>();
 
     private FakeServers() {
         try {
@@ -64,6 +75,12 @@ public final class FakeServers {
         tenancy.set(c -> c.method().equals("DELETE")
                 ? Reply.json("{\"outcome\":\"DELETED\",\"workflowInstances\":1,\"messages\":3}")
                 : Reply.json("{\"created\":1,\"conflicts\":[]}"));
+        // Meta media (D-027): GET /<version>/<media-id> names the file, GET /media-files/<media-id> is the file
+        media.set(c -> c.path().startsWith("/media-files/")
+                ? Reply.bytes(new byte[] {79, 103, 103, 83, 1, 2, 3}, "audio/ogg")
+                : Reply.json("{\"url\":\"" + baseUrl() + "/media-files/" + c.path().substring(c.path().lastIndexOf('/') + 1)
+                        + "\",\"mime_type\":\"audio/ogg; codecs=opus\",\"file_size\":7,\"id\":\"media\"}"));
+        speechToText.set(c -> Reply.json("{\"language_code\":\"heb\",\"text\":\"רוצה לקבוע זמן עם נועה ביום שישי\"}"));
     }
 
     public static String turnReply(String content, String outcome) {
@@ -79,6 +96,25 @@ public final class FakeServers {
 
     public void onTenancy(Function<Call, Reply> answer) {
         tenancy.set(answer);
+    }
+
+    /** Meta's media lookup ({@code GET /<version>/<id>}) and download ({@code GET /media-files/<id>}). */
+    public void onMedia(Function<Call, Reply> answer) {
+        media.set(answer);
+    }
+
+    /** ElevenLabs {@code POST /v1/speech-to-text}. */
+    public void onSpeechToText(Function<Call, Reply> answer) {
+        speechToText.set(answer);
+    }
+
+    public List<Call> speechToTextCalls() {
+        return calls("/v1/speech-to-text");
+    }
+
+    public List<Call> mediaCalls() {
+        return calls.stream().filter(c -> c.method().equals("GET")
+                && (c.path().startsWith("/media-files/") || c.path().matches("/v[0-9.]+/[^/]+"))).toList();
     }
 
     public List<Call> calls(String pathPrefix) {
@@ -98,7 +134,9 @@ public final class FakeServers {
     }
 
     private void handle(HttpExchange ex) throws IOException {
-        String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        // ISO-8859-1 keeps a multipart body's bytes one char each (the audio inside is not text)
+        byte[] in = ex.getRequestBody().readAllBytes();
+        String body = new String(in, isMultipart(ex) ? StandardCharsets.ISO_8859_1 : StandardCharsets.UTF_8);
         Call call = new Call(ex.getRequestMethod(), ex.getRequestURI().getPath(), Map.copyOf(ex.getRequestHeaders()), body);
         calls.add(call);
         Reply reply;
@@ -109,16 +147,25 @@ public final class FakeServers {
             reply = Reply.json("{\"recorded\":true}");
         } else if (path.startsWith("/api/v1/tenancy/")) {
             reply = tenancy.get().apply(call);
+        } else if (path.equals("/v1/speech-to-text")) {
+            reply = speechToText.get().apply(call);
+        } else if (call.method().equals("GET") && (path.startsWith("/media-files/") || path.matches("/v[0-9.]+/[^/]+"))) {
+            reply = media.get().apply(call);
         } else if (path.endsWith("/messages")) {
             reply = Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"wamid.out." + sent.incrementAndGet() + "\"}]}");
         } else {
             reply = new Reply(404, "{}");
         }
-        byte[] bytes = reply.body().getBytes(StandardCharsets.UTF_8);
-        ex.getResponseHeaders().add("Content-Type", "application/json");
+        byte[] bytes = reply.raw() != null ? reply.raw() : reply.body().getBytes(StandardCharsets.UTF_8);
+        ex.getResponseHeaders().add("Content-Type", reply.contentType());
         ex.sendResponseHeaders(reply.status(), bytes.length);
         try (OutputStream os = ex.getResponseBody()) {
             os.write(bytes);
         }
+    }
+
+    private static boolean isMultipart(HttpExchange ex) {
+        String type = ex.getRequestHeaders().getFirst("Content-Type");
+        return type != null && type.startsWith("multipart/");
     }
 }

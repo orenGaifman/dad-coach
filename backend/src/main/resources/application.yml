@@ -71,6 +71,17 @@ dad-coach:
     webhook-secret: ${WHATSAPP_WEBHOOK_SECRET:}
     # true = a turn runs on the webhook thread (tests only); production answers Meta first.
     inbound-sync: false
+  # D-027 (Big Boss D-176): a WhatsApp voice note is transcribed by ElevenLabs and read like a typed message. Turned
+  # on and off in the admin's integrations screen (on unless the admin turned it off); without a key it stays off.
+  voice-notes:
+    elevenlabs-api-key: ${ELEVENLABS_API_KEY:}
+    elevenlabs-base-url: ${ELEVENLABS_BASE_URL:https://api.elevenlabs.io}
+    model: ${VOICE_NOTES_MODEL:scribe_v2}
+    # Hebrew; blank lets ElevenLabs detect the language.
+    language-code: ${VOICE_NOTES_LANGUAGE:heb}
+    # About 25 minutes of a WhatsApp voice note; a longer one is answered "too long" without being downloaded.
+    max-bytes: ${VOICE_NOTES_MAX_BYTES:3145728}
+    timeout-ms: ${VOICE_NOTES_TIMEOUT_MS:60000}
 
 dadcoach:
   scheduler:

@@ -5,8 +5,10 @@ import com.dadcoach.auth.DashboardProperties;
 import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import com.dadcoach.integration.platform.scheduled.ScheduledResponseCallbackConfig;
 import com.dadcoach.web.common.Areas;
+import com.dadcoach.web.common.WebException;
 import com.dadcoach.web.father.HomeView;
 import com.dadcoach.web.training.TrainingService;
+import com.dadcoach.whatsapp.voice.VoiceNotes;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import java.time.Clock;
@@ -19,6 +21,8 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,6 +30,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -34,15 +39,20 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * The internal Dad Coach admin (/api/admin/**, playbook §40): the team only (a coded 403 for anyone else, checked
- * on every call); a father who does not exist is a 404.
+ * on every call); a father who does not exist is a 404. Integrations are observability only, with one switch the
+ * owner asked for (D-027): voice notes on or off.
  */
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
 
+    private static final Logger log = LoggerFactory.getLogger(AdminController.class);
     static final ZoneId PRODUCT_ZONE = ZoneId.of("Asia/Jerusalem");
 
     public record DeleteRequest(@Size(max = 120) String confirmation) {
+    }
+
+    public record VoiceNotesRequest(Boolean enabled) {
     }
 
     private final AdminQueries queries;
@@ -52,6 +62,7 @@ public class AdminController {
     private final ScheduledResponseCallbackConfig callback;
     private final DashboardProperties properties;
     private final TrainingService training;
+    private final VoiceNotes voiceNotes;
     private final Clock clock;
     private final String whatsappPhoneNumberId;
     private final String whatsappAccessToken;
@@ -60,7 +71,7 @@ public class AdminController {
 
     public AdminController(AdminQueries queries, AdminFathersService fathers, PlatformAdminClient platformAdmin,
                            WorkflowPlatformProperties platform, ScheduledResponseCallbackConfig callback,
-                           DashboardProperties properties, TrainingService training, Clock clock,
+                           DashboardProperties properties, TrainingService training, VoiceNotes voiceNotes, Clock clock,
                            @Value("${dad-coach.whatsapp.phone-number-id:}") String whatsappPhoneNumberId,
                            @Value("${dad-coach.whatsapp.access-token:}") String whatsappAccessToken,
                            @Value("${google.calendar.client-id:}") String googleClientId,
@@ -72,6 +83,7 @@ public class AdminController {
         this.callback = callback;
         this.properties = properties;
         this.training = training;
+        this.voiceNotes = voiceNotes;
         this.clock = clock;
         this.whatsappPhoneNumberId = whatsappPhoneNumberId;
         this.whatsappAccessToken = whatsappAccessToken;
@@ -189,7 +201,32 @@ public class AdminController {
         body.put("opsApiConfigured", !blank(properties.getOpsApiKey()));
         body.put("trainingMediaConfigured", training.admin().mediaConfigured());
         body.put("webBaseUrl", webBaseUrl);
+        body.put("voiceNotes", voiceNotesStatus());
         return body;
+    }
+
+    /** D-027: voice notes on or off for every father - the admin's one switch on this screen. */
+    @PutMapping("/integrations/voice-notes")
+    public Map<String, Object> setVoiceNotes(@AuthenticationPrincipal DashboardPrincipal p, @RequestBody VoiceNotesRequest request) {
+        Areas.requireStaff(p);
+        if (request == null || request.enabled() == null) {
+            throw WebException.badRequest("VALIDATION_ERROR", "enabled is required");
+        }
+        voiceNotes.setEnabled(request.enabled());
+        log.atInfo().setMessage("admin.voice_notes.set").addKeyValue("enabled", request.enabled()).log();
+        return voiceNotesStatus();
+    }
+
+    /** Whether a key is set - never the key - and the last note heard or not heard (since the last restart). */
+    private Map<String, Object> voiceNotesStatus() {
+        VoiceNotes.Status status = voiceNotes.status();
+        Map<String, Object> voice = new LinkedHashMap<>();
+        voice.put("enabled", status.enabled());
+        voice.put("configured", status.configured());
+        voice.put("lastHeardAt", status.lastHeardAt());
+        voice.put("lastFailedAt", status.lastFailedAt());
+        voice.put("lastError", status.lastSafeErrorSummary());
+        return voice;
     }
 
     @GetMapping("/training")

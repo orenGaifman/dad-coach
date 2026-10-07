@@ -145,7 +145,8 @@ public class WhatsAppMessageParser {
             null,               // mediaReference — populated later by media service
             receivedAt,
             ingestedAt,
-            messageType == MessageType.INTERACTIVE ? extractButtonId(msg) : null
+            messageType == MessageType.INTERACTIVE ? extractButtonId(msg) : null,
+            messageType == MessageType.AUDIO ? extractAudioMediaId(msg) : null
         );
     }
 
@@ -254,6 +255,11 @@ public class WhatsAppMessageParser {
             sb.append(String.format("%.6f, %.6f", location.latitude(), location.longitude()));
         }
         return sb.toString();
+    }
+
+    /** D-027: a voice note's Meta media id, so it can be downloaded and heard. */
+    private String extractAudioMediaId(Message msg) {
+        return msg.audio() != null && msg.audio().id() != null && !msg.audio().id().isBlank() ? msg.audio().id() : null;
     }
 
     /** The tapped id: a template quick reply's payload, a reply button's id or a list row's id. */

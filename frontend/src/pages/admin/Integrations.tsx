@@ -5,6 +5,7 @@ import { Page } from '../../shared/Page'
 import { ErrorState, Skeleton } from '../../shared/States'
 import ui from '../../shared/ui.module.css'
 import styles from './Admin.module.css'
+import { VoiceNotesCard } from './VoiceNotesCard'
 
 function Yes({ ok, yes = 'מוגדר', no = 'לא מוגדר' }: { ok: boolean; yes?: string; no?: string }) {
   return <span className={ok ? styles.ok : styles.bad}>{ok ? yes : no}</span>
@@ -45,6 +46,7 @@ export function IntegrationsPage() {
               <dt>כתובת הלוח</dt><dd className="ltr">{i.data.webBaseUrl}</dd>
             </dl>
           </section>
+          {i.data.voiceNotes && <VoiceNotesCard status={i.data.voiceNotes} />}
         </div>
       )}
     </Page>

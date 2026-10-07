@@ -22,6 +22,8 @@ import com.dadcoach.integration.platform.lifecycle.WhatsAppDeletionRequests;
 import com.dadcoach.whatsapp.ReplyLanguageGuard;
 import com.dadcoach.whatsapp.WhatsAppAdapter;
 import com.dadcoach.whatsapp.buttons.SessionButtonTaps;
+import com.dadcoach.whatsapp.voice.VoiceNoteReplies;
+import com.dadcoach.whatsapp.voice.VoiceNotes;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -37,9 +39,12 @@ import org.springframework.stereotype.Component;
  * One inbound WhatsApp message, in order (playbook §34):
  * <ol>
  *   <li>a DELETED father, or a number whose platform deletion is not confirmed yet: dropped, nothing reaches the AI;</li>
+ *   <li>a voice note, when voice notes are on (D-027): heard (ElevenLabs) and from here on read like the same words
+ *       typed - the reply opens with "🎙️ שמעתי: ..."; a note too long, silent or not heard gets its own line, no AI
+ *       turn;</li>
  *   <li>"DELETE MY DATA": the deletion request, handled here, never by the AI;</li>
  *   <li>a known father: his WhatsApp endpoint is ensured and his 24-hour window opened (F1);</li>
- *   <li>a voice note or file without words: one fixed line (the coach reads text only);</li>
+ *   <li>a voice note (voice notes off) or a file without words: one fixed line (the coach reads text only);</li>
  *   <li>a tapped session button ("dc:done:&lt;id&gt;"...): handled by {@link SessionButtonTaps} - its fixed reply is
  *       sent and recorded in the conversation with no AI turn, or the turn runs with the text it hands over;</li>
  *   <li>the turn: worker + workflow named by the caller, correlation id = Meta's message id, the father's timezone,
@@ -65,13 +70,14 @@ public class InboundMessageHandler {
     private final WhatsAppInboundRateLimiter rateLimiter;
     private final SessionButtonTaps buttonTaps;
     private final SentMessageRecorder recorder;
+    private final VoiceNotes voiceNotes;
     private final Clock clock;
 
     public InboundMessageHandler(FatherRepository fathers, WhatsAppEndpoints endpoints, DeletedSenders deletedSenders,
                                  WhatsAppDeletionRequests deletionRequests, WorkflowPlatformClient platform,
                                  WorkflowPlatformProperties platformProperties, WhatsAppAdapter whatsapp,
                                  WhatsAppInboundRateLimiter rateLimiter, SessionButtonTaps buttonTaps,
-                                 SentMessageRecorder recorder, Clock clock) {
+                                 SentMessageRecorder recorder, VoiceNotes voiceNotes, Clock clock) {
         this.fathers = fathers;
         this.endpoints = endpoints;
         this.deletedSenders = deletedSenders;
@@ -82,6 +88,7 @@ public class InboundMessageHandler {
         this.rateLimiter = rateLimiter;
         this.buttonTaps = buttonTaps;
         this.recorder = recorder;
+        this.voiceNotes = voiceNotes;
         this.clock = clock;
     }
 
@@ -92,21 +99,43 @@ public class InboundMessageHandler {
             log.atInfo().setMessage("whatsapp.inbound.ignored").addKeyValue("reason", "DELETED_FATHER").log();
             return;
         }
-        if (WhatsAppDeletionRequests.isRequest(in.textContent())) {
+        String text = in.textContent();
+        // D-027: a voice note is heard, and from here on read like the same words typed (a spoken deletion phrase too).
+        String heard = null;
+        boolean admitted = false;
+        if (in.messageType() == MessageType.AUDIO && in.mediaId() != null && voiceNotes.active()) {
+            // the rate limit comes before the transcription: a flood of notes never spends ElevenLabs credit
+            if (!rateLimiter.tryAcquire(phone)) {
+                log.atWarn().setMessage("whatsapp.inbound.rate_limited").addKeyValue("sender", MaskingUtils.maskPhone(phone)).log();
+                return;
+            }
+            admitted = true;
+            VoiceNotes.Outcome outcome = voiceNotes.listen(in.mediaId());
+            log.atInfo().setMessage("whatsapp.inbound.voice").addKeyValue("outcome", outcome.getClass().getSimpleName())
+                    .addKeyValue("messageId", in.idempotencyKey()).log();
+            if (outcome instanceof VoiceNotes.Outcome.Heard h) {
+                heard = h.text();
+                text = heard;
+            } else if (!(outcome instanceof VoiceNotes.Outcome.Off)) {
+                fathers.findByPhone(phone).ifPresent(endpoints::recordInbound);
+                send(phone, VoiceNoteReplies.notHeard(outcome));
+                return;
+            }
+        }
+        if (WhatsAppDeletionRequests.isRequest(text)) {
             send(phone, deletionRequests.handle(phone));
             return;
         }
         Optional<Father> father = fathers.findByPhone(phone);
         father.ifPresent(endpoints::recordInbound);
-        if (in.textContent() == null || in.textContent().isBlank()) {
+        if (text == null || text.isBlank()) {
             send(phone, MEDIA_REPLY);
             return;
         }
-        if (!rateLimiter.tryAcquire(phone)) {
+        if (!admitted && !rateLimiter.tryAcquire(phone)) {
             log.atWarn().setMessage("whatsapp.inbound.rate_limited").addKeyValue("sender", MaskingUtils.maskPhone(phone)).log();
             return;
         }
-        String text = in.textContent();
         if (in.buttonId() != null && father.isPresent()) {
             SessionButtonTaps.Tap tap;
             try {
@@ -125,10 +154,12 @@ public class InboundMessageHandler {
                 text = tap.coachText();
             }
         }
-        runTurn(in, text, father, receivedAt, started);
+        runTurn(in, text, heard, father, receivedAt, started);
     }
 
-    private void runTurn(InboundMessageDto in, String text, Optional<Father> father, Instant receivedAt, Instant started) {
+    /** @param heard the words of the voice note this message was (D-027), or null for typed text */
+    private void runTurn(InboundMessageDto in, String text, String heard, Optional<Father> father, Instant receivedAt,
+                         Instant started) {
         String phone = in.fatherChannelIdentity();
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("timezone", FatherTimezones.of(father.orElse(null)).getId());
@@ -139,7 +170,8 @@ public class InboundMessageHandler {
         try {
             WorkerExecuteResponse response = platform.execute(new WorkerExecuteRequest(platformProperties.getWorkerKey(),
                     PersonRefs.whatsappId(phone), "whatsapp", in.idempotencyKey(),
-                    in.messageType() == MessageType.INTERACTIVE ? "button_reply" : "text", text, metadata,
+                    in.messageType() == MessageType.INTERACTIVE ? "button_reply" : "text",
+                    heard == null ? text : VoiceNoteReplies.TURN_NOTE + text, metadata,
                     platformProperties.getTenantId(), father.map(f -> PersonRefs.of(f.getId())).orElse(null),
                     father.map(Father::getDisplayName).orElse(null), platformProperties.getWorkflowKey()));
             deliveryStart = clock.instant();
@@ -158,12 +190,12 @@ public class InboundMessageHandler {
             if (!hebrew.get().equals(reply.strip())) {
                 log.atWarn().setMessage("whatsapp.reply.english_note_removed").addKeyValue("correlationId", in.idempotencyKey()).log();
             }
-            send(phone, hebrew.get());
+            send(phone, VoiceNoteReplies.withHeard(hebrew.get(), heard));
         } catch (PlatformUnavailableException | WorkflowPlatformClient.PlatformRejectedException e) {
             outcome = "PLATFORM_FAILED";
             log.atWarn().setMessage("whatsapp.turn.platform_failed").addKeyValue("error", e.getMessage()).log();
             deliveryStart = clock.instant();
-            send(phone, PLATFORM_DOWN_REPLY);
+            send(phone, VoiceNoteReplies.withHeard(PLATFORM_DOWN_REPLY, heard));
         } finally {
             Instant end = clock.instant();
             log.atInfo().setMessage("whatsapp.turn.timing")

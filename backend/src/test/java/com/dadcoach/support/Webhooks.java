@@ -32,8 +32,14 @@ public final class Webhooks {
     }
 
     public static String audio(String fromE164, String id) {
+        return audio(fromE164, id, "media1");
+    }
+
+    /** A WhatsApp voice note, as Meta sends it: the file is fetched by its media id (D-027). */
+    public static String audio(String fromE164, String id, String mediaId) {
         return envelope("{\"messages\":[{\"from\":\"" + fromE164.substring(1) + "\",\"id\":\"" + id
-                + "\",\"timestamp\":\"1793700000\",\"type\":\"audio\",\"audio\":{\"id\":\"media1\"}}]}");
+                + "\",\"timestamp\":\"1793700000\",\"type\":\"audio\",\"audio\":{\"id\":\"" + mediaId
+                + "\",\"mime_type\":\"audio/ogg; codecs=opus\",\"voice\":true}}]}");
     }
 
     public static String status(String id) {

@@ -148,6 +148,17 @@ export interface Integrations {
   opsApiConfigured: boolean
   trainingMediaConfigured: boolean
   webBaseUrl: string
+  /** D-027: absent from a backend without voice notes. */
+  voiceNotes?: VoiceNotesStatus
+}
+
+/** D-027: the admin's on/off for WhatsApp voice notes, whether an ElevenLabs key is set (never the key), the last note. */
+export interface VoiceNotesStatus {
+  enabled: boolean
+  configured: boolean
+  lastHeardAt: string | null
+  lastFailedAt: string | null
+  lastError: string | null
 }
 
 export interface AdminTraining {

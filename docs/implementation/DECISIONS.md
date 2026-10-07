@@ -186,3 +186,38 @@ The callback names only the state, so the session is picked the way the weekly p
 
 Every fixed reply starts with "❤️ דאד קואץ׳:" and is recorded in the platform conversation (/messages/outbound), so the
 coach knows about it on the next turn.
+
+## D-027 The coach hears WhatsApp voice notes - ElevenLabs writes down the words; on/off in the admin (owner, 2026-10-07)
+The owner: "the ability to hear a recording exists in Big Boss; put it in Dad Coach too, with the ability to turn it
+off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, same env var).
+- **Until now** a voice note got "אני עדיין לא יכול לשמוע הקלטות או לראות קבצים 🙏 אפשר לכתוב לי במילים?". Now, when
+  voice notes are on: the parser keeps the note's Meta media id (`InboundMessageDto.mediaId`); `VoiceNotes` downloads
+  it (`GET <WHATSAPP_API_BASE_URL>/<version>/<media-id>`, then the file, with `WHATSAPP_ACCESS_TOKEN` - the shared
+  number's gateway forwards audio unchanged) and sends it to ElevenLabs speech to text (`POST /v1/speech-to-text`,
+  `scribe_v2`, Hebrew, no sound tags, no timings). The words then go through everything typed text goes through: the
+  deletion phrase (a spoken "מחק את המידע שלי" deletes, as typed), the rate limit (before the transcription, so a flood
+  spends no credit), the father's own turn (message type `text`). The coach reads them after a Hebrew note -
+  `[הודעה קולית, תומללה אוטומטית - שמות ומספרים עלולים להישמע לא נכון]` - Hebrew so it does not invite English (D-024).
+- **What the father sees:** the reply opens, under "❤️ דאד קואץ׳:", with `🎙️ שמעתי: "..."` (up to 200 characters), so a
+  misheard word shows at once - also on the "משהו השתבש" line. Signed fixed lines, no AI turn: no words - "לא שמעתי מילים
+  בהקלטה - נסה שוב, או כתוב לי במילים 🙏"; over 3 MB (about 25 minutes, refused before downloading) - "ההקלטה ארוכה מדי
+  בשבילי..."; any failure (Meta, ElevenLabs, out of credit) - "לא הצלחתי לשמוע את ההקלטה - אפשר לכתוב לי במילים? 🙏".
+  Session-button taps, photos and files are unchanged.
+- **On/off:** a new `system_setting` table (V43, key/value, empty = defaults) holds `voice_notes.enabled`; no row = on.
+  The admin's "אינטגרציות" screen has a "הודעות קוליות" card: the switch (`PUT /api/admin/integrations/voice-notes`,
+  the team only - a father gets 403 `NOT_STAFF`, a write needs the CSRF echo), whether an ElevenLabs key is set (never
+  the key), the last note heard and the last failure in Hebrew (out of credit `quota_exceeded`, a key id set instead
+  of the key `api_key_id_used_as_api_key`, a refused key, ElevenLabs slow, the Meta download) - since the last restart
+  (in memory, like Big Boss). Off, or no `ELEVENLABS_API_KEY`: the old line, unchanged.
+- **Privacy and cost:** the audio is held in memory for the request and sent only to ElevenLabs; Dad Coach stores
+  neither the audio nor a copy - the words reach the conversation like typed text. Logs carry sizes and timings, never
+  the words. The ElevenLabs plan is the owner's (shared with Big Boss and Tair): when its credit runs out ElevenLabs
+  refuses and fathers are asked to write until it renews - the admin card says so.
+- **Tests:** `VoiceNoteHttpTest` (Meta lookup under the Graph version then download, both with the token; over the
+  limit not downloaded; Meta refusal / unreachable; the ElevenLabs multipart request and key; `quota_exceeded`,
+  `api_key_id_used_as_api_key`, a 503), `VoiceNotesTest` (heard, off by switch or missing key, silent, too long is not a
+  failure, failures by safe code, unexpected errors), `VoiceNoteRepliesTest`, `WhatsAppMessageParserVoiceTest`,
+  `VoiceNoteWebhookTest` (signed webhook end to end on FakeServers: heard -> the turn and the echo; switch off; out of
+  credit; too long; silent; Meta 404; platform down; spoken deletion; typed text untouched), `VoiceNotesAdminTest` (on by
+  default, off and on again, 400, a father / a visitor / no CSRF refused, the key never in the answer). Local check with
+  the real ElevenLabs: a Hebrew note (macOS Carmit, ogg/opus 16 kHz) was written down word for word in 2.1 s.

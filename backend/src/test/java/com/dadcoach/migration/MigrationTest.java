@@ -52,8 +52,8 @@ class MigrationTest extends AbstractIntegrationTest {
 
     static final List<String> KEPT = List.of("child", "communication_endpoints", "dashboard_session", "father",
             "father_deactivation", "goal", "login_link", "message_log", "platform_person_deletion", "quality_time",
-            "quality_time_child", "scheduled_response_delivery", "site_signup", "staff_user", "template_messages", "tool_idempotency",
-            "training_progress", "weekly_goal");
+            "quality_time_child", "scheduled_response_delivery", "site_signup", "staff_user", "system_setting", "template_messages",
+            "tool_idempotency", "training_progress", "weekly_goal");
 
     @Test
     void aFreshDatabaseIsBuiltFromTheBaselineAndHasExactlyTheKeptTables() {
