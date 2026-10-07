@@ -134,7 +134,8 @@ export interface FatherDetail {
   goals: { weekStart: string; targetHours: number; creditedMinutes: number; status: string }[]
   sessions: { id: string; childName: string | null; phase: Phase; start: string; end: string; notes: string | null }[]
   deliveries: DeliveryRow[]
-  loginLinks: { createdAt: string; expiresAt: string; usedAt: string | null; deliveryStatus: string; deliveryError: string | null }[]
+  loginLinks: { createdAt: string; expiresAt: string; usedAt: string | null; lastUsedAt: string | null; useCount: number;
+                revokedAt: string | null; deliveryStatus: string; deliveryError: string | null }[]
   liveDashboardSessions: number
   deletion: { requestedAt: string; attempts: number; nextAttemptAt: string; lastError: string | null; completedAt: string | null; outcome: string | null; purgeLocal: boolean } | null
   deactivatedAt: string | null

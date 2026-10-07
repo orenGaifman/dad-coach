@@ -41,6 +41,7 @@ public final class FakeServers {
     private final AtomicInteger sent = new AtomicInteger();
     private final AtomicReference<Function<Call, Reply>> turn = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> tenancy = new AtomicReference<>();
+    private final AtomicReference<Function<Call, Reply>> meta = new AtomicReference<>();
 
     private FakeServers() {
         try {
@@ -60,6 +61,7 @@ public final class FakeServers {
 
     public void reset() {
         calls.clear();
+        meta.set(c -> Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"wamid.out." + sent.incrementAndGet() + "\"}]}"));
         turn.set(c -> Reply.json(turnReply("שלום! מה שלומך?", "GENERATED")));
         tenancy.set(c -> c.method().equals("DELETE")
                 ? Reply.json("{\"outcome\":\"DELETED\",\"workflowInstances\":1,\"messages\":3}")
@@ -79,6 +81,11 @@ public final class FakeServers {
 
     public void onTenancy(Function<Call, Reply> answer) {
         tenancy.set(answer);
+    }
+
+    /** How Meta's Graph API answers a send (default: accepted with a new wamid). */
+    public void onMetaSend(Function<Call, Reply> answer) {
+        meta.set(answer);
     }
 
     public List<Call> calls(String pathPrefix) {
@@ -110,7 +117,7 @@ public final class FakeServers {
         } else if (path.startsWith("/api/v1/tenancy/")) {
             reply = tenancy.get().apply(call);
         } else if (path.endsWith("/messages")) {
-            reply = Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"wamid.out." + sent.incrementAndGet() + "\"}]}");
+            reply = meta.get().apply(call);
         } else {
             reply = new Reply(404, "{}");
         }

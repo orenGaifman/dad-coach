@@ -36,6 +36,9 @@ public class WhatsAppMessageFormatter {
     /** WhatsApp's limit on the body of an interactive message. */
     public static final int INTERACTIVE_BODY_LIMIT = 1024;
 
+    /** WhatsApp's limit on the footer of an interactive message. */
+    public static final int INTERACTIVE_FOOTER_LIMIT = 60;
+
     /**
      * WhatsApp interactive list row title limit.
      */
@@ -87,7 +90,10 @@ public class WhatsAppMessageFormatter {
             case AUDIO -> formatMedia(message, normalizedPhone, "audio");
             case VIDEO -> formatMedia(message, normalizedPhone, "video");
             case DOCUMENT -> formatMedia(message, normalizedPhone, "document");
-            case INTERACTIVE -> message.buttons().isEmpty() ? formatText(message, normalizedPhone)
+            case INTERACTIVE -> message.linkButton() != null
+                    ? (linkButtonFits(message) ? formatLinkButton(normalizedPhone, message.textContent(), message.linkButton())
+                            : formatText(message.withLinkAsText(), normalizedPhone))
+                    : message.buttons().isEmpty() ? formatText(message, normalizedPhone)
                     : formatButtonMessage(normalizedPhone, message.textContent(), message.buttons().stream()
                             .map(b -> new InteractiveButton(b.id(), b.title())).toList());
             default -> throw new IllegalArgumentException(
@@ -284,6 +290,44 @@ public class WhatsAppMessageFormatter {
 
         payload.put("interactive", interactive);
         return payload;
+    }
+
+    /**
+     * A URL button under the text (WhatsApp "cta_url", D-027): {"type":"interactive","interactive":{"type":"cta_url",
+     * "body":{"text":...},"footer":{"text":...},"action":{"name":"cta_url","parameters":{"display_text":...,"url":...}}}}.
+     * Callers check {@link #linkButtonFits} first: Meta refuses a longer body, label or footer.
+     */
+    public Map<String, Object> formatLinkButton(String recipientPhone, String bodyText, OutboundMessageDto.LinkButton button) {
+        Map<String, Object> interactive = new LinkedHashMap<>();
+        interactive.put("type", "cta_url");
+        interactive.put("body", Map.of("text", applyWhatsAppMarkdown(bodyText)));
+        if (button.footer() != null && !button.footer().isBlank()) {
+            interactive.put("footer", Map.of("text", button.footer()));
+        }
+        Map<String, Object> parameters = new LinkedHashMap<>();
+        parameters.put("display_text", button.label());
+        parameters.put("url", button.url());
+        Map<String, Object> action = new LinkedHashMap<>();
+        action.put("name", "cta_url");
+        action.put("parameters", parameters);
+        interactive.put("action", action);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("messaging_product", "whatsapp");
+        payload.put("recipient_type", "individual");
+        payload.put("to", normalizePhone(recipientPhone));
+        payload.put("type", "interactive");
+        payload.put("interactive", interactive);
+        return payload;
+    }
+
+    /** Whether Meta accepts this link button as it is (body, label and footer within its limits). */
+    public static boolean linkButtonFits(OutboundMessageDto message) {
+        OutboundMessageDto.LinkButton button = message.linkButton();
+        String body = message.textContent();
+        return button != null && body != null && !body.isBlank() && body.length() <= INTERACTIVE_BODY_LIMIT
+                && button.label().length() <= BUTTON_TEXT_LIMIT
+                && (button.footer() == null || button.footer().length() <= INTERACTIVE_FOOTER_LIMIT);
     }
 
     /**

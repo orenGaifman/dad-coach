@@ -10,7 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Server-side browser sessions behind the {@code DADCOACH_SESSION} cookie (Tair / Big Boss D-075 model). The cookie
  * holds an opaque random token; only its hash is stored. A session expires after {@link #IDLE_TTL} without use; use
- * slides the window (at most one write per {@link #RENEWAL_INTERVAL}). Revocation is immediate.
+ * slides the window (at most one write per {@link #RENEWAL_INTERVAL}). Revocation is immediate. Revoking every
+ * session of a person also revokes every sign-in link he holds (D-027: links are reusable, so "log out everywhere",
+ * deactivation and deletion must end them too).
  */
 @Service
 public class SessionService {
@@ -24,11 +26,13 @@ public class SessionService {
     }
 
     private final DashboardSessionRepository sessions;
+    private final LoginLinkRepository links;
     private final SignInPolicy policy;
     private final Clock clock;
 
-    public SessionService(DashboardSessionRepository sessions, SignInPolicy policy, Clock clock) {
+    public SessionService(DashboardSessionRepository sessions, LoginLinkRepository links, SignInPolicy policy, Clock clock) {
         this.sessions = sessions;
+        this.links = links;
         this.policy = policy;
         this.clock = clock;
     }
@@ -81,14 +85,19 @@ public class SessionService {
             n += revokeAllForFather(principal.fatherId(), reason);
         }
         if (principal.staffUserId() != null) {
-            n += sessions.revokeAllForStaff(principal.staffUserId(), clock.instant(), reason);
+            Instant now = clock.instant();
+            n += sessions.revokeAllForStaff(principal.staffUserId(), now, reason);
+            links.revokeAllForStaff(principal.staffUserId(), now, reason);
         }
         return n;
     }
 
+    /** Every session and every sign-in link of this father. */
     @Transactional
     public int revokeAllForFather(Long fatherId, String reason) {
-        return sessions.revokeAllForFather(fatherId, clock.instant(), reason);
+        Instant now = clock.instant();
+        links.revokeAllForFather(fatherId, now, reason);
+        return sessions.revokeAllForFather(fatherId, now, reason);
     }
 
     private static String truncate(String userAgent) {

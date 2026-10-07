@@ -51,6 +51,8 @@ states:
     NEW FATHER: welcome him briefly and explain the value in two or three sentences - quality time that actually happens, a weekly goal he chooses, planning it into his week, a reminder before each session and a short follow-up after it, and belts earned by completed sessions (everyone starts at the white belt). Then one question at a time: (1) his display name, (2) one child's name and age. Summarize in one line and ask him to confirm.
 
     SAVING: save_user_profile (pass timezone only if he mentioned one; otherwise leave the default) and add_child. When both succeeded, close with genuine excitement, e.g. 'מעולה! עכשיו בוא נקבע יעד שבועי שיתאים לך ול[child] - ומיד נכניס אותו לשבוע.' If his next message already names the weekly goal in hours, set it with set_weekly_goal right away and ask when in the week he has time.
+
+    HIS PAGE: he asks for his page or the dashboard -> dad_dashboard_link (one short line that the button is on its way; never write a link yourself).
   displayOrder: 0
   tools:
   - toolKey: save_user_profile
@@ -71,6 +73,11 @@ states:
     outputBindings:
     - outputPath: $.timezone
       targetContextKey: timezone
+  - toolKey: dad_dashboard_link
+    guidance: "Only when he asks for his page/dashboard: sends him a button to it as its own WhatsApp message. It needs
+      his saved profile (otherwise it fails - tell him the page opens right after setup). Say in one short line that
+      the button is on its way; never write a link yourself."
+    displayOrder: 3
   contextProviders:
   - providerKey: family_context
     executionOrder: 0
@@ -154,7 +161,7 @@ states:
       - coverage.uncovered_minutes > 0: help close the gap early. Call show_available_slots with days_ahead = current_week.days_left_including_today and propose concrete slots and durations that together cover uncovered_minutes (90 minutes -> one 90-minute session or two of 45). Prefer: his stated constraints, days/times that worked before (completed sessions, notes), free time in his calendar when it is connected, the child's age and interests. Book on his "yes".
       - coverage.is_covered=true: say so briefly when relevant ('השבוע שלך כבר מכוסה 💪').
       - Only plan inside the current week. On Friday/Saturday with nothing possible, acknowledge it kindly and leave the new week for Sunday's check-in.
-      - A connected Google Calendar is optional: sessions are booked either way; when calendar_connected=false and he asks about his calendar, tell him he can connect it in his Dad Coach page (dashboard_url).
+      - A connected Google Calendar is optional: sessions are booked either way; when calendar_connected=false and he asks about his calendar, tell him he can connect it in his Dad Coach page and send him the button to it (dad_dashboard_link).
 
     D. SESSION LIFECYCLE
       SCHEDULE: child chosen automatically when there is only one. schedule_quality_time with start_time as an ISO-8601 UTC instant ending in Z (converted from his local time) and the agreed duration_minutes; arm its timers (Critical Rules); confirm warmly in one or two lines, e.g. 'יופי, קבעתי! אזכיר לך ביום עצמו ושעה לפני.', and state the updated coverage in one short line.
@@ -168,7 +175,7 @@ states:
       Timers: Dad Coach decides every timer's time and returns them in the scheduling result ("timers": transition key -> UTC instant). A key missing from "timers" is skipped on purpose (the moment has passed). Never calculate a reminder time yourself.
 
     E. EVERYTHING ELSE
-      Progress ('איך אני עומד') -> coverage and progress from the weekly plan in two or three lines. Ideas -> get_activity_ideas (3-4 concrete ideas, prefer what worked before). His page/dashboard -> dashboard_url (he signs in there with his phone number). A greeting -> greet him by name and mention a session coming up soon, if any. Anything unclear -> one short clarifying question.
+      Progress ('איך אני עומד') -> coverage and progress from the weekly plan in two or three lines. Ideas -> get_activity_ideas (3-4 concrete ideas, prefer what worked before). His page/dashboard ('דשבורד', 'לוח', 'הדף שלי') -> dad_dashboard_link: the button goes out as its own message; say in one short line that it is on its way. A greeting -> greet him by name and mention a session coming up soon, if any. Anything unclear -> one short clarifying question.
   displayOrder: 1
   maxAgentIterationsOverride: 8
   maxToolCallsOverride: 30
@@ -241,6 +248,12 @@ states:
       - $.name
       - $.age
       required: false
+  - toolKey: dad_dashboard_link
+    guidance: "Sends the father a button to his Dad Coach page (his week, children, progress, Google Calendar
+      connection) as its own WhatsApp message - the link behind it keeps working. No parameters. Call it whenever he
+      asks for his page/dashboard or needs it for something. The result's note says what to tell him; never write a
+      link or an address yourself."
+    displayOrder: 9
   contextProviders:
   - providerKey: family_context
     executionOrder: 0
@@ -367,6 +380,16 @@ states:
     actionType: GUIDE_AI
     actionInstruction: "ask about that same session a third time - wait until he brings it up."
     displayOrder: 11
+  - ruleKey: dashboard-by-button
+    name: הדף שלו בכפתור, לא בקישור
+    ruleStrength: REQUIRED
+    conditionType: AI_CONDITION
+    conditionDescription: "he asks for his page, the dashboard, 'דשבורד' or 'לוח', or needs the page for something
+      (connecting Google Calendar, editing a child's details)"
+    actionType: GUIDE_AI
+    actionInstruction: "call dad_dashboard_link and tell him in one short line that the button is on its way - never
+      write a link or an address yourself, not even dashboard_url."
+    displayOrder: 12
   transitions:
   - transitionKey: session_morning_reminder
     targetStateKey: SESSION_MORNING_REMINDER

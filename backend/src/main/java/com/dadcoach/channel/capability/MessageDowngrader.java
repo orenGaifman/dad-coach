@@ -98,6 +98,10 @@ public class MessageDowngrader {
      * The text_content of the interactive message is used as the base text.
      */
     private DowngradeResult downgradeInteractive(OutboundMessageDto message) {
+        if (message.linkButton() != null) {
+            log.info("Downgrading INTERACTIVE link-button message {} to TEXT (link on its own line)", message.messageId());
+            return new DowngradeResult.Success(message.withLinkAsText());
+        }
         log.info("Downgrading INTERACTIVE message {} to TEXT (numbered list)",
             message.messageId());
 

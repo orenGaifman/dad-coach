@@ -22,7 +22,8 @@ father ──WhatsApp──▶ Meta ──webhook──▶ Dad Coach ──/api/
   reply sends nothing, a platform failure one short Hebrew line.
 - **Tools** (`api/tools`, bound in dad-coach-3): `save_user_profile`, `add_child`, `schedule_quality_time`,
   `reschedule_quality_time`, `cancel_quality_time`, `complete_quality_time`, `show_available_slots`,
-  `set_weekly_goal`, `get_activity_ideas`. Idempotent, actor only from the envelope's WhatsApp number.
+  `set_weekly_goal`, `get_activity_ideas`, `dad_dashboard_link` (the button to his page, D-027). Idempotent, actor
+  only from the envelope's WhatsApp number.
 - **Context** (`api/context`): `family_context`, `weekly_plan_context` (this Sunday-Saturday week in his timezone).
 - **Proactive**: the platform owns the timers (morning / 1-hour reminders, follow-up, daily check) and calls back;
   Dad Coach delivers inside the 24-hour window or with the approved template. Dad Coach's own job: Sunday's weekly

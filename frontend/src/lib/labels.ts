@@ -8,7 +8,7 @@ export const PHASE_LABEL: Record<string, string> = {
   UPCOMING: 'מתוכנן', IN_PROGRESS: 'עכשיו', AWAITING_CONFIRMATION: 'מחכה לאישור', COMPLETED: 'היה', CANCELLED: 'בוטל', MISSED: 'לא יצא',
 }
 
-export const DELIVERY_KIND: Record<string, string> = { SCHEDULED: 'הודעת מאמן מתוזמנת', LOGIN_LINK: 'קישור כניסה' }
+export const DELIVERY_KIND: Record<string, string> = { SCHEDULED: 'הודעת מאמן מתוזמנת', LOGIN_LINK: 'כפתור כניסה' }
 
 /** Why a WhatsApp message did not go out, in words. */
 export function reasonLabel(reason: string | null | undefined): string {

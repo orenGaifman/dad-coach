@@ -10,3 +10,6 @@ export function coachLink(number: string | null | undefined, text: string): stri
 export function bookingPrompt(childName?: string | null): string {
   return childName ? `רוצה לקבוע זמן עם ${childName} ביום שלישי` : 'רוצה לקבוע זמן עם הילדים השבוע'
 }
+
+/** What he writes to the coach for the button to his page (D-027). */
+export const DASHBOARD_WORD = 'דשבורד'

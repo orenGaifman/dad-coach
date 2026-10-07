@@ -48,13 +48,13 @@ class AuthUnitsTest {
     }
 
     @Test
-    @DisplayName("rate limits: 3 per person and 20 per client in 15 minutes")
+    @DisplayName("rate limits: 5 per person and 20 per client in 15 minutes")
     void rateLimits() {
         LoginLinkRateLimiter limiter = new LoginLinkRateLimiter(Clock.fixed(Instant.parse("2030-01-01T10:00:00Z"), ZoneOffset.UTC));
         SignInSubject s = new SignInSubject(1L, null);
-        assertThat(limiter.trySubject(s)).isTrue();
-        assertThat(limiter.trySubject(s)).isTrue();
-        assertThat(limiter.trySubject(s)).isTrue();
+        for (int i = 0; i < 5; i++) {
+            assertThat(limiter.trySubject(s)).isTrue();
+        }
         assertThat(limiter.trySubject(s)).isFalse();
         assertThat(limiter.trySubject(new SignInSubject(2L, null))).isTrue();
         for (int i = 0; i < 20; i++) {

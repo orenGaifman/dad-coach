@@ -30,7 +30,12 @@
   font-size: var(--dc-fs-2xl);
   line-height: 1;
 }
-.form, .sent { display: grid; gap: var(--dc-sp-4); }
+.form, .sent, .phoneForm { display: grid; gap: var(--dc-sp-4); }
+.phoneForm {
+  padding-block-start: var(--dc-sp-4);
+  border-block-start: 1px solid var(--dc-ink-100);
+}
+.secondaryWay { justify-self: center; font-weight: 600; color: var(--dc-ink-700); }
 .title { font-size: var(--dc-fs-xl); font-weight: 800; }
 .lead { color: var(--dc-ink-700); }
 .sentIcon {

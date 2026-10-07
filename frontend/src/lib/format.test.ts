@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { ageLabel, dayLabel, daysLeft, displayPhone, duration, percent, weekRange } from './format'
 import { beltImage, beltName, toNextBelt } from './belts'
-import { bookingPrompt, coachLink } from './whatsapp'
-import { safeNext } from './session'
+import { bookingPrompt, coachLink, DASHBOARD_WORD } from './whatsapp'
+import { homeFor, safeNext } from './session'
+import type { Me } from './types'
 
 describe('duration', () => {
   it('speaks Hebrew hours and minutes', () => {
@@ -62,5 +63,23 @@ describe('links', () => {
     expect(safeNext('//evil.example')).toBeNull()
     expect(safeNext('https://evil.example')).toBeNull()
     expect(safeNext('/login')).toBeNull()
+  })
+})
+
+describe('homeFor (D-028)', () => {
+  const me = (capabilities: string[]): Me => ({ kind: capabilities.includes('admin') ? 'ADMIN' : 'FATHER', name: 'אורן', capabilities, fatherId: 1 })
+  it('lands a father on his own page, also when he is on the team', () => {
+    expect(homeFor(me(['father']))).toBe('/home')
+    expect(homeFor(me(['father', 'training', 'admin']))).toBe('/home')
+  })
+  it('lands a team member who is not a father on the admin', () => {
+    expect(homeFor(me(['admin']))).toBe('/admin')
+    expect(homeFor(me([]))).toBe('/login')
+  })
+})
+
+describe('the dashboard word (D-027)', () => {
+  it('is what he writes to the coach for the button', () => {
+    expect(coachLink('+972501234567', DASHBOARD_WORD)).toBe('https://wa.me/972501234567?text=%D7%93%D7%A9%D7%91%D7%95%D7%A8%D7%93')
   })
 })
