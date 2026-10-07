@@ -3,7 +3,7 @@
 Names only — never values. Secrets live on Render (and the owner-local `~/.config/dad-coach/production-secrets.env`).
 
 ## Topology (CURRENT)
-- Render web service `dad-coach` — builds the ROOT `Dockerfile` (Java 21, Spring Boot) on every push to `main`;
+- Render web service `dad-coach` — builds `backend/Dockerfile` (service root directory `backend/`) (Java 21, Spring Boot) on every push to `main`;
   health check `/actuator/health`. Profile `prod`.
 - Database: Supabase Postgres 17 (`DB_URL`), Flyway on startup.
 - WhatsApp: Dad Coach's own number (Meta Cloud API, WABA of its own) → webhook `https://<dad-coach>/webhook/whatsapp`.

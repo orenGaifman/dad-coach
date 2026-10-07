@@ -60,7 +60,7 @@ No test needs a network service or a key. A red test is never "pre-existing" - f
 
 ## Deploy
 
-Render web service `dad-coach` builds the root `Dockerfile` on every push to `main`. A deployed instance refuses
+Render web service `dad-coach` builds `backend/Dockerfile` (service root directory `backend/`) on every push to `main`. A deployed instance refuses
 to start without its secrets (`ProductionStartupGuard`). Variables (names only): `docs/implementation/DEPLOYMENT.md`.
 
 ## Database
