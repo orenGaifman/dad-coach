@@ -158,3 +158,12 @@ dashboard's /belts - old WhatsApp links and the Meta app settings keep working.
 
 ## D-023 Training videos on the owner's existing Bunny zone, under dad-coach/ (2026-10-07)
 The catalog names dad-coach/training/v1/father-<slug>.mp4/.jpg; signed URLs (TRAINING_MEDIA_TOKEN_KEY) like Big Boss.
+
+## D-024 Everything the father sees is Hebrew; the brand is "דאד קואץ׳" (owner, 2026-10-07)
+The platform prefixes every reply with "<emoji> <worker name>:"; a Latin first line can make WhatsApp lay a Hebrew
+message out left to right. The worker's display name, the coach's self-name, the dashboard, system messages, the site
+and every video frame use "דאד קואץ׳" (Hebrew geresh ׳). The one narrator is a male voice (amit) - the audience is fathers.
+
+## D-025 The site is impressive and humorous, and true (owner, 2026-10-07)
+Humor from the real situation (the plan that slides to "next week", the excuse graveyard, silence as a feature,
+messages it will never send, the belt dojo); the coach's bubbles stay real lab output; no testimonials or stats.

@@ -133,6 +133,13 @@ Work streams: DC-A backend (branch align-backend), DC-B dashboard, DC-C workflow
 9. Obsolete env vars removed; dad-coach-web (Vercel) now only redirects (bc50e59).
 10. Demo father יואב (+19995551000) seeded through the tool API (4 sessions done, 1 upcoming, yellow belt);
    the owner is a dashboard admin (ops bootstrap-admin).
+11. Training library v1 uploaded to Bunny (dad-coach/training/v1), TRAINING_MEDIA_* set on dad-coach; then, on the
+   owner's "everything in Hebrew" and "a male voice", v2 (brand "דאד קואץ׳" on every frame, the Hebrew identity line,
+   narrator amit = male) at dad-coach/training/v2 - verified in production: 5/5 signed links play (206), unsigned 403.
+12. Everything in Hebrew: worker display name "דאד קואץ׳" (dad-coach-3 v3), dashboard, login links, calendar text,
+   the deletion reply (+ Hebrew deletion phrases); catalog titles.
+13. The site reworked to impressive + humorous (site-humor, 09b24ea), live.
+14. Final production smoke 33/33 at f35f95f; suite 168/168. Hub: https://claude.ai/artifact/A9kqDFimgpwXZ4DSmYxxZi
 
 ## Production runbooks & records
 (append numbered sections for every production operation: plan, rehearsal, execution record, verification)
