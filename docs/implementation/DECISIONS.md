@@ -99,8 +99,8 @@ Not recorded: replies to his own turn (the platform has them), scheduled-respons
 them), and the deletion confirmation — recording it could re-create a conversation the deletion is removing.
 
 ## D-017 Security surfaces (2026-10-07)
-Ordered chains (Tair): 1 `/api/tools/**` + `/api/context/**` (TOOL_API_KEY), 2 `/api/integration/**` (callback key,
-closed when the receiver is off), 3 `/api/v1/admin/**` (DADCOACH_ADMIN_API_KEY), 4 `/webhook/whatsapp` (signature
+Ordered chains (Tair): 1 `/api/tools/**` + `/api/context/**` (TOOL_API_KEY), 2 `/api/integration/channel/**`
+(callback key, always; D-019), 6 `/api/integration/**` (callback key, closed when the receiver is off), 3 `/api/v1/admin/**` (DADCOACH_ADMIN_API_KEY), 4 `/webhook/whatsapp` (signature
 in the controller), 5 the two calendar OAuth hops (HMAC in the controller), last: only `/actuator/health*`,
 everything else 401. Orders 20-99 are left for the dashboard's chains. The calendar connect hop now actually
 verifies its signature (it did not: anyone could attach a Google calendar to any father id). Production's
@@ -115,3 +115,10 @@ Single tenant `20082bcd-a7bf-57a8-a382-4bad32144b2f`. Every turn sends the fathe
 data; failures retry with backoff 1, 2, 4 … minutes up to 6 hours, never dropped; from the 6th failure every retry
 logs OVERDUE. Until the platform confirms, his number's messages never reach the AI and he gets no scheduled
 message. Production: V22 applied 2026-10-04; JWT_SECRET and DADCOACH_ADMIN_API_KEY set on Render then.
+
+## D-019 Gateway channel claim (2026-10-07, owner-approved; playbook §33)
+`POST /api/integration/channel/claim {"phone":"+E164"}` → `{"claimed": true|false}`, Tair/Big Boss contract.
+Claimed = a father with this normalized number exists, is not DELETED and his number is not waiting for its
+platform deletion. Unknown/invalid/deleted = false (never a 4xx, never data). Auth: the platform-callback key on its
+own chain (order 2), required even when the scheduled-response receiver is off; no key configured = 401 (fail closed).
+Dad Coach still uses its own number today; the claim lets the shared gateway route it when that changes.

@@ -31,9 +31,20 @@ public class SecurityConfig {
         return serviceChain(http, entryPoint, toolKey, "platform", "/api/tools/**", "/api/context/**");
     }
 
-    /** Platform → Dad Coach: the scheduled-response callback (WORKFLOW_PLATFORM_CALLBACK_API_KEY). */
+    /**
+     * Platform gateway → Dad Coach: the channel claim (playbook §33). The callback key ALWAYS - also when the
+     * scheduled-response receiver is off; with no key configured it is closed (401), never open.
+     */
     @Bean
     @Order(2)
+    SecurityFilterChain channelClaim(HttpSecurity http, RestAuthenticationEntryPoint entryPoint,
+                                     @Value("${workflow.platform.scheduled-response.api-key:}") String callbackKey) throws Exception {
+        return serviceChain(http, entryPoint, callbackKey, "platform-gateway", "/api/integration/channel/**");
+    }
+
+    /** Platform → Dad Coach: the scheduled-response callback (WORKFLOW_PLATFORM_CALLBACK_API_KEY; closed when off). */
+    @Bean
+    @Order(6)
     SecurityFilterChain integration(HttpSecurity http, RestAuthenticationEntryPoint entryPoint,
                                     @Value("${workflow.platform.scheduled-response.api-key:}") String callbackKey,
                                     @Value("${workflow.platform.scheduled-response.enabled:false}") boolean callbackEnabled)

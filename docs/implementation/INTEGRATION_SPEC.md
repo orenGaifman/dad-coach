@@ -74,7 +74,7 @@ father_found=false / empty profile; failure = success:false.
   `PUT /api/v1/tenancy/people`, `DELETE /api/v1/tenancy/tenants/{t}/people/{ref}` (WORKFLOW_PLATFORM_API_KEY).
 - Platform → Dad Coach: tools, context (TOOL_API_KEY), scheduled-response callback
   `/api/integration/workflow/scheduled-response` (WORKFLOW_PLATFORM_CALLBACK_API_KEY,
-  `X-Idempotency-Key: scheduled-response:{triggerId}`).
+  `X-Idempotency-Key: scheduled-response:{triggerId}`); gateway claim `/api/integration/channel/claim` (same key, D-019).
 - Reconfiguration: timezone change = save_user_profile (next new instance only — existing instances keep theirs).
 
 ## Lifecycle

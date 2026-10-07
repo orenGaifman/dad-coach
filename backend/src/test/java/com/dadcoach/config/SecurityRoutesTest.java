@@ -14,7 +14,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Every route Dad Coach serves, by who may call it. Public: the health probes, Meta's webhook (signature checked in
+ * Every route Dad Coach serves, by who may call it. Key-protected: tools + context (tool key), the scheduled-response
+ * callback and the channel claim (callback key), the operator API (admin key). Public: the health probes, Meta's webhook (signature checked in
  * the controller) and the two calendar OAuth hops (HMAC checked in the controller). Each service surface opens
  * only with its own key. Everything else - including every route of the deleted features - is refused.
  */
@@ -63,6 +64,14 @@ class SecurityRoutesTest extends AbstractIntegrationTest {
         mvc.perform(post("/api/integration/workflow/scheduled-response").header("X-API-Key", CALLBACK_KEY)
                 .header("X-Idempotency-Key", "scheduled-response:t1").contentType(MediaType.APPLICATION_JSON).content(callback))
                 .andExpect(status().isNotFound()); // authenticated; the recipient is unknown
+
+        String claim = "{\"phone\":\"+19995550100\"}";
+        mvc.perform(post("/api/integration/channel/claim").contentType(MediaType.APPLICATION_JSON).content(claim))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/integration/channel/claim").header("X-API-Key", TOOL_KEY)
+                .contentType(MediaType.APPLICATION_JSON).content(claim)).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/integration/channel/claim").header("X-API-Key", CALLBACK_KEY)
+                .contentType(MediaType.APPLICATION_JSON).content(claim)).andExpect(status().isOk());
 
         mvc.perform(get("/api/v1/admin/fathers")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/admin/fathers").header("X-API-Key", TOOL_KEY)).andExpect(status().isUnauthorized());
