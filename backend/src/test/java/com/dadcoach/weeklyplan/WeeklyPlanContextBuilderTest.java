@@ -70,7 +70,7 @@ class WeeklyPlanContextBuilderTest {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         WeeklyGoalService weeklyGoalService = new WeeklyGoalService(weeklyGoalRepository, fatherRepository, clock);
         builder = new WeeklyPlanContextBuilder(qualityTimeRepository, childRepository, weeklyGoalRepository,
-                weeklyGoalService, clock);
+                weeklyGoalService, clock, new com.dadcoach.common.DashboardLinks("https://app.dadcoach.test/"));
 
         when(childRepository.findByFatherIdAndStatus(7L, "ACTIVE")).thenReturn(List.of(child));
         when(qualityTimeRepository.findByFatherIdOrderByScheduledStartDesc(7L)).thenReturn(sessions);
@@ -245,7 +245,7 @@ class WeeklyPlanContextBuilderTest {
         Map<String, Object> data = builder.build(father);
 
         assertThat(data).containsEntry("calendar_connected", false)
-                .containsEntry("dashboard_url", "https://dadcoach.app/dashboard?fatherId=7");
+                .containsEntry("dashboard_url", "https://app.dadcoach.test/login");
     }
 
     @Test
@@ -254,7 +254,8 @@ class WeeklyPlanContextBuilderTest {
         // Saturday 22:30Z = Sunday 01:30 in Jerusalem
         Clock clock = Clock.fixed(Instant.parse("2026-10-03T22:30:00Z"), ZoneOffset.UTC);
         WeeklyPlanContextBuilder sunday = new WeeklyPlanContextBuilder(qualityTimeRepository, childRepository,
-                weeklyGoalRepository, new WeeklyGoalService(weeklyGoalRepository, fatherRepository, clock), clock);
+                weeklyGoalRepository, new WeeklyGoalService(weeklyGoalRepository, fatherRepository, clock), clock,
+                new com.dadcoach.common.DashboardLinks("https://app.dadcoach.test"));
         goal(WEEK, 2, 120, WeeklyGoalStatus.ACTIVE);
 
         Map<String, Object> data = sunday.build(father);
