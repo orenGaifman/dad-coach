@@ -3,6 +3,9 @@ import { initCommon } from './common.js';
 import { initDemo } from './demo/player.js';
 import { initSignupForm } from './signup-form.js';
 import { initIntro } from './intro.js';
+import { initStory } from './story.js';
+import { initExcuses } from './excuses.js';
+import { initBeltRate } from './belts.js';
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -22,6 +25,15 @@ if (!reducedMotion && 'IntersectionObserver' in window) {
   }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
   document.querySelectorAll('.reveal').forEach((n) => io.observe(n));
 }
+
+const story = document.querySelector('[data-story]');
+if (story) initStory(story, { reducedMotion });
+
+const excuses = document.getElementById('excuses');
+if (excuses) initExcuses(excuses);
+
+const belts = document.getElementById('belts');
+if (belts) initBeltRate(belts);
 
 const demo = document.querySelector('[data-demo]');
 if (demo) initDemo(demo, { reducedMotion });

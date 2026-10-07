@@ -28,7 +28,7 @@ function setError(input, message) {
   if (err) err.textContent = message || '';
 }
 
-const validateName = (input) => (input.value.trim().length < 2 ? 'איך קוראים לך? (לפחות שתי אותיות)' : '');
+const validateName = (input) => (input.value.trim().length < 2 ? 'איך קוראים לך? (שתי אותיות לפחות. גם ״אבא״ עובד.)' : '');
 function validatePhone(input) {
   const v = input.value.trim();
   if (!v) return 'נא למלא מספר נייד.';
