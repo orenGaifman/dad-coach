@@ -9,6 +9,7 @@ import com.dadcoach.qualitytime.QualityTime;
 import com.dadcoach.qualitytime.QualityTimeRepository;
 import com.dadcoach.qualitytime.QualityTimeService;
 import com.dadcoach.qualitytime.QualityTimeStatus;
+import com.dadcoach.qualitytime.SessionChildren;
 import com.dadcoach.weeklyplan.WeeklyPlanContextBuilder;
 import java.time.Clock;
 import java.time.Duration;
@@ -29,7 +30,7 @@ import org.springframework.stereotype.Component;
  *   <li>"היה מעולה": his session is completed here, exactly as the coach's complete_quality_time tool does, and a
  *       fixed confirmation with the week's progress goes back; already completed → "כבר רשום";</li>
  *   <li>"לא יצא": handed to the coach as his words "לא יצא" - its rules record it and offer another time;</li>
- *   <li>"רוצה רעיונות": 2-3 ideas for that session's child that fit its length;</li>
+ *   <li>"רוצה רעיונות": 2-3 ideas for that session's children (fit for the youngest) that fit its length;</li>
  *   <li>a session that is not his, gone, cancelled or not started (for "done"): one fixed line, no AI turn;</li>
  *   <li>a "dc:" id this version does not know: the tapped title goes to the coach as a normal reply.</li>
  * </ul>
@@ -121,14 +122,19 @@ public class SessionButtonTaps {
     }
 
     private String ideasReply(Father father, QualityTime session) {
-        Optional<Child> child = Optional.ofNullable(session.getChildId()).flatMap(children::findById);
-        int age = child.map(c -> c.ageOn(LocalDate.now(clock.withZone(FatherTimezones.of(father))))).orElse(6);
+        LocalDate today = LocalDate.now(clock.withZone(FatherTimezones.of(father)));
+        // a session with several children gets ideas that fit the youngest of them
+        int age = childrenOf(session).stream().filter(c -> c.getBirthDate() != null).mapToInt(c -> c.ageOn(today))
+                .min().orElse(6);
+        String names = childName(session);
         int minutes = (int) Duration.between(session.getScheduledStart(), session.getScheduledEnd()).toMinutes();
         List<ActivityIdeas.ActivityIdea> ideas = ActivityIdeas.forChild(age, "he", null).stream()
                 .sorted(Comparator.comparing(idea -> idea.durationMinutes() > minutes))
                 .limit(IDEAS).toList();
         StringBuilder reply = new StringBuilder(IDENTITY).append("כמה רעיונות לזמן שלך");
-        child.ifPresent(c -> reply.append(" עם ").append(c.getName()));
+        if (names != null) {
+            reply.append(" עם ").append(names);
+        }
         reply.append(":\n");
         for (ActivityIdeas.ActivityIdea idea : ideas) {
             reply.append("\n• ").append(idea.title()).append(" (").append(idea.durationMinutes()).append(" דק׳): ")
@@ -137,8 +143,18 @@ public class SessionButtonTaps {
         return reply.append("\n\nבהצלחה! 💪").toString();
     }
 
+    /**
+     * All the session's children, joined in Hebrew ("מטר ונעם"). Read through the repository: a tap is handled
+     * outside a transaction, where the session's first child is an unloaded proxy.
+     */
     private String childName(QualityTime session) {
-        return Optional.ofNullable(session.getChildId()).flatMap(children::findById).map(Child::getName).orElse(null);
+        Map<Long, String> names = new java.util.HashMap<>();
+        childrenOf(session).forEach(c -> names.put(c.getId(), c.getName()));
+        return SessionChildren.hebrew(session, names);
+    }
+
+    private List<Child> childrenOf(QualityTime session) {
+        return children.findAllById(session.getChildIds());
     }
 
     static String hebrewDuration(int totalMinutes) {

@@ -6,6 +6,8 @@ import com.dadcoach.domain.father.Father;
 import com.dadcoach.qualitytime.QualityTime;
 import com.dadcoach.qualitytime.QualityTimeRepository;
 import com.dadcoach.qualitytime.QualityTimeStatus;
+import com.dadcoach.qualitytime.SessionChildren;
+import com.dadcoach.qualitytime.SessionIntervals;
 import com.dadcoach.weeklygoal.WeeklyGoal;
 import com.dadcoach.weeklygoal.WeeklyGoalRepository;
 import com.dadcoach.weeklygoal.WeeklyGoalService;
@@ -37,7 +39,9 @@ import java.util.Optional;
  * <ul>
  *   <li><b>coverage</b> - completed + valid planned minutes against the weekly goal. Planned counts only
  *       SCHEDULED sessions of this week that have not ended; cancelled and missed sessions never count,
- *       and a rescheduled session counts once (rescheduling cancels the original).</li>
+ *       and a rescheduled session counts once (rescheduling cancels the original). Time where sessions overlap
+ *       counts once (the union of their intervals - completed first, then planned, then awaiting), so two
+ *       sessions for the same slot never count its minutes twice.</li>
  *   <li><b>session phases</b> - UPCOMING / IN_PROGRESS / AWAITING_CONFIRMATION (ended but still
  *       SCHEDULED, i.e. the father has not said whether it happened) / COMPLETED / CANCELLED / MISSED.</li>
  *   <li><b>previous_week</b> - read straight from the previous week's goal and sessions, so it does not
@@ -111,10 +115,10 @@ public class WeeklyPlanContextBuilder {
         List<Map<String, Object>> awaitingConfirmation = new ArrayList<>();
         List<Map<String, Object>> scheduledAfterThisWeek = new ArrayList<>();
         Map<String, Object> nextSession = null;
-        int completedFromSessions = 0;
-        int plannedMinutes = 0;
-        int awaitingMinutes = 0;
-        int previousCompletedMinutes = 0;
+        List<SessionIntervals.Interval> completedIntervals = new ArrayList<>();
+        List<SessionIntervals.Interval> plannedIntervals = new ArrayList<>();
+        List<SessionIntervals.Interval> awaitingIntervals = new ArrayList<>();
+        List<SessionIntervals.Interval> previousCompletedIntervals = new ArrayList<>();
         int previousCompletedSessions = 0;
         int previousNotCompletedSessions = 0;
         List<String> previousNotes = new ArrayList<>();
@@ -134,16 +138,16 @@ public class WeeklyPlanContextBuilder {
             if (inThisWeek) {
                 thisWeek.add(view);
                 if (qt.getStatus() == QualityTimeStatus.COMPLETED) {
-                    completedFromSessions += minutes;
+                    completedIntervals.add(SessionIntervals.of(qt));
                 } else if ("UPCOMING".equals(phase) || "IN_PROGRESS".equals(phase)) {
-                    plannedMinutes += minutes;
+                    plannedIntervals.add(SessionIntervals.of(qt));
                 } else if ("AWAITING_CONFIRMATION".equals(phase)) {
-                    awaitingMinutes += minutes;
+                    awaitingIntervals.add(SessionIntervals.of(qt));
                 }
             }
             if (inPreviousWeek) {
                 if (qt.getStatus() == QualityTimeStatus.COMPLETED) {
-                    previousCompletedMinutes += minutes;
+                    previousCompletedIntervals.add(SessionIntervals.of(qt));
                     previousCompletedSessions++;
                     if (qt.getCompletionNotes() != null && !qt.getCompletionNotes().isBlank()) {
                         previousNotes.add(truncate(qt.getCompletionNotes()));
@@ -166,6 +170,16 @@ public class WeeklyPlanContextBuilder {
                 awaitingConfirmation.add(0, view); // most recently ended first
             }
         }
+
+        // Wall-clock minutes, overlaps once: completed, then what planned adds to it, then what awaiting adds.
+        List<SessionIntervals.Interval> completedAndPlanned = new ArrayList<>(completedIntervals);
+        completedAndPlanned.addAll(plannedIntervals);
+        List<SessionIntervals.Interval> all = new ArrayList<>(completedAndPlanned);
+        all.addAll(awaitingIntervals);
+        int completedFromSessions = SessionIntervals.unionMinutes(completedIntervals);
+        int plannedMinutes = SessionIntervals.unionMinutes(completedAndPlanned) - completedFromSessions;
+        int awaitingMinutes = SessionIntervals.unionMinutes(all) - completedFromSessions - plannedMinutes;
+        int previousCompletedMinutes = SessionIntervals.unionMinutes(previousCompletedIntervals);
 
         Optional<WeeklyGoal> currentGoal = weeklyGoalRepository.findByFatherIdAndWeekStartDate(father.getId(), weekStart);
         Optional<WeeklyGoal> previousGoal = weeklyGoalRepository.findByFatherIdAndWeekStartDate(father.getId(), previousWeekStart);
@@ -276,7 +290,7 @@ public class WeeklyPlanContextBuilder {
     static String line(Map<String, Object> view) {
         StringBuilder sb = new StringBuilder()
                 .append(view.get("phase"))
-                .append(" | ").append(view.get("child_name"))
+                .append(" | ").append(shortNames(view.get("child_name")))
                 .append(" | ").append(view.get("duration_minutes")).append(" min")
                 .append(" | ").append(view.get("weekday")).append(' ').append(view.get("local_date"))
                 .append(' ').append(view.get("local_start")).append('-').append(view.get("local_end"));
@@ -287,6 +301,14 @@ public class WeeklyPlanContextBuilder {
             sb.append(" | ended ").append(view.get("ended_minutes_ago")).append(" min ago");
         }
         return sb.append(" | id=").append(view.get("quality_time_id")).toString();
+    }
+
+    /** Keeps the line well under the platform's 200-character cut, so the id at its end always survives. */
+    static final int MAX_LINE_NAMES_LENGTH = 60;
+
+    private static String shortNames(Object names) {
+        String text = String.valueOf(names);
+        return text.length() <= MAX_LINE_NAMES_LENGTH ? text : text.substring(0, MAX_LINE_NAMES_LENGTH - 3) + "...";
     }
 
     static String phaseOf(QualityTime qt, Instant now) {
@@ -314,9 +336,8 @@ public class WeeklyPlanContextBuilder {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("quality_time_id", qt.getId().toString());
         view.put("child_id", qt.getChildId());
-        view.put("child_name", childNames.containsKey(qt.getChildId())
-                ? childNames.get(qt.getChildId())
-                : (qt.getChild() != null ? qt.getChild().getName() : null));
+        view.put("child_ids", qt.getChildIds());
+        view.put("child_name", SessionChildren.hebrew(qt, childNames));
         view.put("status", qt.getStatus().name());
         view.put("phase", phase);
         view.put("local_date", localStart.toLocalDate().toString());

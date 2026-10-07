@@ -113,8 +113,9 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         log.info("Scheduling Quality Time for father {} with child {} at {}", 
                 fatherId, childId, startTime);
 
-        // Step 1: Load father and child entities
-        Father father = fatherRepository.findById(fatherId)
+        // Step 1: Load father and child entities. His row stays locked until the booking commits, so two bookings
+        // for the same slot (one call per child) are serialized and the second one finds the first one's session.
+        Father father = fatherRepository.findByIdForUpdate(fatherId)
                 .orElseThrow(() -> new IllegalArgumentException("Father not found: " + fatherId));
         Child child = childRepository.findById(childId)
                 .orElseThrow(() -> new IllegalArgumentException("Child not found: " + childId));
@@ -135,6 +136,17 @@ public class QualityTimeServiceImpl implements QualityTimeService {
                     "A session can be booked at most " + MAX_BOOKING_AHEAD.toDays() + " days ahead.");
         }
         boolean inThePast = !startTime.isAfter(now);
+
+        // One block of time with several children is ONE session: a booking at exactly the start and end of one of
+        // his scheduled sessions adds the child to it (no second session, no second set of reminders, minutes
+        // counted once). Already in it: returned unchanged.
+        Optional<QualityTime> sameSlot = qualityTimeRepository.findByFatherIdAndStatus(fatherId, QualityTimeStatus.SCHEDULED)
+                .stream()
+                .filter(qt -> startTime.equals(qt.getScheduledStart()) && endTime.equals(qt.getScheduledEnd()))
+                .min(Comparator.comparing(QualityTime::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
+        if (sameSlot.isPresent()) {
+            return joinSession(father, sameSlot.get(), child);
+        }
 
         // D-007: the session lives in Dad Coach; Google Calendar is optional (and never touched for a past session). Without a connected calendar the
         // session is booked with no calendar event. With one, a conflicting event refuses the slot (read before
@@ -169,6 +181,61 @@ public class QualityTimeServiceImpl implements QualityTimeService {
                 startTime,
                 endTime
         ).withCalendarError(calendarError);
+    }
+
+    private ScheduleQualityTimeResult joinSession(Father father, QualityTime session, Child child) {
+        boolean added = session.addChild(child);
+        if (added) {
+            qualityTimeRepository.save(session);
+            log.info("Child {} joined Quality Time {} (same slot): {} children", child.getId(), session.getId(),
+                    session.getChildIds().size());
+            updateCalendarEventChildren(father, session);
+        } else {
+            log.info("Child {} is already in Quality Time {} - nothing changed", child.getId(), session.getId());
+        }
+        return ScheduleQualityTimeResult.joined(session.getId(), session.getGoogleCalendarEventId(),
+                SessionChildren.hebrew(session), SessionChildren.names(session), session.getScheduledStart(),
+                session.getScheduledEnd(), !added);
+    }
+
+    /**
+     * Best effort: the session's calendar event names all its children after one joined. A failure is logged and
+     * the session stands (like the rest of the calendar code).
+     */
+    private void updateCalendarEventChildren(Father father, QualityTime session) {
+        String eventId = session.getGoogleCalendarEventId();
+        if (eventId == null || eventId.isBlank() || !father.hasGoogleCalendarConfigured()) {
+            return;
+        }
+        try {
+            String accessToken = getValidAccessToken(father);
+            if (accessToken == null) {
+                return;
+            }
+            String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
+            String locale = father.getLocale() != null ? father.getLocale() : AppConstants.DEFAULT_LOCALE;
+            Map<String, Object> event = buildCalendarEvent(calendarChildNames(session, locale),
+                    session.getScheduledStart(), session.getScheduledEnd(), timezone, locale);
+            Map<String, Object> patch = new HashMap<>();
+            patch.put("summary", event.get("summary"));
+            patch.put("description", event.get("description"));
+            String calendarId = father.getGoogleCalendarId() != null ? father.getGoogleCalendarId() : "primary";
+            String url = GOOGLE_CALENDAR_API + "/calendars/" + URLEncoder.encode(calendarId, StandardCharsets.UTF_8)
+                    + "/events/" + eventId;
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(accessToken);
+            restTemplate.exchange(url, HttpMethod.PATCH, new HttpEntity<>(patch, headers), String.class);
+            log.info("Updated Google Calendar event {} with the children of Quality Time {}", eventId, session.getId());
+        } catch (Exception e) {
+            log.warn("Failed to update Google Calendar event {} for Quality Time {}: {}", eventId, session.getId(),
+                    e.getMessage());
+        }
+    }
+
+    private static String calendarChildNames(QualityTime session, String locale) {
+        List<String> names = SessionChildren.names(session);
+        return "he".equals(locale) ? SessionChildren.joinHebrew(names) : SessionChildren.joinEnglish(names);
     }
 
     /**
@@ -315,8 +382,9 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         qualityTimeRepository.save(qualityTime);
         fatherRepository.save(father);
         
-        // Record completed minutes to weekly goal
-        int durationMinutes = calculateDurationMinutes(qualityTime);
+        // Record completed minutes to weekly goal - only minutes no other completed session of his already
+        // covers (overlapping sessions, e.g. a legacy pair for the same slot, never count the same time twice)
+        int durationMinutes = creditedMinutes(qualityTime);
         weeklyGoalService.recordCompletedQualityTime(father.getId(), qualityTime.getScheduledStart(), durationMinutes);
         log.info("Recorded {} minutes to weekly goal for father {}", durationMinutes, father.getId());
 
@@ -330,6 +398,22 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         } else {
             return CompleteQualityTimeResult.withoutNewBelt(qualityTimeId, newStreak, newBelt);
         }
+    }
+
+    private int creditedMinutes(QualityTime qualityTime) {
+        int full = calculateDurationMinutes(qualityTime);
+        if (qualityTime.getScheduledStart() == null || qualityTime.getScheduledEnd() == null) {
+            return full;
+        }
+        SessionIntervals.Interval interval = SessionIntervals.of(qualityTime);
+        List<SessionIntervals.Interval> overlapping = qualityTimeRepository
+                .findByFatherIdAndStatus(qualityTime.getFatherId(), QualityTimeStatus.COMPLETED).stream()
+                .filter(other -> !other.getId().equals(qualityTime.getId()))
+                .filter(other -> other.getScheduledStart() != null && other.getScheduledEnd() != null)
+                .map(SessionIntervals::of)
+                .filter(other -> SessionIntervals.overlaps(other, interval))
+                .toList();
+        return overlapping.isEmpty() ? full : SessionIntervals.uncoveredMinutes(interval, overlapping);
     }
 
     /**

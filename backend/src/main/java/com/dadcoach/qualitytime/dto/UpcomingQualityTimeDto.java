@@ -2,8 +2,10 @@ package com.dadcoach.qualitytime.dto;
 
 import com.dadcoach.qualitytime.QualityTime;
 import com.dadcoach.qualitytime.QualityTimeStatus;
+import com.dadcoach.qualitytime.SessionChildren;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -20,12 +22,12 @@ public record UpcomingQualityTimeDto(
         UUID id,
 
         /**
-         * The name of the child this Quality Time is with.
+         * The names of the children this Quality Time is with, joined in Hebrew ("מטר ונעם").
          */
         String childName,
 
         /**
-         * The child's ID.
+         * The session's first child's ID.
          */
         Long childId,
 
@@ -47,7 +49,12 @@ public record UpcomingQualityTimeDto(
         /**
          * Whether a reminder has been sent for this Quality Time.
          */
-        boolean reminderSent
+        boolean reminderSent,
+
+        /**
+         * All the session's children's IDs, first child first.
+         */
+        List<Long> childIds
 ) {
 
     /**
@@ -59,12 +66,13 @@ public record UpcomingQualityTimeDto(
     public static UpcomingQualityTimeDto from(QualityTime qualityTime) {
         return new UpcomingQualityTimeDto(
                 qualityTime.getId(),
-                qualityTime.getChild() != null ? qualityTime.getChild().getName() : null,
+                SessionChildren.hebrew(qualityTime),
                 qualityTime.getChildId(),
                 qualityTime.getScheduledStart(),
                 qualityTime.getScheduledEnd(),
                 qualityTime.getStatus(),
-                qualityTime.isReminderSent()
+                qualityTime.isReminderSent(),
+                qualityTime.getChildIds()
         );
     }
 }

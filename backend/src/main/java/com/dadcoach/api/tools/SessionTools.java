@@ -54,7 +54,20 @@ public final class SessionTools {
             data.put("calendar_error", result.calendarError());
         }
         data.put("child_name", result.childName());
+        data.put("child_names", result.childNames());
+        if (result.joinedExistingSession()) {
+            data.put("joined_existing_session", true);
+            if (result.childAlreadyInSession()) {
+                data.put("child_already_in_session", true);
+            }
+        }
     }
+
+    static final String JOINED_NOTE = "This child was added to the existing session at the same time - one session "
+            + "with all of these children (child_names), not a second session. Tell him in one line.";
+    static final String ALREADY_IN_NOTE = "This child is already in this session - nothing changed.";
+    static final String MERGED_NOTE = "The new time is exactly the time of another session of his - the children were "
+            + "added to that session (new_quality_time_id), one session with all of them. Tell him in one line.";
 
     @Component
     public static class Schedule implements ToolHandler {
@@ -88,6 +101,9 @@ public final class SessionTools {
             data.put("status", result.status().name());
             views.putSessionTimers(data, father, result.startTime(), result.endTime());
             views.putWeekCoverage(data, father);
+            if (result.joinedExistingSession()) {
+                data.put("note", result.childAlreadyInSession() ? ALREADY_IN_NOTE : JOINED_NOTE);
+            }
             return data;
         }
     }
@@ -117,8 +133,23 @@ public final class SessionTools {
                     : (int) Duration.between(existing.getScheduledStart(), existing.getScheduledEnd()).toMinutes());
             // one transaction (the controller's): if the new time is refused, the old session stays as it was
             sessions.cancelQualityTime(existing.getId());
-            ScheduleQualityTimeResult result = sessions.scheduleQualityTime(father.getId(), existing.getChildId(), start,
-                    Duration.ofMinutes(duration));
+            // every child of the session moves with it; the first booking creates the new session (or joins one of
+            // his sessions at exactly that time) and each further child joins it
+            List<Long> childIds = existing.getChildIds();
+            ScheduleQualityTimeResult result = null;
+            for (Long childId : childIds) {
+                ScheduleQualityTimeResult booked = sessions.scheduleQualityTime(father.getId(), childId, start,
+                        Duration.ofMinutes(duration));
+                if (result == null) {
+                    result = booked;
+                } else {
+                    // keep whether the FIRST booking joined another session; take the latest children's names
+                    result = new ScheduleQualityTimeResult(result.qualityTimeId(), booked.calendarEventId(),
+                            booked.childName(), result.startTime(), result.endTime(), result.status(),
+                            result.calendarError(), booked.childNames(), result.joinedExistingSession(),
+                            result.childAlreadyInSession());
+                }
+            }
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("old_quality_time_id", existing.getId().toString());
             data.put("new_quality_time_id", result.qualityTimeId().toString());
@@ -128,6 +159,9 @@ public final class SessionTools {
             data.put("status", result.status().name());
             views.putSessionTimers(data, father, result.startTime(), result.endTime());
             views.putWeekCoverage(data, father);
+            if (result.joinedExistingSession()) {
+                data.put("note", MERGED_NOTE);
+            }
             return data;
         }
     }

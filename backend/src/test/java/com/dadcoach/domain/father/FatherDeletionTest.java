@@ -29,8 +29,14 @@ class FatherDeletionTest extends AbstractIntegrationTest {
 
     private Father fatherWithData(String phone) {
         Father f = data.activeFather(phone);
-        data.child(f, "נועה", 6);
+        var noa = data.child(f, "נועה", 6);
+        var matar = data.child(f, "מטר", 4);
         data.endpoint(f, true);
+        // a session with both children (quality_time_child)
+        UUID session = UUID.randomUUID();
+        jdbc.update("INSERT INTO quality_time (id, father_id, child_id, scheduled_start, scheduled_end) "
+                + "VALUES (?, ?, ?, now() + interval '1 day', now() + interval '25 hours')", session, f.getId(), noa.getId());
+        jdbc.update("INSERT INTO quality_time_child (quality_time_id, child_id) VALUES (?, ?)", session, matar.getId());
         jdbc.update("INSERT INTO tool_idempotency (id, scope, idempotency_key, status, actor_ref, expires_at) "
                 + "VALUES (gen_random_uuid(), 'TOOL:add_child', 'k', 'SUCCEEDED', ?, now() + interval '1 day')", "whatsapp:" + phone);
         jdbc.update("INSERT INTO site_signup (name, phone) VALUES ('אבא', ?)", phone); // he signed up on the site first
@@ -56,6 +62,8 @@ class FatherDeletionTest extends AbstractIntegrationTest {
         assertThat(fake.calls("/api/v1/tenancy/tenants/")).hasSize(1);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM father", Integer.class)).isZero();
         assertThat(rows("child", f)).isZero();
+        assertThat(rows("quality_time", f)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM quality_time_child", Integer.class)).isZero();
         assertThat(rows("communication_endpoints", f)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tool_idempotency", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM site_signup", Integer.class)).as("his site signup too").isZero();
@@ -79,6 +87,7 @@ class FatherDeletionTest extends AbstractIntegrationTest {
         mvc.perform(delete("/api/v1/admin/fathers/" + new UUID(0L, f.getId())).header("X-API-Key", ADMIN_KEY))
                 .andExpect(status().isNoContent());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM father", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM quality_time_child", Integer.class)).isZero();
         assertThat(deletedSenders.isDeleted(f.getPhone())).isTrue();
 
         assertThat(outbox.sendDue()).isZero();

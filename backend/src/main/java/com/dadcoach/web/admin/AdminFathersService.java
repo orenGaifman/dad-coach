@@ -106,7 +106,7 @@ public class AdminFathersService {
                 .toList();
         List<SessionRow> sessionRows = qualityTimes.findByFatherIdOrderByScheduledStartDesc(fatherId).stream().limit(40)
                 .filter(qt -> qt.getScheduledStart() != null && qt.getScheduledEnd() != null)
-                .map(qt -> new SessionRow(qt.getId().toString(), qt.getChild() == null ? null : qt.getChild().getName(),
+                .map(qt -> new SessionRow(qt.getId().toString(), com.dadcoach.qualitytime.SessionChildren.hebrew(qt),
                         SessionPhases.phaseOf(qt, now), qt.getScheduledStart(), qt.getScheduledEnd(), qt.getCompletionNotes()))
                 .toList();
         return new FatherDetail(profile, kids, goalRows, sessionRows, queries.deliveriesOf(fatherId, 30),

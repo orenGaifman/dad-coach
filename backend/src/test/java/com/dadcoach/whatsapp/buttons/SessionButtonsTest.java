@@ -153,6 +153,28 @@ class SessionButtonsTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void aSessionWithTwoChildrenIsDoneOnceAndItsIdeasNameBoth() throws Exception {
+        setUpFather("+19995550609", true);
+        Child matar = data.child(father, "מטר", 3);
+        QualityTime ended = session(Duration.ofMinutes(-90), 60);
+        ended.addChild(matar);
+        sessions.saveAndFlush(ended);
+        QualityTime next = session(Duration.ofMinutes(60), 30);
+        next.addChild(matar);
+        sessions.saveAndFlush(next);
+
+        webhook(tap("wamid.joint1", "dc:done:" + ended.getId(), "היה מעולה"));
+        assertThat(statusOf(ended)).isEqualTo("COMPLETED");
+        assertThat(lastSentText()).isEqualTo("❤️ דאד קואץ׳:\nאיזה כיף! רשמתי את הזמן שלך עם נועה ומטר ✅\nהשבוע: שעה.");
+        assertThat(jdbc.queryForObject("SELECT total_quality_times_completed FROM father WHERE id = ?", Integer.class,
+                father.getId())).isEqualTo(1);
+
+        webhook(tap("wamid.joint2", "dc:ideas:" + next.getId(), "רוצה רעיונות"));
+        assertThat(lastSentText()).startsWith("❤️ דאד קואץ׳:\nכמה רעיונות לזמן שלך עם נועה ומטר:\n\n• ");
+        assertThat(fake.turns()).isEmpty();
+    }
+
+    @Test
     void missedGoesToTheCoachAsHisWordsAndLeavesTheSessionForTheCoachToRecord() throws Exception {
         setUpFather("+19995550605", true);
         QualityTime qt = session(Duration.ofMinutes(-90), 60);

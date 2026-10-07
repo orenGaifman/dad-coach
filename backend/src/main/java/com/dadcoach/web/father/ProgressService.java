@@ -65,7 +65,7 @@ public class ProgressService {
         Set<Long> childrenWithSession = new HashSet<>();
         boolean noted = false;
         for (QualityTime qt : completed) {
-            childrenWithSession.add(qt.getChildId());
+            childrenWithSession.addAll(qt.getChildIds());
             noted |= qt.getCompletionNotes() != null && !qt.getCompletionNotes().isBlank();
         }
         List<Long> activeChildren = children.findByFatherIdAndStatus(father.getId(), "ACTIVE").stream()

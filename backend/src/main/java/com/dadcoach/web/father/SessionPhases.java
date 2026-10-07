@@ -1,6 +1,7 @@
 package com.dadcoach.web.father;
 
 import com.dadcoach.qualitytime.QualityTime;
+import com.dadcoach.qualitytime.SessionChildren;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -33,16 +34,14 @@ public final class SessionPhases {
     static SessionView view(QualityTime qt, String phase, ZoneId zone, Map<Long, String> childNames) {
         ZonedDateTime start = qt.getScheduledStart().atZone(zone);
         ZonedDateTime end = qt.getScheduledEnd().atZone(zone);
-        String childName = childNames.get(qt.getChildId());
-        if (childName == null && qt.getChild() != null) {
-            childName = qt.getChild().getName();
-        }
+        String childName = SessionChildren.hebrew(qt, childNames);
         boolean started = "IN_PROGRESS".equals(phase) || "AWAITING_CONFIRMATION".equals(phase);
         boolean open = "UPCOMING".equals(phase) || started;
         return new SessionView(
                 qt.getId().toString(),
                 qt.getChildId(),
                 childName,
+                qt.getChildIds(),
                 phase,
                 qt.getScheduledStart(),
                 qt.getScheduledEnd(),

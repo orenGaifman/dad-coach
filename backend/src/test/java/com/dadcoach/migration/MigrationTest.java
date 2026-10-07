@@ -52,7 +52,7 @@ class MigrationTest extends AbstractIntegrationTest {
 
     static final List<String> KEPT = List.of("child", "communication_endpoints", "dashboard_session", "father",
             "father_deactivation", "goal", "login_link", "message_log", "platform_person_deletion", "quality_time",
-            "scheduled_response_delivery", "site_signup", "staff_user", "template_messages", "tool_idempotency",
+            "quality_time_child", "scheduled_response_delivery", "site_signup", "staff_user", "template_messages", "tool_idempotency",
             "training_progress", "weekly_goal");
 
     @Test
@@ -98,6 +98,12 @@ class MigrationTest extends AbstractIntegrationTest {
         prodJdbc.update("INSERT INTO father (phone, display_name, status, created_at) VALUES ('+19995550001', 'אבא', 'ONBOARDING', now())");
         prodJdbc.update("INSERT INTO child (father_id, name, birth_date, created_at, updated_at, status) "
                 + "VALUES (1, 'נועה', '2020-01-01', now(), now(), 'ACTIVE')");
+        prodJdbc.update("INSERT INTO child (father_id, name, birth_date, created_at, updated_at, status) "
+                + "VALUES (1, 'מטר', '2022-01-01', now(), now(), 'ACTIVE')");
+        // production's pair: one Friday slot booked once per daughter (V42 merges it)
+        prodJdbc.update("INSERT INTO quality_time (father_id, child_id, scheduled_start, scheduled_end, created_at) VALUES "
+                + "(1, 1, '2026-10-09T06:00:00Z', '2026-10-09T07:30:00Z', '2026-10-07T10:00:00Z'), "
+                + "(1, 2, '2026-10-09T06:00:00Z', '2026-10-09T07:30:00Z', '2026-10-07T10:00:05Z')");
 
         Flyway flyway = Flyway.configure().dataSource(prod).locations("classpath:db/migration")
                 .outOfOrder(true).validateOnMigrate(true).load();
@@ -108,7 +114,45 @@ class MigrationTest extends AbstractIntegrationTest {
         assertThat(indexes(prodJdbc)).containsExactlyElementsOf(indexes(jdbc));
         assertThat(constraints(prodJdbc)).containsExactlyElementsOf(constraints(jdbc));
         assertThat(prodJdbc.queryForObject("SELECT count(*) FROM father", Integer.class)).isEqualTo(1);
-        assertThat(prodJdbc.queryForObject("SELECT count(*) FROM child", Integer.class)).isEqualTo(1);
+        assertThat(prodJdbc.queryForObject("SELECT count(*) FROM child", Integer.class)).isEqualTo(2);
+        assertThat(prodJdbc.queryForList("SELECT status FROM quality_time ORDER BY created_at", String.class))
+                .containsExactly("SCHEDULED", "CANCELLED");
+        assertThat(prodJdbc.queryForObject("SELECT child_id FROM quality_time_child", Long.class)).isEqualTo(2L);
+    }
+
+    /** V42: per father, SCHEDULED sessions with the same start and end become one session with all their children. */
+    @Test
+    void theMergeOfDuplicateSessionsKeepsTheFirstWithEveryChildCancelsTheRestAndIsIdempotent() throws Exception {
+        runMerge(); // an empty database: nothing to do
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM quality_time", Integer.class)).isZero();
+
+        jdbc.update("INSERT INTO father (phone, display_name, status, created_at) VALUES ('+19995550800', 'אבא', 'ACTIVE', now())");
+        jdbc.update("INSERT INTO father (phone, display_name, status, created_at) VALUES ('+19995550801', 'אבא', 'ACTIVE', now())");
+        for (String[] child : new String[][]{{"1", "מטר"}, {"1", "נעם"}, {"1", "איתמר"}, {"2", "רון"}}) {
+            jdbc.update("INSERT INTO child (father_id, name, birth_date, created_at, updated_at, status) "
+                    + "VALUES (?, ?, '2020-01-01', now(), now(), 'ACTIVE')", Long.valueOf(child[0]), child[1]);
+        }
+        String friday = "'2026-10-09T06:00:00Z', '2026-10-09T07:30:00Z'";
+        jdbc.update("INSERT INTO quality_time (id, father_id, child_id, scheduled_start, scheduled_end, status, created_at) VALUES "
+                + "('00000000-0000-0000-0000-00000000000b', 1, 2, " + friday + ", 'SCHEDULED', '2026-10-07T10:00:05Z'), "
+                + "('00000000-0000-0000-0000-00000000000a', 1, 1, " + friday + ", 'SCHEDULED', '2026-10-07T10:00:00Z'), "
+                + "('00000000-0000-0000-0000-00000000000c', 1, 3, " + friday + ", 'COMPLETED', '2026-10-07T09:00:00Z'), "
+                + "('00000000-0000-0000-0000-00000000000d', 1, 1, '2026-10-10T06:00:00Z', '2026-10-10T07:00:00Z', 'SCHEDULED', now()), "
+                + "('00000000-0000-0000-0000-00000000000e', 2, 4, " + friday + ", 'SCHEDULED', now())");
+
+        runMerge();
+        runMerge(); // a re-run changes nothing
+
+        assertThat(jdbc.queryForList("SELECT right(id::text, 1) || ' ' || status FROM quality_time ORDER BY id", String.class))
+                .containsExactly("a SCHEDULED", "b CANCELLED", "c COMPLETED", "d SCHEDULED", "e SCHEDULED");
+        assertThat(jdbc.queryForList("SELECT right(quality_time_id::text, 1) || ' ' || child_id FROM quality_time_child",
+                String.class)).containsExactly("a 2");
+    }
+
+    private void runMerge() throws Exception {
+        try (Connection c = jdbc.getDataSource().getConnection()) {
+            ScriptUtils.executeSqlScript(c, new ClassPathResource("db/migration/V42__merge_duplicate_sessions.sql"));
+        }
     }
 
     private static List<String> tables(JdbcTemplate j) {

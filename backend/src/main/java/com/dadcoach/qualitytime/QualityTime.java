@@ -5,7 +5,15 @@ import com.dadcoach.domain.father.Father;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
 
 /**
  * JPA entity representing a Quality Time event in the coaching system.
@@ -16,6 +24,10 @@ import java.util.UUID;
  * of the deterministic workflow engine.
  * 
  * Requirements: 3.4 - Google Calendar Integration (Quality Time event storage)
+ *
+ * <p>One session can be with several of the father's children (V41): {@code child} is the session's first child,
+ * every further child is a row of {@code quality_time_child}. {@link #getChildren()} is all of them, first child
+ * first. Completing, missing or cancelling a session applies to the whole session.</p>
  */
 @Entity
 @Table(name = "quality_time")
@@ -38,6 +50,14 @@ public class QualityTime {
 
     @Column(name = "child_id", insertable = false, updatable = false)
     private Long childId;
+
+    /** The children who joined the session after its first child (quality_time_child). Small; loaded with it. */
+    @ManyToMany(fetch = FetchType.EAGER)
+    @Fetch(FetchMode.SUBSELECT)
+    @JoinTable(name = "quality_time_child",
+            joinColumns = @JoinColumn(name = "quality_time_id"),
+            inverseJoinColumns = @JoinColumn(name = "child_id"))
+    private Set<Child> additionalChildren = new LinkedHashSet<>();
 
     @Column(name = "google_calendar_event_id", length = 255)
     private String googleCalendarEventId;
@@ -144,6 +164,50 @@ public class QualityTime {
      */
     public boolean isScheduled() {
         return this.status == QualityTimeStatus.SCHEDULED;
+    }
+
+    /** Every child of this session: the first child, then the ones who joined (by child id). */
+    public List<Child> getChildren() {
+        List<Child> all = new ArrayList<>();
+        if (child != null) {
+            all.add(child);
+        }
+        additionalChildren.stream()
+                .filter(c -> c != null && (child == null || !Objects.equals(c.getId(), child.getId())))
+                .sorted(Comparator.comparing(Child::getId, Comparator.nullsLast(Comparator.naturalOrder())))
+                .forEach(all::add);
+        return all;
+    }
+
+    /** The ids of {@link #getChildren()}, in the same order. */
+    public List<Long> getChildIds() {
+        List<Long> ids = new ArrayList<>();
+        Long first = childId != null ? childId : (child != null ? child.getId() : null);
+        if (first != null) {
+            ids.add(first);
+        }
+        for (Child c : getChildren()) {
+            if (c.getId() != null && !ids.contains(c.getId())) {
+                ids.add(c.getId());
+            }
+        }
+        return ids;
+    }
+
+    public boolean hasChild(Long id) {
+        return id != null && getChildIds().contains(id);
+    }
+
+    /**
+     * Adds a child to this session.
+     *
+     * @return false when the child is already in it (nothing changes)
+     */
+    public boolean addChild(Child other) {
+        if (other == null || hasChild(other.getId())) {
+            return false;
+        }
+        return additionalChildren.add(other);
     }
 
     /**
