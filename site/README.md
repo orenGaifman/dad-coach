@@ -5,6 +5,23 @@ framework. Reference implementation: `~/repos/tair/site` (same structure, same q
 design rules come from `dad-coach-web/docs/brand` and `docs/design`; tokens live in
 `src/styles/tokens.css`. Light page with navy bands, address the father in the masculine singular.
 
+**Everything visible is Hebrew.** The brand is written **דאד קואץ׳** (Hebrew geresh ׳, U+05F3), never
+"Dad Coach", in headings, buttons, the demo phone, alt texts, meta tags, the OG image, the footer and the
+legal pages. Latin stays only where it is a name or a command: vendor names in the privacy table (Meta,
+Render, Supabase, Google Fonts), standards and screen readers in the accessibility statement, and the
+deletion command `DELETE MY DATA` (the backend only knows the English phrase; the FAQ says so).
+
+**Voice: impressive and humorous** (owner, 2026-10-07). The jokes are fathers recognizing themselves,
+never mocking the father or the kids, never guilt. Humor lives in the headlines and around the demo; the
+coach's own bubbles stay the real product lines. Page story: the hero ("ביום ראשון תכננת פארק. ביום חמישי
+זה כבר היה ״שבוע הבא״.") with the signature *week story* card (`src/story.js`: the plan hops to
+"tomorrow" until it lands on "שבוע הבא", then the same week with Dad Coach), the excuse graveyard
+(`src/excuses.js`, sticky notes that flip to what the product really does), the demo, how it works,
+capabilities, the covered week ("זה לא באג, זה פיצ׳ר."), the notifications he never gets, the belts as
+a dojo with a pace switch (`src/belts.js`, plain arithmetic on the real thresholds, labeled as such), the
+personal page, FAQ (two "שאלה כמעט רצינית"), and the final callback ("הפארק עדיין שם. הפעם אתם מגיעים.").
+Every motion respects `prefers-reduced-motion` and `?demo=static` (the HTML is the final state).
+
 ## Build and preview
 
 ```sh
@@ -14,7 +31,8 @@ npm run build        # → site/dist/ (static, deploy as-is)
 npm run preview      # serves dist on http://localhost:4175
 npm run dev          # live reload while editing
 npm run images       # re-render og-image.png, apple-touch-icon.png, favicon.png (headless Chrome) + the WhatsApp QR
-npm run screenshots  # Playwright screenshots into screenshots/ (needs `npm run preview` running)
+                     # (the OG headline is the hero's: "ביום ראשון תכננת פארק. הפעם אתם מגיעים.")
+npm run screenshots  # Playwright: screenshots/home-390.png, demo-1440.png, full-{390,1440}.jpg (needs `npm run preview` running)
 python3 scripts/intro_voice.py   # (from the repo root) re-record the hero voice intro, prints the caption timings
 ```
 
@@ -39,7 +57,8 @@ devices (there the wa.me link is the whole flow).
 ## The demo
 
 `src/demo/scenarios.js` mirrors `../marketing/whatsapp-demo-flow.md` line for line (edit the doc
-first). The coach lines are **drafts from the workflow rules**; replace them with real qa-lab lines
+first). Every coach bubble and lock-screen notification opens with the product's identity line
+`❤️ דאד קואץ׳:` (`COACH_LINE`), and the phone's contact name is דאד קואץ׳. The coach lines are **drafts from the workflow rules**; replace them with real qa-lab lines
 before launch (checklist at the end of the doc). `src/demo/player.js` is deterministic: typing
 indicator, proactive messages shown first as a lock-screen notification, a "השבוע שלך" card that
 follows the week, pause/skip/replay, pauses when scrolled away or the tab is hidden.
@@ -49,7 +68,8 @@ follows the week, pause/skip/replay, pauses when scrolled away or the tab is hid
 
 `src/intro.js`: the coach's avatar (the dashboard's `coach-avatar` artwork) + a 20-second Hebrew male
 voice (ElevenLabs, voice "amit", script in `scripts/intro_voice.py`) with live captions. Plays only on
-tap. `?coach=off` hides it, to compare the hero with and without it. Note: the brand's
+tap. `?coach=off` hides it, to compare the hero with and without it. The captions say דאד קואץ׳; the
+recording says the name out loud, which sounds the same in Hebrew, so the mp3 is unchanged. Note: the brand's
 ILLUSTRATION_STYLE says "no character mascots"; the dashboard already uses this character, so it is
 used here as a measured, removable experiment.
 
@@ -71,7 +91,10 @@ used here as a measured, removable experiment.
 No testimonials, logos, ratings, user counts or invented statistics. The demo says "שיחה מתוסרטת
 להמחשה … לדוגמה", the week card and the weekly summary carry a "דוגמה" badge, the footer repeats it.
 Belt thresholds are the real ones (`workflow/Belt.java`), timer times are the real policy
-(`SessionTimerPlanner`: 08:00 on the day, 1 hour before, 30 minutes after the end).
+(`SessionTimerPlanner`: 08:00 on the day, 1 hour before, 30 minutes after the end). The hero's week story
+carries a "דוגמה" badge and uses the demo's own coach lines; the dojo's "שבוע N" is labeled as arithmetic,
+not a promise; the struck-through notifications are invented on purpose (they are what he never gets).
+No testimonials, no stats, no price beyond the launch wording.
 
 ## Slots for real product screenshots
 
@@ -85,7 +108,8 @@ real data with permission).
 site/
   index.html                       landing page
   privacy/ terms/ data-deletion/ accessibility/   legal pages (index.html each)
-  src/main.js                      reveal, demo, signup form, intro
+  src/main.js                      reveal, demo, signup form, intro, story, excuses, belt pace
+  src/story.js, excuses.js, belts.js   the hero's week story, the excuse notes, the dojo's pace switch
   src/config.js                    the configuration above
   src/signup-form.js               validation, phone normalization, submit (honeypot, 10 s timeout)
   src/intro.js                     the coach's voice intro + captions
@@ -96,9 +120,13 @@ site/
                                    dad-coach-intro.mp3, img/ (logo, belts, hero, coach, QR)
   og/                              HTML sources of the rendered PNGs
   scripts/                         render-images.sh, intro_voice.py, screenshots.mjs
-  screenshots/                     home/demo at 390 and 1440 px (for the hub page)
+  screenshots/                     home-390, demo-1440, full-page 390/1440 (for the hub page)
   render.yaml                      the Render static service (Blueprint path site/render.yaml)
 ```
+
+Images: hero.webp (now the final call to action), coach.webp (intro), belts/, and two dashboard
+illustrations copied from `frontend/public/img` (coach-thinking: the excuses; mission-quality-time: how it
+works). All lazy except the first screen, which has no image: the LCP is the headline.
 
 Quality notes: one layout breakpoint (760px) plus a 1080px grid step, logical CSS properties,
 no horizontal scroll at 390px (checked by `npm run screenshots`), visible focus ring, skip link,
