@@ -569,7 +569,8 @@ states:
     ruleStrength: REQUIRED
     conditionType: AI_CONDITION
     conditionDescription: "awaiting_confirmation has no session that \"ended N min ago\" with N up to about 180, or
-      he already told you how that session went"
+      he already told you how that session went, or this conversation already asked him about that session in the
+      last three hours (one session can wake you more than once)"
     actionType: GUIDE_AI
     actionInstruction: "reply exactly [[SUPPRESS_RESPONSE]]."
     displayOrder: 1
