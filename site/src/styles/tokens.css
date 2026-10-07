@@ -1,0 +1,66 @@
+/* Dad Coach design tokens (from dad-coach-web docs/design: COLOR_SYSTEM, TYPOGRAPHY, MOTION_PHILOSOPHY;
+   colors sampled from the logo and belt artwork). Warm neutrals as the canvas, a muted navy as the
+   primary, gold only for earned moments and the one primary action. Light page, navy "evening" bands. */
+:root {
+  /* navy — primary, the night sky of the artwork */
+  --dc-navy-950: #0B1424;
+  --dc-navy-900: #101C32;
+  --dc-navy-800: #1D2B4B;
+  --dc-navy-700: #2A3D66;
+  --dc-navy-500: #5A6A8C;
+  --dc-navy-200: #C9D0DE;
+  --dc-navy-100: #E6E9F0;
+
+  /* gold — earned warmth (torii gate, belts) */
+  --dc-gold-700: #7F5B1C; /* text on light surfaces (≥ 5:1 on cream) */
+  --dc-gold-600: #B3893F;
+  --dc-gold-500: #DAAC5F;
+  --dc-gold-300: #EBCB91;
+  --dc-gold-100: #F7EEDC;
+
+  /* warm neutrals — paper, sand, linen */
+  --dc-cream: #FAF7F1;
+  --dc-sand-100: #F2ECE1;
+  --dc-surface: #FFFFFF;
+  --dc-ink-900: #1F1B16;
+  --dc-ink-700: #4A443C;
+  --dc-ink-500: #6B6358; /* ≥ 4.5:1 on white and on the WhatsApp bubbles */
+  --dc-ink-300: #CFC7BA;
+  --dc-ink-100: #ECE6DC;
+
+  /* semantic, softened */
+  --dc-success-600: #3F7D4E;
+  --dc-success-100: #E3F0E5;
+  --dc-danger-600: #B4473B;
+
+  /* WhatsApp, only inside the phone */
+  --dc-wa-bg: #EFE7DD;
+  --dc-wa-in: #FFFFFF;
+  --dc-wa-out: #D9FDD3;
+  --dc-wa-bar: #1D2B4B;
+
+  /* type: a warm humanist sans with good Hebrew */
+  --dc-font: 'Assistant', 'Segoe UI', Arial, sans-serif;
+  --dc-fs-xs: 0.8125rem;
+  --dc-fs-sm: 0.9375rem;
+  --dc-fs-md: 1.0625rem;
+  --dc-fs-lg: 1.25rem;
+  --dc-fs-xl: 1.5rem;
+  --dc-fs-2xl: 2rem;
+  --dc-fs-3xl: clamp(2.3rem, 4vw, 3.4rem);
+  --dc-lh-body: 1.65;
+  --dc-lh-tight: 1.15;
+
+  /* space, radius, shadow */
+  --dc-sp-1: 4px; --dc-sp-2: 8px; --dc-sp-3: 12px; --dc-sp-4: 16px; --dc-sp-5: 20px;
+  --dc-sp-6: 24px; --dc-sp-8: 32px; --dc-sp-10: 40px; --dc-sp-12: 48px; --dc-sp-16: 72px;
+  --dc-r-sm: 8px; --dc-r-md: 12px; --dc-r-lg: 18px; --dc-r-xl: 26px; --dc-r-pill: 999px;
+  --dc-shadow-card: 0 1px 2px rgb(31 27 22 / 6%), 0 4px 14px rgb(31 27 22 / 5%);
+  --dc-shadow-raised: 0 10px 34px rgb(16 28 50 / 14%);
+  --dc-focus-ring: 0 0 0 3px var(--dc-surface), 0 0 0 5px var(--dc-navy-700);
+
+  /* motion (MOTION_PHILOSOPHY: quiet by default) */
+  --dc-ease-out: cubic-bezier(.2, .7, .2, 1);
+  --dc-t-fast: 150ms;
+  --dc-t-reveal: 320ms;
+}

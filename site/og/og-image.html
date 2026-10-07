@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="he" dir="rtl"><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@600;800&display=swap">
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body { font-family: 'Assistant', Arial, sans-serif; background: #101C32; color: #FAF7F1; display: grid; grid-template-columns: 600px 600px; }
+  .copy { padding: 64px 64px 56px 40px; display: flex; flex-direction: column; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: 16px; font-size: 34px; font-weight: 800; direction: ltr; justify-content: flex-end; }
+  .brand img { width: 64px; height: 64px; border-radius: 50%; }
+  h1 { margin: 0; font-size: 66px; line-height: 1.08; font-weight: 800; }
+  h1 span { color: #DAAC5F; display: block; }
+  p { margin: 0; font-size: 28px; color: #C9D0DE; font-weight: 600; }
+  .art { position: relative; background: url('../public/img/hero.webp') center / cover; }
+  .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(270deg, rgba(16,28,50,0) 70%, #101C32 100%); }
+  .notif { position: absolute; z-index: 1; top: 40px; right: 40px; left: 40px; display: flex; gap: 14px; align-items: center; background: rgba(250,247,241,.93); color: #1F1B16; border-radius: 22px; padding: 16px 20px; font-size: 25px; font-weight: 600; }
+  .notif img { width: 44px; height: 44px; border-radius: 10px; }
+  .notif b { display: block; font-size: 17px; color: #4A443C; }
+</style></head>
+<body>
+  <div class="copy">
+    <div class="brand"><span>Dad Coach</span><img src="../public/img/logo-mark.webp" alt=""></div>
+    <h1>הזמן שתכננת עם הילדים. <span>הפעם הוא קורה.</span></h1>
+    <p>יעד שבועי, תזכורות בזמן, ו״נו, איך היה?״. הכול בוואטסאפ.</p>
+  </div>
+  <div class="art"><div class="notif"><img src="../public/img/logo-mark.webp" alt=""><div><b>Dad Coach · עכשיו</b>נו, איך היה לכם עם נועה?</div></div></div>
+</body></html>
