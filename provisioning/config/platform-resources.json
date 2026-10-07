@@ -1,0 +1,31 @@
+{
+  "_comment": "Dad Coach on the AI Workflow Platform: one worker, dad_3, owning the dad-coach-3 workflow. Dad Coach names the worker and the workflow on every call (WORKFLOW_PLATFORM_WORKER_KEY / _WORKFLOW_KEY); the platform never chooses. The daily check is a workflow schedule into the hub (ACTIVE_COACHING), INSTANCE timezone - Dad Coach sends the father's timezone on every execute. Session timers are AI-armed scheduled transitions into one-shot states (the YAML).",
+  "workflows": [
+    "dad-coach-3-workflow.yaml"
+  ],
+  "schedules": [
+    {
+      "workflowKey": "dad-coach-3",
+      "name": "Daily coach check",
+      "targetStateKey": "ACTIVE_COACHING",
+      "scheduleType": "DAILY",
+      "timeOfDay": "09:00",
+      "timezoneSource": "INSTANCE",
+      "enabled": true
+    }
+  ],
+  "workers": [
+    {
+      "workerKey": "dad_3",
+      "name": "Dad Coach",
+      "description": "Dad Coach 3 - platform-owned proactive coaching (default workflow: Dad Coach 3)",
+      "iconEmoji": "❤️",
+      "defaultWorkflowKey": "dad-coach-3",
+      "workflowKeys": [
+        "dad-coach-3"
+      ],
+      "tagline": "המאמן שדואג שזמן האיכות עם הילדים באמת יקרה",
+      "category": "LIFESTYLE"
+    }
+  ]
+}
