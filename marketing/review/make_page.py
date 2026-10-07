@@ -6,7 +6,7 @@ import html, json, os, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__))
 MK = os.path.dirname(HERE)
 CAT = json.load(open(f'{os.path.dirname(MK)}/backend/src/main/resources/training/catalog.json'))
-REL = f'{MK}/training/release/training/v1'
+REL = f'{MK}/training/release/training/v2'
 SHOWS = {
     'welcome': 'The site card (name and mobile, then its done state), the first WhatsApp message, the welcome, the name, '
                'one child and age, the confirmation, the first weekly goal and the slots the coach offers right after it.',
@@ -63,7 +63,7 @@ for e in sorted(CAT, key=lambda e: e['order']):
     total += d
     cards.append(c)
     print(name, round(d, 1))
-ad_d, ad = card('dad-coach-ad-v1', f'{MK}/ad/release/dad-coach-ad-v1.mp4', f'{MK}/ad/release/dad-coach-ad-v1.jpg',
+ad_d, ad = card('dad-coach-ad-v2', f'{MK}/ad/release/dad-coach-ad-v2.mp4', f'{MK}/ad/release/dad-coach-ad-v2.jpg',
                 'הזמן שתכננת. הפעם הוא קורה.', '',
                 'Pain (the week pushes the planned time away), the brand, booking in one message, the reminder an hour '
                 'before, "נו, איך היה?", the dashboard, a missed session without guilt, the half-minute setup, a covered '
@@ -76,20 +76,25 @@ NOTES = '''
 dropping whole sentences; each cut is noted in <code>training/film/msgs.js</code>.</li>
 <li>Every dashboard is a capture of the real dashboard on the lab's demo data and carries its "הדגמה" badge. The site
 card is the real site with a sample name.</li>
-<li>Every clip of the voice ("amit", the site intro's voice) was transcribed back and compared with its script.</li>
+<li>Every clip of the voice ("amit", male, the site intro's voice) was transcribed back and compared with its script.</li>
 <li>The "השבוע שלך" week in the ad is our drawing and is labelled "איור".</li></ul></div>
 <div class="note"><span class="state warn">Shown as a promise</span><h3>What the lab did not produce</h3>
 <ul><li>No morning reminder and no Sunday check-in fired in the lab. The reminders video shows the coach's own sentence
 "אזכיר לך בבוקר ושעה לפני" and does not draw a morning message.</li>
 <li>Logging time that happened without a booking has no tool yet, so that video is not in the library.</li></ul></div>
-<div class="note"><span class="state warn">Open</span><h3>Before the ad runs</h3>
-<ul><li>The end card shows the placeholder "‹כתובת האתר›" until the domain is chosen. Render it with
-<code>?site=</code> set, then rebuild the ad (one command).</li>
-<li>Every coach message starts with the Latin line "❤️ Dad Coach:". On a real phone WhatsApp may lay a Hebrew message out
-left to right because of it; worth one look on a phone before the campaign.</li></ul></div>
+<div class="note"><span class="state ok">v2</span><h3>Hebrew on every screen</h3>
+<ul><li>The brand is written "דאד קואץ׳" everywhere: titles, captions, the chat header, notifications, the end card.
+The voice says the name as before (the clips are unchanged).</li>
+<li>Every coach bubble starts with "❤️ דאד קואץ׳:", the identity line live since 2026-10-07; the rest of each bubble is
+verbatim. In the welcome bubble the coach's own "אני Dad Coach" is "אני דאד קואץ׳", as the workflow now writes it.</li>
+<li>The dashboard screens were captured again from the current dashboard (local run, same demo data). The settings
+screen still says "יומן Google", as the dashboard does; the caption says "יומן גוגל".</li>
+<li>The site card is the real site with its brand name shown in Hebrew. The live site still writes "Dad Coach" and
+needs the same change.</li>
+<li>The ad's end card shows dad-coach-site.onrender.com, the site today.</li></ul></div>
 <div class="note"><span class="state ok">Ready</span><h3>Upload</h3>
-<ul><li>The files are <code>marketing/training/release/training/v1/father-&lt;slug&gt;.mp4|.jpg</code>; on the Bunny
-zone they go to <code>dad-coach/training/v1/</code>, the paths the catalog already names.</li>
+<ul><li>The files are <code>marketing/training/release/training/v2/father-&lt;slug&gt;.mp4|.jpg</code>; on the Bunny
+zone they go to <code>dad-coach/training/v2/</code>, the paths the catalog already names.</li>
 <li>Loudness: the videos at −16 LUFS, the ad at −14 LUFS, music under the voice well below −24 LUFS.</li></ul></div>'''
 
 page = open(f'{HERE}/template.html').read()

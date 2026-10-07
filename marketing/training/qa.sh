@@ -3,7 +3,7 @@
 # duration, size, picture format and loudness (training -16 LUFS, the ad -14 LUFS, true peak under -1 dBFS).
 cd "$(dirname "$0")"
 for v in "$@"; do
-  if [[ $v == ad* ]]; then f=../ad/release/dad-coach-${v}-v1.mp4; q=../ad/out/qa; else f=release/training/v1/father-$v.mp4; q=out/qa; fi
+  if [[ $v == ad* ]]; then f=../ad/release/dad-coach-${v}-v2.mp4; q=../ad/out/qa; else f=release/training/v2/father-$v.mp4; q=out/qa; fi
   mkdir -p $q
   ffmpeg -v error -y -i $f -vf "fps=0.4,scale=180:320,tile=10x3" -frames:v 1 -q:v 4 $q/${v}_scan.jpg
   d=$(ffprobe -v error -show_entries format=duration -of csv=p=0 $f)
