@@ -9,6 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
+import com.dadcoach.channel.dto.OutboundMessageDto;
+import com.dadcoach.whatsapp.buttons.SessionButtonOffers;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -33,12 +36,15 @@ public class ScheduledResponseDeliveryService {
     private final ScheduledResponseDeliveryRepository repository;
     private final ProactiveSender sender;
     private final com.dadcoach.channel.WhatsAppEndpoints endpoints;
+    private final SessionButtonOffers buttons;
 
     public ScheduledResponseDeliveryService(
             ScheduledResponseDeliveryRepository repository,
             ProactiveSender sender,
-            com.dadcoach.channel.WhatsAppEndpoints endpoints) {
+            com.dadcoach.channel.WhatsAppEndpoints endpoints,
+            SessionButtonOffers buttons) {
         this.endpoints = endpoints;
+        this.buttons = buttons;
         this.repository = repository;
         this.sender = sender;
     }
@@ -66,15 +72,17 @@ public class ScheduledResponseDeliveryService {
 
         String content = request.responseContent();
         endpoints.ensure(father); // F1: fathers onboarded on WhatsApp before the fix have no endpoint row yet
-        ProactiveSender.Outcome outcome = sender.send(father, content);
+        List<OutboundMessageDto.ReplyButton> offered = buttons.forScheduledMessage(father, request.targetStateKey());
+        ProactiveSender.Outcome outcome = sender.send(father, content, offered);
         DeliveryResult result = outcome.result();
         ScheduledResponseDelivery.Mode mode = outcome.mode() == ProactiveSender.Mode.TEMPLATE
                 ? ScheduledResponseDelivery.Mode.TEMPLATE : ScheduledResponseDelivery.Mode.FREE_FORM;
 
         if (result.isSuccessful()) {
             delivery.markDelivered(mode);
-            log.info("Scheduled response delivered: triggerId={}, targetStateKey={}, mode={}, father={}",
-                    request.triggerId(), request.targetStateKey(), mode, MaskingUtils.maskPhone(father.getPhone()));
+            log.info("Scheduled response delivered: triggerId={}, targetStateKey={}, mode={}, buttons={}, father={}",
+                    request.triggerId(), request.targetStateKey(), mode,
+                    mode == ScheduledResponseDelivery.Mode.FREE_FORM ? offered.size() : 0, MaskingUtils.maskPhone(father.getPhone()));
         } else {
             delivery.markFailed(result.failureReason());
             log.warn("Scheduled response not delivered: triggerId={}, reason={}", request.triggerId(), result.failureReason());

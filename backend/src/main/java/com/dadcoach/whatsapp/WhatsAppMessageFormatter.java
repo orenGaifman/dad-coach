@@ -33,6 +33,9 @@ public class WhatsAppMessageFormatter {
      */
     public static final int BUTTON_TEXT_LIMIT = 20;
 
+    /** WhatsApp's limit on the body of an interactive message. */
+    public static final int INTERACTIVE_BODY_LIMIT = 1024;
+
     /**
      * WhatsApp interactive list row title limit.
      */
@@ -84,7 +87,9 @@ public class WhatsAppMessageFormatter {
             case AUDIO -> formatMedia(message, normalizedPhone, "audio");
             case VIDEO -> formatMedia(message, normalizedPhone, "video");
             case DOCUMENT -> formatMedia(message, normalizedPhone, "document");
-            case INTERACTIVE -> formatText(message, normalizedPhone);
+            case INTERACTIVE -> message.buttons().isEmpty() ? formatText(message, normalizedPhone)
+                    : formatButtonMessage(normalizedPhone, message.textContent(), message.buttons().stream()
+                            .map(b -> new InteractiveButton(b.id(), b.title())).toList());
             default -> throw new IllegalArgumentException(
                 "Unsupported message type for WhatsApp formatting: " + message.messageType());
         };

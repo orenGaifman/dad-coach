@@ -1,6 +1,7 @@
 package com.dadcoach.channel.dto;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -20,6 +21,7 @@ import java.util.UUID;
  * @param templateParameters key-value pairs for template variable substitution
  * @param priority           IMMEDIATE (conversation reply) or SCHEDULED (proactive notification)
  * @param requestedAt        timestamp when the Conversation_Engine requested delivery
+ * @param buttons            reply buttons of an INTERACTIVE message (up to 3, every id starts with "dc:"); empty otherwise
  */
 public record OutboundMessageDto(
     UUID messageId,
@@ -32,5 +34,22 @@ public record OutboundMessageDto(
     String templateName,
     Map<String, String> templateParameters,
     MessagePriority priority,
-    Instant requestedAt
-) {}
+    Instant requestedAt,
+    List<ReplyButton> buttons
+) {
+
+    public OutboundMessageDto {
+        buttons = buttons == null ? List.of() : List.copyOf(buttons);
+    }
+
+    public OutboundMessageDto(UUID messageId, UUID fatherId, String channel, MessageType messageType, String textContent,
+                              UUID mediaReference, boolean isTemplate, String templateName,
+                              Map<String, String> templateParameters, MessagePriority priority, Instant requestedAt) {
+        this(messageId, fatherId, channel, messageType, textContent, mediaReference, isTemplate, templateName,
+                templateParameters, priority, requestedAt, List.of());
+    }
+
+    /** One WhatsApp reply button: the id comes back on a tap, the title is what the father sees (up to 20 characters). */
+    public record ReplyButton(String id, String title) {
+    }
+}

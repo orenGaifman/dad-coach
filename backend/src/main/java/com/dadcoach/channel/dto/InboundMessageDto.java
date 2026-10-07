@@ -17,6 +17,7 @@ import java.util.UUID;
  * @param mediaReference        reference to media asset (for media types; null for text-only)
  * @param receivedAt            timestamp when the provider received the message from the father
  * @param ingestedAt            timestamp when the system accepted the message
+ * @param buttonId              the tapped button's id (reply button, list row or template quick reply); null otherwise
  */
 public record InboundMessageDto(
     UUID messageId,
@@ -27,5 +28,6 @@ public record InboundMessageDto(
     String textContent,
     UUID mediaReference,
     Instant receivedAt,
-    Instant ingestedAt
+    Instant ingestedAt,
+    String buttonId
 ) {}

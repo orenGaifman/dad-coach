@@ -167,3 +167,22 @@ and every video frame use "דאד קואץ׳" (Hebrew geresh ׳). The one narrat
 ## D-025 The site is impressive and humorous, and true (owner, 2026-10-07)
 Humor from the real situation (the plan that slides to "next week", the excuse graveyard, silence as a feature,
 messages it will never send, the belt dojo); the coach's bubbles stay real lab output; no testimonials or stats.
+
+## D-026 Session buttons: "dc:<action>:<session id>", handled before the AI (2026-10-07)
+Like Big Boss's follow-up buttons (fu:<action>:<task id>). Every id starts with "dc:" - the shared number's gateway
+routes a tap with that prefix back to Dad Coach (ROUTES_1_BUTTONPREFIXES=dc:), whatever product the phone talked to
+last. Two timer messages carry buttons, only inside the 24-hour window (the generic template carries none):
+- the follow-up after a session (SESSION_FOLLOW_UP): [היה מעולה] dc:done:<id> · [לא יצא] dc:missed:<id> - the most
+  recently ended session still awaiting confirmation;
+- the one-hour reminder (SESSION_REMINDER_1H): [רוצה רעיונות] dc:ideas:<id> - the next session that has not started.
+
+The callback names only the state, so the session is picked the way the weekly plan context picks it. A tap:
+- done: completes the session here (the complete_quality_time path), and a fixed confirmation with the week's minutes
+  goes back. A second tap says it's already recorded. No AI turn.
+- missed: the coach's turn runs with the text "לא יצא" (its rules record it and offer another time).
+- ideas: 3 ideas for that child that fit the session, sent here. No AI turn.
+- a session that isn't his, cancelled, gone or not started: one fixed line. A "dc:" id this version does not know:
+  the title goes to the coach.
+
+Every fixed reply starts with "❤️ דאד קואץ׳:" and is recorded in the platform conversation (/messages/outbound), so the
+coach knows about it on the next turn.

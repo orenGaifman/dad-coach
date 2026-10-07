@@ -11,6 +11,7 @@ import com.dadcoach.common.MaskingUtils;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.integration.platform.FatherTimezones;
+import com.dadcoach.integration.platform.SentMessageRecorder;
 import com.dadcoach.integration.platform.WorkerExecuteRequest;
 import com.dadcoach.integration.platform.WorkerExecuteResponse;
 import com.dadcoach.integration.platform.WorkflowPlatformClient;
@@ -19,6 +20,7 @@ import com.dadcoach.integration.platform.lifecycle.DeletedSenders;
 import com.dadcoach.integration.platform.lifecycle.PersonRefs;
 import com.dadcoach.integration.platform.lifecycle.WhatsAppDeletionRequests;
 import com.dadcoach.whatsapp.WhatsAppAdapter;
+import com.dadcoach.whatsapp.buttons.SessionButtonTaps;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -37,6 +39,8 @@ import org.springframework.stereotype.Component;
  *   <li>"DELETE MY DATA": the deletion request, handled here, never by the AI;</li>
  *   <li>a known father: his WhatsApp endpoint is ensured and his 24-hour window opened (F1);</li>
  *   <li>a voice note or file without words: one fixed line (the coach reads text only);</li>
+ *   <li>a tapped session button ("dc:done:&lt;id&gt;"...): handled by {@link SessionButtonTaps} - its fixed reply is
+ *       sent and recorded in the conversation with no AI turn, or the turn runs with the text it hands over;</li>
  *   <li>the turn: worker + workflow named by the caller, correlation id = Meta's message id, the father's timezone,
  *       person ref and name in the request; a new number is onboarded by the workflow itself (D-002);</li>
  *   <li>the reply goes out as written; a SUPPRESSED, duplicate or blank reply sends nothing; the platform down or
@@ -58,12 +62,15 @@ public class InboundMessageHandler {
     private final WorkflowPlatformProperties platformProperties;
     private final WhatsAppAdapter whatsapp;
     private final WhatsAppInboundRateLimiter rateLimiter;
+    private final SessionButtonTaps buttonTaps;
+    private final SentMessageRecorder recorder;
     private final Clock clock;
 
     public InboundMessageHandler(FatherRepository fathers, WhatsAppEndpoints endpoints, DeletedSenders deletedSenders,
                                  WhatsAppDeletionRequests deletionRequests, WorkflowPlatformClient platform,
                                  WorkflowPlatformProperties platformProperties, WhatsAppAdapter whatsapp,
-                                 WhatsAppInboundRateLimiter rateLimiter, Clock clock) {
+                                 WhatsAppInboundRateLimiter rateLimiter, SessionButtonTaps buttonTaps,
+                                 SentMessageRecorder recorder, Clock clock) {
         this.fathers = fathers;
         this.endpoints = endpoints;
         this.deletedSenders = deletedSenders;
@@ -72,6 +79,8 @@ public class InboundMessageHandler {
         this.platformProperties = platformProperties;
         this.whatsapp = whatsapp;
         this.rateLimiter = rateLimiter;
+        this.buttonTaps = buttonTaps;
+        this.recorder = recorder;
         this.clock = clock;
     }
 
@@ -96,10 +105,29 @@ public class InboundMessageHandler {
             log.atWarn().setMessage("whatsapp.inbound.rate_limited").addKeyValue("sender", MaskingUtils.maskPhone(phone)).log();
             return;
         }
-        runTurn(in, father, receivedAt, started);
+        String text = in.textContent();
+        if (in.buttonId() != null && father.isPresent()) {
+            SessionButtonTaps.Tap tap;
+            try {
+                tap = buttonTaps.handle(father.get(), in.buttonId());
+            } catch (RuntimeException e) {
+                log.atWarn().setMessage("whatsapp.button.failed").addKeyValue("error", e.getClass().getSimpleName()).log();
+                send(phone, PLATFORM_DOWN_REPLY);
+                return;
+            }
+            if (tap.reply() != null) {
+                send(phone, tap.reply());
+                recorder.recordSent(father.get(), tap.reply(), in.idempotencyKey());
+                return;
+            }
+            if (tap.coachText() != null) {
+                text = tap.coachText();
+            }
+        }
+        runTurn(in, text, father, receivedAt, started);
     }
 
-    private void runTurn(InboundMessageDto in, Optional<Father> father, Instant receivedAt, Instant started) {
+    private void runTurn(InboundMessageDto in, String text, Optional<Father> father, Instant receivedAt, Instant started) {
         String phone = in.fatherChannelIdentity();
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("timezone", FatherTimezones.of(father.orElse(null)).getId());
@@ -110,16 +138,16 @@ public class InboundMessageHandler {
         try {
             WorkerExecuteResponse response = platform.execute(new WorkerExecuteRequest(platformProperties.getWorkerKey(),
                     PersonRefs.whatsappId(phone), "whatsapp", in.idempotencyKey(),
-                    in.messageType() == MessageType.INTERACTIVE ? "button_reply" : "text", in.textContent(), metadata,
+                    in.messageType() == MessageType.INTERACTIVE ? "button_reply" : "text", text, metadata,
                     platformProperties.getTenantId(), father.map(f -> PersonRefs.of(f.getId())).orElse(null),
                     father.map(Father::getDisplayName).orElse(null), platformProperties.getWorkflowKey()));
             deliveryStart = clock.instant();
-            String text = response.responseContent();
-            if (response.suppressed() || response.isDuplicate() || text == null || text.isBlank()) {
+            String reply = response.responseContent();
+            if (response.suppressed() || response.isDuplicate() || reply == null || reply.isBlank()) {
                 outcome = response.suppressed() ? "SUPPRESSED" : response.isDuplicate() ? "DUPLICATE" : "BLANK";
                 return;
             }
-            send(phone, text.strip());
+            send(phone, reply.strip());
         } catch (PlatformUnavailableException | WorkflowPlatformClient.PlatformRejectedException e) {
             outcome = "PLATFORM_FAILED";
             log.atWarn().setMessage("whatsapp.turn.platform_failed").addKeyValue("error", e.getMessage()).log();

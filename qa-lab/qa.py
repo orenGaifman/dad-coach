@@ -184,6 +184,33 @@ def wa(phone, text, timeout=180):
     return new
 
 
+def buttons_of(phone):
+    """The reply buttons ({title: id}) of the last interactive message sent to this phone."""
+    for e in reversed(sent_lines()):
+        p = e["payload"]
+        if to_of(e) == phone and p.get("type") == "interactive":
+            return {b["reply"]["title"]: b["reply"]["id"] for b in p["interactive"]["action"].get("buttons", [])}
+    return {}
+
+
+def tap(phone, title, timeout=180):
+    """The father taps a reply button (by its title) on the last interactive message; returns what came back."""
+    button_id = buttons_of(phone).get(title)
+    assert button_id, f"no button '{title}' on the last interactive message to {phone}"
+    out(f"\n**{PEOPLE.get(phone, phone)}:** [{title}]  _(tap {button_id.rsplit(':', 1)[0]}:…)_")
+    before = len(sent_lines())
+    msg = {"from": phone.lstrip("+"), "id": f"wamid.tap-{uuid.uuid4()}", "timestamp": str(int(time.time())),
+           "type": "interactive", "interactive": {"type": "button_reply", "button_reply": {"id": button_id, "title": title}}}
+    started = time.time()
+    _post(phone, msg)
+    new = _settle(before, phone, timeout)
+    show(new)
+    out(f"      _({time.time() - started:.1f}s)_")
+    if not new:
+        note("no reply")
+    return new
+
+
 def texts(entries):
     return "\n".join("\n".join(render(e)) for e in entries)
 

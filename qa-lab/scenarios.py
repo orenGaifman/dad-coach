@@ -10,6 +10,9 @@ s3 quiet           the week is covered → the daily check stays silent; asking 
 s4 stale timers    a session is cancelled after booking → its follow-up never asks about it
 s5 goal locked     a different goal number after this week's goal exists → kindly refused
 s6 returning       a father whose profile + child exist writes for the first time → no re-onboarding
+s8 buttons         the 1h reminder comes with [רוצה רעיונות] → ideas; the follow-up with [היה מעולה] [לא יצא] →
+                   done completes with no AI turn (a second tap: already recorded); a second session → [לא יצא]
+                   goes to the coach; the coach then knows what was recorded
 """
 import sys
 import time
@@ -64,6 +67,28 @@ def s1(tag):
     qa.fire(p, "session_follow_up")
     qa.wa(p, "היה מדהים! בנינו מגדל לגו ענק והיא לא הפסיקה לצחוק")
     qa.show_timers(p)
+    qa.wa(p, "איך אני עומד השבוע?")
+
+
+def s8(tag):
+    qa.start_transcript(f"{tag}-s8-buttons", "s8 · כפתורים")
+    p = father("גיל")
+    onboard(p, "גיל", "מאיה", "5")
+    qa.wa(p, "3 שעות בשבוע")
+    qa.wa(p, f"בוא נקבע היום ב-{local_in(75)} עם מאיה, שעה")
+    qa.fire(p, "session_reminder_1h")
+    qa.note(f"buttons: {qa.buttons_of(p)}")
+    qa.tap(p, "רוצה רעיונות")
+    time_travel_session(p)
+    qa.fire(p, "session_follow_up")
+    qa.note(f"buttons: {qa.buttons_of(p)}")
+    qa.tap(p, "היה מעולה")
+    qa.note("status: " + str(qa.psql(f"select status from quality_time where father_id = {father_id(p)}")))
+    qa.tap(p, "היה מעולה")
+    qa.wa(p, f"תקבע עוד אחד היום ב-{local_in(75)} עם מאיה, חצי שעה")
+    time_travel_session(p)
+    qa.fire(p, "session_follow_up")
+    qa.tap(p, "לא יצא")
     qa.wa(p, "איך אני עומד השבוע?")
 
 
@@ -142,7 +167,7 @@ def s7(tag):
     qa.fire(p, "session_follow_up")
 
 
-ALL = {"s7": s7, "s1": s1, "s2": s2, "s3": s3, "s4": s4, "s5": s5, "s6": s6}
+ALL = {"s7": s7, "s8": s8, "s1": s1, "s2": s2, "s3": s3, "s4": s4, "s5": s5, "s6": s6}
 
 if __name__ == "__main__":
     tag = sys.argv[1]

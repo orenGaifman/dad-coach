@@ -144,7 +144,8 @@ public class WhatsAppMessageParser {
             textContent,
             null,               // mediaReference — populated later by media service
             receivedAt,
-            ingestedAt
+            ingestedAt,
+            messageType == MessageType.INTERACTIVE ? extractButtonId(msg) : null
         );
     }
 
@@ -253,6 +254,21 @@ public class WhatsAppMessageParser {
             sb.append(String.format("%.6f, %.6f", location.latitude(), location.longitude()));
         }
         return sb.toString();
+    }
+
+    /** The tapped id: a template quick reply's payload, a reply button's id or a list row's id. */
+    private String extractButtonId(Message msg) {
+        if (msg.button() != null) {
+            return msg.button().payload();
+        }
+        InteractiveReply interactive = msg.interactive();
+        if (interactive == null) {
+            return null;
+        }
+        if (interactive.buttonReply() != null) {
+            return interactive.buttonReply().id();
+        }
+        return interactive.listReply() != null ? interactive.listReply().id() : null;
     }
 
     private String extractInteractiveText(InteractiveReply interactive) {
