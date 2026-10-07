@@ -60,12 +60,16 @@ The site lives in `../site` (see its README).
 | DC-D06 | Admin page "הרשמות מהאתר" on `recentSignups(days)` | OPEN (WS-B) |
 | DC-D07 | Replace draft demo lines with qa-lab transcripts | OPEN (WS-C → WS-D) |
 | DC-D08 | Domain, placeholders, lawyer review, `VITE_SIGNUP_ENDPOINT` + `SITE_ORIGINS` | OPEN (owner + main) |
-| DC-D09 | Ad + training videos from the lab and the real dashboard | DONE v1 (upload to Bunny + the ad's site address open) |
+| DC-D09 | Ad + training videos from the lab and the real dashboard | DONE v2, Hebrew (upload to Bunny open) |
 
-## Videos (v1)
+## Videos (v2, Hebrew)
 
 Five father videos (catalog `backend/src/main/resources/training/catalog.json`) and one ad, all 1080×1920, 30 fps,
-captions burned in, voice "amit" (the site intro's voice).
+captions burned in, voice "amit" (male, the site intro's voice). Every word on screen is Hebrew: the brand is written
+"דאד קואץ׳" (titles, captions, the chat header, notifications, the end card) and every coach bubble starts with
+"❤️ דאד קואץ׳:", the WhatsApp identity line since 2026-10-07; the voice says the name as before. The only Latin is the
+ad's site address and "יומן Google" on the real settings screen. v1 (Latin brand) stays in `release/training/v1` and on
+the CDN; the CDN caches by URL, so a new cut is always a new folder.
 
 | Slug | Title | What it shows |
 |---|---|---|
@@ -78,8 +82,10 @@ captions burned in, voice "amit" (the site intro's voice).
 
 Sources: every WhatsApp bubble is copied from qa-lab transcripts v4-s1 and v4-s2 (`training/film/msgs.js`; three
 bubbles shortened by whole sentences, each marked `cut:`); every dashboard is a capture of the real SPA on the lab's demo
-data (`training/film/assets/screens`, labelled "הדגמה"); the site card is the real site (`training/capture/site.mjs`).
-Not in v1: logging time that happened without a booking (no tool yet) and the calendar video (after D-007). No morning
+data (`training/film/assets/screens`, from `frontend/e2e/e2e-04-screenshots.spec.ts` phone, labelled "הדגמה"); the site
+card is the real site with its brand name shown in Hebrew (`training/capture/site.mjs`; the live site still writes
+"Dad Coach").
+Not in the library yet: logging time that happened without a booking (no tool yet) and the calendar video (after D-007). No morning
 reminder or Sunday check-in fired in the lab, so the reminders video shows the coach's promise, not a morning message.
 
 ### Build
@@ -92,22 +98,26 @@ Needs ffmpeg, Python 3, and Playwright: `marketing/node_modules` is a symlink to
 cd marketing/training
 node film/sheet.mjs <slug>          # contact sheet out/qa/<slug>_sheet_<n>.jpg - check a film before rendering it
 ./build.sh welcome book-a-session reminders when-cancelled my-dashboard ad
-node film/posters.mjs               # release/training/v1/father-<slug>.jpg + ../ad/release/dad-coach-ad-v1.jpg
+node film/posters.mjs               # release/training/v2/father-<slug>.jpg + ../ad/release/dad-coach-ad-v2.jpg
 python3 release.py                  # release/media.json, checked against the catalog
 ./qa.sh welcome ad                  # length, size, loudness, a frame scan in out/qa
 python3 ../review/make_page.py      # the review page
 ```
 
+Screens: `node training/capture/site.mjs` (from `marketing/`) for the site card; for the dashboard, the phone screenshot test
+(`npx playwright test e2e-04 -g phone` in `frontend/`, local stack as in `docs/implementation/DEPLOYMENT.md`), then copy
+the files the films use from `frontend/e2e/screenshots/phone` to `training/film/assets/screens` (same sizes, 780 px wide).
+
 `build.sh` renders each frame straight into ffmpeg (no frames on disk), mixes the sound (`audio/mix.py`: voice,
 UI sounds, ducked music bed; −16 LUFS for the videos, −14 LUFS for the ad), writes `out/<v>_master.mp4` (archive,
 not in git) and the web file, removes the intermediates, and stops when less than 700 MB is free. The voice is
 regenerated with `audio/vo.py` (ElevenLabs; `--wav` rebuilds the ignored wavs from the committed mp3s), the music with
-`audio/music.py`. The ad's end card takes the site address as `?site=` (`ad/film/index.html?site=www.example`); until
-the domain is chosen it shows "‹כתובת האתר›".
+`audio/music.py`. The ad's end card shows dad-coach-site.onrender.com; another address goes in as `?site=`
+(`ad/film/index.html?site=www.example`).
 
 ### Release and upload
 
-`training/release/training/v1/father-<slug>.mp4|.jpg` go to the Bunny zone (shared with Big Boss) as
-`dad-coach/training/v1/father-<slug>.mp4|.jpg`, the paths the catalog names; `release/media.json` lists each file with
+`training/release/training/v2/father-<slug>.mp4|.jpg` go to the Bunny zone (shared with Big Boss) as
+`dad-coach/training/v2/father-<slug>.mp4|.jpg` (`provisioning/scripts/upload_training_media.py`), the paths the catalog names; `release/media.json` lists each file with
 its size, sha256 and length. The dashboard shows them once `TRAINING_MEDIA_BASE_URL` and the token key are set. The ad
-is `ad/release/dad-coach-ad-v1.mp4` (+ `.jpg`), for the campaign, not the CDN.
+is `ad/release/dad-coach-ad-v2.mp4` (+ `.jpg`), for the campaign, not the CDN.

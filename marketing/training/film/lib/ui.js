@@ -43,7 +43,7 @@ export function phone(o) {
   const sub = o.typing ? '<div class="sub typing">מקליד…</div>' : '<div class="sub">חשבון עסקי</div>';
   return `<div class="phone">
     <div class="status"><span>${o.clock || '16:00'}</span><span class="icons">●●● <span class="bat"></span></span></div>
-    <div class="head"><span class="back">‹</span><div class="av"><img src="${A('logo-mark.webp')}"></div><div><div class="nm" dir="ltr">Dad Coach</div>${sub}</div></div>
+    <div class="head"><span class="back">‹</span><div class="av"><img src="${A('logo-mark.webp')}"></div><div><div class="nm">דאד קואץ׳</div>${sub}</div></div>
     <div class="chat">${msgs}</div>
     ${compose}
   </div>`;
@@ -124,7 +124,7 @@ export function captionAt(beat, t) {
   }
   return `<div class="caption"><span>${capText(parts[parts.length - 1])}</span></div>`;
 }
-const capText = (s) => esc(s).replace(/Dad Coach/g, '<span dir="ltr" class="wm">Dad Coach</span>').replace(/(\d[\d:–-]*\d|\d)/g, '<span class="num">$1</span>');
+const capText = (s) => esc(s).replace(/דאד קואץ׳/g, '<span class="wm">דאד קואץ׳</span>').replace(/(\d[\d:–-]*\d|\d)/g, '<span class="num">$1</span>');
 
 export function install({ S, beats, total, assets = [], fadeColor = 'var(--bg)' }) {
   const ui = document.getElementById('stage');

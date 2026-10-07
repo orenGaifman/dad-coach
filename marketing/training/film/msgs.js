@@ -1,13 +1,15 @@
 // Every WhatsApp line in the films, copied verbatim from the qa-lab transcripts (real workflow dad-coach-3, real model):
 // qa-lab/transcripts/v4-s1-first-week.md (יואב, נועה 7), v4-s2-recovery.md (a father with איתי). A bubble may be shortened
 // only by dropping whole sentences - marked "cut:" with what was dropped and why. The platform's prefix line
-// "❤️ Dad Coach:" is part of every coach message, as WhatsApp shows it.
-const P = '❤️ Dad Coach:\n';
+// "❤️ דאד קואץ׳:" is part of every coach message, as WhatsApp shows it (the worker's Hebrew display name, live
+// 2026-10-07; the lab ran with the Latin "❤️ Dad Coach:"). Where the coach named itself in Latin ("אני Dad Coach"),
+// the Hebrew name is used: the workflow now has the coach write its own name in Hebrew.
+const P = '❤️ דאד קואץ׳:\n';
 
 export const M = {
   // ---- s1: the first week (יואב, נועה 7)
   hi: 'היי, שמעתי עליכם, אשמח להתחיל',
-  welcome: P + 'היי, איזה כיף שהצטרפת! 😊\n\nאני Dad Coach - אני עוזר לאבות להפוך כוונות טובות לזמן איכות שבאמת קורה עם הילדים. ביחד נקבע יעד שבועי שמתאים לך, נתכנן אותו בתוך השבוע, אני אזכיר לך לפני כל מפגש ואבדוק מה קרה אחרי - ובדרך גם צוברים "חגורות" על מפגשים שהושלמו (כולם מתחילים בחגורה לבנה).\n\nבוא נתחיל - איך קוראים לך?',
+  welcome: P + 'היי, איזה כיף שהצטרפת! 😊\n\nאני דאד קואץ׳ - אני עוזר לאבות להפוך כוונות טובות לזמן איכות שבאמת קורה עם הילדים. ביחד נקבע יעד שבועי שמתאים לך, נתכנן אותו בתוך השבוע, אני אזכיר לך לפני כל מפגש ואבדוק מה קרה אחרי - ובדרך גם צוברים "חגורות" על מפגשים שהושלמו (כולם מתחילים בחגורה לבנה).\n\nבוא נתחיל - איך קוראים לך?',
   name: 'יואב',
   askChild: P + 'נעים מאוד, יואב! 😊\nועכשיו ספר לי על הילד/ה - מה השם והגיל?',
   child: 'נועה, בת 7',

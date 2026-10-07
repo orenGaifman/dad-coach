@@ -10,7 +10,7 @@ const T = '../../training/film/';
 const TEMPO = 1.07;
 const VO = Object.fromEntries(Object.entries(await (await fetch(T + 'vo.json')).json()).map(([k, v]) => [k, v / TEMPO]));
 const LINES = await (await fetch(T + 'lines.json')).json();
-const SITE = new URLSearchParams(location.search).get('site') || '‹כתובת האתר›';
+const SITE = new URLSearchParams(location.search).get('site') || 'dad-coach-site.onrender.com';
 
 const out = (text, time, at, extra = {}) => ({ dir: 'out', text, time, ticks: 'blue', at, ...extra });
 const inn = (text, time, at, extra = {}) => ({ dir: 'in', text, time, at, ...extra });
@@ -48,7 +48,7 @@ S.brand = (lt) => {
   const p = fadeIn(lt, 0.1, 0.6), q = fadeIn(lt, 1.2, 0.6);
   return `<div class="center" style="top:250px;opacity:${p};transform:translateY(${lerp(30, 0, p)}px)">
       <div class="logo" style="width:260px;height:260px"><img src="${asset('logo-mark.webp')}"></div>
-      <div class="wordmark" style="margin-top:44px">Dad Coach</div><div class="lede" style="margin-top:8px">מאמן בוואטסאפ לאבות</div></div>
+      <div class="wordmark" style="margin-top:44px">דאד קואץ׳</div><div class="lede" style="margin-top:8px">מאמן בוואטסאפ לאבות</div></div>
     <div class="hero-art" style="top:${lerp(1060, 1010, q)}px;opacity:${q}"><img src="${asset('hero.webp')}"></div>`;
 };
 S.book = (lt, beat) => {
@@ -62,7 +62,7 @@ S.book = (lt, beat) => {
 const BOOKED = [day('היום'), out(M.book, '15:43'), inn(M.bookedShort, '15:43')];
 S.remind = (lt) => {
   const msgs = [...BOOKED, inn(M.reminder1h, '15:55', 0.8, { cls: lt > 2.0 ? 'glow' : '' })];
-  return `${ost('שעה לפני · עם רעיונות', lt, { at: 0.1 })}${device(chat(lt, '15:55', msgs) + notif(lt, 0.15, 'Dad Coach', 'עוד שעה הזמן שלך עם נועה 😊', 1.8))}`;
+  return `${ost('שעה לפני · עם רעיונות', lt, { at: 0.1 })}${device(chat(lt, '15:55', msgs) + notif(lt, 0.15, 'דאד קואץ׳', 'עוד שעה הזמן שלך עם נועה 😊', 1.8))}`;
 };
 S.after = (lt) => {
   const msgs = [...BOOKED, inn(M.reminder1h, '15:55'), inn(M.followUp, '18:25', 0.5), out(M.happened, '18:31', 2.4), inn(M.recorded, '18:31', 3.7, { cls: lt > 4.4 ? 'glow' : '' })];
@@ -103,9 +103,9 @@ S.end = (lt) => {
   const p = fadeIn(lt, 0.1, 0.6), q = fadeIn(lt, 1.3, 0.5), r = fadeIn(lt, 2.4, 0.5);
   return `<div class="center" style="top:300px;opacity:${p}">
       <div class="logo" style="width:340px;height:340px"><img src="${asset('logo-full.webp')}"></div>
-      <div class="wordmark" style="margin-top:40px;font-size:96px">Dad Coach</div></div>
+      <div class="wordmark" style="margin-top:40px;font-size:96px">דאד קואץ׳</div></div>
     <div class="center motto" style="top:930px;opacity:${q}">הזמן שתכננת.<br><span class="g">הפעם הוא קורה.</span></div>
-    <div class="center" style="top:1250px;opacity:${r}"><span class="cta">מתחילים באתר</span><div class="site">${SITE}</div></div>`;
+    <div class="center" style="top:1250px;opacity:${r}"><span class="cta">מתחילים באתר</span><div class="site" dir="ltr">${SITE}</div></div>`;
 };
 
 const PLAN = [

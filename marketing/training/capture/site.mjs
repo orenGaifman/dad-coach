@@ -3,6 +3,9 @@
 // its done state. The site is served as plain files (python http.server on :8779 from ../site); the one Vite-only line
 // (main.js importing its CSS, and public/ at the root) is answered with the same file minus that import, and the CSS is linked instead.
 // With the default config (SIGNUP_ENDPOINT empty) the form sends nothing anywhere - it only shows its done state.
+// The brand is written in Hebrew ("דאד קואץ׳"), as the dashboard and WhatsApp write it since 2026-10-07: the site's own
+// copy still says "Dad Coach", so the page is served with the name replaced (and "ש-Dad Coach" -> "שדאד קואץ׳").
+// Nothing else on the page is changed.
 import { chromium } from 'playwright';
 import { spawn } from 'child_process';
 import { readFileSync } from 'fs';
@@ -16,6 +19,10 @@ try {
   await page.route('**/src/main.js', (route) => route.fulfill({
     contentType: 'text/javascript',
     body: readFileSync('../site/src/main.js', 'utf8').replace("import './styles/site.css';", ''),
+  }));
+  const hebrew = (html) => html.replace(/>([^<]*)</g, (m, text) => '>' + text.replace(/([בהוכלמש])-Dad Coach/g, '$1דאד קואץ׳').replace(/Dad Coach/g, 'דאד קואץ׳') + '<');
+  await page.route((u) => u.pathname === '/' || u.pathname === '/index.html', (route) => route.fulfill({
+    contentType: 'text/html; charset=utf-8', body: hebrew(readFileSync('../site/index.html', 'utf8')),
   }));
   // Vite serves site/public at the root; a plain file server does not
   await page.route(/\/img\//, (route) => route.fulfill({ path: '../site/public' + new URL(route.request().url()).pathname }));

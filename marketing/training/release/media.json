@@ -1,77 +1,77 @@
 {
  "welcome": {
   "video": {
-   "local": "release/training/v1/father-welcome.mp4",
-   "cdn": "dad-coach/training/v1/father-welcome.mp4",
-   "bytes": 2401321,
-   "sha256": "31f58972b10b6d3722b957e1f1238ade6de0007201b806432520018f0a588bb2"
+   "local": "release/training/v2/father-welcome.mp4",
+   "cdn": "dad-coach/training/v2/father-welcome.mp4",
+   "bytes": 2380379,
+   "sha256": "e0d96485b5fe48a48b05fec9067031ea00c5bb15451daafb97c9229513675476"
   },
   "poster": {
-   "local": "release/training/v1/father-welcome.jpg",
-   "cdn": "dad-coach/training/v1/father-welcome.jpg",
-   "bytes": 78590,
-   "sha256": "ecafe3ec9d1a79160c3f3c00d5deb97b3151f8cb9c152bf1dd5d752bdc334c2d"
+   "local": "release/training/v2/father-welcome.jpg",
+   "cdn": "dad-coach/training/v2/father-welcome.jpg",
+   "bytes": 77322,
+   "sha256": "65d788c47a54bd3fd006ac8120c402e7580949c30b0c561fea6cd1acd9ee36c5"
   },
   "durationSeconds": 49.5
  },
  "book-a-session": {
   "video": {
-   "local": "release/training/v1/father-book-a-session.mp4",
-   "cdn": "dad-coach/training/v1/father-book-a-session.mp4",
-   "bytes": 1539596,
-   "sha256": "fd6f57c2577bda8ec9e9284566a0b3c81e1ac1fac2f431a62aacbcb50e7ee175"
+   "local": "release/training/v2/father-book-a-session.mp4",
+   "cdn": "dad-coach/training/v2/father-book-a-session.mp4",
+   "bytes": 1542288,
+   "sha256": "80f0917f7ca6e2b4dc3c301cbe0b1e4aac79bc04414987327b11ab4e03eaceed"
   },
   "poster": {
-   "local": "release/training/v1/father-book-a-session.jpg",
-   "cdn": "dad-coach/training/v1/father-book-a-session.jpg",
-   "bytes": 82798,
-   "sha256": "d1666c789e2565b5f38f3342137d45b509e7a6082a6892564dd7d6a8da4db98d"
+   "local": "release/training/v2/father-book-a-session.jpg",
+   "cdn": "dad-coach/training/v2/father-book-a-session.jpg",
+   "bytes": 82115,
+   "sha256": "2da070884bd0f2d15abd96b8d9f41d8da416c733c3efd034f4e77fb689c82b72"
   },
   "durationSeconds": 33.4
  },
  "reminders": {
   "video": {
-   "local": "release/training/v1/father-reminders.mp4",
-   "cdn": "dad-coach/training/v1/father-reminders.mp4",
-   "bytes": 1736655,
-   "sha256": "8a13cc9abaae17a921cd41ae6c4200a3ed2540a02bea45d484033bddc6865138"
+   "local": "release/training/v2/father-reminders.mp4",
+   "cdn": "dad-coach/training/v2/father-reminders.mp4",
+   "bytes": 1727016,
+   "sha256": "87cc292ccbff4a2c8ce729767e14515517582691b37f76cbf722831224b229a0"
   },
   "poster": {
-   "local": "release/training/v1/father-reminders.jpg",
-   "cdn": "dad-coach/training/v1/father-reminders.jpg",
-   "bytes": 79241,
-   "sha256": "68c6e5d1ccce6df8502f6036065ef80a0d9c771c9fcaca57e6e0d7ff7261da5f"
+   "local": "release/training/v2/father-reminders.jpg",
+   "cdn": "dad-coach/training/v2/father-reminders.jpg",
+   "bytes": 78371,
+   "sha256": "9e36d17e0b118d3163b3b4903b59518067f03e1e873d592b6268c9082db48ae4"
   },
   "durationSeconds": 40.4
  },
  "when-cancelled": {
   "video": {
-   "local": "release/training/v1/father-when-cancelled.mp4",
-   "cdn": "dad-coach/training/v1/father-when-cancelled.mp4",
-   "bytes": 1672105,
-   "sha256": "0ee29c4109c68a447fbbc30a1072f39b622d183dcaaefb07acf282f5dfaf8f25"
+   "local": "release/training/v2/father-when-cancelled.mp4",
+   "cdn": "dad-coach/training/v2/father-when-cancelled.mp4",
+   "bytes": 1674147,
+   "sha256": "18ac3f3d717568d88e391e6a9fd8c8db42d4c2e973e63ec4c90ffe72681d9293"
   },
   "poster": {
-   "local": "release/training/v1/father-when-cancelled.jpg",
-   "cdn": "dad-coach/training/v1/father-when-cancelled.jpg",
-   "bytes": 88721,
-   "sha256": "a4bca2dd0aa9312b77a281117bc3fdfcbc1638f857e4aa35e9f2a3325ebc21e6"
+   "local": "release/training/v2/father-when-cancelled.jpg",
+   "cdn": "dad-coach/training/v2/father-when-cancelled.jpg",
+   "bytes": 87888,
+   "sha256": "10f45cc78a23953f4d7156850e5b895806c7e55dadf038034dd774273ec2f2c2"
   },
   "durationSeconds": 33.6
  },
  "my-dashboard": {
   "video": {
-   "local": "release/training/v1/father-my-dashboard.mp4",
-   "cdn": "dad-coach/training/v1/father-my-dashboard.mp4",
-   "bytes": 3472331,
-   "sha256": "c5cbfe78e82a82532ee92ff76ebd3e03afec974cc040f6b62d90d74fd42f72dc"
+   "local": "release/training/v2/father-my-dashboard.mp4",
+   "cdn": "dad-coach/training/v2/father-my-dashboard.mp4",
+   "bytes": 3430876,
+   "sha256": "13368dead4c28658cdbeeb5da3eba7b25d3d3f1caade07f8fd58c9fefa205555"
   },
   "poster": {
-   "local": "release/training/v1/father-my-dashboard.jpg",
-   "cdn": "dad-coach/training/v1/father-my-dashboard.jpg",
-   "bytes": 63017,
-   "sha256": "199e9215cf36084f0761216531c49b37060f64fdc124c15bf6926dc3b1377e1c"
+   "local": "release/training/v2/father-my-dashboard.jpg",
+   "cdn": "dad-coach/training/v2/father-my-dashboard.jpg",
+   "bytes": 63023,
+   "sha256": "38c02bcea7e37a4353090a40af11c0bfbb8651e85ed9907c5ef4399595914339"
   },
-  "durationSeconds": 56.73
+  "durationSeconds": 56.85
  }
 }

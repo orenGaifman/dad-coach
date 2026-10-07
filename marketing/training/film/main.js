@@ -1,4 +1,4 @@
-// Dad Coach father training videos: index.html?v=<slug>. window.renderAt(t) draws the frame at t seconds; film/render.mjs
+// דאד קואץ׳ (Dad Coach) father training videos: index.html?v=<slug>. window.renderAt(t) draws the frame at t seconds; film/render.mjs
 // screenshots it frame by frame. Every chat bubble is real lab output (msgs.js); every dashboard is a capture of the
 // real SPA on the lab's demo data (frontend/e2e/screenshots, labelled "הדגמה"); the site card is the real site (capture/site.mjs).
 import { clamp, lerp, ease, fadeIn, esc, phone, device, cam, dash, dashShot, dashCam, statusBar, notif, ost, buildTimeline, install, K, asset } from './lib/ui.js';
@@ -52,14 +52,14 @@ const at = (m, t, extra = {}) => ({ ...m, at: t, ...extra });
 
 const S = {};
 // ---------------------------------------------------------------- 1. ברוך הבא
-S.wTitle = (lt) => titleCard(lt, 'ברוך הבא ל-<span dir="ltr">Dad Coach</span>', 'זמן עם הילדים, שבאמת קורה');
+S.wTitle = (lt) => titleCard(lt, 'ברוך הבא לדאד קואץ׳', 'זמן עם הילדים, שבאמת קורה');
 S.wSite = (lt) => {
   const p = fadeIn(lt, 0.1, 0.5), swap = ease(clamp((lt - 3.4) / 0.5));
   const card = (img, o) => `<img src="${asset('screens/' + img)}" style="position:absolute;inset:0;width:100%;opacity:${o}">`;
   return `${ost('מתחילים באתר', lt, { at: 0.1 })}
     <div class="card" style="left:90px;right:90px;top:${lerp(560, 520, p)}px;height:${(lerp(636, 758, swap) / 716) * 900}px;opacity:${p};background:#fff">
       ${card('site-signup-filled.png', 1 - swap)}${card('site-signup-done.png', swap)}</div>
-    <div class="center" style="top:1520px;opacity:${p};font-size:40px;color:var(--navy-200);font-weight:600">האתר של <span dir="ltr">Dad Coach</span> · הפרטים לדוגמה</div>`;
+    <div class="center" style="top:1520px;opacity:${p};font-size:40px;color:var(--navy-200);font-weight:600">האתר של דאד קואץ׳ · הפרטים לדוגמה</div>`;
 };
 S.wHi = (lt) => {
   const msgs = [day('היום'), at(S1.hi, 0.6), at(S1.welcome, 1.8)];
@@ -112,12 +112,12 @@ S.rMorning = (lt) => {
 const DAY_S1 = [day('היום'), S1.book, S1.booked];
 S.r1h = (lt) => {
   const msgs = [...DAY_S1, at(inn(M.reminder1h, '15:55'), 0.9, { cls: lt > 2.6 ? 'glow' : '' })];
-  return `${ost('שעה לפני · עם רעיונות', lt, { at: 0.1, gold: true })}${device(chat(lt, '15:55', msgs) + notif(lt, 0.2, 'Dad Coach', 'עוד שעה הזמן שלך עם נועה 😊'))}`;
+  return `${ost('שעה לפני · עם רעיונות', lt, { at: 0.1, gold: true })}${device(chat(lt, '15:55', msgs) + notif(lt, 0.2, 'דאד קואץ׳', 'עוד שעה הזמן שלך עם נועה 😊'))}`;
 };
 const R1H = inn(M.reminder1h, '15:55');
 S.rFollow = (lt) => {
   const msgs = [...DAY_S1, R1H, at(inn(M.followUp, '18:25'), 0.8, { cls: lt > 1.6 ? 'glow' : '' })];
-  return `${ost('אחרי: "נו, איך היה?"', lt, { at: 0.1 })}${device(chat(lt, '18:25', msgs) + notif(lt, 0.15, 'Dad Coach', 'נו, איך היה לכם עם נועה? 😊', 1.8))}`;
+  return `${ost('אחרי: "נו, איך היה?"', lt, { at: 0.1 })}${device(chat(lt, '18:25', msgs) + notif(lt, 0.15, 'דאד קואץ׳', 'נו, איך היה לכם עם נועה? 😊', 1.8))}`;
 };
 S.rAnswer = (lt) => {
   const msgs = [R1H, inn(M.followUp, '18:25'), at(out(M.happened, '18:31'), 0.3), at(inn(M.recorded, '18:31'), 2.0, { cls: lt > 2.8 ? 'glow' : '' })];

@@ -1,5 +1,5 @@
 """python3 training/release.py -> training/release/media.json: what the upload needs, measured on the released files.
-Each entry maps a local file (release/training/v1/X) to its path on the CDN zone (dad-coach/training/v1/X, the path
+Each entry maps a local file (release/training/v2/X) to its path on the CDN zone (dad-coach/training/v2/X, the path
 backend/src/main/resources/training/catalog.json names), with the real length. Fails if the catalog and the files
 disagree (a missing file, another path, or a duration more than a second off)."""
 import hashlib, json, os, subprocess, sys
@@ -21,7 +21,7 @@ for e in sorted(CAT, key=lambda e: e['order']):
     for kind in ('video', 'poster'):
         cdn = e[kind]
         local = cdn.removeprefix('dad-coach/')
-        if not cdn.startswith('dad-coach/training/v1/') or not os.path.exists(f'{REL}/{local}'):
+        if not cdn.startswith('dad-coach/training/v2/') or not os.path.exists(f'{REL}/{local}'):
             bad.append(f'{e["slug"]}: {kind} {cdn} has no release/{local}')
             continue
         data = open(f'{REL}/{local}', 'rb').read()
