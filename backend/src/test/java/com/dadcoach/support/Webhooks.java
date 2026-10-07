@@ -42,6 +42,16 @@ public final class Webhooks {
                 + "\",\"mime_type\":\"audio/ogg; codecs=opus\",\"voice\":true}}]}");
     }
 
+    public static String image(String fromE164, String id, String caption) {
+        return envelope("{\"messages\":[{\"from\":\"" + fromE164.substring(1) + "\",\"id\":\"" + id
+                + "\",\"timestamp\":\"1793700000\",\"type\":\"image\",\"image\":{\"id\":\"media2\",\"caption\":\"" + caption + "\"}}]}");
+    }
+
+    public static String reaction(String fromE164, String id, String emoji) {
+        return envelope("{\"messages\":[{\"from\":\"" + fromE164.substring(1) + "\",\"id\":\"" + id
+                + "\",\"timestamp\":\"1793700000\",\"type\":\"reaction\",\"reaction\":{\"message_id\":\"wamid.out\",\"emoji\":\"" + emoji + "\"}}]}");
+    }
+
     public static String status(String id) {
         return envelope("{\"statuses\":[{\"id\":\"" + id + "\",\"status\":\"delivered\",\"timestamp\":\"1793700000\","
                 + "\"recipient_id\":\"19995550100\"}]}");

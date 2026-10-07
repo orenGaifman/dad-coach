@@ -56,7 +56,21 @@ public class SessionViews {
         data.put("timezone", zone.getId());
         data.put("local_date", localStart.toLocalDate().toString());
         data.put("local_start", localStart.toLocalTime().withSecond(0).withNano(0).toString());
+        data.put("when_label", whenLabel(localStart, clock.instant().atZone(zone).toLocalDate()));
         data.put("timers", SessionTimerPlanner.plan(start, end, zone, clock.instant()));
+    }
+
+    private static final String[] DAYS = {"שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"};
+
+    /**
+     * The session's day and time in Hebrew, for the confirmation to copy (qa-lab night round: the coach booked Thursday 8.10
+     * and wrote "מחר, יום שישי 9.10" - it worked the day out itself). "היום, יום חמישי 8.10 ב-17:00".
+     */
+    static String whenLabel(ZonedDateTime localStart, java.time.LocalDate today) {
+        java.time.LocalDate day = localStart.toLocalDate();
+        String date = "יום " + DAYS[day.getDayOfWeek().getValue() - 1] + " " + day.getDayOfMonth() + "." + day.getMonthValue();
+        String prefix = day.equals(today) ? "היום, " : day.equals(today.plusDays(1)) ? "מחר, " : "";
+        return prefix + date + " ב-" + localStart.toLocalTime().withSecond(0).withNano(0);
     }
 
     void putWeekCoverage(Map<String, Object> data, Father father) {

@@ -260,6 +260,18 @@ public class WeeklyPlanContextBuilder {
         progress.put("quality_time_streak", father.getQualityTimeStreak());
         progress.put("total_quality_times_completed", father.getTotalQualityTimesCompleted());
         progress.put("current_streak_weeks", father.getCurrentStreakWeeks());
+        // How belts work, so "איך מקבלים חגורה כתומה?" is answered from facts (it invented "weeks in a row", qa-lab night round):
+        // a belt is earned by completed sessions only - YELLOW at 3, ORANGE at 10, GREEN at 25 ...
+        com.dadcoach.workflow.Belt belt = father.getCurrentBelt() == null ? com.dadcoach.workflow.Belt.WHITE : father.getCurrentBelt();
+        com.dadcoach.workflow.Belt next = belt.getNextBelt();
+        progress.put("next_belt", next == null ? null : next.name());
+        progress.put("sessions_to_next_belt", next == null ? null
+                : Math.max(0, next.getMinCompletions() - father.getTotalQualityTimesCompleted()));
+        Map<String, Integer> thresholds = new LinkedHashMap<>();
+        for (com.dadcoach.workflow.Belt b : com.dadcoach.workflow.Belt.values()) {
+            thresholds.put(b.name(), b.getMinCompletions());
+        }
+        progress.put("belt_at_completed_sessions", thresholds);
         data.put("progress", progress);
 
         data.put("dashboard_url", dashboardLinks.loginUrl());

@@ -123,7 +123,9 @@ class FatherAreaTest extends AbstractWebIntegrationTest {
         Browser browser = signInFather(s.father());
         mvc.perform(browser.on(post("/api/father/sessions/" + s.ahead() + "/cancel"))).andExpect(status().isNoContent());
         assertThat(jdbc.queryForObject("SELECT status FROM quality_time WHERE id = ?", String.class, s.ahead())).isEqualTo("CANCELLED");
-        mvc.perform(browser.on(get("/api/father/home"))).andExpect(jsonPath("$.coverage.plannedMinutes").value(0));
+        mvc.perform(browser.on(get("/api/father/home"))).andExpect(jsonPath("$.coverage.plannedMinutes").value(0))
+                .andExpect(jsonPath("$.sessionsThisWeek.length()").value(2)); // the cancelled one leaves the home's week list
+        mvc.perform(browser.on(get("/api/father/sessions"))).andExpect(jsonPath("$.past[?(@.id == '" + s.ahead() + "')].phase").value("CANCELLED"));
         mvc.perform(browser.on(post("/api/father/sessions/" + s.done() + "/cancel"))).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SESSION_NOT_CANCELLABLE"));
     }

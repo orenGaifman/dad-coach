@@ -167,6 +167,7 @@ class ToolsTest extends AbstractIntegrationTest {
         assertThat(d.path("child_name").asText()).isEqualTo("נועה");
         assertThat(d.path("local_date").asText()).isEqualTo("2026-11-04");
         assertThat(d.path("local_start").asText()).isEqualTo("17:30");
+        assertThat(d.path("when_label").asText()).endsWith("יום רביעי 4.11 ב-17:30");
         assertThat(d.path("timezone").asText()).isEqualTo("Asia/Jerusalem");
         assertThat(d.path("timers").path("session_morning_reminder").asText()).isEqualTo("2026-11-04T06:00:00Z");
         assertThat(d.path("timers").path("session_reminder_1h").asText()).isEqualTo("2026-11-04T14:30:00Z");
@@ -189,6 +190,24 @@ class ToolsTest extends AbstractIntegrationTest {
         Call unknown = tool("cancel_quality_time", f.getPhone(), Map.of("quality_time_id", UUID.randomUUID().toString()));
         assertThat(unknown.error()).isEqualTo("NOT_FOUND");
         assertThat(unknown.body().path("error_message").asText()).contains("scheduled sessions are: none");
+    }
+
+    @Test
+    void aSessionCancelledAfterItsTimeIsRecordedAsMissed() throws Exception {
+        Father f = fatherWithChild("+19995550239");
+        tool("set_weekly_goal", f.getPhone(), Map.of("target_hours", 2));
+        Call booked = tool("schedule_quality_time", f.getPhone(), Map.of("child_id", childId(f),
+                "start_time", at("2026-11-04", "17:30"), "duration_minutes", 60));
+        String id = booked.data().path("quality_time_id").asText();
+        // "it didn't happen" after the follow-up: the session's time is behind us
+        jdbc.update("UPDATE quality_time SET scheduled_start = now() - interval '2 hours', scheduled_end = now() - interval '1 hour' WHERE id = ?::uuid", id);
+
+        Call missed = tool("cancel_quality_time", f.getPhone(), Map.of("quality_time_id", id, "reason", "did not happen (missed)"));
+        assertThat(missed.success()).as(missed.body().toString()).isTrue();
+        assertThat(missed.data().path("status").asText()).isEqualTo("MISSED");
+        assertThat(jdbc.queryForObject("SELECT status FROM quality_time WHERE id = ?::uuid", String.class, id)).isEqualTo("MISSED");
+        Call again = tool("cancel_quality_time", f.getPhone(), Map.of("quality_time_id", id));
+        assertThat(again.success()).isFalse();
     }
 
     @Test

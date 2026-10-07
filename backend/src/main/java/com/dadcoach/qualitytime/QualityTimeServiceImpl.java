@@ -463,9 +463,9 @@ public class QualityTimeServiceImpl implements QualityTimeService {
             throw new IllegalStateException(
                     "Cannot cancel Quality Time that is already COMPLETED: " + qualityTimeId);
         }
-        if (currentStatus == QualityTimeStatus.CANCELLED) {
+        if (currentStatus == QualityTimeStatus.CANCELLED || currentStatus == QualityTimeStatus.MISSED) {
             throw new IllegalStateException(
-                    "Cannot cancel Quality Time that is already CANCELLED: " + qualityTimeId);
+                    "Cannot cancel Quality Time that is already " + currentStatus + ": " + qualityTimeId);
         }
 
         // Step 3: Delete Google Calendar event if exists
@@ -498,8 +498,13 @@ public class QualityTimeServiceImpl implements QualityTimeService {
             qualityTime.setGoogleCalendarEventId(null);
         }
 
-        // Step 4: Update QualityTime status to CANCELLED
-        qualityTime.markCancelled();
+        // Step 4: CANCELLED - or MISSED when its time already passed: "it didn't happen" is not a cancellation, and the
+        // father's history (dashboard "לא יצא") must say so
+        if (qualityTime.hasEnded()) {
+            qualityTime.markMissed();
+        } else {
+            qualityTime.markCancelled();
+        }
 
         // Step 5: Save the entity
         qualityTimeRepository.save(qualityTime);
