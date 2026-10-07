@@ -28,7 +28,8 @@ public class ProductionStartupGuard implements SmartInitializingSingleton {
     static final List<String> PUBLIC_DEFAULTS = List.of(
             "e76625b0ee030a88400a68b3dd9bf23fe24e657455f1dd08b295991073d439f6",
             "default-dev-secret-change-in-production-must-be-at-least-256-bits-long!!",
-            "dad-coach-local-dev");
+            "dad-coach-local-dev",
+            "local-development-link-secret-not-for-production");
 
     private final Environment env;
 

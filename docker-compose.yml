@@ -1,3 +1,4 @@
+# Local development: Postgres + the backend image (the dashboard is added by the frontend work).
 services:
   postgres:
     image: postgres:17-alpine
@@ -16,14 +17,20 @@ services:
       retries: 10
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8080:8080"
+    env_file:
+      - path: .env
+        required: false
     environment:
+      SPRING_PROFILES_ACTIVE: local
+      PORT: "8080"
       DB_URL: jdbc:postgresql://postgres:5432/dadcoach
       DB_USERNAME: dadcoach
       DB_PASSWORD: dadcoach
-      SPRING_PROFILES_ACTIVE: dev
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,7 +39,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 40s
 
 volumes:
   pgdata:

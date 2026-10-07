@@ -1,158 +1,70 @@
 # Dad Coach
 
-AI-powered parenting coaching delivered through WhatsApp. Helps fathers build stronger relationships with their children through guided conversations, daily missions, and personalized coaching.
+A WhatsApp coach that helps a father turn his week into real quality time with his children: he sets a weekly goal
+in hours, books short sessions with a child, gets reminded and followed up, and earns belts (white → black) for
+weeks he meets. Hebrew first, addressed in the masculine singular.
 
-## Architecture Overview
+The conversation runs on the **AI Workflow Platform** (worker `dad_3`, workflow `dad-coach-3`) - Dad Coach itself
+calls no model. This repository is the product: its data, its rules, the tools and context the platform's agent
+uses, the WhatsApp channel (Dad Coach's own number), proactive delivery and person deletion.
 
-Dad Coach is a **Spring Boot 3.4 monolith** using package-by-feature architecture with:
-
-- **Java 21** runtime
-- **PostgreSQL 17** for persistence
-- **Flyway** for database migrations
-- **SpringDoc OpenAPI** for API documentation
-- **Logback** with JSON structured logging (production) / plain-text (local)
-- **Testcontainers** for integration testing
-- **Docker Compose** for local development environment
-
-The application follows a package-by-feature layout where each domain (webhook, whatsapp, father, conversation, etc.) owns its full vertical slice. Cross-cutting concerns like error handling, logging, and configuration live in shared packages.
-
-## System Requirements
-
-| Tool | Version | Notes |
-|------|---------|-------|
-| Java | 21 | Required. Use SDKMAN or brew to install |
-| Docker | 24+ | Required for PostgreSQL (local) and full-stack mode |
-| Maven | 3.9+ | Optional — included wrapper (`./mvnw`) recommended |
-
-## Project Structure
+## How it fits together
 
 ```
-backend/src/main/java/com/dadcoach/
-├── DadCoachApplication.java
-├── api/             # REST controllers (workspace, quality time, onboarding, admin)
-├── ai/              # AI coaching layer (Claude integration, tools, agents)
-├── calendar/        # Google Calendar integration
-├── channel/         # Multi-channel messaging (WhatsApp, templates)
-├── child/           # Child domain and management
-├── common/          # Global exception handler, logging filter, startup listener
-├── config/          # Application configuration (OpenAPI, HTTP client, props)
-├── conversation/    # Conversation session management
-├── father/          # Father domain and profile management
-├── memory/          # AI memory system (embedding, lifecycle, audit, extraction)
-├── mission/         # Coaching missions and quality time
-├── onboarding/      # User onboarding flow (invitations, activation)
-├── qualitytime/     # Quality time scheduling and tracking
-├── scheduling/      # Scheduled tasks and inactivity handling
-├── webhook/         # WhatsApp webhook handling
-├── whatsapp/        # WhatsApp API client
-├── weeklygoal/      # Weekly parenting goals
-└── workflow/        # Workflow orchestration and idempotency
+father ──WhatsApp──▶ Meta ──webhook──▶ Dad Coach ──/api/v1/worker/execute──▶ AI Workflow Platform
+                                          ▲  ▲                                     │
+          reply / reminders ◀── Meta ◀────┘  └── /api/tools/*, /api/context/* ◀───┘ (agent tools + context)
+                                             └── /api/integration/workflow/scheduled-response (timed turns)
 ```
 
-## Running Locally (without Docker)
+- **Inbound** (`whatsapp/inbound`): signature-checked webhook at `/webhook/whatsapp`, durable dedup of Meta ids,
+  200 at once, one turn at a time per sender, the father's timezone/person ref/name on every turn; a suppressed
+  reply sends nothing, a platform failure one short Hebrew line.
+- **Tools** (`api/tools`, bound in dad-coach-3): `save_user_profile`, `add_child`, `schedule_quality_time`,
+  `reschedule_quality_time`, `cancel_quality_time`, `complete_quality_time`, `show_available_slots`,
+  `set_weekly_goal`, `get_activity_ideas`. Idempotent, actor only from the envelope's WhatsApp number.
+- **Context** (`api/context`): `family_context`, `weekly_plan_context` (this Sunday-Saturday week in his timezone).
+- **Proactive**: the platform owns the timers (morning / 1-hour reminders, follow-up, daily check) and calls back;
+  Dad Coach delivers inside the 24-hour window or with the approved template. Dad Coach's own job: Sunday's weekly
+  completion (belts) with the promotion message.
+- **Deletion**: "DELETE MY DATA" or an operator delete → the platform deletes the person via its tenancy API
+  (durable outbox) and Dad Coach purges his data.
+- Google Calendar is optional: when connected, sessions also appear in it and busy times are avoided.
 
-Prerequisites: Java 21 installed, a running PostgreSQL instance.
+Docs: [`docs/implementation/`](docs/implementation) - INTEGRATION_SPEC, DECISIONS, TASKS, DEPLOYMENT.
+The workflow itself: `docs/dad-coach-3/` (provisioned to the platform).
+
+## Run it locally
+
+Requirements: Java 21, Docker.
 
 ```bash
-# Option 1: Start PostgreSQL via Docker (recommended)
-docker run -d --name dadcoach-db \
-  -e POSTGRES_DB=dadcoach \
-  -e POSTGRES_USER=dadcoach \
-  -e POSTGRES_PASSWORD=dadcoach \
-  -p 5432:5432 \
-  postgres:17-alpine
-
-# Copy and configure environment variables
-cp .env.example .env
-# Edit .env with your WhatsApp credentials
-
-# Run the application using Maven wrapper
-cd backend
-./mvnw spring-boot:run
+docker compose up -d postgres            # Postgres 17 on :5432 (dadcoach/dadcoach)
+cd backend && ./mvnw spring-boot:run     # profile "local", port 8081; Flyway builds the schema from empty
+curl localhost:8081/actuator/health
 ```
 
-The app starts on `http://localhost:8080` with the `local` profile (plain-text logs, Swagger UI enabled).
+`docker compose up` runs postgres + the backend image (port 8080). The platform is off by default
+(`WORKFLOW_PLATFORM_ENABLED=false`); to talk to it, run the platform on :8080 and set the `WORKFLOW_PLATFORM_*`
+and `TOOL_API_KEY` variables (see `.env.example`). Local WhatsApp without Meta: POST signed webhook bodies to
+`/webhook/whatsapp` (HMAC-SHA256 with `WHATSAPP_WEBHOOK_SECRET`).
 
-## Running with Docker
-
-Full-stack mode starts both PostgreSQL and the backend in containers:
+## Tests
 
 ```bash
-# Build and start all services
-docker compose up --build
-
-# Run in detached mode
-docker compose up --build -d
-
-# View logs
-docker compose logs -f backend
-
-# Stop all services
-docker compose down
-
-# Stop and remove data volumes
-docker compose down -v
+cd backend && ./mvnw test      # one shared Postgres Testcontainer; platform and Meta are a local HTTP stub
 ```
 
-The backend container uses the `dev` profile (JSON structured logs, Swagger UI enabled).
+With Docker Desktop on macOS: `DOCKER_HOST=unix://$HOME/.docker/run/docker.sock DOCKER_API_VERSION=1.44`.
+No test needs a network service or a key. A red test is never "pre-existing" - find its cause.
 
-## Environment Variables
+## Deploy
 
-Copy `.env.example` to `.env` and configure:
+Render web service `dad-coach` builds the root `Dockerfile` on every push to `main`. A deployed instance refuses
+to start without its secrets (`ProductionStartupGuard`). Variables (names only): `docs/implementation/DEPLOYMENT.md`.
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DB_URL` | Yes | `jdbc:postgresql://localhost:5432/dadcoach` | PostgreSQL JDBC connection URL |
-| `DB_USERNAME` | Yes | `dadcoach` | PostgreSQL username |
-| `DB_PASSWORD` | Yes | `dadcoach` | PostgreSQL password |
-| `WHATSAPP_PHONE_NUMBER_ID` | Yes | — | WhatsApp Business API phone number ID |
-| `WHATSAPP_ACCESS_TOKEN` | Yes | — | WhatsApp Business API access token |
-| `WHATSAPP_VERIFY_TOKEN` | Yes (dev/prod) | `dad-coach-local-dev` (local only) | Webhook verification token |
-| `WHATSAPP_API_VERSION` | No | `v25.0` | WhatsApp Graph API version |
-| `SPRING_PROFILES_ACTIVE` | No | `local` | Active profile: `local`, `dev`, or `prod` |
-| `SERVER_PORT` | No | `8080` | HTTP server port |
+## Database
 
-## Profiles
-
-| Profile | Logging | Swagger UI | Config Source | Health Details |
-|---------|---------|------------|---------------|----------------|
-| `local` | Plain-text | Enabled | Defaults + env vars | Shown |
-| `dev` | JSON structured | Enabled | Env vars (required) | Hidden |
-| `prod` | JSON structured | Disabled | Env vars (required) | Hidden |
-
-## Testing
-
-```bash
-cd backend
-
-# Unit tests only (fast, no Docker needed)
-./mvnw test
-
-# All tests including integration (requires Docker for Testcontainers)
-./mvnw clean verify
-```
-
-Integration tests use [Testcontainers](https://testcontainers.com/) to spin up a real PostgreSQL instance automatically — Docker must be running.
-
-### Test categories
-
-- **Unit tests** — fast, isolated, no external dependencies. Validate error handling, configuration logic.
-- **Integration tests** — use Testcontainers PostgreSQL. Validate context loading, Flyway migrations, health endpoints, OpenAPI spec.
-
-## API Documentation
-
-Swagger UI is available at [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html) when running with `local` or `dev` profiles.
-
-OpenAPI JSON spec: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
-
-Swagger UI is disabled in the `prod` profile.
-
-## Health Endpoints
-
-| Endpoint | Purpose |
-|----------|---------|
-| `/actuator/health` | General application health |
-| `/actuator/health/liveness` | Liveness probe (is the app running?) |
-| `/actuator/health/readiness` | Readiness probe (includes DB connectivity) |
-
-Use liveness and readiness probes for container orchestration (Docker health checks, Kubernetes probes).
+Flyway, `backend/src/main/resources/db/migration`. V1-V22 are exactly what production ran - never edit an applied
+migration; add a new one. Version ranges for parallel work: V23-V29 backend, V30-V39 dashboard, V40-V49 site.
+A fresh empty database starts from `db/baseline/V23__baseline_schema.sql` (production's schema after V23).
