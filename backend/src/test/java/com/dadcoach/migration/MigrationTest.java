@@ -51,7 +51,7 @@ class MigrationTest extends AbstractIntegrationTest {
             new Object[]{22, "platform person deletion", 1893830936});
 
     static final List<String> KEPT = List.of("child", "communication_endpoints", "father", "goal", "message_log",
-            "platform_person_deletion", "quality_time", "scheduled_response_delivery", "template_messages",
+            "platform_person_deletion", "quality_time", "scheduled_response_delivery", "site_signup", "template_messages",
             "tool_idempotency", "weekly_goal");
 
     @Test

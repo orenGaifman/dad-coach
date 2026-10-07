@@ -64,4 +64,22 @@ class ChannelClaimTest extends AbstractIntegrationTest {
         claim(ADMIN_KEY, body).andExpect(status().isUnauthorized());
         assertThat(claim(CALLBACK_KEY, body).andReturn().getResponse().getStatus()).isEqualTo(200);
     }
+
+    @Test
+    void aFatherWhoSignedUpOnTheSiteIsClaimedBeforeHeEverWroteForThirtyDays() throws Exception {
+        java.sql.Timestamp now = java.sql.Timestamp.from(clock.instant());
+        jdbc.update("INSERT INTO site_signup (id, name, phone, source, submissions, first_submitted_at, last_submitted_at) "
+                + "VALUES (gen_random_uuid(), 'נועם', '+972541234567', 'site', 1, ?, ?)", now, now);
+        org.assertj.core.api.Assertions.assertThat(claimed("+972541234567")).isTrue();
+        clock.advance(java.time.Duration.ofDays(31));
+        org.assertj.core.api.Assertions.assertThat(claimed("+972541234567")).isFalse();
+    }
+
+    private boolean claimed(String phone) throws Exception {
+        String body = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/integration/channel/claim")
+                        .header("X-API-Key", CALLBACK_KEY).contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"phone\":\"" + phone + "\"}"))
+                .andReturn().getResponse().getContentAsString();
+        return body.contains("\"claimed\":true");
+    }
 }

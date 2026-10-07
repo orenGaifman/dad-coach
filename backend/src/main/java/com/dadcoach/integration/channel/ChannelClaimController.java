@@ -4,6 +4,7 @@ import com.dadcoach.common.PhoneValidator;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.father.FatherStatus;
 import com.dadcoach.integration.platform.lifecycle.DeletedSenders;
+import com.dadcoach.publicsite.SiteSignupService;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,20 +26,26 @@ public class ChannelClaimController {
 
     public record ClaimRequest(String phone) {}
 
+    /** A father who signed up on the site is claimed this long, so his first WhatsApp message reaches the coach. */
+    static final int SIGNUP_DAYS = 30;
+
     private final FatherRepository fathers;
     private final DeletedSenders deletedSenders;
+    private final SiteSignupService signups;
 
-    public ChannelClaimController(FatherRepository fathers, DeletedSenders deletedSenders) {
+    public ChannelClaimController(FatherRepository fathers, DeletedSenders deletedSenders, SiteSignupService signups) {
         this.fathers = fathers;
         this.deletedSenders = deletedSenders;
+        this.signups = signups;
     }
 
     @PostMapping("/api/integration/channel/claim")
     public Map<String, Boolean> claim(@RequestBody(required = false) ClaimRequest request) {
         String phone = normalize(request == null ? null : request.phone());
-        boolean claimed = phone != null
-                && fathers.findByPhone(phone).filter(f -> f.getStatus() != FatherStatus.DELETED).isPresent()
-                && !deletedSenders.isDeleted(phone);
+        // The shared number is invite-only (no default route): a new father is invited by signing up on the site.
+        boolean claimed = phone != null && !deletedSenders.isDeleted(phone)
+                && (fathers.findByPhone(phone).filter(f -> f.getStatus() != FatherStatus.DELETED).isPresent()
+                    || signups.signedUpWithin(phone, SIGNUP_DAYS));
         log.atInfo().setMessage("channel.claim.result").addKeyValue("claimed", claimed).log();
         return Map.of("claimed", claimed);
     }

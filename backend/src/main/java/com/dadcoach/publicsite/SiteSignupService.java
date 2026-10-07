@@ -83,6 +83,13 @@ public class SiteSignupService {
                 .list();
     }
 
+    /** Whether this phone (E.164) left its details on the site within the last {@code days} days - the WhatsApp claim. */
+    public boolean signedUpWithin(String e164Phone, int days) {
+        Instant since = clock.instant().minus(Duration.ofDays(days));
+        return jdbc.sql("SELECT count(*) FROM site_signup WHERE phone = :phone AND last_submitted_at >= :since")
+                .param("phone", e164Phone).param("since", Timestamp.from(since)).query(Integer.class).single() > 0;
+    }
+
     /** Removes a father's signup row by phone (E.164), e.g. on his data-deletion request. @return rows removed */
     public int deleteByPhone(String e164Phone) {
         return jdbc.sql("DELETE FROM site_signup WHERE phone = :phone").param("phone", e164Phone).update();
