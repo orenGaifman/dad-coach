@@ -3,6 +3,9 @@ package com.dadcoach.web.training;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.InputStream;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -45,5 +48,21 @@ class TrainingCatalogTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> TrainingCatalog.validated(List.of(new TrainingVideo("Bad Slug", false, 0, "t", "", 1, null, null, true))))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("the shipped catalog: valid, one primary, every active video on the CDN path the release uploads")
+    void shippedCatalog() throws Exception {
+        List<TrainingVideo> shipped;
+        try (InputStream in = getClass().getResourceAsStream("/training/catalog.json")) {
+            shipped = new ObjectMapper().readValue(in, new TypeReference<List<TrainingVideo>>() { });
+        }
+        List<TrainingVideo> catalog = TrainingCatalog.validated(shipped);
+        assertThat(catalog).filteredOn(TrainingVideo::primary).extracting(TrainingVideo::slug).containsExactly("welcome");
+        assertThat(catalog).filteredOn(TrainingVideo::active).isNotEmpty().allSatisfy(v -> {
+            assertThat(v.video()).isEqualTo("dad-coach/training/v1/father-" + v.slug() + ".mp4");
+            assertThat(v.poster()).isEqualTo("dad-coach/training/v1/father-" + v.slug() + ".jpg");
+            assertThat(v.durationSeconds()).isBetween(20, 90);
+        });
     }
 }

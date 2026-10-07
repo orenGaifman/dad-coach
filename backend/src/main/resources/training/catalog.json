@@ -2,25 +2,36 @@
   {
     "slug": "welcome", "primary": true, "order": 0,
     "title": "ברוך הבא ל-Dad Coach",
-    "description": "איך זה עובד: יעד שבועי, זמן עם כל ילד, תזכורות בוואטסאפ, והחגורה שעולה איתך.",
-    "durationSeconds": 90, "video": null, "poster": null, "active": true
+    "description": "מהאתר לוואטסאפ: איך קוראים לך, ילד וגיל, ויעד ראשון לשבוע.",
+    "durationSeconds": 50,
+    "video": "dad-coach/training/v1/father-welcome.mp4", "poster": "dad-coach/training/v1/father-welcome.jpg", "active": true
   },
   {
-    "slug": "plan-the-week", "primary": false, "order": 1,
-    "title": "מתכננים שבוע בוואטסאפ",
-    "description": "כותבים למאמן כמה שעות השבוע ומתי, והוא קובע את המפגשים בשבילך.",
-    "durationSeconds": 60, "video": null, "poster": null, "active": true
+    "slug": "book-a-session", "primary": false, "order": 1,
+    "title": "קובעים זמן עם הילדים",
+    "description": "הודעה אחת: עם מי, מתי וכמה זמן. לא בטוח מתי? המאמן מציע זמנים פנויים.",
+    "durationSeconds": 33,
+    "video": "dad-coach/training/v1/father-book-a-session.mp4", "poster": "dad-coach/training/v1/father-book-a-session.jpg", "active": true
   },
   {
-    "slug": "my-week", "primary": false, "order": 2,
-    "title": "הלוח שלך: השבוע שלי",
-    "description": "איפה רואים כמה כבר עשית, מה מתוכנן, ומה מחכה לאישור.",
-    "durationSeconds": 50, "video": null, "poster": null, "active": true
+    "slug": "reminders", "primary": false, "order": 2,
+    "title": "התזכורות",
+    "description": "בבוקר, שעה לפני עם רעיון או שניים, ואחרי: \"נו, איך היה?\". מספיקה מילה אחת.",
+    "durationSeconds": 40,
+    "video": "dad-coach/training/v1/father-reminders.mp4", "poster": "dad-coach/training/v1/father-reminders.jpg", "active": true
   },
   {
-    "slug": "belts", "primary": false, "order": 3,
-    "title": "חגורות והישגים",
-    "description": "כל מפגש שקרה באמת מקדם אותך: מלבנה עד שחורה.",
-    "durationSeconds": 45, "video": null, "poster": null, "active": true
+    "slug": "when-cancelled", "primary": false, "order": 3,
+    "title": "כשמשהו מתבטל",
+    "description": "כותבים למאמן, והוא מציע זמן אחר באותו שבוע. ביטול לא מוריד חגורה.",
+    "durationSeconds": 34,
+    "video": "dad-coach/training/v1/father-when-cancelled.mp4", "poster": "dad-coach/training/v1/father-when-cancelled.jpg", "active": true
+  },
+  {
+    "slug": "my-dashboard", "primary": false, "order": 4,
+    "title": "הלוח האישי שלך",
+    "description": "כניסה בלי סיסמה, היעד והמפגשים של השבוע, החגורות וההגדרות.",
+    "durationSeconds": 57,
+    "video": "dad-coach/training/v1/father-my-dashboard.mp4", "poster": "dad-coach/training/v1/father-my-dashboard.jpg", "active": true
   }
 ]

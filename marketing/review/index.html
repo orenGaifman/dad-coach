@@ -1,0 +1,164 @@
+<meta charset="utf-8">
+<title>Dad Coach Training Library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700;800&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a review sheet in the brand's night-and-paper look - a short navy brief, a shelf of portrait players
+   (the father's library, then the ad), then the review notes. Gold only marks the primary video. */
+:root {
+  --paper: #FAF7F1; --surface: #FFFFFF; --ink: #1F1B16; --muted: #6B6358; --line: #E4DCCD;
+  --night: #101C32; --night-ink: #E6E9F0; --night-muted: #C9D0DE;
+  --gold: #DAAC5F; --gold-ink: #7F5B1C; --gold-soft: #F7EEDC; --ok: #3F7D4E; --ok-soft: #E3F0E5; --warn: #8A5A12; --warn-soft: #F7EEDC;
+  --sans: "Assistant", "Arial Hebrew", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0B1424; --surface: #15223B; --ink: #E6E9F0; --muted: #A9B3C7; --line: #24365A;
+  --night: #101C32; --night-ink: #E6E9F0; --night-muted: #C9D0DE;
+  --gold: #DAAC5F; --gold-ink: #EBCB91; --gold-soft: #2E2814; --ok: #7DC08E; --ok-soft: #16301F; --warn: #EBCB91; --warn-soft: #2E2814; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #0B1424; --surface: #15223B; --ink: #E6E9F0; --muted: #A9B3C7; --line: #24365A;
+  --night: #101C32; --night-ink: #E6E9F0; --night-muted: #C9D0DE;
+  --gold: #DAAC5F; --gold-ink: #EBCB91; --gold-soft: #2E2814; --ok: #7DC08E; --ok-soft: #16301F; --warn: #EBCB91; --warn-soft: #2E2814; color-scheme: dark }
+body { background: var(--paper); color: var(--ink); font: 16px/1.6 var(--sans); }
+.band { background: var(--night); color: var(--night-ink); padding-inline: 20px; }
+.band .in { max-width: 1180px; margin: 0 auto; padding-block: 40px 36px; display: grid; gap: 12px; }
+.eyebrow { font: 500 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+h1 { font: 800 clamp(30px, 4.4vw, 44px)/1.1 var(--sans); margin: 0; text-wrap: balance; }
+h2 { font: 700 22px/1.2 var(--sans); margin: 0; text-wrap: balance; }
+h3 { font: 700 20px/1.3 var(--sans); margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.lede { color: var(--night-muted); max-width: 70ch; font-size: 17px; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 15px; color: var(--night-muted); }
+.facts b { color: var(--night-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 36px 64px; display: grid; gap: 44px; }
+section { display: grid; gap: 18px; }
+.shelf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.shelf-head span { color: var(--muted); font-size: 15px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 22px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+.card.primary { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
+video { width: 100%; max-width: 100%; aspect-ratio: 9 / 16; display: block; background: var(--night); object-fit: cover; }
+.meta { padding: 14px 16px 18px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tag { font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: var(--gold-soft); color: var(--gold-ink); }
+.tag.quiet { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.len { font: 500 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.desc { font-size: 16px; }
+.shows { color: var(--muted); font-size: 14px; }
+.file { font: 500 12px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.adrow .card { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); grid-template-rows: none; max-width: 860px; }
+@media (max-width: 640px) { .adrow .card { grid-template-columns: minmax(0, 1fr); } }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+.note { border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; background: var(--surface); min-width: 0; }
+.note ul { margin: 0; padding-inline-start: 18px; display: grid; gap: 6px; font-size: 15px; }
+.note code { font: 500 13px var(--mono); overflow-wrap: anywhere; }
+.state { justify-self: start; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; }
+.state.ok { background: var(--ok-soft); color: var(--ok); }
+.state.warn { background: var(--warn-soft); color: var(--warn); }
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+</style>
+
+<div class="band"><div class="in">
+  <div class="eyebrow">Dad Coach · father onboarding · v1</div>
+  <h1>The training library and the ad</h1>
+  <p class="lede">Five short videos that show a father the product in his own WhatsApp and on his dashboard, and the 9:16 ad
+    for the campaign. Everything on screen comes from the lab on the real workflow.</p>
+  <div class="facts"><span><b>5</b> videos</span><span><b>3 min 34 s</b> in all</span><span>1080 × 1920, 30 fps, captions burned in</span><span>Voice: amit</span></div>
+</div></div>
+
+<main class="wrap">
+  <section>
+    <div class="shelf-head"><h2>For fathers</h2><span>In the dashboard's training area, in catalog order</span></div>
+    <div class="grid">
+    <article class="card primary" id="father-welcome">
+      <video controls playsinline preload="none" poster="media/father-welcome.jpg" src="media/father-welcome.mp4"></video>
+      <div class="meta">
+        <div class="row"><span class="tag">Primary · after signup</span><span class="len">0:50 · 2.4 MB</span></div>
+        <h3 lang="he" dir="rtl">ברוך הבא ל-Dad Coach</h3>
+        <p class="desc" lang="he" dir="rtl">מהאתר לוואטסאפ: איך קוראים לך, ילד וגיל, ויעד ראשון לשבוע.</p>
+        <p class="shows">The site card (name and mobile, then its done state), the first WhatsApp message, the welcome, the name, one child and age, the confirmation, the first weekly goal and the slots the coach offers right after it.</p>
+        <p class="file">father-welcome.mp4</p>
+      </div>
+    </article>
+    <article class="card" id="father-book-a-session">
+      <video controls playsinline preload="none" poster="media/father-book-a-session.jpg" src="media/father-book-a-session.mp4"></video>
+      <div class="meta">
+        <div class="row"><span class="tag quiet">Guide 1</span><span class="len">0:33 · 1.5 MB</span></div>
+        <h3 lang="he" dir="rtl">קובעים זמן עם הילדים</h3>
+        <p class="desc" lang="he" dir="rtl">הודעה אחת: עם מי, מתי וכמה זמן. לא בטוח מתי? המאמן מציע זמנים פנויים.</p>
+        <p class="shows">The free slots the coach offers, a booking typed in one message, the confirmation with the week so far, and &quot;איך אני עומד השבוע?&quot; answered with minutes and what is left.</p>
+        <p class="file">father-book-a-session.mp4</p>
+      </div>
+    </article>
+    <article class="card" id="father-reminders">
+      <video controls playsinline preload="none" poster="media/father-reminders.jpg" src="media/father-reminders.mp4"></video>
+      <div class="meta">
+        <div class="row"><span class="tag quiet">Guide 2</span><span class="len">0:40 · 1.7 MB</span></div>
+        <h3 lang="he" dir="rtl">התזכורות</h3>
+        <p class="desc" lang="he" dir="rtl">בבוקר, שעה לפני עם רעיון או שניים, ואחרי: &quot;נו, איך היה?&quot;. מספיקה מילה אחת.</p>
+        <p class="shows">The morning reminder as the coach promises it, the reminder an hour before with ideas for a 7-year-old, &quot;נו, איך היה?&quot;, the father&#x27;s answer recorded, and that note next to the session on the dashboard.</p>
+        <p class="file">father-reminders.mp4</p>
+      </div>
+    </article>
+    <article class="card" id="father-when-cancelled">
+      <video controls playsinline preload="none" poster="media/father-when-cancelled.jpg" src="media/father-when-cancelled.mp4"></video>
+      <div class="meta">
+        <div class="row"><span class="tag quiet">Guide 3</span><span class="len">0:34 · 1.7 MB</span></div>
+        <h3 lang="he" dir="rtl">כשמשהו מתבטל</h3>
+        <p class="desc" lang="he" dir="rtl">כותבים למאמן, והוא מציע זמן אחר באותו שבוע. ביטול לא מוריד חגורה.</p>
+        <p class="shows">A cancel and the replacement slots in the same week, the rebooking, &quot;לא הספקנו&quot; answered without guilt, and the belt card (it counts only sessions that happened).</p>
+        <p class="file">father-when-cancelled.mp4</p>
+      </div>
+    </article>
+    <article class="card" id="father-my-dashboard">
+      <video controls playsinline preload="none" poster="media/father-my-dashboard.jpg" src="media/father-my-dashboard.mp4"></video>
+      <div class="meta">
+        <div class="row"><span class="tag quiet">Guide 4</span><span class="len">0:57 · 3.5 MB</span></div>
+        <h3 lang="he" dir="rtl">הלוח האישי שלך</h3>
+        <p class="desc" lang="he" dir="rtl">כניסה בלי סיסמה, היעד והמפגשים של השבוע, החגורות וההגדרות.</p>
+        <p class="shows">The login page (phone number, link in WhatsApp), home (goal, done, booked), the next session and the belt, a session waiting for &quot;היה / לא יצא&quot;, sessions, progress with the belts, settings (calendar optional).</p>
+        <p class="file">father-my-dashboard.mp4</p>
+      </div>
+    </article>
+    </div>
+  </section>
+  <section>
+    <div class="shelf-head"><h2>The ad</h2><span>Instagram and Facebook Reels, Stories, WhatsApp status</span></div>
+    <div class="adrow">
+    <article class="card" id="dad-coach-ad-v1">
+      <video controls playsinline preload="none" poster="media/dad-coach-ad-v1.jpg" src="media/dad-coach-ad-v1.mp4"></video>
+      <div class="meta">
+        <div class="row"><span class="tag quiet">Ad · 9:16</span><span class="len">1:03 · 3.7 MB</span></div>
+        <h3 lang="he" dir="rtl">הזמן שתכננת. הפעם הוא קורה.</h3>
+        
+        <p class="shows">Pain (the week pushes the planned time away), the brand, booking in one message, the reminder an hour before, &quot;נו, איך היה?&quot;, the dashboard, a missed session without guilt, the half-minute setup, a covered week with no nagging, the motto and the call to action. Voice 7% faster than the library.</p>
+        <p class="file">dad-coach-ad-v1.mp4</p>
+      </div>
+    </article></div>
+  </section>
+  <section>
+    <div class="shelf-head"><h2>Review notes</h2><span>What was checked, and what is still open</span></div>
+    <div class="notes">
+<div class="note"><span class="state ok">Checked</span><h3>Only real lines and real screens</h3>
+<ul><li>Every WhatsApp bubble is copied from the qa-lab runs v4-s1 and v4-s2 on the real workflow. Three are shortened by
+dropping whole sentences; each cut is noted in <code>training/film/msgs.js</code>.</li>
+<li>Every dashboard is a capture of the real dashboard on the lab's demo data and carries its "הדגמה" badge. The site
+card is the real site with a sample name.</li>
+<li>Every clip of the voice ("amit", the site intro's voice) was transcribed back and compared with its script.</li>
+<li>The "השבוע שלך" week in the ad is our drawing and is labelled "איור".</li></ul></div>
+<div class="note"><span class="state warn">Shown as a promise</span><h3>What the lab did not produce</h3>
+<ul><li>No morning reminder and no Sunday check-in fired in the lab. The reminders video shows the coach's own sentence
+"אזכיר לך בבוקר ושעה לפני" and does not draw a morning message.</li>
+<li>Logging time that happened without a booking has no tool yet, so that video is not in the library.</li></ul></div>
+<div class="note"><span class="state warn">Open</span><h3>Before the ad runs</h3>
+<ul><li>The end card shows the placeholder "‹כתובת האתר›" until the domain is chosen. Render it with
+<code>?site=</code> set, then rebuild the ad (one command).</li>
+<li>Every coach message starts with the Latin line "❤️ Dad Coach:". On a real phone WhatsApp may lay a Hebrew message out
+left to right because of it; worth one look on a phone before the campaign.</li></ul></div>
+<div class="note"><span class="state ok">Ready</span><h3>Upload</h3>
+<ul><li>The files are <code>marketing/training/release/training/v1/father-&lt;slug&gt;.mp4|.jpg</code>; on the Bunny
+zone they go to <code>dad-coach/training/v1/</code>, the paths the catalog already names.</li>
+<li>Loudness: the videos at −16 LUFS, the ad at −14 LUFS, music under the voice well below −24 LUFS.</li></ul></div></div>
+  </section>
+</main>
