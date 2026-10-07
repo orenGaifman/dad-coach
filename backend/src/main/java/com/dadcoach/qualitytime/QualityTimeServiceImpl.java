@@ -726,7 +726,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
 
         // Description (Requirement 3.3)
         if ("he".equals(locale)) {
-            event.put("description", "Dad Coach - זמן איכות מתוכנן. תהנו מהרגע יחד!");
+            event.put("description", "דאד קואץ׳ - זמן איכות מתוכנן. תהנו מהרגע יחד!");
         } else {
             event.put("description", "Dad Coach scheduled Quality Time — enjoy your moment together!");
         }

@@ -209,7 +209,7 @@ function Lifecycle({ d }: { d: FatherDetail }) {
       </div>
       <ConfirmDialog open={deleting} title="מחיקה לצמיתות" confirmLabel="למחוק" danger busy={busy} error={error}
                      confirmDisabled={typed.trim() !== d.deleteConfirmation} onClose={() => setDeleting(false)} onConfirm={remove}>
-        <p>כל הנתונים שלו ב-Dad Coach יימחקו עכשיו, ובקשת מחיקה תישלח לפלטפורמה (שיחות, מופעים, טריגרים).</p>
+        <p>כל הנתונים שלו בדאד קואץ׳ יימחקו עכשיו, ובקשת מחיקה תישלח לפלטפורמה (שיחות, מופעים, טריגרים).</p>
         <div className={ui.field}>
           <label className={ui.label} htmlFor="confirm">כדי לאשר, הקלד <strong>{d.deleteConfirmation}</strong></label>
           <input id="confirm" className={ui.input} value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />

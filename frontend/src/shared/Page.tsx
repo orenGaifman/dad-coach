@@ -13,7 +13,7 @@ interface PageProps {
 /** Every screen: one h1, an optional line under it, actions at the inline end. */
 export function Page({ title, subtitle, actions, children, docTitle }: PageProps) {
   useEffect(() => {
-    document.title = `${docTitle ?? title} · Dad Coach`
+    document.title = `${docTitle ?? title} · דאד קואץ׳`
   }, [docTitle, title])
   return (
     <div className={styles.page}>

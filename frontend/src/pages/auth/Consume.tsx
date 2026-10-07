@@ -24,7 +24,7 @@ export function Consume() {
   }, [])
 
   useEffect(() => {
-    document.title = 'נכנס… · Dad Coach'
+    document.title = 'נכנס… · דאד קואץ׳'
     if (started.current) return
     started.current = true
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
@@ -51,7 +51,7 @@ export function Consume() {
       <div className={styles.card}>
         <div className={styles.brand}>
           <Logomark size={52} />
-          <span>Dad Coach</span>
+          <span>דאד קואץ׳</span>
         </div>
         {missing ? (
           <>

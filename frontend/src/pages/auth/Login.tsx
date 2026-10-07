@@ -27,7 +27,7 @@ export function Login() {
   const [error, setError] = useState<unknown>(null)
   const [invalid, setInvalid] = useState(false)
 
-  useEffect(() => { document.title = 'כניסה · Dad Coach' }, [])
+  useEffect(() => { document.title = 'כניסה · דאד קואץ׳' }, [])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -58,7 +58,7 @@ export function Login() {
       <div className={styles.card}>
         <div className={styles.brand}>
           <Logomark size={52} />
-          <span>Dad Coach</span>
+          <span>דאד קואץ׳</span>
         </div>
         {sent ? (
           <div className={styles.sent} role="status">
@@ -103,7 +103,7 @@ export function Login() {
         )}
       </div>
       <p className={styles.foot}>
-        Dad Coach · זמן אמיתי עם הילדים, כל שבוע · <Link to="/privacy">פרטיות</Link> · <Link to="/terms">תנאים</Link>
+        דאד קואץ׳ · זמן אמיתי עם הילדים, כל שבוע · <Link to="/privacy">פרטיות</Link> · <Link to="/terms">תנאים</Link>
       </p>
     </main>
   )

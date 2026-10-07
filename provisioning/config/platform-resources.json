@@ -17,7 +17,7 @@
   "workers": [
     {
       "workerKey": "dad_3",
-      "name": "Dad Coach",
+      "name": "דאד קואץ׳",
       "description": "Dad Coach 3 - platform-owned proactive coaching (default workflow: Dad Coach 3)",
       "iconEmoji": "❤️",
       "defaultWorkflowKey": "dad-coach-3",

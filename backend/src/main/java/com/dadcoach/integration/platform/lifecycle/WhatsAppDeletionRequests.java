@@ -19,12 +19,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class WhatsAppDeletionRequests {
 
     private static final Logger log = LoggerFactory.getLogger(WhatsAppDeletionRequests.class);
-    static final String PHRASE = "delete my data";
+    /** "DELETE MY DATA" stays accepted (Meta's data-deletion instructions name it); the Hebrew phrases are the ones fathers use. */
+    static final java.util.Set<String> PHRASES = java.util.Set.of("delete my data", "מחק את המידע שלי", "מחקו את המידע שלי",
+            "מחיקת המידע שלי", "תמחק את המידע שלי");
 
-    static final String CONFIRMATION = "We received your request. Your Dad Coach account and all your data - your phone number, "
-            + "conversation history and preferences - are being deleted now. This is the last message you will get from us.";
-    static final String NO_ACCOUNT = "We received your request. There is no Dad Coach account for this number. "
-            + "To delete anything else we may hold, email oren26g@gmail.com with the subject \"Data Deletion Request\".";
+    static final String CONFIRMATION = "קיבלנו את הבקשה. החשבון שלך בדאד קואץ׳ וכל המידע שלך - מספר הטלפון, השיחות וההעדפות - "
+            + "נמחקים עכשיו. זו ההודעה האחרונה שתקבל מאיתנו.";
+    static final String NO_ACCOUNT = "קיבלנו את הבקשה. למספר הזה אין חשבון בדאד קואץ׳. "
+            + "כדי למחוק כל מידע אחר שאולי שמור אצלנו, כתוב ל-oren26g@gmail.com עם הנושא \"בקשת מחיקת מידע\".";
 
     private final FatherRepository fathers;
     private final com.dadcoach.domain.father.FatherDeletionService deletions;
@@ -39,7 +41,7 @@ public class WhatsAppDeletionRequests {
             return false;
         }
         String normalized = text.trim().replaceAll("\\s+", " ").replaceAll("[.!]+$", "").toLowerCase(Locale.ROOT);
-        return PHRASE.equals(normalized);
+        return PHRASES.contains(normalized);
     }
 
     /** Handles a deletion request from this number. @return the reply to send */

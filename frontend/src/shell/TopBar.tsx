@@ -13,11 +13,11 @@ export function TopBar() {
   const admin = pathname.startsWith('/admin')
   return (
     <header className={styles.bar}>
-      <Link to={admin ? '/admin' : '/home'} className={styles.brand} aria-label="Dad Coach - דף הבית">
+      <Link to={admin ? '/admin' : '/home'} className={styles.brand} aria-label="דאד קואץ׳ - דף הבית">
         <Logomark size={30} />
-        <span>Dad Coach</span>
+        <span>דאד קואץ׳</span>
       </Link>
-      <span className={styles.area}>{admin ? 'ניהול Dad Coach' : ''}</span>
+      <span className={styles.area}>{admin ? 'ניהול דאד קואץ׳' : ''}</span>
       <AccountMenu />
     </header>
   )
@@ -72,7 +72,7 @@ function AccountMenu() {
         <div className={styles.menu} role="menu">
           <div className={styles.who}>
             <strong>{name}</strong>
-            {can(me, 'admin') && <span>צוות Dad Coach</span>}
+            {can(me, 'admin') && <span>צוות דאד קואץ׳</span>}
           </div>
           {can(me, 'admin') && can(me, 'father') && (
             pathname.startsWith('/admin')

@@ -85,7 +85,7 @@ class AdminAreaTest extends AbstractWebIntegrationTest {
         mvc.perform(staff.on(get("/api/admin/undelivered"))).andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.fatherId == " + father + ")].kind").value("LOGIN_LINK"));
         mvc.perform(staff.on(get("/api/admin/training"))).andExpect(jsonPath("$.mediaConfigured").value(false))
-                .andExpect(jsonPath("$.videos.length()").value(4));
+                .andExpect(jsonPath("$.videos.length()").value(5));
     }
 
     @Test

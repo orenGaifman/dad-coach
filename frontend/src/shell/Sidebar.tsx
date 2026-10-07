@@ -11,7 +11,7 @@ export function Sidebar({ nav, keepSearch }: { nav: NavItem[]; keepSearch?: stri
     <aside className={styles.sidebar} aria-label="ניווט ראשי">
       <Link to={home.to + (keepSearch ?? '')} className={styles.brand}>
         <Logomark size={36} />
-        <span>Dad Coach</span>
+        <span>דאד קואץ׳</span>
       </Link>
       <nav className={styles.nav}>
         {nav.map((item) => {

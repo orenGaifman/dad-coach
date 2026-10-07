@@ -9,11 +9,11 @@ import styles from './Legal.module.css'
 const CONTACT = 'oren26g@gmail.com'
 
 function LegalPage({ title, children }: { title: string; children: ReactNode }) {
-  useEffect(() => { document.title = `${title} · Dad Coach` }, [title])
+  useEffect(() => { document.title = `${title} · דאד קואץ׳` }, [title])
   return (
     <main className={styles.screen}>
       <article className={styles.doc}>
-        <Link to="/" className={styles.brand}><Logomark size={32} /> Dad Coach</Link>
+        <Link to="/" className={styles.brand}><Logomark size={32} /> דאד קואץ׳</Link>
         <p className={styles.draft} role="note">טיוטה לבדיקת עו״ד</p>
         <h1>{title}</h1>
         <p className={styles.updated}>עודכן לאחרונה: 7 באוקטובר 2026</p>
@@ -32,7 +32,7 @@ export function Privacy() {
   return (
     <LegalPage title="מדיניות פרטיות">
       <section><h2>1. מי אנחנו</h2>
-        <p>Dad Coach ("אנחנו") הוא מאמן בוואטסאפ שעוזר לאבות לתכנן זמן איכות עם הילדים ולעמוד בו. המדיניות הזאת מסבירה איזה מידע אנחנו אוספים, למה, ואיך אנחנו שומרים עליו.</p></section>
+        <p>דאד קואץ׳ ("אנחנו") הוא מאמן בוואטסאפ שעוזר לאבות לתכנן זמן איכות עם הילדים ולעמוד בו. המדיניות הזאת מסבירה איזה מידע אנחנו אוספים, למה, ואיך אנחנו שומרים עליו.</p></section>
       <section><h2>2. איזה מידע אנחנו אוספים</h2>
         <ul>
           <li>מספר הטלפון שלך (דרך וואטסאפ), והשם שבחרת.</li>
@@ -65,9 +65,9 @@ export function Terms() {
   return (
     <LegalPage title="תנאי שימוש">
       <section><h2>1. הסכמה לתנאים</h2>
-        <p>השימוש ב-Dad Coach מהווה הסכמה לתנאים האלה. אם אינך מסכים, אל תשתמש בשירות.</p></section>
+        <p>השימוש בדאד קואץ׳ מהווה הסכמה לתנאים האלה. אם אינך מסכים, אל תשתמש בשירות.</p></section>
       <section><h2>2. מה השירות</h2>
-        <p>Dad Coach הוא מאמן מבוסס בינה מלאכותית בוואטסאפ: עוזר לקבוע יעד שבועי של זמן עם הילדים, לקבוע מפגשים, מזכיר ושואל איך היה, ומציג את ההתקדמות בלוח אישי.</p></section>
+        <p>דאד קואץ׳ הוא מאמן מבוסס בינה מלאכותית בוואטסאפ: עוזר לקבוע יעד שבועי של זמן עם הילדים, לקבוע מפגשים, מזכיר ושואל איך היה, ומציג את ההתקדמות בלוח אישי.</p></section>
       <section><h2>3. האחריות שלך</h2>
         <ul>
           <li>השירות מיועד לבני 18 ומעלה.</li>
@@ -75,7 +75,7 @@ export function Terms() {
           <li>אין להשתמש בשירות לרעה או למטרה שאינה חוקית.</li>
         </ul></section>
       <section><h2>4. הבהרה</h2>
-        <p>Dad Coach נותן הכוונה כללית להורות, ואינו תחליף לייעוץ רפואי, פסיכולוגי או משפטי. בכל שאלה על בריאות הילד או התפתחותו - פנה לאיש מקצוע.</p></section>
+        <p>דאד קואץ׳ נותן הכוונה כללית להורות, ואינו תחליף לייעוץ רפואי, פסיכולוגי או משפטי. בכל שאלה על בריאות הילד או התפתחותו - פנה לאיש מקצוע.</p></section>
       <section><h2>5. הגבלת אחריות</h2>
         <p>השירות ניתן כמות שהוא (AS IS), בלי התחייבות מכל סוג. איננו אחראים לנזק שנגרם מהשימוש בו.</p></section>
       <section><h2>6. שינויים</h2>
@@ -90,7 +90,7 @@ export function DataDeletion() {
   return (
     <LegalPage title="מחיקת נתונים">
       <section><h2>איך מבקשים מחיקה</h2>
-        <p>זכותך לבקש למחוק את המידע האישי שלך מ-Dad Coach. יש שלוש דרכים:</p></section>
+        <p>זכותך לבקש למחוק את המידע האישי שלך מדאד קואץ׳. יש שלוש דרכים:</p></section>
       <section><h2>1. מהלוח</h2>
         <p>בלוח שלך: הגדרות ← "מחיקת הנתונים שלי", ומקלידים את מילת האישור. החשבון נסגר מיד.</p></section>
       <section><h2>2. בוואטסאפ</h2>

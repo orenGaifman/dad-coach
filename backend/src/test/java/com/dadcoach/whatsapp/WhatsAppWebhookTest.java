@@ -164,9 +164,18 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
         Father father = data.father("+19995550103", "אבי", FatherStatus.ONBOARDING);
         webhook(Webhooks.text(father.getPhone(), "wamid.del", "DELETE MY DATA")).andExpect(status().isOk());
         assertThat(fake.turns()).isEmpty();
-        assertThat(sentText(0)).contains("being deleted");
+        assertThat(sentText(0)).contains("נמחקים עכשיו");
         assertThat(jdbc.queryForObject("SELECT status FROM father WHERE id = ?", String.class, father.getId())).isEqualTo("DELETED");
         assertThat(jdbc.queryForObject("SELECT purge_local FROM platform_person_deletion WHERE father_id = ?", Boolean.class,
                 father.getId())).isTrue();
+    }
+
+    @Test
+    void theHebrewPhraseDeletesToo() throws Exception {
+        Father father = data.father("+19995550104", "אבי", FatherStatus.ACTIVE);
+        webhook(Webhooks.text(father.getPhone(), "wamid.del-he", "מחק את המידע שלי")).andExpect(status().isOk());
+        assertThat(fake.turns()).isEmpty();
+        assertThat(sentText(0)).contains("דאד קואץ׳");
+        assertThat(jdbc.queryForObject("SELECT status FROM father WHERE id = ?", String.class, father.getId())).isEqualTo("DELETED");
     }
 }

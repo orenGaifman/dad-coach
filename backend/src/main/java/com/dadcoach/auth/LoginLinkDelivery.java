@@ -66,11 +66,11 @@ public class LoginLinkDelivery {
     }
 
     static String fatherText(String url) {
-        return "הנה הקישור שלך ללוח של Dad Coach:\n" + url
+        return "הנה הקישור שלך ללוח של דאד קואץ׳:\n" + url
                 + "\n\nהקישור תקף ל-15 דקות ולכניסה אחת. לא ביקשת אותו? אפשר פשוט להתעלם.";
     }
 
     static String staffText(String url) {
-        return "קישור כניסה לניהול Dad Coach:\n" + url + "\n\nתקף ל-15 דקות ולכניסה אחת.";
+        return "קישור כניסה לניהול דאד קואץ׳:\n" + url + "\n\nתקף ל-15 דקות ולכניסה אחת.";
     }
 }
