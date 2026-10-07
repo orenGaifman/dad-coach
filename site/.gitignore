@@ -1,6 +1,8 @@
 node_modules
 dist/
-# only two screenshots are committed (for the hub page); the rest are local review output
+# committed screenshots (for the hub page): first screen, the demo, and the full page; the rest are local review output
 screenshots/*
 !screenshots/home-390.png
 !screenshots/demo-1440.png
+!screenshots/full-390.jpg
+!screenshots/full-1440.jpg
