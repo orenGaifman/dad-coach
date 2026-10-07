@@ -14,6 +14,9 @@
 //   { kind: 'outro', text }                         the takeaway shown when the scenario ends
 
 export const CHILD = 'נועה';
+// The product's identity line: every coach message on WhatsApp opens with it (the player adds it to each coach
+// bubble and lock-screen notification, so the lines below leave it out, exactly like the doc).
+export const COACH_LINE = '❤️ דאד קואץ׳:';
 export const DAD = 'אורי';
 
 export const scenarios = [
@@ -25,7 +28,7 @@ export const scenarios = [
       { kind: 'progress', goal: 0, done: 0, planned: 0, belt: 'white' },
       { kind: 'msg', from: 'dad', time: '21:10', text: 'היי, אני רוצה להתחיל' },
       { kind: 'msg', from: 'coach', time: '21:10',
-        text: 'היי, כיף שבאת 🙂 אני Dad Coach. אתה בוחר כמה זמן אתה רוצה עם הילדים בכל שבוע, ואני עוזר שזה באמת יקרה: נכניס את הזמן לשבוע, אזכיר לפני ואשאל אחרי איך היה. כל מפגש שקרה מקדם אותך בחגורות, מהלבנה ועד השחורה. איך לקרוא לך?' },
+        text: 'היי, כיף שבאת 🙂 אני דאד קואץ׳. אתה בוחר כמה זמן אתה רוצה עם הילדים בכל שבוע, ואני עוזר שזה באמת יקרה: נכניס את הזמן לשבוע, אזכיר לפני ואשאל אחרי איך היה. כל מפגש שקרה מקדם אותך בחגורות, מהלבנה ועד השחורה. איך לקרוא לך?' },
       { kind: 'msg', from: 'dad', time: '21:11', text: 'אורי' },
       { kind: 'msg', from: 'coach', time: '21:11', text: 'נעים מאוד, אורי. ספר לי על אחד הילדים: מה השם ובאיזה גיל?' },
       { kind: 'msg', from: 'dad', time: '21:11', text: 'נועה, בת 7' },
@@ -51,7 +54,7 @@ export const scenarios = [
       { kind: 'msg', from: 'coach', time: '21:20', text: 'יופי, קבעתי! אזכיר לך ביום עצמו ושעה לפני. השבוע: שעה מתוכננת מתוך 3.' },
       { kind: 'progress', goal: 3, done: 0, planned: 1, belt: 'white' },
       { kind: 'day', text: 'יום שלישי' },
-      { kind: 'scene', text: 'יום שלישי, יום המפגש. Dad Coach כותב שלוש פעמים, קצר: בבוקר, שעה לפני, ואחרי.' },
+      { kind: 'scene', text: 'יום שלישי, יום המפגש. דאד קואץ׳ כותב שלוש פעמים, קצר: בבוקר, שעה לפני, ואחרי.' },
       { kind: 'msg', from: 'coach', time: '08:00', notify: true, text: 'היום ב-17:00 זה הזמן שלך ושל נועה 🙂' },
       { kind: 'msg', from: 'coach', time: '16:00', notify: true,
         text: 'עוד שעה הזמן שלך ושל נועה. אם עוד אין תוכנית, כמה רעיונות לגיל 7: מבצר מכריות בסלון, אפייה של עוגיות, או סיבוב אופניים בפארק.' },
@@ -74,7 +77,7 @@ export const scenarios = [
       { kind: 'msg', from: 'dad', time: '15:24', text: 'כן, שישי בבוקר מעולה' },
       { kind: 'msg', from: 'coach', time: '15:24', text: 'יופי, קבעתי לשישי ב-10:00! אזכיר לך ביום עצמו ושעה לפני. השבוע שוב מכוסה 💪' },
       { kind: 'progress', goal: 3, done: 2, planned: 1, belt: 'white' },
-      { kind: 'outro', text: 'בלי "חבל" ובלי "שוב?". הביטול לא הקטין את השבוע: Dad Coach הציע זמן אחר מיד, ואורי אמר כן. ביטול גם לא שובר את הרצף.' },
+      { kind: 'outro', text: 'בלי "חבל" ובלי "שוב?". הביטול לא הקטין את השבוע: דאד קואץ׳ הציע זמן אחר מיד, ואורי אמר כן. ביטול גם לא שובר את הרצף.' },
     ],
   },
   {
@@ -100,12 +103,12 @@ export const scenarios = [
     steps: [
       { kind: 'scene', text: 'יום שני עד רביעי. השבוע של אורי כבר מתוכנן כולו, 4 מתוך 4 שעות.' },
       { kind: 'progress', goal: 4, done: 0, planned: 4, belt: 'yellow' },
-      { kind: 'event', day: 'יום שני', time: '09:00', text: 'בדיקת הבוקר: השבוע מכוסה. אין סיבה לכתוב, אז Dad Coach לא כותב.' },
+      { kind: 'event', day: 'יום שני', time: '09:00', text: 'בדיקת הבוקר: השבוע מכוסה. אין סיבה לכתוב, אז דאד קואץ׳ לא כותב.' },
       { kind: 'event', day: 'יום רביעי', time: '09:00', text: 'עדיין מכוסה. גם היום, שום הודעה.' },
       { kind: 'scene', text: 'יום חמישי, 08:00. היום יש מפגש, אז יש סיבה לכתוב.' },
       { kind: 'day', text: 'יום חמישי' },
       { kind: 'msg', from: 'coach', time: '08:00', notify: true, text: 'היום ב-17:00 זה הזמן שלך ושל נועה 🙂' },
-      { kind: 'outro', text: 'כשהשבוע מכוסה, Dad Coach שקט. לא "רק בודק מה נשמע", לא "אולי עוד מפגש?". הוא כותב כשיש בשביל מה: לפני מפגש, אחריו, או כשמשהו צריך תיקון.' },
+      { kind: 'outro', text: 'כשהשבוע מכוסה, דאד קואץ׳ שקט. לא "רק בודק מה נשמע", לא "אולי עוד מפגש?". הוא כותב כשיש בשביל מה: לפני מפגש, אחריו, או כשמשהו צריך תיקון.' },
     ],
   },
 ];
