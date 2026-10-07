@@ -19,3 +19,11 @@ export function reasonLabel(reason: string | null | undefined): string {
   if (reason.startsWith('WHATSAPP_NOT_CONFIGURED')) return 'וואטסאפ לא מוגדר בסביבה הזאת'
   return reason
 }
+
+export const GOAL_STATUS: Record<string, string> = { ACTIVE: 'פעיל', COMPLETED: 'הושלם', MISSED: 'לא הושג', CANCELLED: 'בוטל' }
+
+export const DELIVERY_STATUS: Record<string, string> = {
+  DELIVERED: 'נמסר', FAILED: 'נכשל', SKIPPED: 'דולג', PENDING: 'ממתין', HELD: 'ממתין לשעה מתאימה', ISSUED: 'הונפק',
+}
+
+export const CHILD_STATUS: Record<string, string> = { ACTIVE: 'פעיל', ARCHIVED: 'בארכיון', INACTIVE: 'לא פעיל' }

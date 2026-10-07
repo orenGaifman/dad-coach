@@ -40,8 +40,8 @@ describe('labels', () => {
     expect(toNextBelt(null, null)).toContain('השחורה')
   })
   it('ages and phones', () => {
-    expect(ageLabel(7)).toBe('בן 7')
-    expect(ageLabel(2)).toBe('בן שנתיים')
+    expect(ageLabel(7)).toBe('גיל 7')
+    expect(ageLabel(2)).toBe('גיל שנתיים')
     expect(displayPhone('+972501234567')).toBe('050-123-4567')
     expect(displayPhone('+19995550001')).toBe('+19995550001')
     expect(percent(60, 180)).toBe(33)

@@ -61,9 +61,10 @@ export function displayPhone(e164: string): string {
 
 export function ageLabel(age: number): string {
   if (age === 0) return 'פחות משנה'
-  if (age === 1) return 'בן שנה'
-  if (age === 2) return 'בן שנתיים'
-  return `בן ${age}`
+  // "גיל" - the dashboard does not know a child's gender, and "בן" for a daughter is wrong
+  if (age === 1) return 'גיל שנה'
+  if (age === 2) return 'גיל שנתיים'
+  return `גיל ${age}`
 }
 
 /** A timestamp for the admin: "7.10.2026, 14:05" in the browser's zone. */

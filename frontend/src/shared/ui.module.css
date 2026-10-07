@@ -191,7 +191,7 @@ a.stat:hover { border-color: var(--dc-navy-500); color: inherit; }
 .segmented input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
 .segmented span {
   display: inline-block; padding: 6px var(--dc-sp-3); border-radius: var(--dc-r-sm);
-  font-size: var(--dc-fs-sm); font-weight: 500; color: var(--dc-ink-700); cursor: pointer;
+  font-size: var(--dc-fs-sm); font-weight: 500; color: var(--dc-ink-700); cursor: pointer; white-space: nowrap;
 }
 .segmented input:checked + span { background: var(--dc-surface); color: var(--dc-navy-900); font-weight: 700; box-shadow: var(--dc-shadow-card); }
 .segmented input:focus-visible + span { box-shadow: var(--dc-focus-ring); }

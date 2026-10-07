@@ -6,7 +6,7 @@ import { useFatherDetail } from '../../lib/admin'
 import { beltName } from '../../lib/belts'
 import { errorLine } from '../../lib/errors'
 import { dateTime, displayPhone, duration } from '../../lib/format'
-import { DELIVERY_KIND, FATHER_STATUS, PHASE_LABEL, reasonLabel } from '../../lib/labels'
+import { DELIVERY_KIND, FATHER_STATUS, PHASE_LABEL, reasonLabel, GOAL_STATUS, DELIVERY_STATUS, CHILD_STATUS } from '../../lib/labels'
 import type { FatherDetail } from '../../lib/types'
 import { ConfirmDialog } from '../../shared/ConfirmDialog'
 import { Icon } from '../../shared/Icon'
@@ -49,7 +49,7 @@ export function FatherDetailPage() {
           {d.children.length === 0 ? <p className={ui.muted}>אין ילדים.</p> : (
             <ul className={ui.list}>
               {d.children.map((c) => <li key={c.id} className={ui.listItem}><strong>{c.name}</strong><span className={ui.muted}>גיל {c.age}</span>
-                {c.status !== 'ACTIVE' && <span className={ui.chip}>{c.status}</span>}</li>)}
+                {c.status !== 'ACTIVE' && <span className={ui.chip}>{CHILD_STATUS[c.status] ?? c.status}</span>}</li>)}
             </ul>
           )}
         </section>
@@ -61,7 +61,7 @@ export function FatherDetailPage() {
           <div className={ui.tableWrap}><table className={ui.table}>
             <thead><tr><th>שבוע</th><th>יעד</th><th>זוכה</th><th>מצב</th></tr></thead>
             <tbody>{d.goals.map((g) => <tr key={g.weekStart}><td className="num">{g.weekStart}</td><td>{duration(g.targetHours * 60)}</td>
-              <td>{duration(g.creditedMinutes)}</td><td>{g.status}</td></tr>)}</tbody>
+              <td>{duration(g.creditedMinutes)}</td><td>{GOAL_STATUS[g.status] ?? g.status}</td></tr>)}</tbody>
           </table></div>
         )}
       </section>
@@ -84,7 +84,7 @@ export function FatherDetailPage() {
             <thead><tr><th>מתי</th><th>מה</th><th>מצב</th><th>סיבה</th></tr></thead>
             <tbody>
               {d.deliveries.map((r, i) => <tr key={`d${i}`}><td>{dateTime(r.at)}</td><td>{DELIVERY_KIND[r.kind]} <span className="ltr">{r.what ?? ''}</span></td>
-                <td className={r.status === 'FAILED' ? styles.bad : styles.ok}>{r.status}</td><td>{reasonLabel(r.reason)}</td></tr>)}
+                <td className={r.status === 'FAILED' ? styles.bad : styles.ok}>{DELIVERY_STATUS[r.status] ?? r.status}</td><td>{reasonLabel(r.reason)}</td></tr>)}
               {d.loginLinks.map((l, i) => <tr key={`l${i}`}><td>{dateTime(l.createdAt)}</td><td>קישור כניסה{l.usedAt ? ' (נוצל)' : ''}</td>
                 <td className={l.deliveryStatus === 'FAILED' ? styles.bad : styles.ok}>{l.deliveryStatus}</td><td>{reasonLabel(l.deliveryError)}</td></tr>)}
             </tbody>
