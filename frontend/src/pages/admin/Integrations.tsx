@@ -43,7 +43,7 @@ export function IntegrationsPage() {
               <dt>Google Calendar OAuth</dt><dd><Yes ok={i.data.calendarOAuthConfigured} /></dd>
               <dt>Ops API</dt><dd><Yes ok={i.data.opsApiConfigured} /></dd>
               <dt>סרטוני הדרכה</dt><dd><Yes ok={i.data.trainingMediaConfigured} /></dd>
-              <dt>כתובת הלוח</dt><dd className="ltr">{i.data.webBaseUrl}</dd>
+              <dt>כתובת הדף האישי</dt><dd className="ltr">{i.data.webBaseUrl}</dd>
             </dl>
           </section>
           {i.data.voiceNotes && <VoiceNotesCard status={i.data.voiceNotes} />}

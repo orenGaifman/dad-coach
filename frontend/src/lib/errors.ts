@@ -10,7 +10,7 @@ const MESSAGES: Record<string, string> = {
   INVALID_TIMEZONE: 'אזור הזמן הזה לא מוכר.',
   SESSION_NOT_CONFIRMABLE: 'אפשר לאשר מפגש רק אחרי שהתחיל.',
   SESSION_NOT_CANCELLABLE: 'המפגש הזה כבר נסגר, אז אי אפשר לבטל אותו.',
-  CALENDAR_NOT_CONFIGURED: 'החיבור ליומן Google עוד לא זמין.',
+  CALENDAR_NOT_CONFIGURED: 'החיבור ליומן גוגל עוד לא זמין.',
   CONFIRMATION_MISMATCH: 'המילה שהוקלדה לא תואמת. כדאי לבדוק ולנסות שוב.',
   DEACTIVATE_FIRST: 'צריך להשבית קודם, ורק אז למחוק.',
   NOT_DEACTIVATED: 'האבא הזה לא מושבת.',

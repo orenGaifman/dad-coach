@@ -27,7 +27,7 @@ export function FatherDetailPage() {
   return (
     <Page title={p.name || 'ללא שם'} docTitle={p.name || 'אבא'}
           subtitle={<><span className="ltr">{displayPhone(p.phone)}</span> · {FATHER_STATUS[p.status] ?? p.status} · {beltName(p.belt)}</>}
-          actions={<Link to={`/admin/fathers/${p.id}/home`} className={cx(ui.btn, ui.secondary)}><Icon name="eye" size={18} /> כך הוא רואה את הלוח</Link>}>
+          actions={<Link to={`/admin/fathers/${p.id}/home`} className={cx(ui.btn, ui.secondary)}><Icon name="eye" size={18} /> כך הוא רואה את הדף שלו</Link>}>
       <Link to="/admin/fathers" className={ui.backLink}><Icon name="chevronStart" size={16} /> כל האבות</Link>
       <div className={ui.grid2}>
         <section className={ui.card}>
@@ -39,9 +39,9 @@ export function FatherDetailPage() {
             <dt>אזור זמן</dt><dd className="ltr">{p.timezone}</dd>
             <dt>מפגשים שהיו</dt><dd className="num">{p.completed}</dd>
             <dt>שבועות ברצף</dt><dd className="num">{p.streakWeeks} (שיא {p.longestStreakWeeks})</dd>
-            <dt>יומן Google</dt><dd>{p.calendarConnected ? 'מחובר' : 'לא מחובר'}</dd>
+            <dt>יומן גוגל</dt><dd>{p.calendarConnected ? 'מחובר' : 'לא מחובר'}</dd>
             <dt>מצב בזרימה</dt><dd className="ltr">{p.workflowState ?? '—'} / {p.onboardingState ?? '—'}</dd>
-            <dt>חיבורים פעילים ללוח</dt><dd className="num">{d.liveDashboardSessions}</dd>
+            <dt>חיבורים פעילים לדף</dt><dd className="num">{d.liveDashboardSessions}</dd>
           </dl>
         </section>
         <section className={ui.card}>
@@ -197,7 +197,7 @@ function Lifecycle({ d }: { d: FatherDetail }) {
       <div className={ui.cardHead}><h2 className={ui.cardTitle}>השבתה ומחיקה</h2></div>
       {d.deletion && !d.deletion.completedAt && <p className={cx(ui.note, ui.noteGlow)}><Icon name="info" size={18} /> מחיקה בפלטפורמה בתהליך (ניסיונות: {d.deletion.attempts}).</p>}
       <p className={ui.muted} style={{ marginBlockEnd: 12 }}>
-        השבתה: האבא לא יכול להיכנס ללוח וכל החיבורים שלו נסגרים (השיחה בוואטסאפ לא נעצרת). מחיקה לצמיתות - רק אחרי השבתה.
+        השבתה: האבא לא יכול להיכנס לדף שלו וכל החיבורים שלו נסגרים (השיחה בוואטסאפ לא נעצרת). מחיקה לצמיתות - רק אחרי השבתה.
       </p>
       <div className={ui.row}>
         {paused

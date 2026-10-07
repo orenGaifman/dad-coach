@@ -22,7 +22,7 @@ export function FatherViewAs() {
       <Link to={`/admin/fathers/${id}`} className={ui.backLink}><Icon name="chevronStart" size={16} /> <bdi>{name}</bdi></Link>
       <div className={styles.banner} role="note">
         <Icon name="eye" size={18} />
-        <span className={styles.bannerText}>כך <bdi>{name}</bdi> רואה את הלוח שלו. תצוגה בלבד, אי אפשר לשנות מכאן.</span>
+        <span className={styles.bannerText}>כך <bdi>{name}</bdi> רואה את הדף שלו. תצוגה בלבד, אי אפשר לשנות מכאן.</span>
       </div>
       <ViewAsContext.Provider value={{ fatherId: Number(id), name }}>
         <FatherHome />

@@ -26,10 +26,10 @@ public final class ActivityIdeas {
             if (hebrew) {
                 if (!outdoorOnly) {
                     allIdeas.add(new ActivityIdea("בניית מגדל קוביות", 
-                            "בנו יחד מגדל מקוביות או לגו. תנו לילד להוביל את הבנייה ולבחור את הצבעים.",
+                            "בנו יחד מגדל מקוביות או לגו. תן לילד להוביל את הבנייה ולבחור את הצבעים.",
                             20, true));
                     allIdeas.add(new ActivityIdea("סיפור עם קולות",
-                            "קראו יחד ספר אהוב ועשו קולות שונים לכל דמות. תנו לילד לבחור את הקולות.",
+                            "קראו יחד ספר אהוב ועשו קולות שונים לכל דמות. תן לילד לבחור את הקולות.",
                             15, true));
                 }
                 if (!indoorOnly) {
@@ -56,7 +56,7 @@ public final class ActivityIdeas {
             if (hebrew) {
                 if (!outdoorOnly) {
                     allIdeas.add(new ActivityIdea("בישול יחד",
-                            "הכינו יחד מתכון פשוט כמו פנקייקים או עוגיות. תנו לילד למדוד חומרים ולערבב.",
+                            "הכינו יחד מתכון פשוט כמו פנקייקים או עוגיות. תן לילד למדוד חומרים ולערבב.",
                             30, true));
                     allIdeas.add(new ActivityIdea("משחק לוח",
                             "שחקו יחד במשחק לוח מתאים לגיל. זה מפתח חשיבה אסטרטגית.",
@@ -85,7 +85,7 @@ public final class ActivityIdeas {
         } else {
             if (hebrew) {
                 if (!outdoorOnly) {
-                    allIdeas.add(new ActivityIdea("פרויקט DIY",
+                    allIdeas.add(new ActivityIdea("פרויקט בנייה",
                             "בנו יחד משהו - בית ציפורים, מדף, או כל פרויקט יצירתי שהילד בוחר.",
                             45, true));
                     allIdeas.add(new ActivityIdea("לימוד מיומנות חדשה",

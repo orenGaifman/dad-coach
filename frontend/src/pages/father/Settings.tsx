@@ -108,7 +108,7 @@ function CalendarCard({ s }: { s: Settings }) {
   return (
     <section className={ui.card} aria-labelledby="cal-title">
       <div className={ui.cardHead}>
-        <h2 id="cal-title" className={ui.cardTitle}>יומן Google</h2>
+        <h2 id="cal-title" className={ui.cardTitle}>יומן גוגל</h2>
         {s.calendarConnected ? <span className={cx(ui.chip, ui.chipSuccess)}>מחובר</span> : <span className={ui.chip}>לא מחובר</span>}
       </div>
       <p className={ui.muted} style={{ marginBlockEnd: 16 }}>
@@ -118,7 +118,7 @@ function CalendarCard({ s }: { s: Settings }) {
         <button type="button" className={cx(ui.btn, ui.ghost)} disabled={busy} onClick={disconnect}>ניתוק היומן</button>
       ) : s.calendarAvailable ? (
         <button type="button" className={cx(ui.btn, ui.secondary)} disabled={busy} onClick={connect}>
-          <Icon name="calendar" size={18} /> חיבור יומן Google
+          <Icon name="calendar" size={18} /> חיבור יומן גוגל
         </button>
       ) : (
         <p className={ui.note}><Icon name="info" size={18} /> החיבור ליומן עוד לא זמין. בינתיים הכול עובד גם בלעדיו.</p>

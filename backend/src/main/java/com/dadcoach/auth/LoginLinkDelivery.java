@@ -33,7 +33,7 @@ public class LoginLinkDelivery {
     static final String WHATSAPP = "WHATSAPP";
     /** The identity line every message Dad Coach sends by itself opens with (the number is shared). */
     static final String IDENTITY = "❤️ דאד קואץ׳:\n";
-    static final String FATHER_TEXT = IDENTITY + "📊 *הדף שלך בדאד קואץ׳*\nהשבוע, הילדים וההתקדמות - הכל כאן 👇";
+    static final String FATHER_TEXT = IDENTITY + "📊 *הדף שלך בדאד קואץ׳*\nהשבוע, הילדים וההתקדמות - הכול כאן 👇";
     static final String FATHER_LABEL = "כניסה לדף שלי";
     static final String STAFF_TEXT = IDENTITY + "🛠️ *ניהול דאד קואץ׳*\nהכניסה שלך לניהול 👇";
     static final String STAFF_LABEL = "כניסה לניהול";

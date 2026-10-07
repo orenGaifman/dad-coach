@@ -28,7 +28,7 @@ function el(tag, className, text) {
 const typingDuration = (text) => Math.min(2200, Math.max(800, 450 + text.length * 14));
 const hours = (n) => (n === 1 ? 'שעה' : `${n} שעות`);
 const happened = (n) => (n === 1 ? 'שעה אחת כבר קרתה' : `${n} שעות כבר קרו`);
-const inPlan = (n) => (n === 1 ? 'שעה אחת בלוח' : `${n} שעות בלוח`);
+const inPlan = (n) => (n === 1 ? 'שעה אחת מתוכננת' : `${n} שעות מתוכננות`);
 
 export function initDemo(root, options) {
   // ?demo=static renders every scenario complete (screenshots, and visitors who prefer reading).
@@ -121,7 +121,7 @@ export function initDemo(root, options) {
     let line;
     if (!goal) line = 'שבוע חדש. מתחילים ביעד.';
     else if (done >= goal) line = `היעד הושלם: ${hours(goal)} מתוך ${goal}.`;
-    else if (done + planned >= goal) line = done ? `${happened(done)}, והשאר בלוח. השבוע מכוסה.` : 'השבוע מכוסה: הכול בלוח.';
+    else if (done + planned >= goal) line = done ? `${happened(done)}, והשאר מתוכנן. השבוע מכוסה.` : 'השבוע מכוסה: הכול מתוכנן.';
     else line = `${done ? happened(done) : 'עוד לא היה מפגש'}${planned ? `, ${inPlan(planned)}` : ''}. עוד ${hours(goal - done - planned)} לתכנן.`;
     week.querySelector('[data-week-line]').textContent = line;
     const belt = BELTS[step.belt] || BELTS.white;

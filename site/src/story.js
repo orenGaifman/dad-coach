@@ -114,8 +114,8 @@ export function initStory(root, { reducedMotion }) {
       say(`${DAD} · ראשון 21:20`, 'נועה, שלישי 17:00, שעה', true);
       await wait(900, token);
       hop(2);
-      setNote('is-booked', 'נועה · 17:00', 'שעה, בלוח');
-      week(0, 1, 'שעה אחת בלוח. עוד 2 לתכנן.');
+      setNote('is-booked', 'נועה · 17:00', 'שעה, נקבעה');
+      week(0, 1, 'שעה אחת מתוכננת. עוד 2 לתכנן.');
       say(`${COACH} · 21:20`, 'יופי, קבעתי! אזכיר לך ביום עצמו ושעה לפני.');
       await wait(1900, token);
       today(2);
@@ -124,7 +124,7 @@ export function initStory(root, { reducedMotion }) {
       say(`${COACH} · 18:30`, 'נו, איך היה לכם עם נועה?');
       await wait(1500, token);
       say(`${DAD} · 18:41`, 'היה מעולה. בנינו מבצר מכריות 😄', true);
-      setNote('is-done', 'נועה · 17:00', 'קרה ✔');
+      setNote('is-done', 'נועה · 17:00', 'היה ✔');
       week(1, 0, 'שעה אחת מתוך 3 כבר קרתה.');
       await wait(600, token);
       root.classList.remove('is-playing');

@@ -23,7 +23,7 @@ export function TrainingPage() {
       <Page title="הדרכה">
         <section className={ui.card}>
           <EmptyState title="בקרוב: סרטונים קצרים" icon="play">
-            איך מתכננים שבוע עם המאמן, מה רואים בלוח, ואיך עולים בחגורות. עד אז - פשוט כתוב למאמן בוואטסאפ.
+            איך מתכננים שבוע עם המאמן, מה רואים בדף האישי, ואיך עולים בחגורות. עד אז - פשוט כתוב למאמן בוואטסאפ.
           </EmptyState>
         </section>
       </Page>

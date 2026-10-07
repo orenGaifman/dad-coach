@@ -185,12 +185,9 @@ public class WeeklyGoal {
         this.status = isGoalMet() ? WeeklyGoalStatus.COMPLETED : WeeklyGoalStatus.MISSED;
         this.completedAt = Instant.now();
         
-        if (isGoalMet() && startingBelt.getNextBelt() != null) {
-            this.endingBelt = startingBelt.getNextBelt();
-            this.beltPromoted = true;
-            return true;
-        }
-        
+        // Belts come only from completed sessions (Belt.fromCompletionCount, on every completion) - the site, the
+        // dashboard and the coach all say so. A finished week never moves the belt; it used to (the old 7-week
+        // program), which set a belt the session count did not support and the next session took back.
         this.endingBelt = startingBelt;
         return false;
     }

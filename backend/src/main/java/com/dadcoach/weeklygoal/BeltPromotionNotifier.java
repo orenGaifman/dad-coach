@@ -21,7 +21,7 @@ import java.util.List;
  * Tells a father who earned a new belt (the weekly completion job): the belt image while his 24-hour window is open
  * (images cannot go in a template), then the congratulation text through the channel layer ({@link ProactiveSender}:
  * free-form in the window, the approved template outside it). A sent congratulation is recorded into his platform
- * conversation (playbook §10.2), so "כן" to "רוצה לקבוע יעד לשבוע הבא?" is understood.
+ * conversation (playbook §10.2), so his reply to it is understood.
  */
 @Service
 public class BeltPromotionNotifier {
@@ -90,102 +90,15 @@ public class BeltPromotionNotifier {
         results.forEach(this::sendPromotionNotification);
     }
 
+    /** Calm and factual: belts count completed sessions; no streak hype, no "great dad" (the site's "מה הוא אף פעם לא יעשה"). */
     private String buildPromotionMessage(WeeklyGoalService.BeltPromotionResult result) {
         Belt newBelt = result.newBelt();
-        Belt previousBelt = result.previousBelt();
-        int actualMinutes = result.actualMinutes();
-        int targetMinutes = result.targetMinutes();
-        int streak = result.currentStreak();
-        boolean programCompleted = result.programCompleted();
-
-        StringBuilder sb = new StringBuilder();
-        
-        // Special header for program completion (BLACK belt)
-        if (programCompleted) {
-            sb.append("🎊🏆🎊 מזל טוב ענק! סיימת את התוכנית! 🎊🏆🎊\n\n");
-        } else {
-            sb.append("🏆 כל הכבוד! עמדת ביעד השבועי!\n\n");
+        StringBuilder sb = new StringBuilder("🥋 *").append(newBelt.getDisplayName("he")).append("*\n\n");
+        sb.append("כל מפגש שקרה ואישרת נספר, והם הצטברו לחגורה חדשה.");
+        Belt next = newBelt.getNextBelt();
+        if (next != null) {
+            sb.append("\nהבאה בתור: ").append(next.getDisplayName("he")).append(".");
         }
-        
-        sb.append("📊 סיכום השבוע:\n");
-        sb.append("🎯 יעד: ").append(targetMinutes / 60).append(" שעות\n");
-        sb.append("✅ ביצוע: ").append(formatMinutesAsTime(actualMinutes)).append("\n");
-        
-        // Show streak
-        if (streak > 1) {
-            sb.append("🔥 רצף: ").append(streak).append(" שבועות רצופים!\n");
-        }
-        sb.append("\n");
-        
-        sb.append("🥋 עלית חגורה!\n");
-        sb.append("מ").append(previousBelt.getDisplayName("he"));
-        sb.append(" ל").append(newBelt.getDisplayName("he")).append("!\n\n");
-        
-        // Add encouragement based on the new belt and context
-        if (programCompleted) {
-            sb.append(getProgramCompletionMessage());
-        } else {
-            sb.append(getBeltEncouragement(newBelt, streak));
-        }
-        
-        if (!programCompleted) {
-            sb.append("\n\n📅 רוצה לקבוע יעד לשבוע הבא?");
-        }
-        
         return sb.toString();
-    }
-
-    /**
-     * Formats minutes as hours and minutes string.
-     */
-    private String formatMinutesAsTime(int totalMinutes) {
-        int hours = totalMinutes / 60;
-        int minutes = totalMinutes % 60;
-        
-        if (minutes > 0) {
-            return hours + " שעות ו-" + minutes + " דקות";
-        } else {
-            return hours + " שעות";
-        }
-    }
-
-    /**
-     * Returns an encouraging message based on the new belt level and streak.
-     */
-    private String getBeltEncouragement(Belt belt, int streak) {
-        // Add streak bonus message
-        String streakBonus = "";
-        if (streak >= 3) {
-            streakBonus = "\n🔥 " + streak + " שבועות ברצף! אתה על גלגל!";
-        }
-        
-        String beltMessage = switch (belt) {
-            case YELLOW -> "💛 התחלת את המסע! כל חגורה מקרבת אותך לאבא מעולה יותר.";
-            case ORANGE -> "🧡 יופי! אתה בדרך הנכונה. עוד 5 שבועות לחגורה שחורה!";
-            case GREEN -> "💚 מרשים! חצי דרך לפסגה! הילדים מרגישים את זה.";
-            case BLUE -> "💙 מדהים! אתה אבא מסור. עוד 3 שבועות לסיום!";
-            case BROWN -> "🤎 וואו! אתה כמעט שם! עוד שבוע אחד לחגורה שחורה! 💪";
-            case BLACK -> "🖤 השגת את הפסגה! חגורה שחורה - אבא אלוף! 🏆";
-            default -> "👏 כל הכבוד על ההתקדמות!";
-        };
-        
-        return beltMessage + streakBonus;
-    }
-
-    /**
-     * Returns the special message for completing the 7-week program.
-     */
-    private String getProgramCompletionMessage() {
-        return """
-            🏆 הגעת לחגורה שחורה! 🏆
-            
-            אתה הוכחת מחויבות אמיתית לילדים שלך.
-            7 שבועות של זמן איכות, קשר, ובניית יחסים.
-            
-            הילדים שלך יזכרו את הרגעים האלה לתמיד.
-            אתה אבא מדהים! 💪❤️
-            
-            המסע לא נגמר כאן - תמשיך להיות נוכח!
-            אני כאן תמיד לעזור.""";
     }
 }

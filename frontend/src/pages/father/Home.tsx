@@ -56,7 +56,7 @@ export function FatherHome() {
               </div>
             </div>
           ) : (
-            <EmptyHint text="אין מפגש קרוב בלוח." prompt={bookingPrompt(firstChild)} />
+            <EmptyHint text="אין מפגש קרוב שנקבע." prompt={bookingPrompt(firstChild)} />
           )}
         </section>
 
@@ -129,7 +129,7 @@ function GoalCard({ h, firstChild }: { h: Home; firstChild?: string }) {
       </ul>
       <p className={styles.goalLine}>
         {done >= target ? 'סגרת את השבוע. כל מפגש נוסף הוא בונוס לילדים.'
-          : missing > 0 ? <>חסרות עוד <strong>{duration(missing)}</strong> בלוח כדי לסגור את היעד. כתוב למאמן מתי, והוא יקבע.</>
+          : missing > 0 ? <>חסרות עוד <strong>{duration(missing)}</strong> כדי לסגור את היעד. כתוב למאמן מתי, והוא יקבע.</>
           : 'השבוע מכוסה. נשאר רק להגיע למפגשים.'}
       </p>
     </section>

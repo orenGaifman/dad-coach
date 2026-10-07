@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { siteUrl } from './site-url.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 
@@ -9,6 +10,7 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 export default defineConfig({
   root: here,
   base: '/',
+  plugins: [siteUrl('https://dad-coach-site.onrender.com')],
   build: {
     outDir: 'dist',
     emptyOutDir: true,

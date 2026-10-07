@@ -26,7 +26,7 @@ public class WhatsAppDeletionRequests {
     static final String CONFIRMATION = "קיבלנו את הבקשה. החשבון שלך בדאד קואץ׳ וכל המידע שלך - מספר הטלפון, השיחות וההעדפות - "
             + "נמחקים עכשיו. זו ההודעה האחרונה שתקבל מאיתנו.";
     static final String NO_ACCOUNT = "קיבלנו את הבקשה. למספר הזה אין חשבון בדאד קואץ׳. "
-            + "כדי למחוק כל מידע אחר שאולי שמור אצלנו, כתוב ל-oren26g@gmail.com עם הנושא \"בקשת מחיקת מידע\".";
+            + "כדי למחוק כל מידע אחר שאולי שמור אצלנו, כתוב ל-oren26g@gmail.com עם הנושא \"בקשה למחיקת מידע\".";
 
     private final FatherRepository fathers;
     private final com.dadcoach.domain.father.FatherDeletionService deletions;

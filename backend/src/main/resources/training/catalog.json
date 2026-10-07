@@ -29,7 +29,7 @@
   },
   {
     "slug": "my-dashboard", "primary": false, "order": 4,
-    "title": "הלוח האישי שלך",
+    "title": "הדף האישי שלך",
     "description": "כניסה בלי סיסמה, היעד והמפגשים של השבוע, החגורות וההגדרות.",
     "durationSeconds": 57,
     "video": "dad-coach/training/v2/father-my-dashboard.mp4", "poster": "dad-coach/training/v2/father-my-dashboard.jpg", "active": true
