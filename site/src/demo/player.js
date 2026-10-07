@@ -1,7 +1,7 @@
 // Deterministic scenario player for the demo: one phone (the father's), a "השבוע שלך" card next to it.
 // No network, no randomness. Pauses while scrolled away or while the tab is hidden.
 // Reduced motion → every scenario renders complete and static (no lock screen, no typing).
-import { scenarios } from './scenarios.js';
+import { scenarios, COACH_LINE } from './scenarios.js';
 
 const ABORT = Symbol('abort');
 const TICK = 50;
@@ -88,8 +88,9 @@ export function initDemo(root, options) {
     if (!chat.querySelector('.chat-day')) dayPill('היום');
     const coach = step.from === 'coach';
     const b = el('div', `bub ${coach ? 'bub-in' : 'bub-out'}${animate ? ' bub-enter' : ''}`);
-    b.append(el('span', 'visually-hidden', `${coach ? 'Dad Coach' : 'אורי'}: `));
+    if (!coach) b.append(el('span', 'visually-hidden', 'אורי: '));
     if (step.notify) b.append(el('span', 'bub-proactive', 'הודעה יזומה'));
+    if (coach) b.append(el('span', 'bub-id', COACH_LINE));
     b.append(document.createTextNode(step.text));
     b.append(el('span', 'bub-time', step.time));
     chat.append(b);
@@ -140,8 +141,8 @@ export function initDemo(root, options) {
       const icon = el('img', 'lock-card-icon');
       icon.src = '/img/logo-mark.webp';
       icon.alt = '';
-      head.append(icon, el('b', '', 'Dad Coach'), el('span', '', 'עכשיו'));
-      card.append(head, el('p', 'lock-card-text', step.text));
+      head.append(icon, el('b', '', 'דאד קואץ׳'), el('span', '', 'עכשיו'));
+      card.append(head, el('p', 'lock-card-text', `${COACH_LINE}\n${step.text}`));
       lockList.append(card);
     } else {
       lockList.append(el('p', 'lock-empty', 'אין התראות חדשות'));

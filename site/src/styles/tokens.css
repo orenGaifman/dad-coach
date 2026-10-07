@@ -33,6 +33,11 @@
   --dc-success-100: #E3F0E5;
   --dc-danger-600: #B4473B;
 
+  /* paper: sticky notes (the excuses, the plan in the hero) and the red marker that strikes what he never sends */
+  --dc-note: #FBE7A0;
+  --dc-note-edge: #E9CF74;
+  --dc-marker: #B4473B;
+
   /* WhatsApp, only inside the phone */
   --dc-wa-bg: #EFE7DD;
   --dc-wa-in: #FFFFFF;
@@ -48,6 +53,10 @@
   --dc-fs-xl: 1.5rem;
   --dc-fs-2xl: 2rem;
   --dc-fs-3xl: clamp(2.3rem, 4vw, 3.4rem);
+  /* display scale: the marketing site speaks big (headlines carry the jokes) */
+  --dc-fs-h2: clamp(1.9rem, 3.6vw, 3rem);
+  --dc-fs-display: clamp(2.45rem, 5.4vw, 4.6rem);
+  --dc-fs-mega: clamp(9rem, 22vw, 17rem);
   --dc-lh-body: 1.65;
   --dc-lh-tight: 1.15;
 

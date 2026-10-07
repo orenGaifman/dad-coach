@@ -3,7 +3,7 @@
 // A try-out, measured: ?coach=off hides it (compare the hero with and without it); when analytics is
 // enabled, play/finish are sent as "coach-intro" events.
 const LINES = [
-  [0.0, 'היי, אני Dad Coach.'],
+  [0.0, 'היי, אני דאד קואץ׳.'],
   [2.08, 'אתה מחליט כמה זמן אתה רוצה עם הילדים השבוע,'],
   [5.19, 'ואני דואג שזה באמת יקרה.'],
   [7.58, 'מזכיר לך בבוקר ושעה לפני, ושואל אחרי איך היה.'],
