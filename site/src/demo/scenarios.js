@@ -21,7 +21,7 @@ export const scenarios = [
     id: 'start',
     label: 'ההודעה הראשונה',
     steps: [
-      { kind: 'scene', text: 'יום ראשון, 21:10. אורי ראה מודעה, לחץ על "מתחילים בוואטסאפ" ושלח את ההודעה שכבר הייתה כתובה.' },
+      { kind: 'scene', text: 'יום ראשון, 21:10. אורי ראה מודעה, השאיר שם ונייד, ושלח בוואטסאפ את ההודעה שכבר הייתה כתובה.' },
       { kind: 'progress', goal: 0, done: 0, planned: 0, belt: 'white' },
       { kind: 'msg', from: 'dad', time: '21:10', text: 'היי, אני רוצה להתחיל' },
       { kind: 'msg', from: 'coach', time: '21:10',

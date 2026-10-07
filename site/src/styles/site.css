@@ -168,7 +168,11 @@ a:hover { color: var(--dc-navy-900); }
 .done-mark svg { inline-size: 22px; block-size: 22px; }
 .done-title { font-weight: 700; color: var(--dc-ink-900); font-size: var(--dc-fs-lg); }
 /* Phones and touch devices go straight to WhatsApp; the form is for computers. */
-@media (max-width: 760px), (hover: none) and (pointer: coarse) { .signup-card { display: none; } }
+.form-done { display: grid; justify-items: center; gap: var(--dc-sp-3); text-align: center; }
+.done-sub { font-size: var(--dc-fs-sm); }
+.done-qr { display: grid; justify-items: center; gap: var(--dc-sp-1); font-size: var(--dc-fs-sm); }
+.done-qr img { border: 1px solid var(--dc-ink-100); border-radius: var(--dc-r-sm); padding: 4px; background: #fff; }
+@media (max-width: 760px), (hover: none) and (pointer: coarse) { .done-qr { display: none; } }
 
 /* ---------- demo ---------- */
 .demo { background: var(--dc-surface); border: 1px solid var(--dc-ink-100); border-radius: var(--dc-r-xl); box-shadow: var(--dc-shadow-raised); padding: var(--dc-sp-6); }

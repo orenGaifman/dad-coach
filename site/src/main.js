@@ -28,3 +28,13 @@ if (demo) initDemo(demo, { reducedMotion });
 
 const form = document.querySelector('[data-signup-form]');
 if (form) initSignupForm(form);
+
+// "מתחילים" goes to the signup (the WhatsApp number is invite-only: he signs up, then writes).
+document.querySelectorAll('[data-start]').forEach((a) => a.addEventListener('click', (e) => {
+  const card = document.getElementById('signup');
+  const name = document.getElementById('su-name');
+  if (!card) return;
+  e.preventDefault();
+  card.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' });
+  if (name && !name.closest('[hidden]')) setTimeout(() => name.focus({ preventScroll: true }), reducedMotion ? 0 : 450);
+}));

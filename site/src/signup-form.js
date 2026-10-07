@@ -1,6 +1,6 @@
-// Desktop signup: name + Israeli mobile. The father's real start is WhatsApp; this form is for a
-// visitor on a computer who would rather leave a number. Unconfigured (SIGNUP_ENDPOINT empty) →
-// nothing leaves the browser and nothing about him is logged; he still sees the thank-you state.
+// The start: name + Israeli mobile, then WhatsApp. The shared WhatsApp number is invite-only - the gateway drops
+// a sender no product claims - so the signup is what lets his first message reach Dad Coach (the backend claims a
+// phone that signed up in the last 30 days). Unconfigured (SIGNUP_ENDPOINT empty) → nothing leaves the browser.
 import { SIGNUP_ENDPOINT } from './config.js';
 
 const TIMEOUT_MS = 10000;
@@ -53,7 +53,7 @@ export function initSignupForm(form) {
 
   function showDone(firstName) {
     form.hidden = true;
-    doneTitle.textContent = firstName ? `תודה, ${firstName}. נחזור אליך בוואטסאפ בהקדם.` : 'תודה. נחזור אליך בוואטסאפ בהקדם.';
+    doneTitle.textContent = firstName ? `מעולה, ${firstName}. עכשיו שלח לנו הודעה בוואטסאפ.` : 'מעולה. עכשיו שלח לנו הודעה בוואטסאפ.';
     done.hidden = false;
     done.focus();
   }
@@ -94,7 +94,7 @@ export function initSignupForm(form) {
       status.textContent = '';
       showDone(firstName);
     } catch {
-      status.textContent = 'משהו השתבש בשליחה. הפרטים נשארו בטופס, אפשר לנסות שוב בעוד רגע, או פשוט לכתוב לנו בוואטסאפ.';
+      status.textContent = 'משהו השתבש בשליחה. הפרטים נשארו בטופס, אפשר לנסות שוב בעוד רגע.';
       status.classList.add('is-error');
     } finally {
       clearTimeout(timer);

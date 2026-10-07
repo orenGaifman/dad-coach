@@ -44,7 +44,7 @@ belt). Rows of kind **progress** below update it; they are not messages.
 
 ## Scenario 1 — "ההודעה הראשונה" (first contact, profile, first weekly goal)
 
-Scene: יום ראשון, 21:10. אורי ראה מודעה, לחץ על "מתחילים בוואטסאפ" ושלח את ההודעה שכבר הייתה כתובה.
+Scene: יום ראשון, 21:10. אורי ראה מודעה, השאיר שם ונייד, ושלח בוואטסאפ את ההודעה שכבר הייתה כתובה.
 
 | # | Phone | From | Time | Message | buttons |
 |---|---|---|---|---|---|
