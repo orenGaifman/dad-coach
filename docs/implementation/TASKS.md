@@ -67,6 +67,9 @@ Work streams: DC-A backend (branch align-backend), DC-B dashboard, DC-C workflow
   make the guard require distinct tool/callback/admin keys. Needs a coordinated Render change on both services.
 - [x] DC-A23 CorrelationIdFilter + structured events whatsapp.turn.timing, workflow.call.result,
   tool.execution.result, context.provider.result, proactive.callback.result, whatsapp.delivery.result.
+- [x] DC-A31 Shared-number gateway claim (§33, Tair/BB contract): POST /api/integration/channel/claim
+  {"phone"} → {"claimed"}; callback key always (own chain, closed when unset); a father who exists, not DELETED,
+  not pending platform deletion. Validation: ChannelClaimTest, SecurityRoutesTest, ApiKeyAuthenticationFilterTest.
 - [x] DC-A24 Calendar connect hop verifies its HMAC (it did not). Validation: CalendarConnectTest.
 
 ## Phase 7 — Lifecycle (WS-A)
@@ -75,7 +78,7 @@ Work streams: DC-A backend (branch align-backend), DC-B dashboard, DC-C workflow
 
 ## Phase 8 — Tests (WS-A)
 - [x] DC-A26 One shared static Testcontainer (postgres:17-alpine), FakeServers JDK HttpServer for platform + Meta,
-  no @MockBean, pinned TestClock. Suite: 119 tests, 0 failures, ~20 s, no hang.
+  no @MockBean, pinned TestClock. Suite: 124 tests, 0 failures, ~20 s, no hang.
 
 ## Open / follow-ups
 - [ ] DC-A22 A Google Calendar API stub test for the connected-calendar path (conflict refuses, event created,
