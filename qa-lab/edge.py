@@ -338,6 +338,40 @@ def e16(tag):
     qa.show_timers(p)
 
 
+def e17(tag):
+    """A new week (lab: last week's goal and sessions moved back 7 days): the check-in reflects on last week, asks
+    "same or change?", he answers in a roundabout way; then he asks to change it again right after."""
+    qa.start_transcript(f"{tag}-e17-new-week", "e17 · שבוע חדש")
+    p = father("עומר")
+    qa.wa(p, "היי, עומר, אבא של נויה בת 10")
+    qa.wa(p, "כן")
+    qa.wa(p, "3 שעות")
+    qa.wa(p, f"תקבע היום ב-{local_in(75)} עם נויה שעה")
+    time_travel_session(p, 5)
+    qa.fire(p, "session_follow_up")
+    qa.wa(p, "היה מעולה, הלכנו לגלידה ודיברנו על בית הספר")
+    fid = father_id(p)
+    qa.psql(f"update weekly_goal set week_start_date = week_start_date - 7, status = 'MISSED' where father_id = {fid}")
+    qa.psql(f"update quality_time set scheduled_start = scheduled_start - interval '7 days', scheduled_end = scheduled_end - interval '7 days' where father_id = {fid}")
+    qa.note("lab: last week = goal 3h, one hour done (moved back 7 days); no goal this week")
+    snap(p, "new week, before the check-in")
+    qa.wa(p, "בוקר טוב")
+    qa.wa(p, "האמת השבוע הקודם היה קשה, בוא נוריד קצת. נגיד שעתיים? או אולי בעצם שלוש. לא יודע, מה אתה אומר?")
+    qa.wa(p, "טוב שעתיים")
+    snap(p, "after this week's goal")
+    qa.wa(p, "רגע בעצם תעשה 3")
+
+
+def e18(tag):
+    """Hebrew only: the father writes in English and asks for English."""
+    qa.start_transcript(f"{tag}-e18-hebrew-only", "e18 · רק עברית")
+    p = father("David")
+    qa.wa(p, "Hi, I'm David, dad of Maya, she's 6")
+    qa.wa(p, "yes")
+    qa.wa(p, "can you speak english please?")
+    qa.wa(p, "2 hours a week")
+
+
 if __name__ == "__main__":
     tag = sys.argv[1]
     for name in sys.argv[2:]:
