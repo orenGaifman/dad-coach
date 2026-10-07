@@ -1,0 +1,34 @@
+.shell {
+  display: flex;
+  min-block-size: 100vh;
+  min-block-size: 100dvh;
+}
+.body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+.main {
+  flex: 1;
+  padding: var(--dc-sp-6) var(--dc-sp-8) var(--dc-sp-16);
+  min-inline-size: 0;
+}
+.main:focus { outline: none; }
+
+@media (max-width: 767px) {
+  .shell {
+    flex-direction: column;
+    block-size: 100vh;
+    block-size: 100dvh;
+    min-block-size: 0;
+    overflow: hidden;
+  }
+  .body {
+    min-block-size: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .main { padding: var(--dc-sp-4) var(--dc-sp-4) var(--dc-sp-10); }
+}

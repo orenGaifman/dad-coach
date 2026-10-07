@@ -1,0 +1,18 @@
+.dialog[open] {
+  border: none;
+  padding: 0;
+  border-radius: var(--dc-r-lg);
+  box-shadow: var(--dc-shadow-raised);
+  inline-size: min(460px, calc(100vw - 32px));
+  background: var(--dc-surface);
+  color: var(--dc-ink-700);
+}
+.dialog::backdrop { background: rgba(15, 26, 48, .35); }
+.inner { padding: var(--dc-sp-6); display: grid; gap: var(--dc-sp-4); }
+.title { font-size: var(--dc-fs-lg); font-weight: 800; }
+.body { display: grid; gap: var(--dc-sp-3); color: var(--dc-ink-700); }
+.actions { display: flex; flex-wrap: wrap; gap: var(--dc-sp-2); justify-content: flex-end; }
+@media (max-width: 767px) {
+  .inner { padding: var(--dc-sp-5); }
+  .actions > * { flex: 1 1 auto; }
+}

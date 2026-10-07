@@ -1,0 +1,54 @@
+# Rendered by the stock nginx image's envsubst-on-start step (see Dockerfile): only variables defined
+# in the container environment are substituted, so nginx's own runtime variables pass through. The
+# env-provided values are spelled out once, at their point of use (envsubst rewrites comments too).
+#
+# The backend's hostname is resolved per request (every 30s): a separately deployed backend (its own
+# Render service) changes IP on redeploy. Resolvers come from /etc/resolv.conf at container start.
+resolver ${NGINX_LOCAL_RESOLVERS} valid=30s ipv6=off;
+
+server {
+    # Render injects the port; the Dockerfile defaults it to 80 for docker compose.
+    listen ${PORT};
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Same-origin API proxy (the session cookie is SameSite; no CORS). The upstream's own Host and SNI:
+    # Render's edge picks the service by Host, so forwarding the browser's Host would loop back here.
+    location /api/ {
+        set $backend_upstream ${BACKEND_URL};
+        proxy_pass $backend_upstream;
+        proxy_set_header Host $proxy_host;
+        proxy_ssl_server_name on;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # SPA fallback; index.html revalidated on every load so a deploy reaches phones at once.
+    location / {
+        add_header Cache-Control "no-cache" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "same-origin" always;
+        add_header X-Frame-Options "DENY" always;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Belt pictures are also sent in WhatsApp (BELT_IMAGES_BASE_URL = <WEB_BASE_URL>/belts): cache, never fall back.
+    location /belts/ {
+        add_header Cache-Control "public, max-age=86400" always;
+        try_files $uri =404;
+    }
+
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+    }
+
+    location = /healthz {
+        access_log off;
+        return 200 "ok\n";
+        add_header Content-Type text/plain;
+    }
+}

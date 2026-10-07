@@ -1,0 +1,65 @@
+/* Dad Coach design tokens (docs/brand, docs/design/COLOR_SYSTEM + TYPOGRAPHY in dad-coach-web).
+   Warm neutrals for the canvas, a deep navy for structure and primary actions (the logo's night sky), and an
+   earned gold for progress and achievements only - scarce on purpose. Light mode only (no dark: classes). */
+:root {
+  /* Primary - muted navy */
+  --dc-navy-900: #0F1A30;
+  --dc-navy-800: #16233F;   /* primary */
+  --dc-navy-700: #22335A;
+  --dc-navy-500: #41598F;   /* interactive accent, focus */
+  --dc-navy-200: #C8D1E5;
+  --dc-navy-100: #E4E9F3;
+  --dc-navy-050: #F2F4F9;
+
+  /* Earned warmth - belts, achievements, progress moments */
+  --dc-gold-700: #8A5A12;
+  --dc-gold-600: #A8741C;
+  --dc-gold-500: #D9A441;   /* the logo's gate */
+  --dc-gold-200: #F0D9A8;
+  --dc-gold-100: #F8EDD5;
+
+  /* Warm neutrals - paper and linen, never cold grey */
+  --dc-ink-900: #1F1B16;    /* headings */
+  --dc-ink-700: #3F3830;    /* body */
+  --dc-ink-500: #6E655B;    /* secondary */
+  --dc-ink-300: #D6CEC3;    /* borders */
+  --dc-ink-100: #EFE9E1;    /* dividers, subtle fills */
+  --dc-bg: #FAF7F2;         /* page */
+  --dc-surface: #FFFFFF;    /* cards */
+
+  /* Semantic, softened */
+  --dc-success-600: #2E7D4F;
+  --dc-success-100: #E3F1E8;
+  --dc-warning-600: #A86A12;
+  --dc-warning-100: #FBEFD9;
+  --dc-danger-600: #B4453A;
+  --dc-danger-100: #F8E5E2;
+
+  /* WhatsApp - only on the "talk to the coach" buttons */
+  --dc-wa-green: #1FA855;
+  --dc-wa-green-dark: #178A45;
+
+  /* Typography - Assistant: humanist, warm, readable at night */
+  --dc-font-ui: "Assistant", "Heebo", system-ui, sans-serif;
+  --dc-fs-xs: 0.8125rem;   /* 13 */
+  --dc-fs-sm: 0.9375rem;   /* 15 */
+  --dc-fs-md: 1.0625rem;   /* 17 body */
+  --dc-fs-lg: 1.25rem;     /* 20 */
+  --dc-fs-xl: 1.625rem;    /* 26 */
+  --dc-fs-2xl: 2.125rem;   /* 34 display */
+  --dc-lh-tight: 1.25;
+  --dc-lh-body: 1.6;
+
+  /* Spacing (4px base) */
+  --dc-sp-1: 4px;  --dc-sp-2: 8px;  --dc-sp-3: 12px; --dc-sp-4: 16px;
+  --dc-sp-5: 20px; --dc-sp-6: 24px; --dc-sp-8: 32px; --dc-sp-10: 40px;
+  --dc-sp-12: 48px; --dc-sp-16: 64px;
+
+  --dc-r-sm: 8px;
+  --dc-r-md: 12px;
+  --dc-r-lg: 18px;
+  --dc-r-pill: 999px;
+  --dc-shadow-card: 0 1px 2px rgba(31, 27, 22, .04), 0 6px 20px rgba(31, 27, 22, .05);
+  --dc-shadow-raised: 0 2px 6px rgba(31, 27, 22, .08), 0 14px 36px rgba(31, 27, 22, .12);
+  --dc-focus-ring: 0 0 0 3px var(--dc-navy-200);
+}

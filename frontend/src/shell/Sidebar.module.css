@@ -1,0 +1,48 @@
+.sidebar {
+  position: sticky;
+  inset-block-start: 0;
+  block-size: 100vh;
+  inline-size: 244px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--dc-sp-2);
+  padding: var(--dc-sp-5) var(--dc-sp-4);
+  background: var(--dc-surface);
+  border-inline-end: 1px solid var(--dc-ink-100);
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dc-sp-2);
+  padding-inline: var(--dc-sp-2);
+  margin-block-end: var(--dc-sp-5);
+  text-decoration: none;
+  color: var(--dc-navy-800);
+  font-family: var(--dc-font-ui);
+  font-weight: 800;
+  font-size: var(--dc-fs-xl);
+  line-height: 1;
+}
+.brand:hover { color: var(--dc-navy-900); }
+.nav { display: grid; gap: 2px; }
+.link {
+  display: flex;
+  align-items: center;
+  gap: var(--dc-sp-3);
+  min-block-size: 44px;
+  padding-inline: var(--dc-sp-3);
+  border-radius: var(--dc-r-md);
+  color: var(--dc-ink-700);
+  text-decoration: none;
+  font-weight: 500;
+  transition: background-color .15s ease, color .15s ease;
+}
+.link:hover { background: var(--dc-ink-100); color: var(--dc-ink-900); }
+.link:focus-visible { border-radius: var(--dc-r-md); }
+.active, .active:hover { background: var(--dc-navy-050); color: var(--dc-navy-800); font-weight: 700; }
+.active svg { color: var(--dc-navy-700); }
+
+@media (max-width: 767px) {
+  .sidebar { display: none; }
+}
