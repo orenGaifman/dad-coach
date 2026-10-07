@@ -19,6 +19,7 @@ import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import com.dadcoach.integration.platform.lifecycle.DeletedSenders;
 import com.dadcoach.integration.platform.lifecycle.PersonRefs;
 import com.dadcoach.integration.platform.lifecycle.WhatsAppDeletionRequests;
+import com.dadcoach.whatsapp.ReplyLanguageGuard;
 import com.dadcoach.whatsapp.WhatsAppAdapter;
 import com.dadcoach.whatsapp.buttons.SessionButtonTaps;
 import java.time.Clock;
@@ -147,7 +148,17 @@ public class InboundMessageHandler {
                 outcome = response.suppressed() ? "SUPPRESSED" : response.isDuplicate() ? "DUPLICATE" : "BLANK";
                 return;
             }
-            send(phone, reply.strip());
+            Optional<String> hebrew = ReplyLanguageGuard.clean(reply.strip());
+            if (hebrew.isEmpty()) {
+                outcome = "BLOCKED_NOT_HEBREW";
+                log.atWarn().setMessage("whatsapp.reply.blocked_not_hebrew").addKeyValue("correlationId", in.idempotencyKey())
+                        .addKeyValue("chars", reply.length()).log();
+                return;
+            }
+            if (!hebrew.get().equals(reply.strip())) {
+                log.atWarn().setMessage("whatsapp.reply.english_note_removed").addKeyValue("correlationId", in.idempotencyKey()).log();
+            }
+            send(phone, hebrew.get());
         } catch (PlatformUnavailableException | WorkflowPlatformClient.PlatformRejectedException e) {
             outcome = "PLATFORM_FAILED";
             log.atWarn().setMessage("whatsapp.turn.platform_failed").addKeyValue("error", e.getMessage()).log();

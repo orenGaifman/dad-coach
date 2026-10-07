@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import com.dadcoach.channel.dto.OutboundMessageDto;
 import com.dadcoach.whatsapp.buttons.SessionButtonOffers;
 import java.util.List;
+import com.dadcoach.whatsapp.ReplyLanguageGuard;
 import java.util.Optional;
 
 /**
@@ -70,7 +71,16 @@ public class ScheduledResponseDeliveryService {
             return ScheduledResponseResult.of(winner, true);
         }
 
-        String content = request.responseContent();
+        Optional<String> hebrew = ReplyLanguageGuard.clean(request.responseContent().strip());
+        if (hebrew.isEmpty()) {
+            // the model wrote its reasoning in English instead of a message - never sent (ReplyLanguageGuard)
+            delivery.markFailed("BLOCKED_NOT_HEBREW");
+            repository.save(delivery);
+            log.warn("Scheduled response blocked, not Hebrew: triggerId={}, targetStateKey={}", request.triggerId(),
+                    request.targetStateKey());
+            return ScheduledResponseResult.of(delivery, false);
+        }
+        String content = hebrew.get();
         endpoints.ensure(father); // F1: fathers onboarded on WhatsApp before the fix have no endpoint row yet
         List<OutboundMessageDto.ReplyButton> offered = buttons.forScheduledMessage(father, request.targetStateKey());
         ProactiveSender.Outcome outcome = sender.send(father, content, offered);

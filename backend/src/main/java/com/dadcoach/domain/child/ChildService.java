@@ -43,7 +43,11 @@ public class ChildService {
         }
         String normalizedGender = null;
         if (gender != null && !gender.isBlank()) {
-            normalizedGender = gender.trim().toLowerCase(Locale.ROOT);
+            normalizedGender = switch (gender.trim().toLowerCase(Locale.ROOT)) {
+                case "male", "m", "son", "בן" -> "boy";
+                case "female", "f", "daughter", "בת" -> "girl";
+                default -> gender.trim().toLowerCase(Locale.ROOT);
+            };
             if (!GENDERS.contains(normalizedGender)) {
                 throw new BusinessRuleViolationException("INVALID_GENDER", "Gender must be boy, girl or other");
             }

@@ -162,8 +162,16 @@ public class Child {
         this.birthDate = birthDate;
     }
 
+    /** boy / girl / other; legacy rows from older Dad Coach versions hold MALE / FEMALE, read the same way. */
     public String getGender() {
-        return gender;
+        if (gender == null) {
+            return null;
+        }
+        return switch (gender.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "male", "m", "son", "בן" -> "boy";
+            case "female", "f", "daughter", "בת" -> "girl";
+            default -> gender;
+        };
     }
 
     public void setGender(String gender) {
