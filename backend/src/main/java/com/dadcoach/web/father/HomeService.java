@@ -6,6 +6,7 @@ import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.qualitytime.QualityTime;
 import com.dadcoach.qualitytime.QualityTimeRepository;
+import com.dadcoach.qualitytime.QualityTimeStatus;
 import com.dadcoach.weeklygoal.WeeklyGoalService;
 import com.dadcoach.weeklyplan.WeeklyPlanContextBuilder;
 import com.dadcoach.workflow.Belt;
@@ -65,6 +66,12 @@ public class HomeService {
         next.forEach(r -> ids.add(r.id()));
         qualityTimes.findAllById(ids).forEach(qt -> rows.put(qt.getId(), qt));
 
+        // The home's week list is what happens (or happened) this week: a cancelled session - also the old half of a
+        // reschedule - is noise there ("בוטל" next to the same session at its new time); the sessions page keeps it.
+        List<WeekTruth.Ref> shownThisWeek = thisWeek.stream()
+                .filter(r -> rows.get(r.id()) == null || rows.get(r.id()).getStatus() != QualityTimeStatus.CANCELLED)
+                .toList();
+
         Map<String, Object> week = WeekTruth.map(plan, "current_week");
         Map<String, Object> goal = WeekTruth.map(plan, "goal");
         Map<String, Object> coverage = WeekTruth.map(plan, "coverage");
@@ -86,7 +93,7 @@ public class HomeService {
                         coverage.get("is_covered") instanceof Boolean b ? b : null,
                         orZero(WeekTruth.integer(coverage, "awaiting_confirmation_minutes"))),
                 next.isEmpty() ? null : view(next.get(0), rows, zone, childNames),
-                views(thisWeek, rows, zone, childNames),
+                views(shownThisWeek, rows, zone, childNames),
                 views(awaiting, rows, zone, childNames),
                 progress(father),
                 childList,

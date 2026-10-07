@@ -97,6 +97,11 @@ public class InboundMessageHandler {
         }
         Optional<Father> father = fathers.findByPhone(phone);
         father.ifPresent(endpoints::recordInbound);
+        if (in.messageType() == MessageType.REACTION) {
+            // a ❤️ on one of our messages is not something to answer ("אתה איתי?" came back for one)
+            log.atInfo().setMessage("whatsapp.inbound.ignored").addKeyValue("reason", "REACTION").log();
+            return;
+        }
         if (in.textContent() == null || in.textContent().isBlank()) {
             send(phone, MEDIA_REPLY);
             return;
@@ -105,7 +110,7 @@ public class InboundMessageHandler {
             log.atWarn().setMessage("whatsapp.inbound.rate_limited").addKeyValue("sender", MaskingUtils.maskPhone(phone)).log();
             return;
         }
-        String text = in.textContent();
+        String text = mediaMarker(in.messageType()) + in.textContent();
         if (in.buttonId() != null && father.isPresent()) {
             SessionButtonTaps.Tap tap;
             try {
@@ -165,6 +170,22 @@ public class InboundMessageHandler {
                     .addKeyValue("deliveryMs", Duration.between(deliveryStart, end).toMillis())
                     .log();
         }
+    }
+
+    /**
+     * A photo with a caption reaches the coach as its caption only - without a marker the coach answers the words as if
+     * they stood alone ("תראה מה בנינו!" got a weekly status). The marker tells it a picture came that it cannot see.
+     */
+    static String mediaMarker(MessageType type) {
+        if (type == null) {
+            return "";
+        }
+        return switch (type) {
+            case IMAGE -> "[photo] ";
+            case VIDEO -> "[video] ";
+            case DOCUMENT -> "[file] ";
+            default -> "";
+        };
     }
 
     /** A reply inside the conversation the father just opened (the 24-hour window is open by definition). */

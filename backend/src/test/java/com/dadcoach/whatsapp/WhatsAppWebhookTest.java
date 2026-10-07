@@ -143,6 +143,19 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void aPhotoWithACaptionReachesTheCoachMarkedAsAPhoto() throws Exception {
+        webhook(Webhooks.image(NEW_NUMBER, "wamid.photo", "תראה מה בנינו!")).andExpect(status().isOk());
+        assertThat(lastTurn().path("content").asText()).isEqualTo("[photo] תראה מה בנינו!");
+    }
+
+    @Test
+    void aReactionIsNeverAnswered() throws Exception {
+        webhook(Webhooks.reaction(NEW_NUMBER, "wamid.reaction", "❤️")).andExpect(status().isOk());
+        assertThat(fake.turns()).isEmpty();
+        assertThat(fake.metaSends()).isEmpty();
+    }
+
+    @Test
     void statusReceiptsAreAcknowledgedAndIgnored() throws Exception {
         webhook(Webhooks.status("wamid.out.1")).andExpect(status().isOk());
         webhook("{\"object\":\"whatsapp_business_account\",\"entry\":[]}").andExpect(status().isOk());

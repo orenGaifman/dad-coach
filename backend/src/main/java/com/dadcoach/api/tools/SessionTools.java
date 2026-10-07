@@ -148,10 +148,11 @@ public final class SessionTools {
         public Map<String, Object> handle(ToolActor actor, ToolParams p) {
             Father father = actor.requireFather();
             QualityTime existing = views.ownSession(father, p.requiredStr("quality_time_id"));
+            String status = existing.hasEnded() ? "MISSED" : "CANCELLED"; // the service records a past session as missed
             sessions.cancelQualityTime(existing.getId());
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("quality_time_id", existing.getId().toString());
-            data.put("status", "CANCELLED");
+            data.put("status", status);
             views.putWeekCoverage(data, father);
             return data;
         }

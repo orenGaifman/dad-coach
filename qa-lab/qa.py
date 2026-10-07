@@ -286,4 +286,5 @@ def fire(phone, key, timeout=200):
 
 
 def fresh_phone():
-    return "+1999" + str(int(time.time() * 1000))[-7:]
+    import random  # parallel runs start in the same millisecond: never share a phone
+    return "+1999" + str(random.randint(1000000, 9999999))
