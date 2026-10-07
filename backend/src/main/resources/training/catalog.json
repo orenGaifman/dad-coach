@@ -1,7 +1,7 @@
 [
   {
     "slug": "welcome", "primary": true, "order": 0,
-    "title": "ברוך הבא ל-Dad Coach",
+    "title": "ברוך הבא לדאד קואץ׳",
     "description": "מהאתר לוואטסאפ: איך קוראים לך, ילד וגיל, ויעד ראשון לשבוע.",
     "durationSeconds": 50,
     "video": "dad-coach/training/v2/father-welcome.mp4", "poster": "dad-coach/training/v2/father-welcome.jpg", "active": true
