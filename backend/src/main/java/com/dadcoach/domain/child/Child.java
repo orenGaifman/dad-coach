@@ -82,7 +82,12 @@ public class Child {
      * @return the age in years
      */
     public int getAge() {
-        return Period.between(birthDate, LocalDate.now()).getYears();
+        return ageOn(LocalDate.now());
+    }
+
+    /** Whole years on {@code today} - pass the day from the application clock wherever one is at hand. */
+    public int ageOn(LocalDate today) {
+        return Period.between(birthDate, today).getYears();
     }
 
     /**

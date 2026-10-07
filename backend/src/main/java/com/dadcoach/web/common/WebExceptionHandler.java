@@ -1,5 +1,7 @@
 package com.dadcoach.web.common;
 
+import com.dadcoach.config.CorrelationIdFilter;
+
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
@@ -54,6 +56,6 @@ public class WebExceptionHandler {
 
     public static ResponseEntity<ApiError> body(HttpStatus status, String code, String message, List<ApiError.FieldProblem> details) {
         return ResponseEntity.status(status)
-                .body(new ApiError(Instant.now(), status.value(), code, message, CorrelationIdFilter.current(), details));
+                .body(new ApiError(Instant.now(), status.value(), code, message, CorrelationIdFilter.currentCorrelationId(), details));
     }
 }

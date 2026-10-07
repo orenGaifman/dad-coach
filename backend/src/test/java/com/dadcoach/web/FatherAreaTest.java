@@ -39,7 +39,7 @@ class FatherAreaTest extends AbstractWebIntegrationTest {
         long father = newFather("יואב");
         long noa = newChild(father, "נועה", 7);
         long itai = newChild(father, "איתי", 4);
-        LocalDate weekStart = weeklyGoals.weekStartFor(fathers.findById(father).orElseThrow(), Instant.now());
+        LocalDate weekStart = weeklyGoals.weekStartFor(fathers.findById(father).orElseThrow(), clock.instant());
         UUID done = newSession(father, noa, -240, 60, "COMPLETED");
         UUID awaiting = newSession(father, itai, -120, 45, "SCHEDULED");
         UUID ahead = newSession(father, noa, 120, 60, "SCHEDULED");

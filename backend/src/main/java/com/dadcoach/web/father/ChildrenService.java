@@ -38,7 +38,7 @@ public class ChildrenService {
     public List<ChildView> list(Father father) {
         return children.findByFatherIdAndStatus(father.getId(), "ACTIVE").stream()
                 .sorted(Comparator.comparing(Child::getBirthDate).thenComparing(Child::getId))
-                .map(ChildrenService::view)
+                .map(this::view)
                 .toList();
     }
 
@@ -71,15 +71,19 @@ public class ChildrenService {
             }
             child.setName(name);
         }
-        if (age != null && age != child.getAge()) {
+        if (age != null && age != child.ageOn(today(father))) {
             validAge(age);
             child.setBirthDate(birthDateFor(father, age));
         }
         return view(children.save(child));
     }
 
+    private LocalDate today(Father father) {
+        return LocalDate.now(clock.withZone(weeklyGoals.zoneFor(father)));
+    }
+
     private LocalDate birthDateFor(Father father, int age) {
-        return LocalDate.now(clock.withZone(weeklyGoals.zoneFor(father))).minusYears(age);
+        return today(father).minusYears(age);
     }
 
     private static String validName(String raw) {
@@ -96,8 +100,8 @@ public class ChildrenService {
         }
     }
 
-    private static ChildView view(Child child) {
-        return new ChildView(child.getId(), child.getName(), child.getAge(),
+    private ChildView view(Child child) {
+        return new ChildView(child.getId(), child.getName(), child.ageOn(today(child.getFather())),
                 child.getBirthDate() == null ? null : child.getBirthDate().getYear());
     }
 }

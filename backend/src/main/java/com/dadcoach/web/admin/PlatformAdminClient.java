@@ -1,7 +1,7 @@
 package com.dadcoach.web.admin;
 
 import com.dadcoach.auth.DashboardProperties;
-import com.dadcoach.integration.platform.PlatformWorkflowConfig;
+import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import com.dadcoach.integration.platform.lifecycle.PersonRefs;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,12 +31,12 @@ public class PlatformAdminClient {
     private static final Duration TIMEOUT = Duration.ofSeconds(6);
     static final int MESSAGES = 12;
 
-    private final PlatformWorkflowConfig platform;
+    private final WorkflowPlatformProperties platform;
     private final DashboardProperties properties;
     private final ObjectMapper json;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(4)).build();
 
-    public PlatformAdminClient(PlatformWorkflowConfig platform, DashboardProperties properties, ObjectMapper json) {
+    public PlatformAdminClient(WorkflowPlatformProperties platform, DashboardProperties properties, ObjectMapper json) {
         this.platform = platform;
         this.properties = properties;
         this.json = json;

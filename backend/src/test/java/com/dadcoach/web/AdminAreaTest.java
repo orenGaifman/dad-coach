@@ -79,7 +79,7 @@ class AdminAreaTest extends AbstractWebIntegrationTest {
         mvc.perform(staff.on(get("/api/admin/fathers/" + father + "/platform"))).andExpect(jsonPath("$.configured").value(false));
         mvc.perform(staff.on(get("/api/admin/fathers/424242424"))).andExpect(status().isNotFound());
         mvc.perform(staff.on(get("/api/admin/integrations"))).andExpect(status().isOk())
-                .andExpect(jsonPath("$.opsApiConfigured").value(true)).andExpect(jsonPath("$.platform.enabled").value(false));
+                .andExpect(jsonPath("$.opsApiConfigured").value(true)).andExpect(jsonPath("$.platform.enabled").value(true));
         // a failed login-link delivery shows up as undelivered
         mvc.perform(post("/api/auth/request-link").contentType(MediaType.APPLICATION_JSON).content("{\"phone\":\"" + phoneOf(father) + "\"}"));
         mvc.perform(staff.on(get("/api/admin/undelivered"))).andExpect(status().isOk())

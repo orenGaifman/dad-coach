@@ -9,63 +9,22 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.testcontainers.containers.PostgreSQLContainer;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * The whole application on ONE shared static Postgres (Tair / Big Boss AbstractIntegrationTest; deliberately no
- * {@code @Testcontainers}, no {@code @MockBean} - one Spring context for every test class). The database starts as
- * production's schema at V22 with its Flyway history (test resource db/prod-v22-baseline.sql), and Flyway applies the
- * repository's newer migrations on top - exactly what a deploy does.
- *
- * <p>Fathers are created per test on +1999 numbers ({@link #newFather}); nothing depends on test order or on the
- * time of day (the weekly plan is computed from the real clock, seeds are relative to now).</p>
+ * The dashboard's helpers on top of the shared {@link com.dadcoach.AbstractIntegrationTest} (one context, one Postgres
+ * built by Flyway from empty, the pinned clock): fathers on +1999 numbers ({@link #newFather}), seeds relative to the
+ * test clock, ops-issued login links.
  */
-@SpringBootTest(properties = {
-        "spring.profiles.active=test",
-        "spring.flyway.enabled=true",
-        "spring.jpa.hibernate.ddl-auto=validate",
-        "dadcoach.dashboard.ops-api-key=test-ops-key-0123456789abcdef",
-        "dadcoach.dashboard.cookie-secure=false",
-        "dadcoach.dashboard.whatsapp-public-number=+19995550100",
-        "dad-coach.web.base-url=http://localhost:5390",
-        "workflow.platform.enabled=false",
-        "dadcoach.features.morning-reminders=false"
-})
-@AutoConfigureMockMvc
-public abstract class AbstractWebIntegrationTest {
-
-    public static final String OPS_KEY = "test-ops-key-0123456789abcdef";
-
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine")
-            .withInitScript("db/prod-v22-baseline.sql");
-
-    static {
-        POSTGRES.start();
-    }
-
-    @DynamicPropertySource
-    static void datasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
-    }
+public abstract class AbstractWebIntegrationTest extends com.dadcoach.AbstractIntegrationTest {
 
     @Autowired
     protected MockMvc mvc;
-
-    @Autowired
-    protected JdbcTemplate jdbc;
 
     @Autowired
     protected LoginLinkRateLimiter rateLimiter;
@@ -95,8 +54,8 @@ public abstract class AbstractWebIntegrationTest {
      * A UTC offset where it is about noon right now (Big Boss TestZones.midday): sessions a few hours either side of
      * now stay on the father's same day and week, whenever the suite runs.
      */
-    protected static String middayZone() {
-        int utcHour = java.time.ZonedDateTime.now(java.time.ZoneOffset.UTC).getHour();
+    protected String middayZone() {
+        int utcHour = clock.instant().atZone(java.time.ZoneOffset.UTC).getHour();
         int offset = 12 - utcHour;
         if (offset > 14) {
             offset -= 24;
@@ -122,7 +81,7 @@ public abstract class AbstractWebIntegrationTest {
 
     /** A session relative to now (minutes may be negative: in the past). */
     protected UUID newSession(long fatherId, long childId, long startInMinutes, int durationMinutes, String status) {
-        Instant start = Instant.now().truncatedTo(ChronoUnit.MINUTES).plus(startInMinutes, ChronoUnit.MINUTES);
+        Instant start = clock.instant().truncatedTo(ChronoUnit.MINUTES).plus(startInMinutes, ChronoUnit.MINUTES);
         return jdbc.queryForObject("""
                 INSERT INTO quality_time (father_id, child_id, scheduled_start, scheduled_end, status)
                 VALUES (?, ?, ?, ?, ?) RETURNING id""", UUID.class, fatherId, childId,

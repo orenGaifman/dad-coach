@@ -2,7 +2,7 @@ package com.dadcoach.web.admin;
 
 import com.dadcoach.auth.DashboardPrincipal;
 import com.dadcoach.auth.DashboardProperties;
-import com.dadcoach.integration.platform.PlatformWorkflowConfig;
+import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import com.dadcoach.integration.platform.scheduled.ScheduledResponseCallbackConfig;
 import com.dadcoach.web.common.Areas;
 import com.dadcoach.web.father.HomeView;
@@ -48,7 +48,7 @@ public class AdminController {
     private final AdminQueries queries;
     private final AdminFathersService fathers;
     private final PlatformAdminClient platformAdmin;
-    private final PlatformWorkflowConfig platform;
+    private final WorkflowPlatformProperties platform;
     private final ScheduledResponseCallbackConfig callback;
     private final DashboardProperties properties;
     private final TrainingService training;
@@ -59,7 +59,7 @@ public class AdminController {
     private final String webBaseUrl;
 
     public AdminController(AdminQueries queries, AdminFathersService fathers, PlatformAdminClient platformAdmin,
-                           PlatformWorkflowConfig platform, ScheduledResponseCallbackConfig callback,
+                           WorkflowPlatformProperties platform, ScheduledResponseCallbackConfig callback,
                            DashboardProperties properties, TrainingService training, Clock clock,
                            @Value("${dad-coach.whatsapp.phone-number-id:}") String whatsappPhoneNumberId,
                            @Value("${dad-coach.whatsapp.access-token:}") String whatsappAccessToken,

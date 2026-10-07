@@ -1,7 +1,7 @@
 package com.dadcoach.auth;
 
 import com.dadcoach.web.common.ApiError;
-import com.dadcoach.web.common.CorrelationIdFilter;
+import com.dadcoach.config.CorrelationIdFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -109,6 +109,6 @@ public class DashboardSecurityConfig {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         response.getWriter().write(json.writeValueAsString(new ApiError(Instant.now(), status, code,
-                status == 401 ? "authentication required" : "forbidden", CorrelationIdFilter.current(), List.of())));
+                status == 401 ? "authentication required" : "forbidden", CorrelationIdFilter.currentCorrelationId(), List.of())));
     }
 }
