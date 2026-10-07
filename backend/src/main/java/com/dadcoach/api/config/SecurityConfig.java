@@ -26,7 +26,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *   <li>{@code /api/tools/**} — permitAll (uses X-API-Key via ToolApiAuthFilter)</li>
  *   <li>{@code /api/context/**} — permitAll (uses X-API-Key via ContextProviderAuthFilter)</li>
  *   <li>{@code /api/profile/**} — permitAll (uses X-API-Key via ProfileApiAuthFilter)</li>
- *   <li>{@code /api/webhooks/**} — permitAll (uses X-API-Key via webhook auth)</li>
  *   <li>{@code /api/v1/admin/**} — requires ADMIN role</li>
  *   <li>{@code /api/v1/service/**} — requires SERVICE role</li>
  *   <li>{@code /api/v1/fathers/me/**} — requires FATHER role</li>
@@ -100,13 +99,13 @@ public class SecurityConfig {
                         .requestMatchers("/api/context/**").permitAll()
                         // Profile API endpoints (use X-API-Key via ProfileApiAuthFilter)
                         .requestMatchers("/api/profile/**").permitAll()
-                        // Platform webhook endpoints (use X-API-Key auth)
-                        .requestMatchers("/api/webhooks/**").permitAll()
                         // Workflow Platform callbacks (use X-API-Key via ScheduledResponseAuthFilter)
                         .requestMatchers("/api/integration/**").permitAll()
                         // Onboarding endpoints (no auth required - uses invitation tokens)
                         .requestMatchers("/api/v1/onboarding/**").permitAll()
-                        .requestMatchers("/api/v1/invitations/**").permitAll()
+                        // Validating an invitation token is public; creating or revoking one is operator-only
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/invitations/*/validate").permitAll()
+                        .requestMatchers("/api/v1/invitations/**").hasRole(AdminApiKeyAuthFilter.ROLE)
                         .requestMatchers("/api/v1/activation/**").permitAll()
                         // Calendar OAuth endpoints (public - OAuth flow handles auth)
                         // Only the OAuth hops are public (both verify a signature); status/events need the father's token

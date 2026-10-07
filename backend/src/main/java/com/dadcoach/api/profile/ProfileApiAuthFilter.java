@@ -88,7 +88,7 @@ public class ProfileApiAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (!providedApiKey.equals(toolApiConfig.getApiKey())) {
+        if (!com.dadcoach.api.tools.ServiceKeys.matches(providedApiKey, toolApiConfig.getApiKey())) {
             log.warn("Invalid API key for Profile API request: {} {}", method, requestPath);
             sendErrorResponse(response, 401, "Invalid API key");
             return;

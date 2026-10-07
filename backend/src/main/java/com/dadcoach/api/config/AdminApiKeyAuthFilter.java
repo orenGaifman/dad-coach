@@ -33,6 +33,8 @@ public class AdminApiKeyAuthFilter extends OncePerRequestFilter {
     static final String PATH_PREFIX = "/api/v1/admin/";
     /** The tool/context test console ({@code AdminToolTestController}) is operator-only too. */
     static final String TEST_CONSOLE_PREFIX = "/api/admin/";
+    /** Creating or revoking an invitation is operator-only (validating one stays public). */
+    static final String INVITATIONS_PREFIX = "/api/v1/invitations";
     public static final String ROLE = "ADMIN_API";
 
     private final String adminApiKey;
@@ -44,7 +46,9 @@ public class AdminApiKeyAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        return !uri.startsWith(PATH_PREFIX) && !uri.equals("/api/v1/admin") && !uri.startsWith(TEST_CONSOLE_PREFIX);
+        boolean invitationWrite = uri.startsWith(INVITATIONS_PREFIX) && !"GET".equalsIgnoreCase(request.getMethod());
+        return !uri.startsWith(PATH_PREFIX) && !uri.equals("/api/v1/admin") && !uri.startsWith(TEST_CONSOLE_PREFIX)
+                && !invitationWrite;
     }
 
     @Override

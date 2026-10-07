@@ -88,7 +88,7 @@ public class ContextProviderAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (!providedApiKey.equals(toolApiConfig.getApiKey())) {
+        if (!com.dadcoach.api.tools.ServiceKeys.matches(providedApiKey, toolApiConfig.getApiKey())) {
             log.warn("Invalid API key for Context Provider API request: {} {}", method, requestPath);
             sendErrorResponse(response, 401, "Invalid API key", "UNAUTHORIZED");
             return;

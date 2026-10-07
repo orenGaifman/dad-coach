@@ -86,18 +86,7 @@ public class ToolApiAuthFilter extends OncePerRequestFilter {
 
         String configuredKey = toolApiConfig.getApiKey();
         
-        // Debug logging - show first/last 4 chars only for security
-        String providedKeyDebug = providedApiKey.length() > 8 
-            ? providedApiKey.substring(0, 4) + "..." + providedApiKey.substring(providedApiKey.length() - 4)
-            : "***";
-        String configuredKeyDebug = configuredKey != null && configuredKey.length() > 8 
-            ? configuredKey.substring(0, 4) + "..." + configuredKey.substring(configuredKey.length() - 4)
-            : "***";
-        log.info("API key validation - provided: {}, configured: {}, lengths: {}/{}", 
-            providedKeyDebug, configuredKeyDebug, 
-            providedApiKey.length(), configuredKey != null ? configuredKey.length() : 0);
-
-        if (!providedApiKey.equals(configuredKey)) {
+        if (!ServiceKeys.matches(providedApiKey, configuredKey)) {
             log.warn("Invalid API key for Tool API request: {} {} - key mismatch", method, requestPath);
             sendErrorResponse(response, 401, "Invalid API key", "UNAUTHORIZED");
             return;

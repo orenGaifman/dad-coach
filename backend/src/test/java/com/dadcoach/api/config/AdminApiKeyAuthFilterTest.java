@@ -30,6 +30,30 @@ class AdminApiKeyAuthFilterTest {
         // the tool/context test console runs real tools - it was reachable with any father's token before
         assertThat(run(new AdminApiKeyAuthFilter("admin-secret-key"), "POST", "/api/admin/test/tools/run-all", null).getStatus()).isEqualTo(401);
         assertThat(run(new AdminApiKeyAuthFilter("admin-secret-key"), "GET", "/api/admin/test/context-providers", "wrong").getStatus()).isEqualTo(401);
+        // creating or revoking an invitation is operator-only
+        assertThat(run(new AdminApiKeyAuthFilter("admin-secret-key"), "POST", "/api/v1/invitations", null).getStatus()).isEqualTo(401);
+        assertThat(run(new AdminApiKeyAuthFilter("admin-secret-key"), "DELETE", "/api/v1/invitations/x", "wrong").getStatus()).isEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("validating an invitation token stays public")
+    void invitationValidateIsPublic() throws Exception {
+        MockFilterChain chain = new MockFilterChain();
+        new AdminApiKeyAuthFilter("admin-secret-key").doFilter(new MockHttpServletRequest("GET", "/api/v1/invitations/abc/validate"),
+                new MockHttpServletResponse(), chain);
+        assertThat(chain.getRequest()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("production refuses to start with a short tool key or the committed development default")
+    void serviceKeyGuard() {
+        MockEnvironment prod = new MockEnvironment();
+        prod.setActiveProfiles("prod");
+        assertThatThrownBy(() -> new ServiceKeyGuard(ServiceKeyGuard.DEV_DEFAULT, prod)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new ServiceKeyGuard("dad-coach-api-2024", prod)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new ServiceKeyGuard("", prod)).isInstanceOf(IllegalStateException.class);
+        new ServiceKeyGuard("0123456789abcdef0123456789abcdef0123456789abcdef", prod);
+        new ServiceKeyGuard(ServiceKeyGuard.DEV_DEFAULT, new MockEnvironment());
     }
 
     @Test
