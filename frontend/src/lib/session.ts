@@ -8,9 +8,12 @@ export function useMe() {
 
 export const can = (me: Me | undefined, capability: string) => !!me?.capabilities.includes(capability)
 
-/** Where a signed-in person lands: the team on the admin, a father on his week. */
+/**
+ * Where a signed-in person lands (D-028, like Big Boss): a father on his own page - also when he is on the team; the
+ * admin is one tap away in the account menu. Only a team member who is not a father lands on the admin.
+ */
 export function homeFor(me: Me): string {
-  return can(me, 'admin') ? '/admin' : can(me, 'father') ? '/home' : '/login'
+  return can(me, 'father') ? '/home' : can(me, 'admin') ? '/admin' : '/login'
 }
 
 /** A `next` from a link is honoured only inside the dashboard areas. */
