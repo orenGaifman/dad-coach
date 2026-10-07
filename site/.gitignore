@@ -1,0 +1,6 @@
+node_modules
+dist/
+# only two screenshots are committed (for the hub page); the rest are local review output
+screenshots/*
+!screenshots/home-390.png
+!screenshots/demo-1440.png

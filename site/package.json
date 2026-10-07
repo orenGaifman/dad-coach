@@ -1,0 +1,17 @@
+{
+  "name": "dad-coach-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Dad Coach marketing site: static, Hebrew RTL, plain HTML/CSS/JS (Vite multi-page)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4175 --strictPort",
+    "images": "sh scripts/render-images.sh",
+    "screenshots": "node scripts/screenshots.mjs"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

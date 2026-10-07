@@ -1,0 +1,29 @@
+# Render Blueprint for the Dad Coach marketing site ONLY (Blueprint path: site/render.yaml).
+# The existing `dad-coach` web service (srv-…, Dockerfile at the repo root) is managed in the Render
+# dashboard and is deliberately NOT in this file. Created by the main session (not by WS-D).
+# After the site has an origin, set SITE_ORIGINS on the `dad-coach` service to that origin.
+services:
+  - type: web
+    name: dad-coach-site
+    runtime: static
+    branch: main
+    buildCommand: cd site && npm ci && npm run build
+    staticPublishPath: site/dist
+    buildFilter:
+      paths:
+        - site/**
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    envVars:
+      - { key: VITE_SIGNUP_ENDPOINT, sync: false }   # https://<dad-coach host>/api/public/site-signups (empty = form sends nothing)
+      - { key: VITE_WHATSAPP_NUMBER, value: "972552961164" }
+      - { key: VITE_ANALYTICS_SRC, value: "" }       # optional, cookieless analytics; update the privacy page first
+      - { key: VITE_ANALYTICS_DOMAIN, value: "" }
