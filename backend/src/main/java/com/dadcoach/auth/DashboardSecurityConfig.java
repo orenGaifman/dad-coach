@@ -107,6 +107,7 @@ public class DashboardSecurityConfig {
     private static void write(HttpServletResponse response, ObjectMapper json, int status, String code) throws IOException {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
         response.getWriter().write(json.writeValueAsString(new ApiError(Instant.now(), status, code,
                 status == 401 ? "authentication required" : "forbidden", CorrelationIdFilter.current(), List.of())));
     }
