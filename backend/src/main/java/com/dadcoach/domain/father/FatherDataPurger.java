@@ -58,6 +58,9 @@ public class FatherDataPurger {
         if (hasColumn("tool_idempotency", "actor_ref")) {
             rows += jdbc.update("DELETE FROM tool_idempotency WHERE actor_ref = ?", "whatsapp:" + phones.get(0));
         }
+        if (hasColumn("site_signup", "phone")) { // the site's signup is keyed by phone, not by father
+            rows += jdbc.update("DELETE FROM site_signup WHERE phone = ?", phones.get(0));
+        }
         for (Owned owned : OWNED) {
             if (hasColumn(owned.table(), owned.column())) {
                 rows += jdbc.update("DELETE FROM " + owned.table() + " WHERE " + owned.column() + " = ?",

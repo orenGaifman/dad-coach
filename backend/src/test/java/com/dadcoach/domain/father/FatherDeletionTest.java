@@ -33,6 +33,7 @@ class FatherDeletionTest extends AbstractIntegrationTest {
         data.endpoint(f, true);
         jdbc.update("INSERT INTO tool_idempotency (id, scope, idempotency_key, status, actor_ref, expires_at) "
                 + "VALUES (gen_random_uuid(), 'TOOL:add_child', 'k', 'SUCCEEDED', ?, now() + interval '1 day')", "whatsapp:" + phone);
+        jdbc.update("INSERT INTO site_signup (name, phone) VALUES ('אבא', ?)", phone); // he signed up on the site first
         return f;
     }
 
@@ -57,6 +58,7 @@ class FatherDeletionTest extends AbstractIntegrationTest {
         assertThat(rows("child", f)).isZero();
         assertThat(rows("communication_endpoints", f)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tool_idempotency", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM site_signup", Integer.class)).as("his site signup too").isZero();
         assertThat(jdbc.queryForObject("SELECT outcome FROM platform_person_deletion", String.class)).isEqualTo("DELETED");
         assertThat(deletedSenders.isDeleted(f.getPhone())).isFalse(); // confirmed: the number may start over
 
