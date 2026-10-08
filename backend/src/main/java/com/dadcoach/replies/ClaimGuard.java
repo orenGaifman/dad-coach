@@ -61,6 +61,11 @@ public final class ClaimGuard {
     /** A line about times, reminders or the week - dropped when the ready booking confirmation replaces the model's. */
     private static final Pattern BOOKING_DETAIL = Pattern.compile("קבע|אזכיר|תזכורת|השבוע|מכוסה|דקות|\\d{1,2}:\\d{2}|🎉|אעדכן");
 
+    /** A number of hours as HebrewHours writes it. */
+    private static final Pattern HOURS = Pattern.compile("(?:\\d+ שעות|שעתיים|שלושת רבעי שעה|חצי שעה|רבע שעה|שעה|\\d+ דקות)"
+            + "(?: ו(?:חצי|רבע|-\\d+ דקות))?");
+    private static final Pattern MISSING = Pattern.compile("חסר(?:ה|ות|ים)?");
+
     private static final Pattern TIME = Pattern.compile("(\\d{1,2}):(\\d{2})(?:\\s*[-–]\\s*(\\d{1,2}):(\\d{2}))?");
     private static final Pattern DAY = Pattern.compile("היום|מחר|(?:ב?יום\\s+)?(ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת)");
     private static final Pattern LENGTH = Pattern.compile("חצי שעה|רבע שעה|שעה וחצי|שעתיים וחצי|שעתיים|\\d+ שעות(?: וחצי)?|\\d+ דקות|שעה");
@@ -98,6 +103,16 @@ public final class ClaimGuard {
         for (List<String> sentences : lines) {
             for (int i = 0; i < sentences.size(); i++) {
                 String s = sentences.get(i);
+                String fixedGap = wrongGap(s, changes.week());
+                if (fixedGap != null) {
+                    changed = true;
+                    if (fixedGap.isEmpty()) {
+                        sentences.remove(i--);
+                        continue;
+                    }
+                    sentences.set(i, fixedGap);
+                    s = fixedGap;
+                }
                 Claim invalid = invalidClaim(s, changes);
                 if (invalid == Claim.BUTTON) {
                     if (!buttonSent) {
@@ -221,6 +236,32 @@ public final class ClaimGuard {
         }
         String rest = words(LEAD_WORD.matcher(sentence.replace(m.group(), " ")).replaceAll(" "));
         return rest.isEmpty() || rest.split(" ").length <= 1;
+    }
+
+    /**
+     * A sentence saying how much is still missing this week with a number that is not the week's (lab r2-c: "שעתיים
+     * וחצי ליעד עדיין חסרות" after a cancellation left 3 hours missing): the true line instead, or "" to drop it.
+     * Null when the sentence is right or not about the gap.
+     */
+    static String wrongGap(String sentence, CoachReplies.Week week) {
+        if (week == null || !week.hasGoal() || !MISSING.matcher(sentence).find() || sentence.contains("?")) {
+            return null;
+        }
+        Matcher h = HOURS.matcher(sentence);
+        if (!h.find()) {
+            return null;
+        }
+        String truth = week.isCovered() ? null : com.dadcoach.weeklyplan.HebrewHours.of(week.uncovered());
+        if (truth != null && words(sentence).contains(words(truth))) {
+            return null;
+        }
+        if (truth == null) {
+            return "";
+        }
+        // the true number in his sentence (its slot and question stay); חסרה / חסרות follows the number
+        String fixed = sentence.substring(0, h.start()) + truth + sentence.substring(h.end());
+        boolean singular = CoachReplies.missing(week.uncovered()).startsWith("חסרה");
+        return MISSING.matcher(fixed).replaceFirst(singular ? "חסרה" : "חסרות");
     }
 
     /** "קבענו לשישי ב-09:00" about a session he already has is not a claim of a new booking. */

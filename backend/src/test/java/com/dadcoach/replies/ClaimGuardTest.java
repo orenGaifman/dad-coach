@@ -104,6 +104,20 @@ class ClaimGuardTest {
     }
 
     @Test
+    @DisplayName("a wrong 'missing' number gets the week's real one (lab r2-c: 2.5 hours said, 3 missing)")
+    void wrongGap() {
+        TurnLedger.Changes threeMissing = new TurnLedger.Changes(List.of(), List.of(), 1, 0, false, false, false, true, false,
+                null, List.of(), false, new CoachReplies.Week(180, 0, 0));
+        ClaimGuard.Result r = ClaimGuard.check("ביטלתי את המפגש של *מחר*.\nיש חלון *היום ב-17:00*, שעתיים וחצי ליעד עדיין חסרות.\n"
+                + "לקבוע שם שעה?", threeMissing, false, KIDS);
+        assertThat(r.body()).isEqualTo("ביטלתי את המפגש של *מחר*.\nיש חלון *היום ב-17:00*, 3 שעות ליעד עדיין חסרות.\nלקבוע שם שעה?");
+        TurnLedger.Changes oneMissing = new TurnLedger.Changes(List.of(), List.of(), 0, 0, false, false, false, true, false,
+                null, List.of(), false, new CoachReplies.Week(120, 60, 0));
+        assertThat(ClaimGuard.check("חסרות עוד שעתיים ליעד.", oneMissing, false, KIDS).body()).isEqualTo("חסרה עוד שעה ליעד.");
+        assertThat(ClaimGuard.check("חסרה עוד שעה ליעד.", oneMissing, false, KIDS).changed()).isFalse();
+    }
+
+    @Test
     @DisplayName("an ordinary reply is never touched")
     void ordinary() {
         String reply = "גם זה סוג לגיטימי של זמן איכות.\nהעיקר שאתם יחד ולא כל אחד על המסך שלו 🙂";

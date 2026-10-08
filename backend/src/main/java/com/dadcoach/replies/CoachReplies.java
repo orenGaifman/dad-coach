@@ -130,12 +130,26 @@ public final class CoachReplies {
         return lines;
     }
 
-    public static List<String> cancelled(String when, String children) {
-        return List.of("ביטלתי את המפגש של *" + when + "*" + with(children) + ".");
+    public static List<String> cancelled(String when, String children, Week week) {
+        List<String> lines = new ArrayList<>();
+        lines.add("ביטלתי את המפגש של *" + when + "*" + with(children) + ".");
+        addIfPresent(lines, gapLine(week));
+        return lines;
     }
 
-    public static List<String> missed(String children) {
-        return List.of("קורה, העיקר שממשיכים.", "רשמתי שהמפגש" + with(children) + " לא יצא.");
+    public static List<String> missed(String children, Week week) {
+        List<String> lines = new ArrayList<>(List.of("קורה, העיקר שממשיכים.", "רשמתי שהמפגש" + with(children) + " לא יצא."));
+        addIfPresent(lines, gapLine(week));
+        return lines;
+    }
+
+    /** "השבוע חסרות עוד 3 שעות ליעד." / "השבוע חסרה עוד שעה ליעד."; null without a goal or when covered. */
+    public static String gapLine(Week week) {
+        if (week == null || !week.hasGoal() || week.isCovered()) {
+            return null;
+        }
+        String hours = HebrewHours.of(week.uncovered());
+        return "השבוע " + (missing(week.uncovered()).startsWith("חסרה") ? "חסרה" : "חסרות") + " עוד " + hours + " ליעד.";
     }
 
     public static List<String> completionUndone(String children) {
@@ -211,7 +225,7 @@ public final class CoachReplies {
     }
 
     /** "חסרה: שעה וחצי" (one hour is singular - D-14) / "חסרות: שעתיים". */
-    static String missing(int minutes) {
+    public static String missing(int minutes) {
         String hours = HebrewHours.of(minutes);
         boolean singular = hours.startsWith("שעה") || hours.startsWith("חצי שעה") || hours.startsWith("רבע שעה")
                 || hours.startsWith("שלושת רבעי");

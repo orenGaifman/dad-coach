@@ -41,13 +41,13 @@ public class TurnLedger {
     public record Changes(List<QualityTime> booked, List<QualityTime> joined, int cancelled, int completed,
                           boolean childAdded, boolean goalCreated, boolean nextWeekGoalSaved, boolean goalExists,
                           boolean upcomingSession, List<String> bookingReply, List<String> upcomingStarts,
-                          boolean profileSaved) {
+                          boolean profileSaved, CoachReplies.Week week) {
 
         public Changes(List<QualityTime> booked, List<QualityTime> joined, int cancelled, int completed, boolean childAdded,
                        boolean goalCreated, boolean nextWeekGoalSaved, boolean goalExists, boolean upcomingSession,
                        List<String> bookingReply, List<String> upcomingStarts) {
             this(booked, joined, cancelled, completed, childAdded, goalCreated, nextWeekGoalSaved, goalExists,
-                    upcomingSession, bookingReply, upcomingStarts, false);
+                    upcomingSession, bookingReply, upcomingStarts, false, null);
         }
 
         public static final Changes NONE = new Changes(List.of(), List.of(), 0, 0, false, false, false, false, false, null,
@@ -155,7 +155,8 @@ public class TurnLedger {
         }
         return new Changes(booked, joined, cancelled, completed, children.countActiveByFatherId(f.getId()) > before.children(),
                 goalCreated, nextSaved, goal.isPresent(), upcoming, bookingReply, upcomingStarts,
-                before.fatherId() == null || !java.util.Objects.equals(before.profile(), profile(f)));
+                before.fatherId() == null || !java.util.Objects.equals(before.profile(), profile(f)),
+                weekOf(f));
     }
 
     /** The same lines schedule_quality_time / reschedule_quality_time returned as their reply. */
@@ -169,6 +170,14 @@ public class TurnLedger {
         String names = com.dadcoach.qualitytime.SessionChildren.hebrew(qt);
         return moved ? CoachReplies.moved(when, minutes, names, timers, week)
                 : CoachReplies.booked(when, minutes, names, timers, week);
+    }
+
+    private CoachReplies.Week weekOf(Father f) {
+        try {
+            return CoachReplies.Week.of(weeklyPlan.build(f).get("coverage"));
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /** What save_user_profile changes: his name, timezone, preferred time. */

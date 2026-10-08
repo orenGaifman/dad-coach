@@ -191,7 +191,7 @@ class ToolsTest extends AbstractIntegrationTest {
         Call cancelled = tool("cancel_quality_time", f.getPhone(), Map.of("quality_time_id", newId));
         assertThat(cancelled.success()).isTrue();
         assertThat(cancelled.data().path("week_coverage").path("planned_minutes").asInt()).isZero();
-        assertThat(cancelled.data().path("reply").asText()).isEqualTo("ביטלתי את המפגש של *יום חמישי 5.11 ב-18:00* עם נועה.");
+        assertThat(cancelled.data().path("reply").asText()).isEqualTo("ביטלתי את המפגש של *יום חמישי 5.11 ב-18:00* עם נועה.\nהשבוע חסרות עוד שעתיים ליעד.");
 
         Call unknown = tool("cancel_quality_time", f.getPhone(), Map.of("quality_time_id", UUID.randomUUID().toString()));
         assertThat(unknown.error()).isEqualTo("NOT_FOUND");
@@ -211,7 +211,7 @@ class ToolsTest extends AbstractIntegrationTest {
         Call missed = tool("cancel_quality_time", f.getPhone(), Map.of("quality_time_id", id, "reason", "did not happen (missed)"));
         assertThat(missed.success()).as(missed.body().toString()).isTrue();
         assertThat(missed.data().path("status").asText()).isEqualTo("MISSED");
-        assertThat(missed.data().path("reply").asText()).isEqualTo("קורה, העיקר שממשיכים.\nרשמתי שהמפגש עם נועה לא יצא.");
+        assertThat(missed.data().path("reply").asText()).isEqualTo("קורה, העיקר שממשיכים.\nרשמתי שהמפגש עם נועה לא יצא.\nהשבוע חסרות עוד שעתיים ליעד.");
         assertThat(jdbc.queryForObject("SELECT status FROM quality_time WHERE id = ?::uuid", String.class, id)).isEqualTo("MISSED");
         Call again = tool("cancel_quality_time", f.getPhone(), Map.of("quality_time_id", id));
         assertThat(again.success()).isFalse();

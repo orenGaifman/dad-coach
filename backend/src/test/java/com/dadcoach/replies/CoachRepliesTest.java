@@ -90,6 +90,16 @@ class CoachRepliesTest {
     }
 
     @Test
+    @DisplayName("a cancellation says the real gap left in the week")
+    void cancelled() {
+        assertThat(CoachReplies.cancelled("מחר, יום שישי 9.10 ב-19:00", "איתמר", new CoachReplies.Week(180, 0, 0)))
+                .containsExactly("ביטלתי את המפגש של *מחר, יום שישי 9.10 ב-19:00* עם איתמר.", "השבוע חסרות עוד 3 שעות ליעד.");
+        assertThat(CoachReplies.missed("נועה", new CoachReplies.Week(120, 60, 0)))
+                .containsExactly("קורה, העיקר שממשיכים.", "רשמתי שהמפגש עם נועה לא יצא.", "השבוע חסרה עוד שעה ליעד.");
+        assertThat(CoachReplies.cancelled("היום ב-17:00", "נועה", new CoachReplies.Week(60, 60, 0))).hasSize(1);
+    }
+
+    @Test
     @DisplayName("the session timers' messages and the goal lines")
     void timersAndGoal() {
         assertThat(CoachReplies.morning(List.of("17:00"), "איתמר")).isEqualTo("*היום ב-17:00* זה הזמן שלך ושל איתמר 🙂");

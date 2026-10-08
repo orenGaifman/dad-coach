@@ -224,6 +224,7 @@ public final class SessionTools {
             data.put("quality_time_id", existing.getId().toString());
             data.put("status", status);
             String children = SessionChildren.hebrew(existing);
+            CoachReplies.Week week = views.putWeekCoverage(data, father);
             if (undoesCompletion) {
                 data.put("completion_undone", true);
                 data.put("streak", existing.getFather().getQualityTimeStreak());
@@ -231,11 +232,11 @@ public final class SessionTools {
                 data.put("belt_name", existing.getFather().getCurrentBelt().getDisplayName("he"));
                 SessionViews.putReply(data, CoachReplies.completionUndone(children));
             } else if ("MISSED".equals(status)) {
-                SessionViews.putReply(data, CoachReplies.missed(children));
+                SessionViews.putReply(data, CoachReplies.missed(children, week));
             } else {
-                SessionViews.putReply(data, CoachReplies.cancelled(views.whenLabel(father, existing.getScheduledStart()), children));
+                SessionViews.putReply(data, CoachReplies.cancelled(views.whenLabel(father, existing.getScheduledStart()),
+                        children, week));
             }
-            views.putWeekCoverage(data, father);
             return data;
         }
     }
