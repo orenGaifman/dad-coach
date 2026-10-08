@@ -51,8 +51,9 @@ export function Icon({ name, size = 20, className }: { name: IconName | string; 
   )
 }
 
-/** The Dad Coach mark (the gate and a father with his children), from the brand logo. */
+/** The Dad Coach mark: the coach himself, in his gi (from the black-belt art the site, the ads and the training use).
+ *  Owner 2026-10-08: the dashboard's logo is the character, not the gate. */
 export function Logomark({ size = 32 }: { size?: number }) {
-  return <img src="/brand/logo-mark.webp" width={size} height={size} alt="" aria-hidden="true"
+  return <img src="/brand/coach-mark.webp" width={size} height={size} alt="" aria-hidden="true"
               style={{ borderRadius: '50%', display: 'block', flex: '0 0 auto' }} />
 }
