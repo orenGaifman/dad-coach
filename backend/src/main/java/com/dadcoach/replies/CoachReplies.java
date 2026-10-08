@@ -343,7 +343,7 @@ public final class CoachReplies {
     }
 
     public static String followUp(String children) {
-        return "נו, איך היה לכם עם " + children + "?";
+        return "נו, איך היה לכם עם " + children + "? 🙂";
     }
 
     /** D-5: a greeting is answered as a greeting - the session of today is not its tail. */

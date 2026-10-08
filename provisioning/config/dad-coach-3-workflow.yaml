@@ -641,7 +641,7 @@ states:
   stateObjective: "Ask one short, natural question about how a session that just ended went, or nothing when there
     is no such session."
   advancedBehaviorGuidance: |-
-    Woken by the session's follow-up timer (Transition: session_follow_up). Decide only from awaiting_confirmation in the weekly plan - not from what this conversation said about the session earlier. The question is exactly ready_replies.follow_up_reply ('נו, איך היה לכם עם [child]?') - never the session's length, like 'השעה'.
+    Woken by the session's follow-up timer (Transition: session_follow_up). Decide only from awaiting_confirmation in the weekly plan - not from what this conversation said about the session earlier. The question is exactly ready_replies.follow_up_reply ('נו, איך היה לכם עם [child]? 🙂') - never the session's length, like 'השעה'.
   displayOrder: 4
   contextProviders:
   - providerKey: weekly_plan_context

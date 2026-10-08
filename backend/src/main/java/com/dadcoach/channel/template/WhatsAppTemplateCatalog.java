@@ -79,7 +79,7 @@ public final class WhatsAppTemplateCatalog {
                     List.of("מאיה"), List.of("רוצה רעיונות")),
             new Entry(SESSION_FOLLOW_UP_HE, "UTILITY",
                     "אחרי המפגש: איך היה, עם כפתורי היה / לא יצא",
-                    IDENTITY + "נו, איך היה לכם עם {{1}}?",
+                    IDENTITY + "נו, איך היה לכם עם {{1}}? 🙂",
                     List.of("מאיה"), List.of("היה מעולה", "לא יצא")));
 
     public static Optional<Entry> named(String name) {
