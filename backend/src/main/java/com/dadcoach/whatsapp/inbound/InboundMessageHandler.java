@@ -1,6 +1,8 @@
 package com.dadcoach.whatsapp.inbound;
 
 import com.dadcoach.api.error.PlatformUnavailableException;
+import com.dadcoach.api.tools.DashboardTools;
+import com.dadcoach.auth.LoginLinkService;
 import com.dadcoach.channel.WhatsAppEndpoints;
 import com.dadcoach.channel.dto.InboundMessageDto;
 import com.dadcoach.channel.dto.MessagePriority;
@@ -81,6 +83,7 @@ public class InboundMessageHandler {
     private final VoiceNotes voiceNotes;
     private final Clock clock;
     private com.dadcoach.auth.LoginLinkRepository loginLinks;
+    private LoginLinkService loginLinkService;
 
     public InboundMessageHandler(FatherRepository fathers, WhatsAppEndpoints endpoints, DeletedSenders deletedSenders,
                                  WhatsAppDeletionRequests deletionRequests, WorkflowPlatformClient platform,
@@ -210,8 +213,10 @@ public class InboundMessageHandler {
             if (!hebrew.get().equals(reply.strip())) {
                 log.atWarn().setMessage("whatsapp.reply.english_note_removed").addKeyValue("correlationId", in.idempotencyKey()).log();
             }
-            if (cardSaysItAll(father, hebrew.get(), platformStart)) {
+            if (father.isPresent() && isOnlyTheSentLine(hebrew.get())) {
+                Optional<String> instead = theCardInsteadOfTheLine(father.get(), platformStart);
                 outcome = "DASHBOARD_CARD";
+                instead.ifPresent(line -> send(phone, VoiceNoteReplies.withHeard(line, heard)));
                 return;
             }
             send(phone, VoiceNoteReplies.withHeard(hebrew.get(), heard));
@@ -235,12 +240,26 @@ public class InboundMessageHandler {
     }
 
     /**
-     * The button to his page went out in this turn and the coach's reply only says so: the button message is the whole
-     * answer (owner, 2026-10-08). A reply with anything else in it still goes.
+     * The coach's reply only says "I sent you the button". The button message is the whole answer (owner, 2026-10-08),
+     * so the line never goes. When the coach said it without calling dad_dashboard_link (prod simulate: 7 in 10 - he
+     * copies his earlier replies), the button goes out from here, so what he said is true. Returns the line to send
+     * instead of the card, or empty when the card is the answer.
      */
-    private boolean cardSaysItAll(Optional<Father> father, String reply, Instant turnStarted) {
-        return loginLinks != null && father.isPresent() && isOnlyTheSentLine(reply)
-                && loginLinks.sentToFatherSince(father.get().getId(), turnStarted);
+    private Optional<String> theCardInsteadOfTheLine(Father father, Instant turnStarted) {
+        if (loginLinks == null || loginLinkService == null) {
+            return Optional.of(IDENTITY + DashboardTools.ON_SCREEN_REPLY);
+        }
+        if (loginLinks.sentToFatherSince(father.getId(), turnStarted)) {
+            return Optional.empty();
+        }
+        LoginLinkService.SendOutcome sent = loginLinkService.sendTo(father.getPhone());
+        log.atInfo().setMessage("whatsapp.reply.dashboard_card_from_line").addKeyValue("delivery", sent.name()).log();
+        return switch (sent) {
+            case SENT -> Optional.empty();
+            case ALREADY_SENT, RATE_LIMITED -> Optional.of(IDENTITY + DashboardTools.ON_SCREEN_REPLY);
+            case NOT_ALLOWED -> Optional.of(IDENTITY + "הדף שלך לא זמין כרגע.");
+            case FAILED -> Optional.of(IDENTITY + "לא הצלחתי לשלוח את הכפתור כרגע. נסה שוב עוד כמה דקות.");
+        };
     }
 
     /**
@@ -274,6 +293,11 @@ public class InboundMessageHandler {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setLoginLinks(com.dadcoach.auth.LoginLinkRepository loginLinks) {
         this.loginLinks = loginLinks;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setLoginLinkService(LoginLinkService loginLinkService) {
+        this.loginLinkService = loginLinkService;
     }
 
     /**

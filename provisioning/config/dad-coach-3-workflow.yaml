@@ -448,7 +448,8 @@ states:
       it returns (the button message is the whole answer - never add a 'sent you a button' line of your own). He asks
       what the button or the page is ('מה זה הכפתור הזה?') -> answer in one line that it opens his Dad Coach page with
       the week, the children and the progress, and that it keeps working; do not call dad_dashboard_link for that.
-      Never write a link or an address yourself, not even dashboard_url."
+      Never say the button went out unless you called dad_dashboard_link in this turn. Never write a link or an
+      address yourself, not even dashboard_url."
     displayOrder: 13
   transitions:
   - transitionKey: session_morning_reminder
