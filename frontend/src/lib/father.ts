@@ -24,8 +24,9 @@ function useWeekRefresh() {
 export function useConfirmSession() {
   const refresh = useWeekRefresh()
   return useMutation({
+    // B-1: the answer names a belt this confirmation earned (Hebrew, e.g. "חגורה צהובה"), or null
     mutationFn: ({ id, note }: { id: string; note?: string }) =>
-      api(`/father/sessions/${id}/confirm`, { method: 'POST', body: { note: note?.trim() || null } }),
+      api<{ beltEarned: string | null } | undefined>(`/father/sessions/${id}/confirm`, { method: 'POST', body: { note: note?.trim() || null } }),
     onSuccess: refresh,
   })
 }

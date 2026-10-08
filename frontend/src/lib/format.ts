@@ -79,3 +79,9 @@ export function percent(part: number, whole: number | null | undefined): number 
   if (!whole || whole <= 0) return 0
   return Math.max(0, Math.min(100, Math.round((100 * part) / whole)))
 }
+
+/** What the page says after "כן, היה" - and the belt, once, when this session earned it (B-1). */
+export function confirmedLine(length: string, childName: string | null | undefined, beltEarned: string | null): string {
+  const line = `יופי. ${length} עם ${childName ?? 'הילד'} נספרו לשבוע.`
+  return beltEarned ? `${line} עלית ל${beltEarned} 💪` : line
+}

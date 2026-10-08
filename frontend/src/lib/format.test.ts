@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ageLabel, dayLabel, daysLeft, displayPhone, duration, percent, weekRange } from './format'
+import { ageLabel, confirmedLine, dayLabel, daysLeft, displayPhone, duration, percent, weekRange } from './format'
 import { beltImage, beltName, toNextBelt } from './belts'
 import { bookingPrompt, coachLink, DASHBOARD_WORD } from './whatsapp'
 import { homeFor, safeNext } from './session'
@@ -81,5 +81,12 @@ describe('homeFor (D-028)', () => {
 describe('the dashboard word (D-027)', () => {
   it('is what he writes to the coach for the button', () => {
     expect(coachLink('+972501234567', DASHBOARD_WORD)).toBe('https://wa.me/972501234567?text=%D7%93%D7%A9%D7%91%D7%95%D7%A8%D7%93')
+  })
+})
+
+describe('confirmedLine', () => {
+  it('names the belt once, only when this session earned it (B-1)', () => {
+    expect(confirmedLine('שעה', 'נועה', null)).toBe('יופי. שעה עם נועה נספרו לשבוע.')
+    expect(confirmedLine('שעה', 'נועה', 'חגורה צהובה')).toBe('יופי. שעה עם נועה נספרו לשבוע. עלית לחגורה צהובה 💪')
   })
 })

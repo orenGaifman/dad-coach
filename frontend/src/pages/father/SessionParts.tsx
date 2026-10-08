@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { errorLine } from '../../lib/errors'
 import { useCancelSession, useConfirmSession } from '../../lib/father'
+import { confirmedLine } from '../../lib/format'
 import { dayLabel, duration } from '../../lib/format'
 import type { Phase, Session } from '../../lib/types'
 import { useScreenOwner } from '../../lib/viewAs'
@@ -72,8 +73,8 @@ function ConfirmDrawer({ session, onClose }: { session: Session; onClose: () => 
   const [note, setNote] = useState('')
   async function save() {
     try {
-      await confirm.mutateAsync({ id: session.id, note })
-      toast(`יופי. ${duration(session.durationMinutes)} עם ${session.childName ?? 'הילד'} נספרו לשבוע.`)
+      const result = await confirm.mutateAsync({ id: session.id, note })
+      toast(confirmedLine(duration(session.durationMinutes), session.childName, result?.beltEarned ?? null))
       onClose()
     } catch {
       // shown in the drawer
