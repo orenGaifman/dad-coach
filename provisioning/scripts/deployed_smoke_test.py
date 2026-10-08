@@ -196,7 +196,10 @@ def main():
             "targetStateKey": "SESSION_REMINDER_1H", "responseContent": "בדיקה: עוד שעה זמן איכות"}
     s1, r1 = be.call("POST", "/api/integration/workflow/scheduled-response", body, cb)
     s2, r2 = be.call("POST", "/api/integration/workflow/scheduled-response", body, cb)
-    check("callback handled", s1 == 200 and r1.get("status") in ("DELIVERED", "FAILED"), f"{s1} {r1}")
+    # the smoke's session was completed above: a 1-hour reminder about it is not sent (D-036, timer messages only about a
+    # session that is still there)
+    no_session = r1.get("status") == "SKIPPED" and "No valid session" in (r1.get("detail") or "")
+    check("callback handled", s1 == 200 and (r1.get("status") in ("DELIVERED", "FAILED") or no_session), f"{s1} {r1}")
     check("same trigger replays", s2 == 200 and r2.get("status") == r1.get("status"))
 
     print("6. the dashboard")
