@@ -158,6 +158,22 @@ public class WeeklyGoalService {
         }
     }
 
+    /** Takes back what {@link #recordCompletedQualityTime} added, for a session that turned out not to happen. */
+    @Transactional
+    public void undoCompletedQualityTime(Long fatherId, Instant sessionStart, int minutes) {
+        Father father = fatherRepository.findById(fatherId).orElse(null);
+        if (father == null) {
+            return;
+        }
+        LocalDate sessionWeek = weekStartFor(father, sessionStart != null ? sessionStart : clock.instant());
+        weeklyGoalRepository.findByFatherIdAndWeekStartDate(fatherId, sessionWeek)
+            .filter(goal -> goal.getStatus() == WeeklyGoalStatus.ACTIVE)
+            .ifPresent(goal -> {
+                goal.removeCompletedMinutes(minutes);
+                weeklyGoalRepository.save(goal);
+            });
+    }
+
     /**
      * Increments the scheduled count when a quality time is scheduled.
      */

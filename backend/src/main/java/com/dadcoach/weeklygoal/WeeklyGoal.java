@@ -153,6 +153,12 @@ public class WeeklyGoal {
         this.completedCount++;
     }
 
+    /** Takes back a completion marked by mistake ("בעצם זה לא קרה"). */
+    public void removeCompletedMinutes(int minutes) {
+        this.actualMinutes = Math.max(0, this.actualMinutes - minutes);
+        this.completedCount = Math.max(0, this.completedCount - 1);
+    }
+
     /**
      * Increments scheduled count when a quality time is scheduled.
      */

@@ -6,6 +6,7 @@ import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.qualitytime.QualityTime;
 import com.dadcoach.qualitytime.QualityTimeService;
+import com.dadcoach.qualitytime.QualityTimeStatus;
 import com.dadcoach.qualitytime.dto.CompleteQualityTimeResult;
 import com.dadcoach.qualitytime.dto.ScheduleQualityTimeResult;
 import com.dadcoach.systemstate.AvailableSlot;
@@ -182,11 +183,18 @@ public final class SessionTools {
         public Map<String, Object> handle(ToolActor actor, ToolParams p) {
             Father father = actor.requireFather();
             QualityTime existing = views.ownSession(father, p.requiredStr("quality_time_id"));
-            String status = existing.hasEnded() ? "MISSED" : "CANCELLED"; // the service records a past session as missed
+            boolean undoesCompletion = existing.getStatus() == QualityTimeStatus.COMPLETED;
+            // the service records a past session as missed - and a completion taken back ("בעצם זה לא קרה") too
+            String status = undoesCompletion || existing.hasEnded() ? "MISSED" : "CANCELLED";
             sessions.cancelQualityTime(existing.getId());
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("quality_time_id", existing.getId().toString());
             data.put("status", status);
+            if (undoesCompletion) {
+                data.put("completion_undone", true);
+                data.put("streak", existing.getFather().getQualityTimeStreak());
+                data.put("belt", existing.getFather().getCurrentBelt().name());
+            }
             views.putWeekCoverage(data, father);
             return data;
         }
