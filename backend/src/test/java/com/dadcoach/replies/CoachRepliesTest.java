@@ -106,7 +106,7 @@ class CoachRepliesTest {
         assertThat(CoachReplies.morning(List.of("17:00", "19:00"), "איתמר ונעם"))
                 .isEqualTo("*היום ב-17:00 וב-19:00* זה הזמן שלך ושל איתמר ונעם 🙂");
         assertThat(CoachReplies.hourBefore("איתמר")).containsExactly("עוד שעה הזמן שלך ושל איתמר 🙂", "יש כבר רעיון מה תעשו?");
-        assertThat(CoachReplies.followUp("מטר ונעם")).isEqualTo("נו, איך היה לכם עם מטר ונעם?");
+        assertThat(CoachReplies.followUp("מטר ונעם")).isEqualTo("נו, איך היה לכם עם מטר ונעם? 🙂");
         assertThat(CoachReplies.greeting("אורן")).isEqualTo("היי אורן 🙂 מה נשמע?");
         assertThat(CoachReplies.goalSet(2)).isEqualTo("סגרנו: השבוע שעתיים 💪");
         assertThat(CoachReplies.nextWeekGoal(3)).isEqualTo("את השבוע הבא נקבע ביום ראשון, ונתחיל מ-3 שעות כמו שרצית.");
