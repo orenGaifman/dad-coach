@@ -55,7 +55,7 @@ public final class ClaimGuard {
     private static final Pattern RECORDED_BARE = Pattern.compile("(?:רשום|שמור)(?: לי)? אצלי");
     private static final Pattern GOAL = Pattern.compile("^(?:" + LEAD.substring(1) + ")?סגרנו|קבענו יעד|היעד נקבע|היעד שלך נקבע|"
             + "קבעתי יעד|קבעתי את היעד|היעד שלך עכשיו|היעד מעכשיו");
-    private static final Pattern REMIND = Pattern.compile("אזכיר לך|אזכיר אותך|אשלח לך תזכורת|תקבל תזכורת|תקבל ממני תזכורת");
+    static final Pattern REMIND = Pattern.compile("אזכיר לך|אזכיר אותך|אשלח לך תזכורת|תקבל תזכורת|תקבל ממני תזכורת");
     private static final Pattern BUTTON = Pattern.compile("שלחתי לך (?:את )?(?:ה)?(?:כפתור|קישור)|הכפתור בדרך|שולח לך (?:את )?(?:ה)?כפתור|"
             + "הנה הכפתור|זה פתוח אצלך");
     /** A line about times, reminders or the week - dropped when the ready booking confirmation replaces the model's. */

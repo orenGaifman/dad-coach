@@ -133,7 +133,16 @@ public class ContextProviderController {
     private Map<String, Object> weekly(Optional<Father> found) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("father_found", found.isPresent());
-        found.ifPresent(f -> data.putAll(weeklyPlan.build(f)));
+        // D-037: the reminders he is told about are the ones the platform holds - one read per load (a plain read: the
+        // turn that asks for this context holds its conversation's lock, and a read does not wait for it)
+        found.ifPresent(f -> data.putAll(weeklyPlan.build(f, sessionTimers == null ? null : sessionTimers.armed(f))));
         return data;
+    }
+
+    private com.dadcoach.integration.platform.SessionTimers sessionTimers;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setSessionTimers(com.dadcoach.integration.platform.SessionTimers sessionTimers) {
+        this.sessionTimers = sessionTimers;
     }
 }

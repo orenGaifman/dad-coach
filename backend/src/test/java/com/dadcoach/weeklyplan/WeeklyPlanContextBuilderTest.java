@@ -301,6 +301,30 @@ class WeeklyPlanContextBuilderTest {
     }
 
     @Test
+    @DisplayName("D-037: with the platform's timers, the reminders are what it holds - its times, none when none, unknown when it cannot say")
+    void remindersFromThePlatform() {
+        goal(WEEK, 2, 0, WeeklyGoalStatus.ACTIVE);
+        QualityTime today = session("2026-09-29T14:00:00Z", 30);   // today 17:00-17:30
+        session("2026-10-02T06:00:00Z", 90);                        // Friday 09:00: nothing armed
+        ArmedTimers armed = ArmedTimers.of(java.util.Map.of(today.getId().toString(), java.util.Map.of(
+                SessionTimerPlanner.REMINDER_1H, java.time.Instant.parse("2026-09-29T13:30:00Z"))));
+
+        Map<String, Object> data = builder.build(father, armed);
+        assertThat(map(data, "upcoming_reminders")).containsEntry("2026-09-29 17:00", "תזכורת שעה לפני ב-16:30")
+                .containsEntry("2026-10-02 09:00", "אין תזכורות נוספות");
+        assertThat(map(data, "ready_replies").get("reminder_reply"))
+                .isEqualTo(List.of("אזכיר לך *היום ב-16:30*, שעה לפני המפגש עם Noa."));
+
+        Map<String, Object> unknown = builder.build(father, ArmedTimers.UNKNOWN);
+        assertThat(map(unknown, "upcoming_reminders")).containsEntry("2026-09-29 17:00", "לא ניתן לבדוק כרגע");
+        assertThat(map(unknown, "ready_replies").get("reminder_reply"))
+                .isEqualTo(List.of("כרגע אני לא מצליח לבדוק את התזכורות שלך.", "אפשר לשאול שוב עוד כמה דקות."));
+        // the timer messages and the rest of the plan do not depend on it
+        assertThat(map(unknown, "ready_replies").get("hour_reminder_reply"))
+                .isEqualTo(map(builder.build(father), "ready_replies").get("hour_reminder_reply"));
+    }
+
+    @Test
     @DisplayName("D-036: what was said today, belts in Hebrew, and next week's number he asked for")
     void mentionsBeltsAndNextWeek() {
         QualityTime today = session("2026-09-29T14:00:00Z", 30);

@@ -177,10 +177,18 @@ class TruthfulRepliesTest extends AbstractIntegrationTest {
                 + "\n\nרוצה שנמצא עוד זמן השבוע?");
         assertThat(json.readTree(fake.recordedOutbound().get(0).body()).path("content").asText()).isEqualTo(lastSent());
 
+        // D-037: booked outside any turn, nothing armed on the platform - the answer never invents the policy's times
+        says("מתי התזכורת?");
+        assertThat(lastSent()).isEqualTo(IDENTITY + "למפגש עם איתמר לא קבועה כרגע תזכורת.");
+
+        // the timers the platform holds (here: armed by the model's booking turn) are the answer
+        String session = kept.qualityTimeId().toString();
+        fake.armAsModel("whatsapp:" + PHONE, "session_reminder_1h", friday9.minus(Duration.ofHours(1)), session);
+        fake.armAsModel("whatsapp:" + PHONE, "session_follow_up", friday9.plus(Duration.ofMinutes(120)), session);
         says("מתי התזכורת?");
         assertThat(lastSent()).isEqualTo(IDENTITY + "אזכיר לך *ביום שישי 6.11 ב-08:00*, שעה לפני המפגש עם איתמר.\n"
                 + "חצי שעה אחרי שתסיימו, אשאל איך היה 🙂");
-        assertThat(kept.qualityTimeId()).isNotNull();
+        assertThat(fake.scheduledTransitionCalls("POST")).isEmpty(); // a question reads, it never arms
     }
 
     @Test

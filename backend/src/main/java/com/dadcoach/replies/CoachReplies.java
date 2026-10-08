@@ -267,6 +267,41 @@ public final class CoachReplies {
         return lines;
     }
 
+    /**
+     * "מתי התזכורת?" (D-037): when he will really be reminded - from the timers the platform HOLDS for the session, not
+     * the policy. A session whose reminders were not armed is told so; one starting within the hour has none due.
+     *
+     * @param morning    the pending morning reminder in his time, or null
+     * @param hourBefore the pending one-hour reminder in his time, or null
+     * @param followUp   a follow-up is pending
+     * @param startsSoon the session starts within the hour (no reminder is due any more)
+     */
+    public static List<String> armedReminders(String children, ZonedDateTime morning, ZonedDateTime hourBefore,
+                                              boolean followUp, LocalDate today, boolean startsSoon) {
+        if (hourBefore != null || startsSoon) {
+            return reminders(children, morning, hourBefore, followUp, today);
+        }
+        List<String> lines = new ArrayList<>();
+        String session = "המפגש" + with(children);
+        if (morning != null) {
+            lines.add("אזכיר לך *" + HebrewWhen.at(morning, today) + "*, ביום של " + session + ".");
+        } else {
+            lines.add("למפגש" + with(children) + " לא קבועה כרגע תזכורת.");
+        }
+        if (followUp) {
+            lines.add("חצי שעה אחרי שתסיימו, אשאל איך היה 🙂");
+        }
+        return lines;
+    }
+
+    /** The platform could not be asked: no time is stated (D-037). */
+    public static List<String> remindersUnknown() {
+        return List.of("כרגע אני לא מצליח לבדוק את התזכורות שלך.", "אפשר לשאול שוב עוד כמה דקות.");
+    }
+
+    /** The weekly plan's line for a session whose timers could not be read. */
+    public static final String REMINDERS_UNKNOWN_SHORT = "לא ניתן לבדוק כרגע";
+
     public static List<String> noUpcomingSession() {
         return List.of("אין כרגע מפגש מתוכנן, אז גם אין תזכורת.");
     }

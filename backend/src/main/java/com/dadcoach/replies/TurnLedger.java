@@ -41,7 +41,20 @@ public class TurnLedger {
     public record Changes(List<QualityTime> booked, List<QualityTime> joined, int cancelled, int completed,
                           boolean childAdded, boolean goalCreated, boolean nextWeekGoalSaved, boolean goalExists,
                           boolean upcomingSession, List<String> bookingReply, List<String> upcomingStarts,
-                          boolean profileSaved, CoachReplies.Week week) {
+                          boolean profileSaved, CoachReplies.Week week, List<UUID> closed) {
+
+        public Changes(List<QualityTime> booked, List<QualityTime> joined, int cancelled, int completed, boolean childAdded,
+                       boolean goalCreated, boolean nextWeekGoalSaved, boolean goalExists, boolean upcomingSession,
+                       List<String> bookingReply, List<String> upcomingStarts, boolean profileSaved, CoachReplies.Week week) {
+            this(booked, joined, cancelled, completed, childAdded, goalCreated, nextWeekGoalSaved, goalExists,
+                    upcomingSession, bookingReply, upcomingStarts, profileSaved, week, List.of());
+        }
+
+        /** D-037: the same changes with the booking confirmation rebuilt from the timers the platform confirmed. */
+        public Changes withBookingReply(List<String> reply) {
+            return new Changes(booked, joined, cancelled, completed, childAdded, goalCreated, nextWeekGoalSaved, goalExists,
+                    upcomingSession, reply, upcomingStarts, profileSaved, week, closed);
+        }
 
         public Changes(List<QualityTime> booked, List<QualityTime> joined, int cancelled, int completed, boolean childAdded,
                        boolean goalCreated, boolean nextWeekGoalSaved, boolean goalExists, boolean upcomingSession,
@@ -113,6 +126,7 @@ public class TurnLedger {
         List<QualityTime> joined = new ArrayList<>();
         int cancelled = 0;
         int completed = 0;
+        List<UUID> closed = new ArrayList<>();
         boolean upcoming = false;
         List<String> upcomingStarts = new ArrayList<>();
         var now = clock.instant();
@@ -140,6 +154,9 @@ public class TurnLedger {
                 } else if (status == QualityTimeStatus.COMPLETED) {
                     completed++;
                 }
+                if (was.status() == QualityTimeStatus.SCHEDULED && status != QualityTimeStatus.SCHEDULED) {
+                    closed.add(qt.getId()); // D-037: its timers go (a move closes the old session)
+                }
             } else if (qt.getChildIds().size() > was.children()) {
                 joined.add(qt);
             }
@@ -156,7 +173,7 @@ public class TurnLedger {
         return new Changes(booked, joined, cancelled, completed, children.countActiveByFatherId(f.getId()) > before.children(),
                 goalCreated, nextSaved, goal.isPresent(), upcoming, bookingReply, upcomingStarts,
                 before.fatherId() == null || !java.util.Objects.equals(before.profile(), profile(f)),
-                weekOf(f));
+                weekOf(f), closed);
     }
 
     /** The same lines schedule_quality_time / reschedule_quality_time returned as their reply. */

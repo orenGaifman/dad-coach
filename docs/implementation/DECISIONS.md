@@ -368,3 +368,41 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 - **Tests:** CoachRepliesTest, ClaimGuardTest, ReadyQuestionsTest, ReplyStyleGuardTest, TruthfulRepliesTest (new);
   ToolsTest, JointSessionsTest, WeeklyPlanContextBuilderTest, SessionButtonsTest, FatherAreaTest,
   ScheduledResponseCallbackTest, ContextProvidersTest updated. Lab transcripts: qa-lab/transcripts/r2-*.md.
+
+## D-037 — A reminder is promised only when the platform holds it (owner, 2026-10-08)
+
+- **Why:** the booking confirmation ("אזכיר לך שעה לפני, ואשאל אחר כך איך היה.") and the answer to "מתי התזכורת?" were
+  built from the timers Dad Coach PLANNED (`SessionTimerPlanner`). Whether the model then armed them
+  (schedule_state_transition) was known only to the platform; a turn that skipped a call, or a platform that refused one,
+  still promised the reminder. Owner: the bot never claims reminders were scheduled unless the platform confirms it.
+- **Platform API** (platform TASKS.md §32, V120): `/api/v1/worker/scheduled-transitions` under the worker key - GET the
+  conversation's PENDING triggers, POST arms one (same validation and same-reference dedupe as the model's tool; source
+  `PRODUCT`), DELETE cancels by reference. `WorkflowPlatformClient.pendingTimers / armTimer / cancelTimers` (outside the
+  breaker, 3 s / 8 s timeouts; any failure, including 404 from an older platform, means "cannot confirm").
+- **After every turn that booked, moved or joined a session** (`InboundMessageHandler`, before the reply is sent - the
+  turn has returned, so the platform's conversation lock is released; never from inside a tool call): `SessionTimers`
+  reads the father's pending timers once, arms every planned timer that is missing or at another time, and returns what
+  the platform confirmed. The ready confirmation's timers line is built from the confirmed timers only (`TimerClaims`):
+  all - as before; some - only those ("אזכיר לך שעה לפני."); none (refused, down) - "את התזכורת למפגש הזה לא הצלחתי
+  לקבוע הפעם."; several sessions not all confirmed - "חלק מהתזכורות לא הצלחתי לקבוע הפעם." / "את התזכורות למפגשים
+  האלה לא הצלחתי לקבוע הפעם.". Every other reminder or follow-up promise in that reply goes. If the claim check itself
+  fails, the reply goes without any reminder promise. Logs: `session.timers.confirmed` (planned, confirmed, armedNow,
+  result), `session.timers.arm_failed`, `whatsapp.reply.timer_claims_corrected`.
+- **Sessions closed in the turn** (cancelled, missed, done, or the old session of a move): their pending timers are
+  cancelled on the platform after the turn (best effort; the timer turns already stand down for them).
+- **"מתי התזכורת?" and the weekly plan:** `ready_replies.reminder_reply` and `upcoming_reminders` come from the timers
+  the platform holds (`WeeklyPlanContextBuilder.build(father, ArmedTimers)`, one GET per context load / per question; a
+  plain read, which does not wait on the turn's lock): the real times; "למפגש עם X לא קבועה כרגע תזכורת." when none is
+  armed; "כרגע אני לא מצליח לבדוק את התזכורות שלך." / "לא ניתן לבדוק כרגע" when the platform cannot be asked. The
+  question reads; it never arms.
+- **Unchanged:** the model still arms the timers in the turn (the prompt and dad-coach-3 are not touched - the platform's
+  dedupe makes the second arming a no-op, and an older platform keeps working); the tools' `reply` and `timers`; every
+  WhatsApp template and the three timer messages; the page (it books nothing - booking stays in WhatsApp - and page
+  cancels keep D-B04).
+- **Tests:** TimerClaimsTest (all / some / none / none due / several sessions / align / the armed reminder answers),
+  ArmedTimersTest (through the webhook with the fake platform's timers: armed after the turn, already armed, armed at a
+  wrong time and moved, refused 409, partial 422, down 503 and older 404, the model's own promise replaced, a move moves
+  the timers, "מתי התזכורת?" real time and platform down, weekly_plan_context), WeeklyPlanContextBuilderTest
+  (remindersFromThePlatform), TruthfulRepliesTest (the reminder answer reads the platform). FakeServers holds the
+  platform's timers in memory. Full suite 333/333. Lab: qa-lab/transcripts/r3-*.md.
+- **Deploy order:** the platform first (V120 + the API), then Dad Coach. No re-provisioning.

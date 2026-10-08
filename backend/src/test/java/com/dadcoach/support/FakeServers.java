@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -16,7 +17,7 @@ import java.util.function.Function;
 
 /**
  * One JDK HttpServer standing in for everything Dad Coach calls (no @MockBean, playbook §50): the AI Workflow
- * Platform (turns, outbound recording, tenancy person lifecycle), Meta's Graph API (sends, voice-note media) and
+ * Platform (turns, outbound recording, tenancy person lifecycle, session timers - D-037), Meta's Graph API (sends, voice-note media) and
  * ElevenLabs speech to text (D-029) and Google (token endpoint and Calendar API under {@code /google/}). Every
  * request is recorded; the platform's turn answer, the media, the transcript and Google are programmable per test.
  */
@@ -43,6 +44,18 @@ public final class FakeServers {
         }
     }
 
+    /**
+     * A PENDING trigger of the fake platform's scheduled transitions (D-037): who, which timer, when, for which session,
+     * and who armed it ({@code PRODUCT} through the worker API, {@code AI_TOOL} when a test plays the model arming it).
+     */
+    public record Timer(String triggerId, String userId, String transitionKey, Instant scheduledAt, String referenceType,
+                        String referenceId, String source) {
+    }
+
+    /** The Dad Coach 3 transition keys of ACTIVE_COACHING: the fake platform arms these and refuses others (409). */
+    static final java.util.Set<String> TIMER_KEYS = java.util.Set.of("session_morning_reminder", "session_reminder_1h",
+            "session_follow_up");
+
     public static final FakeServers INSTANCE = new FakeServers();
 
     private final HttpServer server;
@@ -55,6 +68,11 @@ public final class FakeServers {
     private final AtomicReference<Function<Call, Reply>> meta = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> gate = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> google = new AtomicReference<>();
+    /** null: the in-memory platform below answers {@code /api/v1/worker/scheduled-transitions}. */
+    private final AtomicReference<Function<Call, Reply>> scheduledTransitions = new AtomicReference<>();
+    private final List<Timer> timers = new CopyOnWriteArrayList<>();
+    private final AtomicInteger triggerIds = new AtomicInteger();
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     private FakeServers() {
         try {
@@ -74,6 +92,8 @@ public final class FakeServers {
 
     public void reset() {
         calls.clear();
+        timers.clear();
+        scheduledTransitions.set(null);
         meta.set(c -> Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"wamid.out." + sent.incrementAndGet() + "\"}]}"));
         turn.set(c -> Reply.json(turnReply("שלום! מה שלומך?", "GENERATED")));
         tenancy.set(c -> c.method().equals("DELETE")
@@ -105,6 +125,111 @@ public final class FakeServers {
     /** The shared number's gate ({@code POST /api/v1/worker/whatsapp/outbound-gate}; default: send). */
     public void onGate(Function<Call, Reply> answer) {
         gate.set(answer);
+    }
+
+    // ---- the platform's scheduled transitions (D-037) ---------------------------------------------------------------
+
+    /** Overrides the in-memory platform for {@code /api/v1/worker/scheduled-transitions} (e.g. down, or refusing). */
+    public void onScheduledTransitions(Function<Call, Reply> answer) {
+        scheduledTransitions.set(answer);
+    }
+
+    /** The timers the fake platform holds as PENDING. */
+    public List<Timer> pendingTimers() {
+        return List.copyOf(timers);
+    }
+
+    /** Plays the model arming a timer in its turn (schedule_state_transition): same dedupe as the platform. */
+    public Timer armAsModel(String userId, String transitionKey, Instant at, String referenceId) {
+        return arm(userId, transitionKey, at, "quality_time", referenceId, "AI_TOOL");
+    }
+
+    public List<Call> scheduledTransitionCalls() {
+        return calls("/api/v1/worker/scheduled-transitions");
+    }
+
+    public List<Call> scheduledTransitionCalls(String method) {
+        return scheduledTransitionCalls().stream().filter(c -> c.method().equals(method)).toList();
+    }
+
+    private Timer arm(String userId, String key, Instant at, String refType, String refId, String source) {
+        for (Timer t : timers) {
+            if (t.userId().equals(userId) && t.transitionKey().equals(key) && refType.equals(t.referenceType())
+                    && refId.equals(t.referenceId())) {
+                Timer moved = new Timer(t.triggerId(), userId, key, at, refType, refId, t.source());
+                timers.set(timers.indexOf(t), moved);
+                return moved;
+            }
+        }
+        Timer created = new Timer("00000000-0000-0000-0000-" + String.format("%012d", triggerIds.incrementAndGet()), userId,
+                key, at, refType, refId, source);
+        timers.add(created);
+        return created;
+    }
+
+    /** The platform's worker API for timers, in memory: GET pending, POST arm (409 off-state keys), DELETE by reference. */
+    private Reply platformTimers(Call call, Map<String, String> query) {
+        try {
+            switch (call.method()) {
+                case "GET" -> {
+                    List<Map<String, Object>> pending = new java.util.ArrayList<>();
+                    timers.stream().filter(t -> t.userId().equals(query.get("userId")))
+                            .sorted(java.util.Comparator.comparing(Timer::scheduledAt)).forEach(t -> {
+                                Map<String, Object> m = new java.util.LinkedHashMap<>();
+                                m.put("triggerId", t.triggerId());
+                                m.put("transitionKey", t.transitionKey());
+                                m.put("targetStateKey", t.transitionKey().toUpperCase());
+                                m.put("scheduledAt", t.scheduledAt().toString());
+                                m.put("referenceType", t.referenceType());
+                                m.put("referenceId", t.referenceId());
+                                m.put("source", t.source());
+                                pending.add(m);
+                            });
+                    return Reply.json(JSON.writeValueAsString(Map.of("instanceId", "11111111-1111-1111-1111-111111111111",
+                            "currentStateKey", "ACTIVE_COACHING", "pending", pending)));
+                }
+                case "POST" -> {
+                    var body = JSON.readTree(call.body());
+                    String key = body.path("transitionKey").asText();
+                    if (!TIMER_KEYS.contains(key)) {
+                        return new Reply(409, "{\"error\":\"TRANSITION_NOT_ON_CURRENT_STATE\",\"currentStateKey\":\"ACTIVE_COACHING\"}");
+                    }
+                    Timer t = arm(body.path("userId").asText(), key, Instant.parse(body.path("scheduledAt").asText()),
+                            body.path("referenceType").asText(), body.path("referenceId").asText(), "PRODUCT");
+                    return Reply.json(JSON.writeValueAsString(Map.of("triggerId", t.triggerId(), "transitionKey", key,
+                            "targetStateKey", key.toUpperCase(), "scheduledAt", t.scheduledAt().toString(),
+                            "referenceType", t.referenceType(), "referenceId", t.referenceId())));
+                }
+                case "DELETE" -> {
+                    List<Timer> gone = timers.stream().filter(t -> t.userId().equals(query.get("userId"))
+                            && t.referenceId().equals(query.get("referenceId"))
+                            && (query.get("transitionKey") == null || t.transitionKey().equals(query.get("transitionKey")))).toList();
+                    timers.removeAll(gone);
+                    return Reply.json("{\"cancelled\":" + gone.size() + ",\"triggerIds\":[]}");
+                }
+                default -> {
+                    return new Reply(405, "{}");
+                }
+            }
+        } catch (IOException e) {
+            return new Reply(400, "{}");
+        }
+    }
+
+    private static Map<String, String> query(HttpExchange ex) {
+        Map<String, String> out = new java.util.HashMap<>();
+        String raw = ex.getRequestURI().getRawQuery();
+        if (raw == null) {
+            return out;
+        }
+        for (String pair : raw.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq > 0) {
+                out.put(java.net.URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8),
+                        java.net.URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8));
+            }
+        }
+        return out;
     }
 
     public static String turnReply(String content, String outcome) {
@@ -176,6 +301,9 @@ public final class FakeServers {
             reply = turn.get().apply(call);
         } else if (path.equals("/api/v1/worker/whatsapp/outbound-gate")) {
             reply = gate.get().apply(call);
+        } else if (path.equals("/api/v1/worker/scheduled-transitions")) {
+            Function<Call, Reply> override = scheduledTransitions.get();
+            reply = override != null ? override.apply(call) : platformTimers(call, query(ex));
         } else if (path.equals("/api/v1/worker/messages/outbound")) {
             reply = Reply.json("{\"recorded\":true}");
         } else if (path.startsWith("/api/v1/tenancy/")) {

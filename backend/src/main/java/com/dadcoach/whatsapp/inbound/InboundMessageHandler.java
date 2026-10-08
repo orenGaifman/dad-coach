@@ -14,6 +14,7 @@ import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.integration.platform.FatherTimezones;
 import com.dadcoach.integration.platform.SentMessageRecorder;
+import com.dadcoach.integration.platform.SessionTimers;
 import com.dadcoach.integration.platform.WorkerExecuteRequest;
 import com.dadcoach.integration.platform.WorkerExecuteResponse;
 import com.dadcoach.integration.platform.WorkflowPlatformClient;
@@ -25,6 +26,7 @@ import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.replies.ClaimGuard;
 import com.dadcoach.replies.CoachReplies;
 import com.dadcoach.replies.ReadyQuestions;
+import com.dadcoach.replies.TimerClaims;
 import com.dadcoach.replies.CoachMentions;
 import com.dadcoach.replies.TurnLedger;
 import com.dadcoach.whatsapp.ReplyLanguageGuard;
@@ -96,6 +98,7 @@ public class InboundMessageHandler {
     private com.dadcoach.auth.LoginLinkRepository loginLinks;
     private LoginLinkService loginLinkService;
     private com.dadcoach.weeklyplan.WeeklyPlanContextBuilder weeklyPlan;
+    private SessionTimers sessionTimers;
 
     /** B-4: the reply was not Hebrew - the coach writes it again once, told why (as Tair's HebrewOnly). */
     static final String HEBREW_RETRY_NOTE = "[הודעת מערכת, לא מהאבא: התשובה הקודמת שלך לא נשלחה כי לא הייתה בעברית. "
@@ -291,7 +294,10 @@ public class InboundMessageHandler {
             return false;
         }
         try {
-            Map<String, Object> plan = weeklyPlan.build(father);
+            // D-037: "מתי התזכורת?" is answered from the timers the platform holds (one read), never from the policy
+            com.dadcoach.weeklyplan.ArmedTimers armed = kind.get() == ReadyQuestions.Kind.REMINDER && sessionTimers != null
+                    ? sessionTimers.armed(father) : null;
+            Map<String, Object> plan = weeklyPlan.build(father, armed);
             if (!(plan.get("ready_replies") instanceof Map<?, ?> ready) || !(ready.get(kind.get().key) instanceof List<?> lines)
                     || children.findByFatherIdAndStatus(father.getId(), "ACTIVE").isEmpty()) {
                 return false;
@@ -337,6 +343,13 @@ public class InboundMessageHandler {
             String identity = reply.startsWith(IDENTITY) ? IDENTITY : "";
             String body = reply.substring(identity.length());
             TurnLedger.Changes changes = ledger.after(before, father);
+            // D-037: the turn is over (the platform released the conversation) - its sessions' timers are confirmed with
+            // the platform now, missing ones armed; the reply promises only what the platform holds
+            TimerCheck timers = confirmTimers(father, changes);
+            if (timers.single() != null) {
+                changes = changes.withBookingReply(TimerClaims.confirmation(changes.bookingReply(),
+                        timers.single().planned(), timers.single().confirmed()));
+            }
             boolean buttonSent = loginLinks != null && father.isPresent()
                     && loginLinks.sentToFatherSince(father.get().getId(), turnStarted);
             List<String> names = father.map(f -> children.findByFatherIdAndStatus(f.getId(), "ACTIVE").stream()
@@ -353,14 +366,65 @@ public class InboundMessageHandler {
             } else if (result.needsButton()) {
                 checked = ClaimGuard.withoutButtonClaims(checked) + "\n" + BUTTON_FAILED_LINE;
             }
+            if (timers.applies()) {
+                String aligned = TimerClaims.align(checked, timers.expectedLine(),
+                        changes.bookingReply() == null || changes.bookingReply().isEmpty() ? null : changes.bookingReply().get(0));
+                if (!ClaimGuard.words(aligned).equals(ClaimGuard.words(checked))) {
+                    log.atWarn().setMessage("whatsapp.reply.timer_claims_corrected").addKeyValue("correlationId", correlationId)
+                            .addKeyValue("allConfirmed", timers.single() != null && timers.single().complete()).log();
+                }
+                checked = aligned;
+            }
             if (result.changed()) {
                 log.atWarn().setMessage("whatsapp.reply.claim_corrected").addKeyValue("correlationId", correlationId).log();
             }
             return identity + checked.strip();
         } catch (RuntimeException e) {
             log.atWarn().setMessage("whatsapp.reply.claim_check_failed").addKeyValue("error", e.getClass().getSimpleName()).log();
-            return reply;
+            // D-037: unchecked, it may not promise a reminder the platform never confirmed
+            String identity = reply.startsWith(IDENTITY) ? IDENTITY : "";
+            return identity + TimerClaims.withoutTimerClaims(reply.substring(identity.length()));
         }
+    }
+
+    /**
+     * D-037: what this turn's booked, moved or joined sessions really got. {@code single} is the confirmation of the one
+     * session of a ready booking reply; {@code expectedLine} the only reminder sentence the reply may carry (null: none,
+     * or - with several sessions all confirmed - the reply's own words stay); {@code applies} false when no session was
+     * booked or moved.
+     */
+    record TimerCheck(boolean applies, SessionTimers.Confirmation single, String expectedLine) {
+        static final TimerCheck NONE = new TimerCheck(false, null, null);
+    }
+
+    private TimerCheck confirmTimers(Optional<Father> father, TurnLedger.Changes changes) {
+        if (father.isEmpty() || sessionTimers == null) {
+            return TimerCheck.NONE;
+        }
+        for (java.util.UUID closed : changes.closed()) {
+            sessionTimers.cancel(father.get(), closed);
+        }
+        if (!changes.sessionBookedOrMoved()) {
+            return TimerCheck.NONE;
+        }
+        List<com.dadcoach.qualitytime.QualityTime> sessions = new java.util.ArrayList<>(changes.booked());
+        sessions.addAll(changes.joined());
+        List<SessionTimers.Confirmation> confirmations = sessionTimers.ensure(father.get(), sessions);
+        if (changes.bookingReply() != null && confirmations.size() == 1) {
+            SessionTimers.Confirmation one = confirmations.get(0);
+            return new TimerCheck(true, one, TimerClaims.line(one.planned(), one.confirmed()));
+        }
+        if (confirmations.isEmpty()) {
+            return TimerCheck.NONE;
+        }
+        String honest = TimerClaims.lineForMany(confirmations);
+        // all confirmed: the reply's own reminder words are true and stay
+        return honest == null ? TimerCheck.NONE : new TimerCheck(true, null, honest);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSessionTimers(SessionTimers sessionTimers) {
+        this.sessionTimers = sessionTimers;
     }
 
 

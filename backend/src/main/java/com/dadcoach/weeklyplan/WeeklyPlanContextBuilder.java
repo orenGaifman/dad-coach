@@ -85,8 +85,18 @@ public class WeeklyPlanContextBuilder {
         this.clock = clock;
     }
 
+    /** The plan with the reminders the booking policy plans (for coverage and the tools' numbers). */
     @Transactional(readOnly = true)
     public Map<String, Object> build(Father father) {
+        return build(father, null);
+    }
+
+    /**
+     * D-037: {@code upcoming_reminders} and {@code ready_replies.reminder_reply} from the timers the platform really holds
+     * ({@code armed}, read once by the caller - never here, inside the transaction); null keeps the planned ones.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> build(Father father, ArmedTimers armed) {
         Instant now = clock.instant();
         ZoneId zone = weeklyGoalService.zoneFor(father);
         ZonedDateTime localNow = now.atZone(zone);
@@ -145,7 +155,8 @@ public class WeeklyPlanContextBuilder {
                 upcomingThisWeek.add(new CoachReplies.Upcoming((String) view.get("when_label"), (String) view.get("child_name")));
             }
             if ("UPCOMING".equals(phase) && start.isBefore(now.plus(LOOKAHEAD))) {
-                reminders.put(view.get("local_date") + " " + view.get("local_start"), remindersOf(qt, zone, now));
+                reminders.put(view.get("local_date") + " " + view.get("local_start"),
+                        armed == null ? remindersOf(qt, zone, now) : armedRemindersOf(qt, zone, now, armed));
             }
             if (upcomingOrNow && today.equals(qt.getMentionedOn())) {
                 mentionedToday.add(view.get("local_date") + " " + view.get("local_start"));
@@ -328,7 +339,8 @@ public class WeeklyPlanContextBuilder {
         ready.put("week_reply", CoachReplies.week(weekNumbers, upcomingThisWeek));
         ready.put("progress_reply", CoachReplies.progress(weekNumbers));
         ready.put("reminder_reply", nextQt == null ? CoachReplies.noUpcomingSession()
-                : reminderReply(nextQt, zone, now, childNames));
+                : armed == null ? reminderReply(nextQt, zone, now, childNames)
+                : armedReminderReply(nextQt, zone, now, childNames, armed));
         ready.put("greeting_reply", CoachReplies.greeting(father.getDisplayName()));
         ready.put("morning_reminder_reply", todayLater.isEmpty() ? NONE : morningReply(todayLater, zone, childNames));
         ready.put("hour_reminder_reply", nextQt == null || !"UPCOMING".equals(phaseOf(nextQt, now))
@@ -450,6 +462,34 @@ public class WeeklyPlanContextBuilder {
         return CoachReplies.reminders(SessionChildren.hebrew(qt, childNames), local(timers, SessionTimerPlanner.MORNING_REMINDER, zone),
                 local(timers, SessionTimerPlanner.REMINDER_1H, zone), timers.containsKey(SessionTimerPlanner.FOLLOW_UP),
                 now.atZone(zone).toLocalDate());
+    }
+
+    /** What the platform holds for this session, in short (D-037). */
+    private static String armedRemindersOf(QualityTime qt, ZoneId zone, Instant now, ArmedTimers armed) {
+        if (!armed.known()) {
+            return CoachReplies.REMINDERS_UNKNOWN_SHORT;
+        }
+        Map<String, Instant> held = armed.of(qt.getId());
+        return CoachReplies.remindersInShort(ahead(held, SessionTimerPlanner.MORNING_REMINDER, zone, now),
+                ahead(held, SessionTimerPlanner.REMINDER_1H, zone, now), ahead(held, SessionTimerPlanner.FOLLOW_UP, zone, now));
+    }
+
+    private static List<String> armedReminderReply(QualityTime qt, ZoneId zone, Instant now, Map<Long, String> childNames,
+                                                   ArmedTimers armed) {
+        if (!armed.known()) {
+            return CoachReplies.remindersUnknown();
+        }
+        Map<String, Instant> held = armed.of(qt.getId());
+        boolean startsSoon = !SessionTimerPlanner.plan(qt.getScheduledStart(), qt.getScheduledEnd(), zone, now)
+                .containsKey(SessionTimerPlanner.REMINDER_1H);
+        return CoachReplies.armedReminders(SessionChildren.hebrew(qt, childNames),
+                ahead(held, SessionTimerPlanner.MORNING_REMINDER, zone, now), ahead(held, SessionTimerPlanner.REMINDER_1H, zone, now),
+                ahead(held, SessionTimerPlanner.FOLLOW_UP, zone, now) != null, now.atZone(zone).toLocalDate(), startsSoon);
+    }
+
+    private static ZonedDateTime ahead(Map<String, Instant> held, String key, ZoneId zone, Instant now) {
+        Instant at = held.get(key);
+        return at == null || !at.isAfter(now) ? null : at.atZone(zone);
     }
 
     private static String morningReply(List<QualityTime> today, ZoneId zone, Map<Long, String> childNames) {

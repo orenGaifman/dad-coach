@@ -130,6 +130,127 @@ public class WorkflowPlatformClient {
         }
     }
 
+    // ---- session timers on the platform (D-037; platform TASKS.md §32) ----------------------------------------------
+    // Never called from inside a tool call: the turn holds the conversation's row lock on the platform, so arming would
+    // wait for the turn to end. Called after the turn returned, or outside any turn. Outside the breaker, short timeouts:
+    // a failure means "cannot confirm", never a failed reply.
+
+    static final String TIMERS_PATH = "/api/v1/worker/scheduled-transitions";
+    static final String CHANNEL = "whatsapp";
+    private static final Duration READ_TIMERS_TIMEOUT = Duration.ofSeconds(3);
+    private static final Duration ARM_TIMER_TIMEOUT = Duration.ofSeconds(8);
+
+    /** One trigger the platform holds as PENDING for the father's conversation. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    public record PendingTimer(String transitionKey, Instant scheduledAt, String referenceType, String referenceId) {
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    record PendingTimers(java.util.List<PendingTimer> pending) {
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    record ArmedTimer(String triggerId, String transitionKey, Instant scheduledAt) {
+    }
+
+    /** What arming one timer came to: ARMED (the platform holds it, at {@code scheduledAt}), REFUSED (4xx), UNAVAILABLE. */
+    public record ArmResult(Outcome outcome, Instant scheduledAt, int status, String error) {
+        public enum Outcome { ARMED, REFUSED, UNAVAILABLE }
+
+        public boolean armed() {
+            return outcome == Outcome.ARMED;
+        }
+    }
+
+    /**
+     * The PENDING timers of the father's conversation, soonest first. Empty when the platform cannot say (down, a
+     * refusal, an older platform without this API - 404): the caller then claims no reminder.
+     */
+    public java.util.Optional<java.util.List<PendingTimer>> pendingTimers(String userId) {
+        if (!isEnabled()) {
+            return java.util.Optional.empty();
+        }
+        try {
+            PendingTimers response = web.get()
+                    .uri(b -> b.path(TIMERS_PATH).queryParam("workerKey", "{w}").queryParam("workflowKey", "{f}")
+                            .queryParam("userId", "{u}").queryParam("channelId", "{c}")
+                            .build(properties.getWorkerKey(), properties.getWorkflowKey(), userId, CHANNEL))
+                    .retrieve().bodyToMono(PendingTimers.class)
+                    .timeout(READ_TIMERS_TIMEOUT)
+                    .block();
+            return java.util.Optional.of(response == null || response.pending() == null ? java.util.List.of() : response.pending());
+        } catch (RuntimeException e) {
+            log.atWarn().setMessage("workflow.timers.read_failed").addKeyValue("externalUserId", mask(userId))
+                    .addKeyValue("error", failure(e)).log();
+            return java.util.Optional.empty();
+        }
+    }
+
+    /** Arms one timer (the platform's dedupe moves a pending one of the same session and key instead of adding one). */
+    public ArmResult armTimer(String userId, String transitionKey, Instant scheduledAt, String referenceType,
+                              String referenceId) {
+        if (!isEnabled()) {
+            return new ArmResult(ArmResult.Outcome.UNAVAILABLE, null, 0, "DISABLED");
+        }
+        java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("workerKey", properties.getWorkerKey());
+        body.put("workflowKey", properties.getWorkflowKey());
+        body.put("userId", userId);
+        body.put("channelId", CHANNEL);
+        body.put("transitionKey", transitionKey);
+        body.put("scheduledAt", scheduledAt.toString());
+        body.put("referenceType", referenceType);
+        body.put("referenceId", referenceId);
+        try {
+            ArmedTimer armed = web.post().uri(TIMERS_PATH).bodyValue(body)
+                    .retrieve().bodyToMono(ArmedTimer.class)
+                    .timeout(ARM_TIMER_TIMEOUT)
+                    .block();
+            if (armed == null || armed.scheduledAt() == null) {
+                return new ArmResult(ArmResult.Outcome.UNAVAILABLE, null, 200, "EMPTY_RESPONSE");
+            }
+            return new ArmResult(ArmResult.Outcome.ARMED, armed.scheduledAt(), 200, null);
+        } catch (WebClientResponseException e) {
+            int status = e.getStatusCode().value();
+            // 404 is also an older platform without this API: it cannot confirm either way
+            return new ArmResult(e.getStatusCode().is4xxClientError() && status != 404 ? ArmResult.Outcome.REFUSED
+                    : ArmResult.Outcome.UNAVAILABLE, null, status, e.getResponseBodyAsString());
+        } catch (RuntimeException e) {
+            return new ArmResult(ArmResult.Outcome.UNAVAILABLE, null, 0, failure(e));
+        }
+    }
+
+    /** Cancels the PENDING timers of one session. Best effort: -1 when it could not be done. */
+    public int cancelTimers(String userId, String referenceType, String referenceId) {
+        if (!isEnabled()) {
+            return -1;
+        }
+        try {
+            java.util.Map<?, ?> response = web.delete()
+                    .uri(b -> b.path(TIMERS_PATH).queryParam("workerKey", "{w}").queryParam("workflowKey", "{f}")
+                            .queryParam("userId", "{u}").queryParam("channelId", "{c}")
+                            .queryParam("referenceType", "{t}").queryParam("referenceId", "{r}")
+                            .build(properties.getWorkerKey(), properties.getWorkflowKey(), userId, CHANNEL, referenceType,
+                                    referenceId))
+                    .retrieve().bodyToMono(java.util.Map.class)
+                    .timeout(READ_TIMERS_TIMEOUT)
+                    .block();
+            return response != null && response.get("cancelled") instanceof Number n ? n.intValue() : 0;
+        } catch (RuntimeException e) {
+            log.atWarn().setMessage("workflow.timers.cancel_failed").addKeyValue("referenceId", referenceId)
+                    .addKeyValue("error", failure(e)).log();
+            return -1;
+        }
+    }
+
+    private static String failure(RuntimeException e) {
+        if (e instanceof WebClientResponseException r) {
+            return "HTTP_" + r.getStatusCode().value();
+        }
+        Throwable cause = e.getCause() != null ? e.getCause() : e;
+        return cause instanceof TimeoutException ? "TIMEOUT" : cause.getClass().getSimpleName();
+    }
+
     private static boolean isRetryable(Throwable t) {
         return t instanceof WebClientRequestException
                 || t instanceof WebClientResponseException e && e.getStatusCode().is5xxServerError();
