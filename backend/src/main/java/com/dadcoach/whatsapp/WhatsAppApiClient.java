@@ -1,6 +1,7 @@
 package com.dadcoach.whatsapp;
 
 import com.dadcoach.config.WhatsAppProperties;
+import com.dadcoach.integration.platform.SharedNumberGate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -31,9 +32,11 @@ public class WhatsAppApiClient {
 
     private final WebClient webClient;
     private final WhatsAppProperties properties;
+    private final SharedNumberGate sharedNumberGate;
 
-    public WhatsAppApiClient(WebClient.Builder webClientBuilder, WhatsAppProperties properties) {
+    public WhatsAppApiClient(WebClient.Builder webClientBuilder, WhatsAppProperties properties, SharedNumberGate sharedNumberGate) {
         this.properties = properties;
+        this.sharedNumberGate = sharedNumberGate;
         this.webClient = webClientBuilder
                 .baseUrl(properties.apiBaseUrl())
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
@@ -50,6 +53,11 @@ public class WhatsAppApiClient {
      * @throws WhatsAppApiException for other non-2xx responses
      */
     public SendResponse sendMessage(Map<String, Object> payload) {
+        // The father may be on another product of the shared number: the gateway then keeps it for later.
+        java.util.Optional<String> held = sharedNumberGate.holdIfOnAnotherProduct(payload);
+        if (held.isPresent()) {
+            return new SendResponse(true, held.get(), null);
+        }
         String uri = String.format("/%s/%s/messages", properties.apiVersion(), properties.phoneNumberId());
 
         return webClient.post()

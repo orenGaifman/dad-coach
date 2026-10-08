@@ -53,6 +53,7 @@ public final class FakeServers {
     private final AtomicReference<Function<Call, Reply>> media = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> speechToText = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> meta = new AtomicReference<>();
+    private final AtomicReference<Function<Call, Reply>> gate = new AtomicReference<>();
 
     private FakeServers() {
         try {
@@ -83,6 +84,12 @@ public final class FakeServers {
                 : Reply.json("{\"url\":\"" + baseUrl() + "/media-files/" + c.path().substring(c.path().lastIndexOf('/') + 1)
                         + "\",\"mime_type\":\"audio/ogg; codecs=opus\",\"file_size\":7,\"id\":\"media\"}"));
         speechToText.set(c -> Reply.json("{\"language_code\":\"heb\",\"text\":\"רוצה לקבוע זמן עם נועה ביום שישי\"}"));
+        gate.set(c -> Reply.json("{\"send\":true,\"route\":\"dad-coach\",\"why\":\"ON_THIS_PRODUCT\"}"));
+    }
+
+    /** The shared number's gate ({@code POST /api/v1/worker/whatsapp/outbound-gate}; default: send). */
+    public void onGate(Function<Call, Reply> answer) {
+        gate.set(answer);
     }
 
     public static String turnReply(String content, String outcome) {
@@ -150,6 +157,8 @@ public final class FakeServers {
         String path = call.path();
         if (path.equals("/api/v1/worker/execute")) {
             reply = turn.get().apply(call);
+        } else if (path.equals("/api/v1/worker/whatsapp/outbound-gate")) {
+            reply = gate.get().apply(call);
         } else if (path.equals("/api/v1/worker/messages/outbound")) {
             reply = Reply.json("{\"recorded\":true}");
         } else if (path.startsWith("/api/v1/tenancy/")) {
