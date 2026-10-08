@@ -163,7 +163,7 @@ export interface VoiceNotesStatus {
   lastError: string | null
 }
 
-/** The templates screen: a catalog entry exactly as submitted to Meta, beside its state here. */
+/** The templates screen: a catalog template as submitted to Meta, its live state there, and whether Dad Coach sends it now. */
 export interface AdminTemplateRow {
   name: string
   language: string
@@ -174,12 +174,25 @@ export interface AdminTemplateRow {
   examples: string[]
   quickReplies: string[]
   sample: string
-  /** The general template: the one the server setting names; the others are the messages' own. */
   general: boolean
-  configured: boolean
-  configuredName: string | null
+  /** APPROVED, PENDING, REJECTED, PAUSED, DISABLED; MISSING (not at Meta); UNKNOWN (Meta not read yet) */
+  metaStatus: string
+  metaCategory: string | null
+  /** set when Meta re-filed it, e.g. UTILITY → MARKETING */
+  metaPreviousCategory: string | null
+  metaRejectedReason: string | null
+  metaBodyMatches: boolean
   registeredStatus: string | null
-  registeredBodyMatches: boolean
+  ready: boolean
+  inUseAs: string | null
+}
+
+export interface AdminTemplates {
+  wabaId: string | null
+  metaConfigured: boolean
+  refreshedAt: string | null
+  lastError: string | null
+  templates: AdminTemplateRow[]
 }
 
 export interface AdminTraining {

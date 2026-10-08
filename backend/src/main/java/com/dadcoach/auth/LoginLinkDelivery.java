@@ -50,7 +50,9 @@ public class LoginLinkDelivery {
         this.deliveryService = deliveryService;
         this.channelRouter = channelRouter;
         this.clock = clock;
-        this.templateName = templateName == null ? "" : templateName.strip();
+        // the general template, as the scheduled messages use it (sending still needs Meta's approval, via the registry)
+        this.templateName = templateName == null || templateName.isBlank()
+                ? com.dadcoach.channel.template.WhatsAppTemplateCatalog.UPDATE_HE : templateName.strip();
     }
 
     public DeliveryResult send(SignInSubject subject, String phone, String url) {

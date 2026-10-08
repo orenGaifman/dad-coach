@@ -193,7 +193,7 @@ public class AdminController {
         plat.put("reachable", platform.isEnabled() && platformAdmin.reachable());
         plat.put("adminPanelConfigured", platformAdmin.configured());
         plat.put("callbackEnabled", callback.isEnabled() && !blank(callback.getApiKey()));
-        plat.put("callbackTemplate", !blank(callback.getTemplateName()));
+        plat.put("callbackTemplate", !blank(callback.effectiveTemplateName()));
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("whatsapp", whatsapp);
         body.put("platform", plat);

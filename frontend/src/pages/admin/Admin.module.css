@@ -38,3 +38,4 @@
   margin-block-start: 4px; max-inline-size: 420px; background: #fff; border-radius: 8px; padding: 8px;
   text-align: center; color: #00a5f4; font-weight: 600; font-size: var(--dc-fs-sm); box-shadow: 0 1px 1px rgba(0, 0, 0, 0.12);
 }
+.kv dd:global(.ltr) { white-space: nowrap; }

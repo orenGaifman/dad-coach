@@ -66,6 +66,7 @@ public final class FakeServers {
     private final AtomicReference<Function<Call, Reply>> media = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> speechToText = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> meta = new AtomicReference<>();
+    private final AtomicReference<Function<Call, Reply>> metaTemplates = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> gate = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> google = new AtomicReference<>();
     /** null: the in-memory platform below answers {@code /api/v1/worker/scheduled-transitions}. */
@@ -91,6 +92,7 @@ public final class FakeServers {
     }
 
     public void reset() {
+        metaTemplates.set(null);
         calls.clear();
         timers.clear();
         scheduledTransitions.set(null);
@@ -266,6 +268,11 @@ public final class FakeServers {
                 && (c.path().startsWith("/media-files/") || c.path().matches("/v[0-9.]+/[^/]+"))).toList();
     }
 
+    /** Meta's {@code GET /<version>/<waba>/message_templates} (default: no templates). */
+    public void onMetaTemplates(Function<Call, Reply> answer) {
+        metaTemplates.set(answer);
+    }
+
     /** How Meta's Graph API answers a send (default: accepted with a new wamid). */
     public void onMetaSend(Function<Call, Reply> answer) {
         meta.set(answer);
@@ -310,6 +317,9 @@ public final class FakeServers {
             reply = tenancy.get().apply(call);
         } else if (path.equals("/v1/speech-to-text")) {
             reply = speechToText.get().apply(call);
+        } else if (call.method().equals("GET") && path.endsWith("/message_templates")) {
+            Function<Call, Reply> answer = metaTemplates.get();
+            reply = answer != null ? answer.apply(call) : Reply.json("{\"data\":[]}");
         } else if (call.method().equals("GET") && (path.startsWith("/media-files/") || path.matches("/v[0-9.]+/[^/]+"))) {
             reply = media.get().apply(call);
         } else if (path.endsWith("/messages")) {

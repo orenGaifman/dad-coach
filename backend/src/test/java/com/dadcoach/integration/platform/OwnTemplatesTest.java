@@ -32,6 +32,7 @@ class OwnTemplatesTest extends AbstractIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired QualityTimeRepository sessions;
+    @Autowired com.dadcoach.channel.template.MetaTemplateDirectory metaTemplates;
 
     private Father father;
     private Child noa;
@@ -150,5 +151,24 @@ class OwnTemplatesTest extends AbstractIntegrationTest {
         approve(WhatsAppTemplateCatalog.SESSION_FOLLOW_UP_HE);
         callback("o-5", "SESSION_FOLLOW_UP", "❤️ דאד קואץ׳:\\nנו, איך היה לכם עם נועה?"); // nothing has ended
         assertThat(lastSend().path("template").path("name").asText()).isEqualTo(TEMPLATE);
+    }
+
+    @Test
+    @DisplayName("approved at Meta, registered by the sync, then really sent: no manual step between Meta and a send")
+    void approvedAtMetaIsSent() throws Exception {
+        setUpFather("+19995550704");
+        QualityTime next = session(noa, Duration.ofMinutes(60), 45);
+        String body = json.writeValueAsString(WhatsAppTemplateCatalog.require(WhatsAppTemplateCatalog.SESSION_HOUR_BEFORE_HE).body());
+        com.dadcoach.support.FakeServers.INSTANCE.onMetaTemplates(c -> com.dadcoach.support.FakeServers.Reply.json(
+                "{\"data\":[{\"name\":\"dad_coach_session_hour_before_he\",\"language\":\"he\",\"status\":\"APPROVED\","
+                        + "\"category\":\"MARKETING\",\"previous_category\":\"UTILITY\",\"components\":[{\"type\":\"BODY\",\"text\":"
+                        + body + "}]}]}"));
+        assertThat(metaTemplates.refresh()).isTrue();
+
+        callback("o-6", "SESSION_REMINDER_1H", "❤️ דאד קואץ׳:\\nעוד שעה הזמן שלך ושל נועה 🙂\\nיש כבר רעיון מה תעשו?");
+
+        JsonNode sent = lastSend();
+        assertThat(sent.path("template").path("name").asText()).isEqualTo("dad_coach_session_hour_before_he");
+        assertThat(component(sent, 1).path("parameters").get(0).path("payload").asText()).isEqualTo("dc:ideas:" + next.getId());
     }
 }

@@ -38,6 +38,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
         "dad-coach.whatsapp.verify-token=test-verify-token",
         "dad-coach.whatsapp.phone-number-id=100000000000001",
         "dad-coach.whatsapp.access-token=test-access-token",
+        "dad-coach.whatsapp.waba-id=200000000000002",
         "dad-coach.whatsapp.inbound-sync=true",
         "dad-coach.web.base-url=https://app.dadcoach.test",
         "workflow.platform.enabled=true",
