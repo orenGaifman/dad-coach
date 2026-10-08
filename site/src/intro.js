@@ -1,5 +1,5 @@
-// Dad Coach introduces itself in the hero: a 20-second Hebrew voice (site/scripts/intro_voice.py),
-// live captions in the bubble, a glow that follows the voice. Nothing plays until the visitor taps.
+// Dad Coach introduces itself from the hero's black-belt card: a 20-second Hebrew voice (site/scripts/intro_voice.py),
+// live captions in his speech bubble (the bubble's own line returns when it ends), a glow that follows the voice. Nothing plays until the visitor taps.
 // A try-out, measured: ?coach=off hides it (compare the hero with and without it); when analytics is
 // enabled, play/finish are sent as "coach-intro" events.
 const LINES = [
@@ -22,6 +22,7 @@ export function initIntro() {
   const text = root.querySelector('[data-intro-text]');
   const label = root.querySelector('[data-intro-label]');
   const glow = root.querySelector('[data-intro-glow]');
+  const idle = text.textContent;
   const audio = new Audio('/dad-coach-intro.mp3');
   audio.preload = 'none';
   let analyser = null;
@@ -66,7 +67,7 @@ export function initIntro() {
     glow.style.setProperty('--level', '0');
     root.classList.remove('is-speaking');
     label.textContent = ended ? 'להקשיב שוב' : 'להמשיך להקשיב';
-    if (ended) { text.textContent = LINES[0][1]; track('ended'); }
+    if (ended) { text.textContent = idle; track('ended'); }
   }
 
   function toggle() {
