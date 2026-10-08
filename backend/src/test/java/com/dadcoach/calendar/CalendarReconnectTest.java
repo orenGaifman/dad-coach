@@ -10,6 +10,7 @@ import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.qualitytime.QualityTimeRepository;
 import com.dadcoach.qualitytime.QualityTimeService;
 import com.dadcoach.qualitytime.dto.ScheduleQualityTimeResult;
+import com.dadcoach.support.FakeServers;
 import com.dadcoach.support.FakeServers.Reply;
 import com.dadcoach.web.father.SettingsService;
 import java.time.Duration;
@@ -86,5 +87,53 @@ class CalendarReconnectTest extends AbstractIntegrationTest {
         Father after = fathers.findById(f.getId()).orElseThrow();
         assertThat(settings.view(after).calendarConnected()).isTrue();
         assertThat(settings.view(after).calendarReconnectRequired()).isFalse();
+    }
+
+    @Test
+    @DisplayName("connecting twice adds each upcoming session once (no duplicate events)")
+    void connectingTwiceAddsNoDuplicates() throws Exception {
+        Father f = data.activeFather("+19995550901");
+        Child noa = data.child(f, "נועה", 7);
+        ScheduleQualityTimeResult upcoming = sessions.scheduleQualityTime(f.getId(), noa.getId(), WEDNESDAY_4PM_IL,
+                Duration.ofHours(1));
+
+        for (int i = 0; i < 2; i++) {
+            mvc.perform(get("/api/v1/calendar/callback").param("code", "code-" + i)
+                    .param("state", signer.state(f.getId(), "/settings")));
+        }
+
+        assertThat(fake.googleEventCreates()).hasSize(1);
+        assertThat(qualityTimes.findById(upcoming.qualityTimeId()).orElseThrow().getGoogleCalendarEventId())
+                .startsWith("evt-");
+    }
+
+    @Test
+    @DisplayName("a connected calendar follows booking, moving (cancel + book, as the reschedule tool does) and cancelling")
+    void bookingMovingAndCancellingKeepTheCalendarInStep() {
+        Father f = data.activeFather("+19995550902");
+        f.setGoogleCalendarEnabled(true);
+        f.setGoogleRefreshToken("refresh");
+        f.setGoogleAccessToken("access");
+        f.setGoogleTokenExpiresAt(Instant.now().plus(Duration.ofHours(1)));
+        fathers.saveAndFlush(f);
+        Child noa = data.child(f, "נועה", 7);
+
+        ScheduleQualityTimeResult booked = sessions.scheduleQualityTime(f.getId(), noa.getId(), WEDNESDAY_4PM_IL,
+                Duration.ofHours(1));
+        assertThat(booked.calendarEventId()).startsWith("evt-");
+
+        sessions.cancelQualityTime(booked.qualityTimeId());
+        ScheduleQualityTimeResult moved = sessions.scheduleQualityTime(f.getId(), noa.getId(),
+                WEDNESDAY_4PM_IL.plus(Duration.ofDays(1)), Duration.ofHours(1));
+        assertThat(moved.calendarEventId()).startsWith("evt-").isNotEqualTo(booked.calendarEventId());
+
+        sessions.cancelQualityTime(moved.qualityTimeId());
+
+        assertThat(fake.googleEventCreates()).hasSize(2);
+        assertThat(fake.calls("/google/calendar/").stream().filter(c -> c.method().equals("DELETE"))
+                .map(FakeServers.Call::path).toList())
+                .containsExactly("/google/calendar/v3/calendars/primary/events/" + booked.calendarEventId(),
+                        "/google/calendar/v3/calendars/primary/events/" + moved.calendarEventId());
+        assertThat(qualityTimes.findById(moved.qualityTimeId()).orElseThrow().getGoogleCalendarEventId()).isNull();
     }
 }
