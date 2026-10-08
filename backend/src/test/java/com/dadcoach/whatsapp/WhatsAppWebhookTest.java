@@ -135,6 +135,10 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\n" + sentLine, "GENERATED")));
         webhook(Webhooks.text(father.getPhone(), "wamid.page1", "תן לי דשבורד")).andExpect(status().isOk());
         assertThat(fake.metaSends()).isEmpty();
+        // the same line ending with an emoji instead of the period
+        fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply(sentLine.replace(".", " 🙂"), "GENERATED")));
+        webhook(Webhooks.text(father.getPhone(), "wamid.page1b", "שלח לי את הדף שלי")).andExpect(status().isOk());
+        assertThat(fake.metaSends()).isEmpty();
 
         // no button this turn (already sent a minute ago): his line goes
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\n" + sentLine, "GENERATED")));

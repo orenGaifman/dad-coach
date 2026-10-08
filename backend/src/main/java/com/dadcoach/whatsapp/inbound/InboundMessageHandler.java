@@ -246,7 +246,12 @@ public class InboundMessageHandler {
     static boolean isOnlyTheSentLine(String reply) {
         String r = reply == null ? "" : reply.strip();
         r = r.startsWith(IDENTITY) ? r.substring(IDENTITY.length()).strip() : r;  // the platform puts the identity line on top
-        return r.equals(com.dadcoach.api.tools.DashboardTools.SENT_REPLY);
+        // words only: the coach sometimes ends it with 🙂 instead of the period (prod simulate, 1 in 6)
+        return wordsOnly(r).equals(wordsOnly(com.dadcoach.api.tools.DashboardTools.SENT_REPLY));
+    }
+
+    private static String wordsOnly(String text) {
+        return text.replaceAll("[^\\p{L}\\p{N}]+", " ").strip();
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
