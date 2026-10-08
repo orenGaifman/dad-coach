@@ -24,9 +24,10 @@ import org.springframework.stereotype.Component;
  * A message Dad Coach sends a father on its own (a scheduled coach message, a belt promotion), through the channel
  * layer ({@link DeliveryService}): free-form while his 24-hour window is open. Outside it, the message's own template
  * ({@link TemplateCall}, with its quick-reply buttons) when the caller has one and it is registered as approved;
- * otherwise the general template {@code WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME} ({{1}} = the message as one line,
- * {@link #asTemplateParameter}) — or, with none configured, nothing is sent (FAILED SESSION_CLOSED: WhatsApp would
- * drop a free-form message). The general template carries no buttons.
+ * otherwise the general template ({@code WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME}, by default the catalog's
+ * {@code dad_coach_update_he}; {{1}} = the message as one line, {@link #asTemplateParameter}). A template that is not
+ * registered as approved - only Meta's approval registers one - is refused by {@link DeliveryService}, so nothing goes
+ * out until then. The general template carries no buttons.
  */
 @Component
 public class ProactiveSender {
@@ -90,11 +91,7 @@ public class ProactiveSender {
                             WhatsAppTemplateCatalog.parameters(own.values().stream().map(ProactiveSender::oneLine).toList()),
                             MessagePriority.IMMEDIATE, clock.instant(), taps)), Mode.TEMPLATE, own.name());
                 }
-                String template = config.getTemplateName();
-                if (template == null || template.isBlank()) {
-                    return new Outcome(DeliveryResult.failed(DeliveryService.SESSION_CLOSED
-                            + ": 24h window closed and no approved template configured; not sent"), Mode.FREE_FORM);
-                }
+                String template = config.effectiveTemplateName();
                 return new Outcome(delivery.deliver(new OutboundMessageDto(UUID.randomUUID(), fatherUuid, null, MessageType.TEXT,
                         content, null, true, template, Map.of("1", asTemplateParameter(content)), MessagePriority.IMMEDIATE,
                         clock.instant())), Mode.TEMPLATE, template);

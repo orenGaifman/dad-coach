@@ -40,6 +40,16 @@ public class ScheduledResponseCallbackConfig {
         this.apiKey = apiKey;
     }
 
+    /**
+     * The general template messages outside the window go out in: the configured name, else the catalog's
+     * {@code dad_coach_update_he}. Sending still needs it registered as approved, which only Meta's approval does
+     * ({@link com.dadcoach.channel.template.MetaTemplateDirectory}).
+     */
+    public String effectiveTemplateName() {
+        return templateName == null || templateName.isBlank()
+                ? com.dadcoach.channel.template.WhatsAppTemplateCatalog.UPDATE_HE : templateName.strip();
+    }
+
     public String getTemplateName() {
         return templateName;
     }

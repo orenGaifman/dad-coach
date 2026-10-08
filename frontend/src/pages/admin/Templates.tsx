@@ -1,12 +1,25 @@
-import { Fragment, useState } from 'react'
-import { useAdminTemplates, useApproveTemplate } from '../../lib/admin'
+import { Fragment } from 'react'
+import { useAdminTemplates, useSyncTemplates } from '../../lib/admin'
 import { errorLine } from '../../lib/errors'
+import { dateTime } from '../../lib/format'
 import type { AdminTemplateRow } from '../../lib/types'
 import { Page } from '../../shared/Page'
 import { EmptyState, ErrorState, Skeleton } from '../../shared/States'
 import { useToast } from '../../shared/Toast'
 import ui from '../../shared/ui.module.css'
 import styles from './Admin.module.css'
+
+const META_STATUS: Record<string, { label: string; tone: string }> = {
+  APPROVED: { label: 'מאושרת ב-Meta', tone: ui.chipSuccess },
+  PENDING: { label: 'ממתינה לבדיקה ב-Meta', tone: ui.chipWarning },
+  REJECTED: { label: 'נדחתה ב-Meta', tone: ui.chipDanger },
+  PAUSED: { label: 'מושהית ב-Meta', tone: ui.chipDanger },
+  DISABLED: { label: 'מושבתת ב-Meta', tone: ui.chipDanger },
+  MISSING: { label: 'לא הוגשה ל-Meta', tone: ui.chipDanger },
+  UNKNOWN: { label: 'עוד לא נבדק מול Meta', tone: '' },
+}
+
+const CATEGORY: Record<string, string> = { UTILITY: 'שירות (Utility)', MARKETING: 'שיווק (Marketing)', AUTHENTICATION: 'אימות' }
 
 /** Body with {{n}} placeholders highlighted, exactly as submitted to Meta. */
 function RawBody({ body }: { body: string }) {
@@ -18,7 +31,7 @@ function RawBody({ body }: { body: string }) {
   )
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+function CopyButton({ text }: { text: string }) {
   const toast = useToast()
   async function copy() {
     try {
@@ -28,26 +41,25 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       toast('ההעתקה נכשלה - אפשר לסמן ולהעתיק ידנית', 'error')
     }
   }
-  return (
-    <button type="button" className={`${ui.btn} ${ui.ghost} ${ui.sm}`} onClick={copy}>{label}</button>
-  )
+  return <button type="button" className={`${ui.btn} ${ui.ghost} ${ui.sm}`} onClick={copy}>העתקה</button>
+}
+
+/** One line on what stands between this template and a message going out. */
+function readiness(t: AdminTemplateRow): string {
+  if (t.ready) return 'דאד קואץ׳ שולח בה עכשיו הודעות מחוץ ל-24 השעות.'
+  if (t.metaStatus === 'APPROVED' && !t.metaBodyMatches) return 'הנוסח המאושר ב-Meta שונה מהקוד, ולכן היא לא בשימוש. צריך לעדכן את הנוסח ב-Meta או בקוד.'
+  if (t.metaStatus === 'APPROVED' && t.general && t.inUseAs !== t.name) return `השרת שולח תבנית כללית בשם אחר (${t.inUseAs}).`
+  if (t.metaStatus === 'APPROVED') return 'מאושרת - תירשם לשימוש בסנכרון הבא (עד 10 דקות).'
+  if (t.metaStatus === 'PENDING') return t.general
+    ? 'הוגשה וממתינה. עד האישור, הודעות מחוץ ל-24 השעות לא נשלחות.'
+    : 'הוגשה וממתינה. עד האישור, ההודעה הזו יוצאת בתבנית הכללית (אם היא מאושרת).'
+  if (t.metaStatus === 'REJECTED') return 'נדחתה. צריך לתקן ולהגיש מחדש.'
+  if (t.metaStatus === 'MISSING') return 'לא קיימת ב-Meta. צריך להגיש אותה.'
+  return 'עוד לא נקרא מצב מ-Meta.'
 }
 
 function TemplateCard({ t }: { t: AdminTemplateRow }) {
-  const approve = useApproveTemplate()
-  const toast = useToast()
-  const [checked, setChecked] = useState(false)
-  const registeredOk = t.registeredStatus === 'APPROVED' && t.registeredBodyMatches
-
-  async function markApproved() {
-    try {
-      await approve.mutateAsync(t.name)
-      toast('נרשמה כמאושרת - הודעות מחוץ ל-24 השעות ישלחו בה')
-    } catch (e) {
-      toast(errorLine(e), 'error')
-    }
-  }
-
+  const status = META_STATUS[t.metaStatus] ?? { label: t.metaStatus, tone: '' }
   return (
     <section className={ui.card} aria-label={t.name}>
       <div className={ui.cardHead}>
@@ -55,39 +67,34 @@ function TemplateCard({ t }: { t: AdminTemplateRow }) {
         <span className={styles.tplName}><bdi dir="ltr">{t.name}</bdi></span>
       </div>
       <div className={ui.row}>
-        <span className={`${ui.chip} ${ui.chipTeal}`}>{t.category === 'UTILITY' ? 'Utility' : t.category}</span>
-        <span className={ui.chip}>עברית (he)</span>
-        <span className={`${ui.chip} ${registeredOk ? ui.chipSuccess : ui.chipWarning}`}>
-          {registeredOk ? 'רשומה כמאושרת במסד' : t.registeredStatus ? `במסד: ${t.registeredStatus}` : 'עוד לא רשומה במסד'}
-        </span>
-        {t.general && (
-          <span className={`${ui.chip} ${t.configured ? ui.chipSuccess : ui.chipWarning}`}>
-            {t.configured ? 'מוגדרת בשרת' : 'לא מוגדרת בשרת'}
-          </span>
+        <span className={`${ui.chip} ${status.tone}`}>{status.label}</span>
+        <span className={`${ui.chip} ${t.ready ? ui.chipSuccess : ''}`}>{t.ready ? 'בשימוש בשליחה' : 'לא בשימוש עדיין'}</span>
+        {t.metaCategory && <span className={`${ui.chip} ${ui.chipTeal}`}>{CATEGORY[t.metaCategory] ?? t.metaCategory}</span>}
+        {t.metaPreviousCategory && t.metaPreviousCategory !== t.metaCategory && (
+          <span className={`${ui.chip} ${ui.chipWarning}`}>Meta העבירה מ-{CATEGORY[t.metaPreviousCategory] ?? t.metaPreviousCategory}</span>
         )}
       </div>
-      {t.registeredStatus && !t.registeredBodyMatches && (
-        <p className={styles.bad} role="note">הגוף שרשום במסד שונה מהגוף כאן - סימון כמאושרת יעדכן אותו לגוף שלמטה.</p>
-      )}
+      <p className={t.ready ? ui.hint : styles.bad} role="note">{readiness(t)}</p>
+      {t.metaRejectedReason && <p className={styles.bad}>סיבת הדחייה ב-Meta: <bdi dir="ltr">{t.metaRejectedReason}</bdi></p>}
       <div className={ui.grid2}>
         <div className={ui.stackSm}>
           <div className={styles.tplLabelRow}>
-            <span className={ui.label}>הגוף להגשה ב-Meta</span>
-            <CopyButton text={t.body} label="העתקה" />
+            <span className={ui.label}>הגוף כפי שהוגש ל-Meta</span>
+            <CopyButton text={t.body} />
           </div>
           <RawBody body={t.body} />
           {t.examples.map((example, i) => (
             <Fragment key={i}>
               <div className={styles.tplLabelRow}>
-                <span className={ui.label}>דוגמה ל-<bdi dir="ltr">{`{{${i + 1}}}`}</bdi> בטופס של Meta</span>
-                <CopyButton text={example} label="העתקה" />
+                <span className={ui.label}>דוגמה ל-<bdi dir="ltr">{`{{${i + 1}}}`}</bdi></span>
+                <CopyButton text={example} />
               </div>
               <pre className={styles.tplRaw}>{example}</pre>
             </Fragment>
           ))}
           {t.quickReplies.length > 0 && (
             <>
-              <span className={ui.label}>כפתורי תשובה מהירה (Quick reply), לפי הסדר</span>
+              <span className={ui.label}>כפתורי תשובה מהירה, לפי הסדר</span>
               <div className={ui.row}>{t.quickReplies.map((b) => <span key={b} className={ui.chip}>{b}</span>)}</div>
             </>
           )}
@@ -100,50 +107,49 @@ function TemplateCard({ t }: { t: AdminTemplateRow }) {
           </div>
         </div>
       </div>
-      {t.general ? (
-        <p className={ui.hint}>
-          {'{{1}}'} הוא ההודעה של המאמן, משוטחת לשורה אחת; שורת הזהות יורדת ממנה כי היא כבר בגוף. ההגשה נעשית ידנית
-          ב-Meta Business Manager (קטגוריה Utility, שפה Hebrew). אחרי שמטא מאשרת: בשרת{' '}
-          <bdi dir="ltr">WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME={t.name}</bdi>, וכאן - סימון כמאושרת.
-        </p>
-      ) : (
-        <p className={ui.hint}>
-          הערכים נלקחים מהנתונים (המפגש, הילד, החגורה), לא מהטקסט של המאמן. ההגשה ידנית ב-Meta Business Manager
-          (קטגוריה Utility, שפה Hebrew){t.quickReplies.length > 0 ? ', עם הכפתורים בסדר הזה' : ''}. אחרי שמטא מאשרת - סימון
-          כמאושרת כאן, ומאותו רגע ההודעה הזו יוצאת בתבנית משלה. עד אז היא יוצאת בתבנית הכללית.
-        </p>
-      )}
-      {!registeredOk && (
-        <div className={ui.stackSm}>
-          <label className={ui.check}>
-            <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
-            <span>Meta אישרה את התבנית הזו, בנוסח הזה בדיוק.</span>
-          </label>
-          <div>
-            <button type="button" className={`${ui.btn} ${ui.primary}`} disabled={!checked || approve.isPending} onClick={markApproved}>
-              {approve.isPending ? 'רושם…' : 'סימון כמאושרת במסד'}
-            </button>
-          </div>
-        </div>
-      )}
     </section>
   )
 }
 
 export function TemplatesPage() {
   const list = useAdminTemplates()
+  const sync = useSyncTemplates()
+  const toast = useToast()
+
+  async function syncNow() {
+    try {
+      await sync.mutateAsync()
+      toast('המצב עודכן מ-Meta')
+    } catch (e) {
+      toast(errorLine(e), 'error')
+    }
+  }
+
+  const data = list.data
+  const ready = data?.templates.filter((t) => t.ready).length ?? 0
   return (
     <Page title="תבניות וואטסאפ"
-          subtitle="הודעה יזומה לאבא שלא כתב 24 שעות יוצאת בתבנית שמטא אישרה: בתבנית משלה כשיש לה אחת מאושרת, אחרת בתבנית הכללית. בלי אף אחת - ההודעה לא נשלחת.">
+          subtitle="המצב החי ב-Meta של כל תבנית, ומה מהן דאד קואץ׳ כבר שולח. תבנית נכנסת לשימוש רק אחרי ש-Meta מאשרת אותה בנוסח שבקוד, בלי שום פעולה ידנית."
+          actions={<button type="button" className={`${ui.btn} ${ui.secondary}`} disabled={sync.isPending || !data?.metaConfigured} onClick={syncNow}>
+            {sync.isPending ? 'מסנכרן…' : 'סנכרון עכשיו'}
+          </button>}>
       {list.isPending ? <Skeleton lines={6} /> : list.error ? <ErrorState error={list.error} onRetry={() => list.refetch()} />
-        : !list.data || list.data.length === 0 ? <EmptyState title="אין תבניות בקטלוג" icon="message" />
-        : <div className={ui.stack}>{list.data.map((t) => <TemplateCard key={t.name} t={t} />)}</div>}
-      {list.data && list.data.some((t) => t.general && t.registeredStatus === 'APPROVED' && t.registeredBodyMatches && !t.configured) && (
-        <p className={styles.bad} role="note">
-          התבנית הכללית רשומה כמאושרת אבל השרת לא מוגדר לשלוח בה - חסר{' '}
-          <bdi dir="ltr">WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME</bdi> ב-Render.
-        </p>
-      )}
+        : !data || data.templates.length === 0 ? <EmptyState title="אין תבניות בקטלוג" icon="message" />
+        : (
+          <div className={ui.stack}>
+            <section className={ui.card} aria-label="מצב הסנכרון">
+              <dl className={styles.kv}>
+                <dt>חשבון WhatsApp Business</dt><dd className="ltr">{data.wabaId || '—'}</dd>
+                <dt>עודכן לאחרונה מ-Meta</dt><dd>{data.refreshedAt ? dateTime(data.refreshedAt) : 'עוד לא'}</dd>
+                <dt>בשימוש בשליחה</dt><dd className="num">{ready} מתוך {data.templates.length}</dd>
+              </dl>
+              {!data.metaConfigured && <p className={styles.bad} role="note">אין חיבור ל-Meta בשרת (<bdi dir="ltr">WHATSAPP_WABA_ID / WHATSAPP_ACCESS_TOKEN</bdi>).</p>}
+              {data.lastError && <p className={styles.bad} role="note">הקריאה האחרונה מ-Meta נכשלה: <bdi dir="ltr">{data.lastError}</bdi></p>}
+              <p className={ui.hint}>המצב נקרא מ-Meta כל 10 דקות. הגשה, עריכה ומחיקה של תבניות נעשות ב-Meta, לא כאן.</p>
+            </section>
+            {data.templates.map((t) => <TemplateCard key={t.name} t={t} />)}
+          </div>
+        )}
     </Page>
   )
 }

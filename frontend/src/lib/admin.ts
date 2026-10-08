@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './api'
-import type { AdminTemplateRow, AdminTraining, DeliveryRow, FatherDetail, FatherRow, Integrations, Overview, VoiceNotesStatus } from './types'
+import type { AdminTemplates, AdminTraining, DeliveryRow, FatherDetail, FatherRow, Integrations, Overview, VoiceNotesStatus } from './types'
 
 export const useOverview = () => useQuery({ queryKey: ['admin', 'overview'], queryFn: () => api<Overview>('/admin/overview') })
 export const useFathers = (q: string, status: string) => useQuery({
@@ -16,14 +16,19 @@ export const useDeletions = () => useQuery({
 })
 export const useAdminTraining = () => useQuery({ queryKey: ['admin', 'training'], queryFn: () => api<AdminTraining>('/admin/training') })
 
-export const useAdminTemplates = () => useQuery({ queryKey: ['admin', 'templates'], queryFn: () => api<AdminTemplateRow[]>('/admin/templates') })
+/** Live from Meta: refetched every minute while the screen is open (the server reads Meta every 10 minutes). */
+export const useAdminTemplates = () => useQuery({
+  queryKey: ['admin', 'templates'],
+  queryFn: () => api<AdminTemplates>('/admin/templates'),
+  refetchInterval: 60_000,
+})
 
-/** Records a template as approved in the registry — only after Meta approved it; nothing goes to Meta from here. */
-export function useApproveTemplate() {
+/** Reads Meta now; registration for sending follows Meta's approval, never a click. */
+export function useSyncTemplates() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (name: string) => api<AdminTemplateRow>(`/admin/templates/${encodeURIComponent(name)}/approve`, { method: 'POST', body: { confirmed: true } }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin', 'templates'] }) },
+    mutationFn: () => api<AdminTemplates>('/admin/templates/sync', { method: 'POST' }),
+    onSuccess: (data) => { qc.setQueryData(['admin', 'templates'], data) },
   })
 }
 

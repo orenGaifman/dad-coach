@@ -44,6 +44,11 @@ public class TemplateRegistry {
      * @param templateName the unique template name
      * @return the template if found and APPROVED, empty otherwise
      */
+    /** The registered row of a template, whatever its status. */
+    public Optional<TemplateMessage> find(String templateName) {
+        return templateRepository.findByTemplateName(templateName);
+    }
+
     public Optional<TemplateMessage> findApprovedTemplate(String templateName) {
         return findApprovedTemplate(templateName, DEFAULT_LANGUAGE);
     }
