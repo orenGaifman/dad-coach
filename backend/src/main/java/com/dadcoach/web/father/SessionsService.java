@@ -92,7 +92,7 @@ public class SessionsService {
 
     /** "It happened": only a session that has started and is still open. */
     @Transactional
-    public void confirm(Father father, UUID sessionId, String note) {
+    public com.dadcoach.qualitytime.dto.CompleteQualityTimeResult confirm(Father father, UUID sessionId, String note) {
         QualityTime qt = owned(father, sessionId);
         String phase = SessionPhases.phaseOf(qt, clock.instant());
         if (!"IN_PROGRESS".equals(phase) && !"AWAITING_CONFIRMATION".equals(phase)) {
@@ -102,7 +102,7 @@ public class SessionsService {
         if (trimmed != null && trimmed.length() > NOTE_MAX) {
             throw WebException.badRequest("NOTE_TOO_LONG", "note too long");
         }
-        qualityTimeService.completeQualityTime(qt.getId(), trimmed);
+        return qualityTimeService.completeQualityTime(qt.getId(), trimmed);
     }
 
     /** Cancel an upcoming one, or say a past open one did not happen. */

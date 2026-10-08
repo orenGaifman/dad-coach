@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.dadcoach.support.FakeServers;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.weeklygoal.WeeklyGoalService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -33,6 +34,14 @@ class FatherAreaTest extends AbstractWebIntegrationTest {
 
     /** יואב: נועה (7) and איתי (4), a 3-hour goal, one session done this week, one ahead, one awaiting confirmation. */
     record Seed(long father, long noa, long itai, UUID done, UUID ahead, UUID awaiting) {
+    }
+
+    String content(FakeServers.Call call) {
+        try {
+            return json.readTree(call.body()).path("content").asText();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     Seed seedYoav() {
@@ -103,7 +112,12 @@ class FatherAreaTest extends AbstractWebIntegrationTest {
         Seed s = seedYoav();
         Browser browser = signInFather(s.father());
         mvc.perform(browser.on(post("/api/father/sessions/" + s.awaiting() + "/confirm"))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"note\":\"בנינו מגדל לגו\"}")).andExpect(status().isNoContent());
+                .contentType(MediaType.APPLICATION_JSON).content("{\"note\":\"בנינו מגדל לגו\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.beltEarned").doesNotExist());
+        // D-034: his AI conversation learns what he did on the page (history only, nothing sent on WhatsApp)
+        assertThat(fake.recordedOutbound()).singleElement().satisfies(c -> assertThat(content(c))
+                .contains("📊 בדף שלך: סימנת שהמפגש של *").contains("עם איתי היה."));
+        assertThat(fake.metaSends()).isEmpty();
         assertThat(jdbc.queryForObject("SELECT status FROM quality_time WHERE id = ?", String.class, s.awaiting())).isEqualTo("COMPLETED");
         assertThat(jdbc.queryForObject("SELECT completion_notes FROM quality_time WHERE id = ?", String.class, s.awaiting())).isEqualTo("בנינו מגדל לגו");
         assertThat(jdbc.queryForObject("SELECT actual_minutes FROM weekly_goal WHERE father_id = ?", Integer.class, s.father())).isEqualTo(105);
@@ -117,12 +131,26 @@ class FatherAreaTest extends AbstractWebIntegrationTest {
     }
 
     @Test
+    @DisplayName("B-1: a belt earned on the page is told on the page, once, and noted in his conversation")
+    void confirmThatEarnsABelt() throws Exception {
+        Seed s = seedYoav();
+        jdbc.update("UPDATE father SET total_quality_times_completed = 2, current_belt = 'WHITE' WHERE id = ?", s.father());
+        Browser browser = signInFather(s.father());
+        mvc.perform(browser.on(post("/api/father/sessions/" + s.awaiting() + "/confirm"))
+                .contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.beltEarned").value("חגורה צהובה"));
+        assertThat(fake.recordedOutbound()).singleElement().satisfies(c -> assertThat(content(c)).contains("עלית ל*חגורה צהובה*."));
+    }
+
+    @Test
     @DisplayName("cancel an upcoming session; a completed one cannot be cancelled")
     void cancel() throws Exception {
         Seed s = seedYoav();
         Browser browser = signInFather(s.father());
         mvc.perform(browser.on(post("/api/father/sessions/" + s.ahead() + "/cancel"))).andExpect(status().isNoContent());
         assertThat(jdbc.queryForObject("SELECT status FROM quality_time WHERE id = ?", String.class, s.ahead())).isEqualTo("CANCELLED");
+        assertThat(fake.recordedOutbound()).singleElement().satisfies(c -> assertThat(content(c))
+                .contains("📊 בדף שלך: ביטלת את המפגש של *היום, ").contains("עם נועה."));
         mvc.perform(browser.on(get("/api/father/home"))).andExpect(jsonPath("$.coverage.plannedMinutes").value(0))
                 .andExpect(jsonPath("$.sessionsThisWeek.length()").value(2)); // the cancelled one leaves the home's week list
         mvc.perform(browser.on(get("/api/father/sessions"))).andExpect(jsonPath("$.past[?(@.id == '" + s.ahead() + "')].phase").value("CANCELLED"));
@@ -148,6 +176,10 @@ class FatherAreaTest extends AbstractWebIntegrationTest {
         mvc.perform(browser.on(put("/api/father/children/" + id)).contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"מיה רוז\",\"age\":6}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("מיה רוז")).andExpect(jsonPath("$.age").value(6));
         mvc.perform(browser.on(get("/api/father/children"))).andExpect(jsonPath("$.length()").value(2));
+        // D-034: each change is noted in his conversation with the coach, so "בן כמה מיה?" is answered from it
+        assertThat(fake.recordedOutbound()).extracting(this::content).anySatisfy(b -> assertThat(b)
+                .contains("📊 בדף שלך: הוספת את מיה, בגיל 5.")).anySatisfy(b -> assertThat(b)
+                .contains("📊 בדף שלך: עדכנת את מיה: השם עכשיו מיה רוז, בגיל 6."));
     }
 
     @Test

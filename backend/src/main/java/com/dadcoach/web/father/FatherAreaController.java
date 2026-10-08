@@ -50,6 +50,10 @@ public class FatherAreaController {
     public record TrainingEvent(boolean completed) {
     }
 
+    /** B-1: a belt this confirmation earned, in Hebrew ("חגורה צהובה"), or null - the page says it once. */
+    public record ConfirmResult(String beltEarned) {
+    }
+
     private final FatherRepository fathers;
     private final HomeService home;
     private final SessionsService sessions;
@@ -58,10 +62,12 @@ public class FatherAreaController {
     private final SettingsService settings;
     private final TrainingService training;
     private final SessionCookies cookies;
+    private final DashboardNotes notes;
 
     public FatherAreaController(FatherRepository fathers, HomeService home, SessionsService sessions, ChildrenService children,
                             ProgressService progress, SettingsService settings, TrainingService training,
-                            SessionCookies cookies) {
+                            SessionCookies cookies, DashboardNotes notes) {
+        this.notes = notes;
         this.fathers = fathers;
         this.home = home;
         this.sessions = sessions;
@@ -83,16 +89,21 @@ public class FatherAreaController {
     }
 
     @PostMapping("/sessions/{id}/confirm")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void confirm(@AuthenticationPrincipal DashboardPrincipal p, @PathVariable UUID id,
-                        @Valid @RequestBody(required = false) ConfirmRequest body) {
-        sessions.confirm(me(p), id, body == null ? null : body.note());
+    public ConfirmResult confirm(@AuthenticationPrincipal DashboardPrincipal p, @PathVariable UUID id,
+                                 @Valid @RequestBody(required = false) ConfirmRequest body) {
+        Father father = me(p);
+        var result = sessions.confirm(father, id, body == null ? null : body.note());
+        String belt = result.beltEarned() == null ? null : result.beltEarned().getDisplayName("he");
+        notes.session(father, id, belt);
+        return new ConfirmResult(belt);
     }
 
     @PostMapping("/sessions/{id}/cancel")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void cancel(@AuthenticationPrincipal DashboardPrincipal p, @PathVariable UUID id) {
-        sessions.cancel(me(p), id);
+        Father father = me(p);
+        sessions.cancel(father, id);
+        notes.session(father, id, null);
     }
 
     @GetMapping("/children")
@@ -103,13 +114,21 @@ public class FatherAreaController {
     @PostMapping("/children")
     @ResponseStatus(HttpStatus.CREATED)
     public ChildrenService.ChildView addChild(@AuthenticationPrincipal DashboardPrincipal p, @Valid @RequestBody NewChildRequest body) {
-        return children.add(me(p), body.name(), body.age());
+        Father father = me(p);
+        ChildrenService.ChildView added = children.add(father, body.name(), body.age());
+        notes.childAdded(father, added.name(), added.age());
+        return added;
     }
 
     @PutMapping("/children/{id}")
     public ChildrenService.ChildView updateChild(@AuthenticationPrincipal DashboardPrincipal p, @PathVariable Long id,
                                                  @Valid @RequestBody ChildRequest body) {
-        return children.update(me(p), id, body.name(), body.age());
+        Father father = me(p);
+        String oldName = children.list(father).stream().filter(c -> c.id().equals(id)).map(ChildrenService.ChildView::name)
+                .findFirst().orElse(null);
+        ChildrenService.ChildView updated = children.update(father, id, body.name(), body.age());
+        notes.childUpdated(father, oldName, updated.name(), updated.age());
+        return updated;
     }
 
     @GetMapping("/progress")
@@ -125,7 +144,13 @@ public class FatherAreaController {
     @PutMapping("/settings")
     public SettingsService.SettingsView updateSettings(@AuthenticationPrincipal DashboardPrincipal p,
                                                        @Valid @RequestBody SettingsRequest body) {
-        return settings.update(me(p), body.name(), body.timezone());
+        Father father = me(p);
+        String before = father.getDisplayName();
+        SettingsService.SettingsView view = settings.update(father, body.name(), body.timezone());
+        if (body.name() != null && !body.name().strip().equals(before)) {
+            notes.nameChanged(father, body.name().strip());
+        }
+        return view;
     }
 
     @PostMapping("/calendar/connect")
