@@ -49,7 +49,7 @@ S.brand = (lt) => {
   return `<div class="center" style="top:250px;opacity:${p};transform:translateY(${lerp(30, 0, p)}px)">
       <div class="logo" style="width:260px;height:260px"><img src="${asset('logo-mark.webp')}"></div>
       <div class="wordmark" style="margin-top:44px">דאד קואץ׳</div><div class="lede" style="margin-top:8px">מאמן בוואטסאפ לאבות</div></div>
-    <div class="hero-art" style="top:${lerp(1060, 1010, q)}px;opacity:${q}"><img src="${asset('hero.webp')}"></div>`;
+    <div class="hero-art sensei" style="top:${lerp(1060, 1000, q)}px;opacity:${q}"><img src="${asset('coach-black-belt.webp')}"><span class="belt-tag">חגורה שחורה · 200 מפגשים</span></div>`;
 };
 S.book = (lt, beat) => {
   const sendAt = 2.6, replyAt = 3.7;
@@ -101,9 +101,9 @@ S.covered = (lt) => {
 };
 S.end = (lt) => {
   const p = fadeIn(lt, 0.1, 0.6), q = fadeIn(lt, 1.3, 0.5), r = fadeIn(lt, 2.4, 0.5);
-  return `<div class="center" style="top:300px;opacity:${p}">
-      <div class="logo" style="width:340px;height:340px"><img src="${asset('logo-full.webp')}"></div>
-      <div class="wordmark" style="margin-top:40px;font-size:96px">דאד קואץ׳</div></div>
+  return `<div class="center" style="top:170px;opacity:${p}">
+      <div class="hero-art sensei" style="position:relative;left:auto;right:auto;width:540px;margin:0 auto"><img src="${asset('coach-black-belt.webp')}"></div>
+      <div class="wordmark" style="margin-top:36px;font-size:96px">דאד קואץ׳</div></div>
     <div class="center motto" style="top:930px;opacity:${q}">הזמן שתכננת.<br><span class="g">הפעם הוא קורה.</span></div>
     <div class="center" style="top:1250px;opacity:${r}"><span class="cta">מתחילים באתר</span><div class="site" dir="ltr">${SITE}</div></div>`;
 };
@@ -114,6 +114,6 @@ const PLAN = [
   ['a08', 'setup', 9.0, [[3.1, 'whoosh']]], ['a09', 'covered', 5.6, [[2.0, 'confirm']]], ['a10', 'end', 6.6],
 ];
 const tl = buildTimeline(PLAN, VO, LINES, { lead: 0.25, tail: 0.4 });
-install({ S, ...tl, assets: ['hero.webp', 'screens/03-home-full.png', 'screens/07-progress-full.png', 'screens/site-signup-filled.png', 'screens/site-signup-done.png'] });
+install({ S, ...tl, assets: ['coach-black-belt.webp', 'hero.webp', 'screens/03-home-full.png', 'screens/07-progress-full.png', 'screens/site-signup-filled.png', 'screens/site-signup-done.png'] });
 window.TIMELINE.video = 'ad';
 window.TIMELINE.tempo = TEMPO;

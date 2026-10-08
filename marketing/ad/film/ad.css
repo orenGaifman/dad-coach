@@ -1,5 +1,7 @@
 /* the ad reuses the training films' look (training/film/style.css); only the ad's own moments are here */
 .hero-art { position: absolute; left: 90px; right: 90px; border-radius: 48px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
 .hero-art img { display: block; width: 100%; }
+.hero-art.sensei { left: 150px; right: 150px; background: #1B2D52; border: 2px solid rgba(218,172,95,0.45); }
+.belt-tag { position: absolute; top: 28px; right: 28px; background: var(--gold-500); color: var(--navy-950, #0B1424); font-size: 38px; font-weight: 800; padding: 8px 26px; border-radius: 999px; transform: rotate(-3deg); box-shadow: 0 10px 24px rgba(0,0,0,.35); }
 .motto { font-size: 104px; font-weight: 800; line-height: 1.1; color: var(--cream); }
 .motto .g { color: var(--gold-500); }
