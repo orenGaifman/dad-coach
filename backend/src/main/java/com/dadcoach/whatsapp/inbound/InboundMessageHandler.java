@@ -21,7 +21,13 @@ import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import com.dadcoach.integration.platform.lifecycle.DeletedSenders;
 import com.dadcoach.integration.platform.lifecycle.PersonRefs;
 import com.dadcoach.integration.platform.lifecycle.WhatsAppDeletionRequests;
+import com.dadcoach.domain.child.ChildRepository;
+import com.dadcoach.replies.ClaimGuard;
+import com.dadcoach.replies.CoachMentions;
+import com.dadcoach.replies.TurnLedger;
 import com.dadcoach.whatsapp.ReplyLanguageGuard;
+import com.dadcoach.whatsapp.ReplyStyleGuard;
+import java.util.List;
 import com.dadcoach.whatsapp.WhatsAppAdapter;
 import com.dadcoach.whatsapp.buttons.SessionButtonTaps;
 import com.dadcoach.whatsapp.voice.VoiceNoteReplies;
@@ -82,14 +88,29 @@ public class InboundMessageHandler {
     private final SentMessageRecorder recorder;
     private final VoiceNotes voiceNotes;
     private final Clock clock;
+    private final TurnLedger ledger;
+    private final CoachMentions mentions;
+    private final ChildRepository children;
     private com.dadcoach.auth.LoginLinkRepository loginLinks;
     private LoginLinkService loginLinkService;
+
+    /** B-4: the reply was not Hebrew - the coach writes it again once, told why (as Tair's HebrewOnly). */
+    static final String HEBREW_RETRY_NOTE = "[הודעת מערכת, לא מהאבא: התשובה הקודמת שלך לא נשלחה כי לא הייתה בעברית. "
+            + "כתוב אותה שוב - אותו תוכן, בעברית בלבד, בלי מילה באנגלית. אל תקרא שוב לכלי שכבר הצליח.]";
+    /** B-4: still not Hebrew - one short line, never silence. */
+    static final String NOT_HEBREW_FALLBACK = IDENTITY + "סליחה, התבלבלתי בניסוח.\nאפשר לכתוב לי שוב מה צריך?";
+    /** D-036: a reply said a button was sent and none could be - said honestly. */
+    static final String BUTTON_FAILED_LINE = "לא הצלחתי לשלוח עכשיו כפתור לדף שלך. אפשר לבקש שוב עוד כמה דקות.";
 
     public InboundMessageHandler(FatherRepository fathers, WhatsAppEndpoints endpoints, DeletedSenders deletedSenders,
                                  WhatsAppDeletionRequests deletionRequests, WorkflowPlatformClient platform,
                                  WorkflowPlatformProperties platformProperties, WhatsAppAdapter whatsapp,
                                  WhatsAppInboundRateLimiter rateLimiter, SessionButtonTaps buttonTaps,
-                                 SentMessageRecorder recorder, VoiceNotes voiceNotes, Clock clock) {
+                                 SentMessageRecorder recorder, VoiceNotes voiceNotes, Clock clock, TurnLedger ledger,
+                                 CoachMentions mentions, ChildRepository children) {
+        this.ledger = ledger;
+        this.mentions = mentions;
+        this.children = children;
         this.fathers = fathers;
         this.endpoints = endpoints;
         this.deletedSenders = deletedSenders;
@@ -187,16 +208,13 @@ public class InboundMessageHandler {
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("timezone", FatherTimezones.of(father.orElse(null)).getId());
         father.ifPresent(f -> metadata.put("productUserId", String.valueOf(f.getId())));
+        TurnLedger.Snapshot before = ledger.before(father);
         Instant platformStart = clock.instant();
         Instant deliveryStart = platformStart;
         String outcome = "REPLIED";
         try {
-            WorkerExecuteResponse response = platform.execute(new WorkerExecuteRequest(platformProperties.getWorkerKey(),
-                    PersonRefs.whatsappId(phone), "whatsapp", in.idempotencyKey(),
-                    in.messageType() == MessageType.INTERACTIVE ? "button_reply" : "text",
-                    heard == null ? text : VoiceNoteReplies.TURN_NOTE + text, metadata,
-                    platformProperties.getTenantId(), father.map(f -> PersonRefs.of(f.getId())).orElse(null),
-                    father.map(Father::getDisplayName).orElse(null), platformProperties.getWorkflowKey()));
+            WorkerExecuteResponse response = platform.execute(turn(in, phone, in.idempotencyKey(),
+                    heard == null ? text : VoiceNoteReplies.TURN_NOTE + text, metadata, father));
             deliveryStart = clock.instant();
             String reply = response.responseContent();
             if (response.suppressed() || response.isDuplicate() || reply == null || reply.isBlank()) {
@@ -205,21 +223,38 @@ public class InboundMessageHandler {
             }
             Optional<String> hebrew = ReplyLanguageGuard.clean(reply.strip());
             if (hebrew.isEmpty()) {
-                outcome = "BLOCKED_NOT_HEBREW";
                 log.atWarn().setMessage("whatsapp.reply.blocked_not_hebrew").addKeyValue("correlationId", in.idempotencyKey())
                         .addKeyValue("chars", reply.length()).log();
-                return;
-            }
-            if (!hebrew.get().equals(reply.strip())) {
+                // B-4: never silence - the coach writes it again once, then a short Hebrew line
+                WorkerExecuteResponse again = platform.execute(turn(in, phone, in.idempotencyKey() + ":he",
+                        HEBREW_RETRY_NOTE, metadata, father));
+                hebrew = again.suppressed() || again.responseContent() == null || again.responseContent().isBlank()
+                        ? Optional.empty() : ReplyLanguageGuard.clean(again.responseContent().strip());
+                if (hebrew.isEmpty()) {
+                    outcome = "BLOCKED_NOT_HEBREW";
+                    send(phone, VoiceNoteReplies.withHeard(NOT_HEBREW_FALLBACK, heard));
+                    return;
+                }
+                outcome = "REWRITTEN_IN_HEBREW";
+            } else if (!hebrew.get().equals(reply.strip())) {
                 log.atWarn().setMessage("whatsapp.reply.english_note_removed").addKeyValue("correlationId", in.idempotencyKey()).log();
             }
-            if (father.isPresent() && isOnlyTheSentLine(hebrew.get())) {
-                Optional<String> instead = theCardInsteadOfTheLine(father.get(), platformStart);
+            Optional<Father> now = father.isPresent() ? father : fathers.findByPhone(phone);
+            if (now.isPresent() && isOnlyTheSentLine(hebrew.get())) {
+                Optional<String> instead = theCardInsteadOfTheLine(now.get(), platformStart);
                 outcome = "DASHBOARD_CARD";
                 instead.ifPresent(line -> send(phone, VoiceNoteReplies.withHeard(line, heard)));
                 return;
             }
-            send(phone, VoiceNoteReplies.withHeard(hebrew.get(), heard));
+            String checked = checkClaims(hebrew.get(), before, now, phone, platformStart, in.idempotencyKey());
+            String out = ReplyStyleGuard.clean(VoiceNoteReplies.withHeard(checked, heard));
+            send(phone, out);
+            now.ifPresent(f -> mentions.sent(f, out));
+            if (!checked.equals(hebrew.get())) {
+                outcome = "CLAIM_CORRECTED";
+                // the father saw the corrected text: his AI conversation gets it too, so the next turn builds on it
+                now.ifPresent(f -> recorder.recordSent(f, out, in.idempotencyKey() + ":corrected"));
+            }
         } catch (PlatformUnavailableException | WorkflowPlatformClient.PlatformRejectedException e) {
             outcome = "PLATFORM_FAILED";
             log.atWarn().setMessage("whatsapp.turn.platform_failed").addKeyValue("error", e.getMessage()).log();
@@ -238,6 +273,51 @@ public class InboundMessageHandler {
                     .log();
         }
     }
+
+    private WorkerExecuteRequest turn(InboundMessageDto in, String phone, String correlationId, String content,
+                                      Map<String, Object> metadata, Optional<Father> father) {
+        return new WorkerExecuteRequest(platformProperties.getWorkerKey(), PersonRefs.whatsappId(phone), "whatsapp",
+                correlationId, in.messageType() == MessageType.INTERACTIVE ? "button_reply" : "text", content, metadata,
+                platformProperties.getTenantId(), father.map(f -> PersonRefs.of(f.getId())).orElse(null),
+                father.map(Father::getDisplayName).orElse(null), platformProperties.getWorkflowKey());
+    }
+
+    /**
+     * D-034 (D-2): the reply may confirm only what this turn really did ({@link ClaimGuard}); a button it says was sent
+     * is sent now, so the sentence is true - or the reply says it could not be.
+     */
+    private String checkClaims(String reply, TurnLedger.Snapshot before, Optional<Father> father, String phone,
+                               Instant turnStarted, String correlationId) {
+        try {
+            String identity = reply.startsWith(IDENTITY) ? IDENTITY : "";
+            String body = reply.substring(identity.length());
+            TurnLedger.Changes changes = ledger.after(before, father);
+            boolean buttonSent = loginLinks != null && father.isPresent()
+                    && loginLinks.sentToFatherSince(father.get().getId(), turnStarted);
+            List<String> names = father.map(f -> children.findByFatherIdAndStatus(f.getId(), "ACTIVE").stream()
+                    .map(com.dadcoach.domain.child.Child::getName).toList()).orElse(List.of());
+            ClaimGuard.Result result = ClaimGuard.check(body, changes, buttonSent, names);
+            String checked = result.body();
+            if (result.needsButton() && father.isPresent() && loginLinkService != null) {
+                // D-035 in a longer reply: the card it speaks of is sent now (or is still on his screen)
+                var sent = loginLinkService.sendTo(phone);
+                log.atInfo().setMessage("whatsapp.reply.button_sent_for_claim").addKeyValue("outcome", sent).log();
+                if (sent == LoginLinkService.SendOutcome.NOT_ALLOWED || sent == LoginLinkService.SendOutcome.FAILED) {
+                    checked = ClaimGuard.withoutButtonClaims(checked) + "\n" + BUTTON_FAILED_LINE;
+                }
+            } else if (result.needsButton()) {
+                checked = ClaimGuard.withoutButtonClaims(checked) + "\n" + BUTTON_FAILED_LINE;
+            }
+            if (result.changed()) {
+                log.atWarn().setMessage("whatsapp.reply.claim_corrected").addKeyValue("correlationId", correlationId).log();
+            }
+            return identity + checked.strip();
+        } catch (RuntimeException e) {
+            log.atWarn().setMessage("whatsapp.reply.claim_check_failed").addKeyValue("error", e.getClass().getSimpleName()).log();
+            return reply;
+        }
+    }
+
 
     /**
      * The coach's reply only says "I sent you the button". The button message is the whole answer (owner, 2026-10-08),
