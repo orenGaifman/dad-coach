@@ -70,8 +70,8 @@ public class ScheduledMessageTemplates {
     }
 
     /**
-     * Today's sessions that have not ended (the weekly plan's sessions_today): their times, earliest first ("17:00",
-     * "17:00 ו-19:00"), and every child in them ("מאיה ויובל").
+     * Today's sessions that have not ended (the weekly plan's sessions_today): their times, earliest first, and every
+     * child in them ("מאיה ויובל").
      */
     private Optional<TemplateCall> morning(Father father) {
         Instant now = clock.instant();
@@ -98,12 +98,16 @@ public class ScheduledMessageTemplates {
                 joinTimes(new ArrayList<>(times)), SessionChildren.joinHebrew(new ArrayList<>(names))));
     }
 
-    /** "17:00", "17:00 ו-19:00", "10:00, 17:00 ו-19:00". */
+    /**
+     * The times after the body's own "ב-": "17:00", "15:00 וב-17:00", "10:00, ב-15:00 וב-17:00" — so the filled
+     * template reads exactly as the in-window message's "*היום ב-15:00 וב-17:00*".
+     */
     static String joinTimes(List<String> times) {
-        if (times.size() == 1) {
-            return times.get(0);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < times.size(); i++) {
+            sb.append(i == 0 ? "" : i == times.size() - 1 ? " וב-" : ", ב-").append(times.get(i));
         }
-        return String.join(", ", times.subList(0, times.size() - 1)) + " ו-" + times.get(times.size() - 1);
+        return sb.toString();
     }
 
     private static Optional<String> children(QualityTime qt) {
