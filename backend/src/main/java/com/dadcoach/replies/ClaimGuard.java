@@ -147,8 +147,8 @@ public final class ClaimGuard {
             String timers = ready.size() > 1 ? words(ready.get(1)) : "";
             List<String> clean = new ArrayList<>();
             for (String line : kept) {
-                boolean ownReminder = REMIND.matcher(line).find() && !words(line).equals(timers)
-                        && !words(String.join(" ", ready)).contains(words(line));
+                boolean ownReminder = (REMIND.matcher(line).find() || line.contains("מפגש אחד"))
+                        && !words(line).equals(timers) && !words(String.join(" ", ready)).contains(words(line));
                 if (ownReminder) {
                     changed = true;
                 } else {

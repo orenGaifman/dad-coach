@@ -98,6 +98,13 @@ public class SessionViews {
         return clock.instant();
     }
 
+    /** The session was created in the last few minutes (the same booking, its next child). */
+    boolean justBooked(java.util.UUID id) {
+        return qualityTimes.findById(id).map(QualityTime::getCreatedAt)
+                .filter(created -> created != null && created.isAfter(Instant.now().minus(java.time.Duration.ofMinutes(5))))
+                .isPresent();
+    }
+
     /**
      * The father's own session with this id. Unknown, malformed or someone else's: NOT_FOUND that lists his
      * still-scheduled sessions with their ids, so an agent that used a wrong id can correct itself in the same turn.

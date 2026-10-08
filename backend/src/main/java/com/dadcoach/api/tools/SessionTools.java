@@ -81,6 +81,9 @@ public final class SessionTools {
         return joined != null ? joined : result.childName();
     }
 
+    static final String JUST_BOOKED_NOTE = "This child joined the session you booked a moment ago - one session with all "
+            + "of these children. This reply replaces the earlier one: your reply is exactly this reply, nothing about joining.";
+
     static final String MERGED_NOTE = "The new time is exactly the time of another session of his - the children were "
             + "added to that session (new_quality_time_id), one session with all of them. Tell him in one line.";
 
@@ -117,7 +120,12 @@ public final class SessionTools {
             views.putSessionTimers(data, father, result.startTime(), result.endTime());
             CoachReplies.Week week = views.putWeekCoverage(data, father);
             String when = views.whenLabel(father, result.startTime());
-            if (result.joinedExistingSession()) {
+            if (result.joinedExistingSession() && !result.childAlreadyInSession() && views.justBooked(result.qualityTimeId())) {
+                // the second child of a booking made a moment ago (one call per child): the whole confirmation, once
+                data.put("note", JUST_BOOKED_NOTE);
+                SessionViews.putReply(data, CoachReplies.booked(when, minutesOf(result), names(result),
+                        views.timerKeys(father, result.startTime(), result.endTime()), week));
+            } else if (result.joinedExistingSession()) {
                 data.put("note", result.childAlreadyInSession() ? ALREADY_IN_NOTE : JOINED_NOTE);
                 SessionViews.putReply(data, result.childAlreadyInSession()
                         ? CoachReplies.alreadyInSession(child.getName(), when)
@@ -296,6 +304,8 @@ public final class SessionTools {
                 s.put("weekday", slot.startTime().atZone(zone).getDayOfWeek().name());
                 s.put("local_start", slot.startTime().atZone(zone).toLocalTime().withSecond(0).withNano(0).toString());
                 s.put("local_end", slot.endTime().atZone(zone).toLocalTime().withSecond(0).withNano(0).toString());
+                // D-8: the day and time he reads, never a weekday the coach works out ("מחר, שישי")
+                s.put("when_label", views.whenLabel(father, slot.startTime()));
                 list.add(s);
             }
             Map<String, Object> data = new LinkedHashMap<>();

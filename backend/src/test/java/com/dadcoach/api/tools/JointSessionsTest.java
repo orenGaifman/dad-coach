@@ -124,7 +124,9 @@ class JointSessionsTest extends AbstractIntegrationTest {
         assertThat(d.has("child_already_in_session")).isFalse();
         assertThat(d.path("child_name").asText()).isEqualTo("מטר ונעם");
         assertThat(d.path("child_names").toString()).isEqualTo("[\"מטר\",\"נעם\"]");
-        assertThat(d.path("note").asText()).contains("added to the existing session");
+        // D-036: the second child of the booking just made - the whole confirmation once, with both names
+        assertThat(d.path("note").asText()).contains("joined the session you booked a moment ago");
+        assertThat(d.path("reply").asText()).startsWith("קבעתי 🎉 *יום שישי 6.11 ב-09:00*, שעה וחצי עם מטר ונעם.");
         assertThat(d.path("timers")).isEqualTo(first.data().path("timers")); // re-arming for the same id = one set
         assertThat(d.path("week_coverage").path("planned_minutes").asInt()).isEqualTo(90);
         assertThat(d.path("week_coverage").path("uncovered_minutes").asInt()).isEqualTo(30);

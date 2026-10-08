@@ -23,6 +23,8 @@ import com.dadcoach.integration.platform.lifecycle.PersonRefs;
 import com.dadcoach.integration.platform.lifecycle.WhatsAppDeletionRequests;
 import com.dadcoach.domain.child.ChildRepository;
 import com.dadcoach.replies.ClaimGuard;
+import com.dadcoach.replies.CoachReplies;
+import com.dadcoach.replies.ReadyQuestions;
 import com.dadcoach.replies.CoachMentions;
 import com.dadcoach.replies.TurnLedger;
 import com.dadcoach.whatsapp.ReplyLanguageGuard;
@@ -93,6 +95,7 @@ public class InboundMessageHandler {
     private final ChildRepository children;
     private com.dadcoach.auth.LoginLinkRepository loginLinks;
     private LoginLinkService loginLinkService;
+    private com.dadcoach.weeklyplan.WeeklyPlanContextBuilder weeklyPlan;
 
     /** B-4: the reply was not Hebrew - the coach writes it again once, told why (as Tair's HebrewOnly). */
     static final String HEBREW_RETRY_NOTE = "[הודעת מערכת, לא מהאבא: התשובה הקודמת שלך לא נשלחה כי לא הייתה בעברית. "
@@ -198,6 +201,9 @@ public class InboundMessageHandler {
                 text = tap.coachText();
             }
         }
+        if (father.isPresent() && in.buttonId() == null && answeredFromData(in, father.get(), heard != null ? heard : text, heard)) {
+            return;
+        }
         runTurn(in, text, heard, father, receivedAt, started);
     }
 
@@ -272,6 +278,45 @@ public class InboundMessageHandler {
                     .addKeyValue("deliveryMs", Duration.between(deliveryStart, end).toMillis())
                     .log();
         }
+    }
+
+    /**
+     * D-036: "מה יש לי השבוע?", "איך אני עומד?", "מתי התזכורת?" as the whole message - answered from the weekly plan of
+     * this moment, before any AI turn (the model listed a session cancelled on his page from its own history), and
+     * recorded in his conversation so the next turn knows it.
+     */
+    private boolean answeredFromData(InboundMessageDto in, Father father, String words, String heard) {
+        Optional<ReadyQuestions.Kind> kind = ReadyQuestions.of(words);
+        if (kind.isEmpty() || weeklyPlan == null) {
+            return false;
+        }
+        try {
+            Map<String, Object> plan = weeklyPlan.build(father);
+            if (!(plan.get("ready_replies") instanceof Map<?, ?> ready) || !(ready.get(kind.get().key) instanceof List<?> lines)
+                    || children.findByFatherIdAndStatus(father.getId(), "ACTIVE").isEmpty()) {
+                return false;
+            }
+            StringBuilder answer = new StringBuilder(IDENTITY);
+            answer.append(String.join("\n", lines.stream().map(String::valueOf).toList()));
+            CoachReplies.Week week = CoachReplies.Week.of(plan.get("coverage"));
+            if (kind.get() != ReadyQuestions.Kind.REMINDER && week != null && week.hasGoal() && !week.isCovered()) {
+                answer.append("\n\nרוצה שנמצא עוד זמן השבוע?");
+            }
+            String out = ReplyStyleGuard.clean(VoiceNoteReplies.withHeard(answer.toString(), heard));
+            send(in.fatherChannelIdentity(), out);
+            recorder.recordSent(father, out, in.idempotencyKey());
+            mentions.sent(father, out);
+            log.atInfo().setMessage("whatsapp.reply.ready_answer").addKeyValue("kind", kind.get().name()).log();
+            return true;
+        } catch (RuntimeException e) {
+            log.atWarn().setMessage("whatsapp.reply.ready_answer_failed").addKeyValue("error", e.getClass().getSimpleName()).log();
+            return false;
+        }
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setWeeklyPlan(com.dadcoach.weeklyplan.WeeklyPlanContextBuilder weeklyPlan) {
+        this.weeklyPlan = weeklyPlan;
     }
 
     private WorkerExecuteRequest turn(InboundMessageDto in, String phone, String correlationId, String content,

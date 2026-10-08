@@ -158,4 +158,28 @@ class TruthfulRepliesTest extends AbstractIntegrationTest {
         says("ואז לא תמצא לי את היעד כאילו היה?");
         assertThat(lastSent()).isEqualTo(IDENTITY + "נכון, אם זה לא יקרה, זה לא ייספר 🙂");
     }
+
+    @Test
+    @DisplayName("D-036: 'מה יש לי השבוע?' is answered from this moment's data, before any AI turn - never from history")
+    void theWeekIsAnsweredFromData() throws Exception {
+        Instant friday9 = LocalDate.of(2026, 11, 6).atTime(9, 0).atZone(java.time.ZoneId.of("Asia/Jerusalem")).toInstant();
+        var kept = qualityTime.scheduleQualityTime(father.getId(), itamar.getId(), friday9, Duration.ofMinutes(90));
+        Instant thursday = friday9.minus(Duration.ofDays(1)).plus(Duration.ofHours(8));
+        var cancelled = qualityTime.scheduleQualityTime(father.getId(), itamar.getId(), thursday, Duration.ofMinutes(30));
+        qualityTime.cancelQualityTime(cancelled.qualityTimeId()); // e.g. on his page
+        jdbc.update("INSERT INTO weekly_goal (father_id, week_start_date, target_hours, actual_minutes, starting_belt, status) "
+                + "VALUES (?, '2026-11-01', 3, 0, 'WHITE', 'ACTIVE')", father.getId());
+
+        says("מה יש לי השבוע?");
+
+        assertThat(fake.turns()).isEmpty();
+        assertThat(lastSent()).isEqualTo(IDENTITY + "השבוע: שעה וחצי מתוך 3 שעות.\n• *יום שישי 6.11 ב-09:00* עם איתמר"
+                + "\n\nרוצה שנמצא עוד זמן השבוע?");
+        assertThat(json.readTree(fake.recordedOutbound().get(0).body()).path("content").asText()).isEqualTo(lastSent());
+
+        says("מתי התזכורת?");
+        assertThat(lastSent()).isEqualTo(IDENTITY + "אזכיר לך *ביום שישי 6.11 ב-08:00*, שעה לפני המפגש עם איתמר.\n"
+                + "חצי שעה אחרי שתסיימו, אשאל איך היה 🙂");
+        assertThat(kept.qualityTimeId()).isNotNull();
+    }
 }
