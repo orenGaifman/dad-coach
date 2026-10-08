@@ -171,9 +171,9 @@ class SessionButtonsTest extends AbstractIntegrationTest {
                 father.getId())).isEqualTo(1);
 
         webhook(tap("wamid.joint2", "dc:ideas:" + next.getId(), "רוצה רעיונות"));
-        // the 30-minute session, both names, the plural verb ("בוחרים") for the two of them
+        // the 30-minute session, both names, no gendered verb (D-032)
         assertThat(lastSentText()).startsWith("❤️ דאד קואץ׳:\n3 רעיונות לחצי שעה עם נועה ומטר:\n• ")
-                .contains("• מגדל קוביות ענק, ונועה ומטר בוחרים את הצבעים");
+                .contains("• מגדל קוביות ענק, בצבעים לבחירת נועה ומטר");
         assertThat(fake.turns()).isEmpty();
     }
 
