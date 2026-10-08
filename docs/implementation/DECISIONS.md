@@ -404,5 +404,13 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   wrong time and moved, refused 409, partial 422, down 503 and older 404, the model's own promise replaced, a move moves
   the timers, "מתי התזכורת?" real time and platform down, weekly_plan_context), WeeklyPlanContextBuilderTest
   (remindersFromThePlatform), TruthfulRepliesTest (the reminder answer reads the platform). FakeServers holds the
-  platform's timers in memory. Full suite 333/333. Lab: qa-lab/transcripts/r3-*.md.
+  platform's timers in memory. Full suite 333/333 (after merging main 750f120).
+- **Lab (real model, Hebrew, qa-lab/r3.py, transcripts r3-*.md):** a - the booking line "אזכיר לך בבוקר ושעה לפני,
+  ואשאל אחר כך איך היה." matched the platform's three PENDING rows, and "מתי התזכורת?" gave their times; b - with the
+  timer transitions refused by the platform: "את התזכורת למפגש הזה לא הצלחתי לקבוע הפעם." and "למפגש עם נועה לא
+  קבועה כרגע תזכורת.", none pending; restored, the next booking promised them again; c - a move left only the new
+  session's triggers, at the new times; d - with the 1-hour trigger missing, the answer named only the morning reminder
+  and the follow-up. Run 1 (r3run1-*) found the platform answering a refusal with 500 instead of 409 (fixed there);
+  the model armed every timer itself in all lab bookings. Seen, not D-037: the coach refused to add a second child to
+  a session ("כל מפגש הוא עם ילד אחד") - joint sessions exist (r3-d).
 - **Deploy order:** the platform first (V120 + the API), then Dad Coach. No re-provisioning.
