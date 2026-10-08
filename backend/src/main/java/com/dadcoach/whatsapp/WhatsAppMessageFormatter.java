@@ -144,7 +144,8 @@ public class WhatsAppMessageFormatter {
         language.put("code", com.dadcoach.channel.template.TemplateRegistry.languageForTemplateName(message.templateName()));
         template.put("language", language);
 
-        // Build template components with variable parameters
+        // Build template components with variable parameters, then one payload per quick-reply button
+        java.util.List<Map<String, Object>> components = new java.util.ArrayList<>();
         if (message.templateParameters() != null && !message.templateParameters().isEmpty()) {
             Map<String, Object> bodyComponent = new LinkedHashMap<>();
             bodyComponent.put("type", "body");
@@ -161,7 +162,13 @@ public class WhatsAppMessageFormatter {
                 .toList();
             bodyComponent.put("parameters", parameters);
 
-            template.put("components", java.util.List.of(bodyComponent));
+            components.add(bodyComponent);
+        }
+        for (int i = 0; i < message.buttons().size(); i++) {
+            components.add(quickReplyButton(i, message.buttons().get(i).id()));
+        }
+        if (!components.isEmpty()) {
+            template.put("components", components);
         }
 
         payload.put("template", template);

@@ -21,9 +21,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * The templates screen (BB D-167 pattern, the team only): each template the code sends, exactly as the
- * owner submits it to Meta, beside its state here — whether the callback is configured to use it and
- * whether it is registered as approved in {@code template_messages} (the send-side gate,
- * {@link TemplateRegistry}). Dad Coach has no direct Meta connection (it sends through the platform
+ * owner submits it to Meta, beside its state here — whether it is registered as approved in
+ * {@code template_messages} (the send-side gate, {@link TemplateRegistry}) and, for the general template,
+ * whether the server is configured to send it. Dad Coach has no direct Meta connection (it sends through the platform
  * gateway), so submission happens in Meta's UI by the owner; after Meta approves, the "mark approved"
  * action here is what used to be a manual INSERT.
  */
@@ -31,9 +31,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/templates")
 public class AdminTemplatesController {
 
-    public record Row(String name, String language, String category, String body, int maxVariables,
-                      String example, String sample, boolean configured, String configuredName,
-                      String registeredStatus, boolean registeredBodyMatches) {}
+    /**
+     * @param configured for the general template: whether the server sends it ({@code WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME});
+     *     a message's own template needs no setting, only the registration
+     */
+    public record Row(String name, String language, String category, String purpose, String body, int maxVariables,
+                      List<String> examples, List<String> quickReplies, String sample, boolean general,
+                      boolean configured, String configuredName, String registeredStatus, boolean registeredBodyMatches) {}
 
     public record Approve(Boolean confirmed) {}
 
@@ -76,9 +80,10 @@ public class AdminTemplatesController {
     private Row row(WhatsAppTemplateCatalog.Entry entry) {
         Optional<TemplateMessage> registered = templates.findByTemplateName(entry.name());
         String configuredName = callback.getTemplateName();
-        return new Row(entry.name(), entry.language(), entry.category(), entry.body(), entry.maxVariables(),
-                entry.example(), entry.sample(),
-                entry.name().equals(configuredName == null ? "" : configuredName.strip()),
+        boolean general = WhatsAppTemplateCatalog.UPDATE_HE.equals(entry.name());
+        return new Row(entry.name(), entry.language(), entry.category(), entry.purpose(), entry.body(),
+                entry.maxVariables(), entry.examples(), entry.quickReplies(), entry.sample(), general,
+                !general || entry.name().equals(configuredName == null ? "" : configuredName.strip()),
                 configuredName == null || configuredName.isBlank() ? null : configuredName.strip(),
                 registered.map(TemplateMessage::getStatus).orElse(null),
                 registered.map(t -> entry.body().equals(t.getBody())).orElse(false));
