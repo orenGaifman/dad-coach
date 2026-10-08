@@ -378,9 +378,24 @@ public class Father {
      * @return true if refresh token exists and calendar is enabled
      */
     public boolean hasGoogleCalendarConfigured() {
-        return Boolean.TRUE.equals(googleCalendarEnabled) 
-            && googleRefreshToken != null 
+        return Boolean.TRUE.equals(googleCalendarEnabled)
+            && googleRefreshToken != null
             && !googleRefreshToken.isEmpty();
+    }
+
+    /**
+     * He connected his calendar but Google no longer accepts the authorization (expired or revoked): still enabled,
+     * no refresh token. Events are not written until he connects again; the dashboard says so.
+     */
+    public boolean calendarNeedsReconnect() {
+        return Boolean.TRUE.equals(googleCalendarEnabled) && !hasGoogleCalendarConfigured();
+    }
+
+    /** Google rejected the refresh token (invalid_grant): drop the dead tokens and keep the calendar enabled. */
+    public void markCalendarReconnectRequired() {
+        this.googleAccessToken = null;
+        this.googleRefreshToken = null;
+        this.googleTokenExpiresAt = null;
     }
 
     /**
