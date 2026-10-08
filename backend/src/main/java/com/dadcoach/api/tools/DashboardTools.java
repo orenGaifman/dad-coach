@@ -18,6 +18,11 @@ public final class DashboardTools {
             + "his page, your reply is exactly the reply line above (it is not shown when the button arrived). When the "
             + "button goes with something else you tell him (where to fix a child, how to connect his calendar), say that "
             + "in one short line. Never write a link or an address yourself.";
+    /** His button from a few minutes ago is right above: nothing new goes out, and a question about it gets an answer. */
+    public static final String ON_SCREEN_REPLY = "הכפתור בהודעה למעלה: לחיצה עליו פותחת את הדף שלך, עם השבוע, הילדים וההתקדמות.";
+    static final String ON_SCREEN_NOTE = "His button to his page went out a few minutes ago and keeps working, so no new one "
+            + "was sent. Reply with the reply line above. If he asked what the button is, the reply line is the answer. "
+            + "Never write a link or an address yourself.";
     static final String RATE_LIMITED_NOTE = "A button to his page was already sent to him a few minutes ago, so no new one "
             + "went out. Tell him in one short line to tap the button in that recent message - it keeps working. "
             + "Never write a link or an address yourself.";
@@ -56,9 +61,12 @@ public final class DashboardTools {
             data.put("delivery", outcome.name());
             if (outcome == SendOutcome.SENT) {
                 data.put("reply", SENT_REPLY);
+            } else if (outcome == SendOutcome.ALREADY_SENT) {
+                data.put("reply", ON_SCREEN_REPLY);
             }
             data.put("note", switch (outcome) {
                 case SENT -> SENT_NOTE;
+                case ALREADY_SENT -> ON_SCREEN_NOTE;
                 case RATE_LIMITED -> RATE_LIMITED_NOTE;
                 default -> FAILED_NOTE;
             });

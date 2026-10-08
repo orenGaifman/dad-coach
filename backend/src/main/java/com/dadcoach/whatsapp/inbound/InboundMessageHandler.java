@@ -243,16 +243,33 @@ public class InboundMessageHandler {
                 && loginLinks.sentToFatherSince(father.get().getId(), turnStarted);
     }
 
+    /**
+     * Only "I sent you the button", in whatever words: every word is one of {@link #SENT_LINE_WORDS}. The coach words it
+     * his own way ("שלחתי לך כפתור לדף שלך 😊" - prod 2026-10-08 - slipped past an exact match), so the words count,
+     * not the sentence. A reply that says anything else (a child to fix under ילדים, the calendar) still goes.
+     */
     static boolean isOnlyTheSentLine(String reply) {
         String r = reply == null ? "" : reply.strip();
         r = r.startsWith(IDENTITY) ? r.substring(IDENTITY.length()).strip() : r;  // the platform puts the identity line on top
-        // words only: the coach sometimes ends it with 🙂 instead of the period (prod simulate, 1 in 6)
-        return wordsOnly(r).equals(wordsOnly(com.dadcoach.api.tools.DashboardTools.SENT_REPLY));
+        String[] words = r.replaceAll("[^\\p{L}\\p{N}]+", " ").strip().split(" ");
+        if (words.length == 0 || words[0].isEmpty()) {
+            return false;
+        }
+        for (String word : words) {
+            if (!SENT_LINE_WORDS.contains(word)) {
+                return false;
+            }
+        }
+        return true;
     }
 
-    private static String wordsOnly(String text) {
-        return text.replaceAll("[^\\p{L}\\p{N}]+", " ").strip();
-    }
+    private static final java.util.Set<String> SENT_LINE_WORDS = java.util.Set.of(
+            "שלחתי", "שלחנו", "נשלח", "נשלחה", "שולח", "הנה", "לך", "אליך", "את", "זה", "הוא", "והוא", "כבר", "עכשיו", "פה",
+            "כאן", "עוד", "רגע", "בדרך", "כפתור", "הכפתור", "קישור", "הקישור", "לינק", "הלינק", "לדף", "הדף", "דף", "לעמוד",
+            "העמוד", "שלך", "האישי", "האישית", "בהודעה", "הודעה", "נפרדת", "בנפרד", "למעלה", "מעל", "ללוח", "לוח", "הבקרה",
+            "לדשבורד", "דשבורד", "הדשבורד", "בדאד", "דאד", "קואץ", "קואץ׳", "ממשיך", "ימשיך", "לעבוד", "עובד", "תמיד",
+            "בכל", "פעם", "מתי", "שתרצה", "שוב", "לחזור", "אפשר", "תוכל", "להיכנס", "להכנס", "כניסה", "דרכו", "בו", "עליו",
+            "לחץ", "תלחץ", "לחיצה", "אחת", "ותגיע", "תגיע", "תיהנה", "בהנאה", "וגם");
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setLoginLinks(com.dadcoach.auth.LoginLinkRepository loginLinks) {

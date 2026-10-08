@@ -139,12 +139,24 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply(sentLine.replace(".", " 🙂"), "GENERATED")));
         webhook(Webhooks.text(father.getPhone(), "wamid.page1b", "שלח לי את הדף שלי")).andExpect(status().isOk());
         assertThat(fake.metaSends()).isEmpty();
+        // his own words (prod 2026-10-08 12:46 - this one went out under the card)
+        fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\nשלחתי לך כפתור לדף שלך 😊", "GENERATED")));
+        webhook(Webhooks.text(father.getPhone(), "wamid.page1c", "הייתי לי דשבורד")).andExpect(status().isOk());
+        assertThat(fake.metaSends()).isEmpty();
+        fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("הנה הכפתור לדף שלך בדאד קואץ׳, הוא ממשיך לעבוד תמיד 👇", "GENERATED")));
+        webhook(Webhooks.text(father.getPhone(), "wamid.page1d", "דשבורד")).andExpect(status().isOk());
+        assertThat(fake.metaSends()).isEmpty();
+        // a reply that says more than "sent" still goes, even with the button in the same turn
+        fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply(
+                "❤️ דאד קואץ׳:\\nאפשר לתקן את השם בדף שלך תחת ילדים, שלחתי לך כפתור", "GENERATED")));
+        webhook(Webhooks.text(father.getPhone(), "wamid.page1e", "השם של הבן שלי נכתב לא נכון")).andExpect(status().isOk());
+        assertThat(fake.metaSends()).hasSize(1);
 
         // no button this turn (already sent a minute ago): his line goes
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\n" + sentLine, "GENERATED")));
         clock.advance(java.time.Duration.ofMinutes(1));
         webhook(Webhooks.text(father.getPhone(), "wamid.page2", "תן לי דשבורד")).andExpect(status().isOk());
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.metaSends()).hasSize(2);
     }
 
     @Test

@@ -158,19 +158,39 @@ class DashboardLinkToolTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("a sixth button within 15 minutes is not sent: the note points to the recent one, which keeps working")
+    @DisplayName("his button from minutes ago is still on his screen: no second card, a reply line that answers what it is")
+    void noSecondCardUnderTheFirst() throws Exception {
+        Father f = data.activeFather("+19995550309");
+        data.endpoint(f, true);
+        assertThat(tool(f.getPhone()).path("data").path("delivery").asText()).isEqualTo("SENT");
+
+        clock.advance(java.time.Duration.ofMinutes(1));  // "מה זה הכפתור הזה?" (prod 2026-10-08 12:47)
+        JsonNode again = tool(f.getPhone());
+        assertThat(again.path("success").asBoolean()).isTrue();
+        assertThat(again.path("data").path("sent").asBoolean()).isFalse();
+        assertThat(again.path("data").path("delivery").asText()).isEqualTo("ALREADY_SENT");
+        assertThat(again.path("data").path("reply").asText()).isEqualTo(DashboardTools.ON_SCREEN_REPLY);
+        assertThat(fake.metaSends()).hasSize(1);
+
+        clock.advance(com.dadcoach.auth.LoginLinkService.ON_SCREEN);
+        assertThat(tool(f.getPhone()).path("data").path("delivery").asText()).isEqualTo("SENT");
+        assertThat(fake.metaSends()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("a sixth try within 15 minutes is not sent: the note points to the recent one, which keeps working")
     void gentleRateLimit() throws Exception {
         Father f = data.activeFather("+19995550305");
         data.endpoint(f, true);
+        fake.onMetaSend(c -> new FakeServers.Reply(400, "{\"error\":{\"code\":131009,\"message\":\"bad\"}}"));
         for (int i = 0; i < 5; i++) {
-            assertThat(tool(f.getPhone()).path("data").path("delivery").asText()).isEqualTo("SENT");
+            assertThat(tool(f.getPhone()).path("data").path("delivery").asText()).isEqualTo("FAILED");
         }
         JsonNode sixth = tool(f.getPhone());
         assertThat(sixth.path("success").asBoolean()).isTrue();
         assertThat(sixth.path("data").path("sent").asBoolean()).isFalse();
         assertThat(sixth.path("data").path("delivery").asText()).isEqualTo("RATE_LIMITED");
         assertThat(sixth.path("data").path("note").asText()).contains("keeps working");
-        assertThat(fake.metaSends()).hasSize(5);
     }
 
     @Test

@@ -33,8 +33,13 @@ public class LoginLinkService {
     public record IssuedLink(String url, Instant expiresAt) {
     }
 
-    /** What {@link #sendTo} did: SENT, RATE_LIMITED (a button went out moments ago), NOT_ALLOWED, FAILED. */
-    public enum SendOutcome { SENT, RATE_LIMITED, NOT_ALLOWED, FAILED }
+    /** What {@link #sendTo} did: SENT, ALREADY_SENT (his button from minutes ago is right above and keeps working),
+     *  RATE_LIMITED, NOT_ALLOWED, FAILED. */
+    public enum SendOutcome { SENT, ALREADY_SENT, RATE_LIMITED, NOT_ALLOWED, FAILED }
+
+    /** A button sent this recently is still on his screen: the coach never stacks a second card under it (owner,
+     *  2026-10-08: "מה זה הכפתור הזה?" got the same card again). */
+    public static final Duration ON_SCREEN = Duration.ofMinutes(10);
 
     private final LoginLinkRepository links;
     private final SignInPolicy policy;
@@ -87,6 +92,11 @@ public class LoginLinkService {
         Optional<SignInSubject> subject = policy.forPhone(e164);
         if (subject.isEmpty()) {
             return SendOutcome.NOT_ALLOWED;
+        }
+        if (subject.get().fatherId() != null
+                && links.sentToFatherSince(subject.get().fatherId(), clock.instant().minus(ON_SCREEN))) {
+            log.info("auth.login_link.already_on_screen source=coach");
+            return SendOutcome.ALREADY_SENT;
         }
         if (!rateLimiter.trySubject(subject.get())) {
             log.info("auth.login_link.rate_limited scope=person source=coach");
