@@ -82,6 +82,8 @@ public abstract class AbstractIntegrationTest {
         registry.add("workflow.platform.base-url", FakeServers.INSTANCE::baseUrl);
         registry.add("dad-coach.whatsapp.api-base-url", FakeServers.INSTANCE::baseUrl);
         registry.add("dad-coach.voice-notes.elevenlabs-base-url", FakeServers.INSTANCE::baseUrl);
+        registry.add("google.calendar.api-base-url", () -> FakeServers.INSTANCE.baseUrl() + "/google/calendar/v3");
+        registry.add("google.calendar.token-url", () -> FakeServers.INSTANCE.baseUrl() + "/google/token");
     }
 
     public static PostgreSQLContainer<?> postgres() {

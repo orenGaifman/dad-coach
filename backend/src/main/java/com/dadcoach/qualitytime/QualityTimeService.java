@@ -158,4 +158,12 @@ public interface QualityTimeService {
      * @return the number of Quality Time events that were detected as externally deleted and marked as CANCELLED
      */
     int syncExternallyDeletedEvents(Long fatherId);
+
+    /**
+     * After he (re)connects Google Calendar: his upcoming scheduled sessions that have no calendar event (booked
+     * while the calendar was disconnected or its authorization had expired) get one. Best effort, one by one.
+     *
+     * @return how many events were created
+     */
+    int addUpcomingToCalendar(Long fatherId);
 }

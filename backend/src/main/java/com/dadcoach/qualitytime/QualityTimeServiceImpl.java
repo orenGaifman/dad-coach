@@ -48,8 +48,6 @@ public class QualityTimeServiceImpl implements QualityTimeService {
 
     private static final Logger log = LoggerFactory.getLogger(QualityTimeServiceImpl.class);
 
-    private static final String GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
-    private static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
     private final QualityTimeRepository qualityTimeRepository;
     private final FatherRepository fatherRepository;
@@ -68,6 +66,13 @@ public class QualityTimeServiceImpl implements QualityTimeService {
 
     @Value("${google.calendar.client-secret:}")
     private String clientSecret;
+
+    /** Google's addresses (tests point them at a fake server). */
+    @Value("${google.calendar.api-base-url:https://www.googleapis.com/calendar/v3}")
+    private String googleCalendarApi;
+
+    @Value("${google.calendar.token-url:https://oauth2.googleapis.com/token}")
+    private String googleTokenUrl;
 
     public QualityTimeServiceImpl(
             QualityTimeRepository qualityTimeRepository,
@@ -222,7 +227,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
             patch.put("summary", event.get("summary"));
             patch.put("description", event.get("description"));
             String calendarId = father.getGoogleCalendarId() != null ? father.getGoogleCalendarId() : "primary";
-            String url = GOOGLE_CALENDAR_API + "/calendars/" + URLEncoder.encode(calendarId, StandardCharsets.UTF_8)
+            String url = googleCalendarApi + "/calendars/" + URLEncoder.encode(calendarId, StandardCharsets.UTF_8)
                     + "/events/" + eventId;
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -268,7 +273,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
             String timeMax = ZonedDateTime.ofInstant(endTime, ZoneId.of(timezone))
                     .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
 
-            String url = GOOGLE_CALENDAR_API + "/calendars/" +
+            String url = googleCalendarApi + "/calendars/" +
                     URLEncoder.encode(calendarId, StandardCharsets.UTF_8) +
                     "/events?timeMin=" + URLEncoder.encode(timeMin, StandardCharsets.UTF_8) +
                     "&timeMax=" + URLEncoder.encode(timeMax, StandardCharsets.UTF_8) +
@@ -311,7 +316,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
     private String createCalendarEventWithRetry(Father father, Child child, Instant startTime, Instant endTime) {
         // First attempt
         try {
-            String eventId = createCalendarEvent(father, child, startTime, endTime);
+            String eventId = createCalendarEvent(father, child.getName(), startTime, endTime);
             log.info("Created Google Calendar event {} for Quality Time", eventId);
             return eventId;
         } catch (CalendarIntegrationException e) {
@@ -332,7 +337,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         }
 
         try {
-            String eventId = createCalendarEvent(father, child, startTime, endTime);
+            String eventId = createCalendarEvent(father, child.getName(), startTime, endTime);
             log.info("Created Google Calendar event {} on retry", eventId);
             return eventId;
         } catch (CalendarIntegrationException e) {
@@ -581,6 +586,37 @@ public class QualityTimeServiceImpl implements QualityTimeService {
      * </ul>
      */
     @Override
+    public int addUpcomingToCalendar(Long fatherId) {
+        Father father = fatherRepository.findById(fatherId).orElse(null);
+        if (father == null || !father.hasGoogleCalendarConfigured()) {
+            return 0;
+        }
+        String locale = father.getLocale() != null ? father.getLocale() : AppConstants.DEFAULT_LOCALE;
+        Instant now = clock.instant();
+        int added = 0;
+        for (QualityTime session : qualityTimeRepository.findByFatherIdAndStatus(fatherId, QualityTimeStatus.SCHEDULED)) {
+            if (!session.getScheduledStart().isAfter(now)
+                    || (session.getGoogleCalendarEventId() != null && !session.getGoogleCalendarEventId().isBlank())) {
+                continue;
+            }
+            try {
+                session.setGoogleCalendarEventId(createCalendarEvent(father, calendarChildNames(session, locale),
+                        session.getScheduledStart(), session.getScheduledEnd()));
+                qualityTimeRepository.save(session);
+                added++;
+            } catch (CalendarIntegrationException e) {
+                log.warn("Could not add Quality Time {} to the calendar of father {}: {}", session.getId(), fatherId,
+                        e.getErrorType().code());
+                if (e.getErrorType() != CalendarIntegrationException.CalendarErrorType.TEMPORARY_FAILURE) {
+                    break;
+                }
+            }
+        }
+        log.info("Added {} upcoming Quality Time sessions to the calendar of father {}", added, fatherId);
+        return added;
+    }
+
+    @Override
     public int syncExternallyDeletedEvents(Long fatherId) {
         log.info("Syncing externally deleted events for father {}", fatherId);
 
@@ -648,7 +684,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
      */
     private boolean checkCalendarEventExists(String accessToken, String calendarId, String eventId) {
         try {
-            String url = GOOGLE_CALENDAR_API + "/calendars/" +
+            String url = googleCalendarApi + "/calendars/" +
                     URLEncoder.encode(calendarId, StandardCharsets.UTF_8) +
                     "/events/" + eventId;
 
@@ -689,7 +725,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
      * @param endTime the end time
      * @return the calendar event ID, or null if creation fails
      */
-    private String createCalendarEvent(Father father, Child child, Instant startTime, Instant endTime) {
+    private String createCalendarEvent(Father father, String childNames, Instant startTime, Instant endTime) {
         // Obtains a valid token or throws a typed CalendarIntegrationException
         // (NOT_CONNECTED / RECONNECT_REQUIRED / TEMPORARY_FAILURE).
         String accessToken = obtainAccessToken(father);
@@ -697,10 +733,10 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
         String locale = father.getLocale() != null ? father.getLocale() : AppConstants.DEFAULT_LOCALE;
 
-        Map<String, Object> event = buildCalendarEvent(child.getName(), startTime, endTime, timezone, locale);
+        Map<String, Object> event = buildCalendarEvent(childNames, startTime, endTime, timezone, locale);
 
         String calendarId = father.getGoogleCalendarId() != null ? father.getGoogleCalendarId() : "primary";
-        String url = GOOGLE_CALENDAR_API + "/calendars/" +
+        String url = googleCalendarApi + "/calendars/" +
                 URLEncoder.encode(calendarId, StandardCharsets.UTF_8) + "/events";
 
         HttpHeaders headers = new HttpHeaders();
@@ -747,6 +783,9 @@ public class QualityTimeServiceImpl implements QualityTimeService {
      *   TEMPORARY_FAILURE (transient error refreshing the token)
      */
     private String obtainAccessToken(Father father) {
+        if (father.calendarNeedsReconnect()) {
+            throw CalendarIntegrationException.reconnectRequired();
+        }
         if (!father.hasGoogleCalendarConfigured()) {
             throw CalendarIntegrationException.notConnected();
         }
@@ -766,7 +805,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
 
             HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
             ResponseEntity<String> response = restTemplate.postForEntity(
-                    GOOGLE_TOKEN_URL, request, String.class);
+                    googleTokenUrl, request, String.class);
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 JsonNode tokens = objectMapper.readTree(response.getBody());
@@ -785,6 +824,11 @@ public class QualityTimeServiceImpl implements QualityTimeService {
             // Google returns 400 invalid_grant (or 401) when the refresh token is expired/revoked.
             log.error("Google token refresh rejected for father {}: status={}, body={}",
                     father.getId(), e.getStatusCode().value(), e.getResponseBodyAsString());
+            if (e.getResponseBodyAsString().contains("invalid_grant")) {
+                // The token is dead for good: settings must stop saying "connected" (and ask him to reconnect).
+                father.markCalendarReconnectRequired();
+                fatherRepository.save(father);
+            }
             throw CalendarIntegrationException.reconnectRequired(e);
         } catch (CalendarIntegrationException e) {
             throw e;
@@ -814,7 +858,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         }
 
         String calendarId = father.getGoogleCalendarId() != null ? father.getGoogleCalendarId() : "primary";
-        String url = GOOGLE_CALENDAR_API + "/calendars/" +
+        String url = googleCalendarApi + "/calendars/" +
                 URLEncoder.encode(calendarId, StandardCharsets.UTF_8) +
                 "/events/" + eventId;
 
