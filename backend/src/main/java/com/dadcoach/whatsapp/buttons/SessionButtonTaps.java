@@ -104,8 +104,10 @@ public class SessionButtonTaps {
                 if (session.getScheduledStart().isAfter(now)) {
                     yield new Tap(NOT_STARTED_REPLY, null);
                 }
-                qualityTime.completeQualityTime(session.getId(), null);
-                yield new Tap(doneReply(father, childName(session)), null);
+                // B-1: a belt earned by this tap is told here, once (the weekly job no longer promotes - D-030)
+                var completed = qualityTime.completeQualityTime(session.getId(), null);
+                yield new Tap(doneReply(father, childName(session),
+                        completed.beltEarned() == null ? null : completed.beltEarned().getDisplayName("he")), null);
             }
             case IDEAS -> session.getStatus() != QualityTimeStatus.SCHEDULED ? new Tap(closedReply(session), null)
                     : !session.getScheduledEnd().isAfter(now) ? new Tap(ENDED_REPLY, null)
@@ -123,25 +125,15 @@ public class SessionButtonTaps {
         };
     }
 
-    private String doneReply(Father father, String child) {
-        StringBuilder reply = new StringBuilder(IDENTITY).append("איזה כיף! רשמתי את הזמן שלך");
-        if (child != null) {
-            reply.append(" עם ").append(child);
-        }
-        reply.append(".");
+    /** The same lines as complete_quality_time's reply (D-034): what was recorded, the week, a belt only when earned. */
+    private String doneReply(Father father, String child, String beltEarned) {
+        com.dadcoach.replies.CoachReplies.Week week = null;
         try {
-            if (weeklyPlan.build(father).get("coverage") instanceof Map<?, ?> coverage
-                    && coverage.get("completed_minutes") instanceof Number completed) {
-                reply.append("\nהשבוע: ").append(hebrewDuration(completed.intValue()));
-                if (coverage.get("target_minutes") instanceof Number target) {
-                    reply.append(" מתוך ").append(hebrewDuration(target.intValue()));
-                }
-                reply.append(" 💪");
-            }
+            week = com.dadcoach.replies.CoachReplies.Week.of(weeklyPlan.build(father).get("coverage"));
         } catch (RuntimeException e) {
             log.atWarn().setMessage("whatsapp.button.coverage_failed").addKeyValue("error", e.getClass().getSimpleName()).log();
         }
-        return reply.toString();
+        return IDENTITY + com.dadcoach.replies.CoachReplies.text(com.dadcoach.replies.CoachReplies.done(child, week, beltEarned));
     }
 
     private String ideasReply(Father father, QualityTime session) {

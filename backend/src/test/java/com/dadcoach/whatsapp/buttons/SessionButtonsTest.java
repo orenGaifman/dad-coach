@@ -154,6 +154,46 @@ class SessionButtonsTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void doneThatEarnsABeltSaysSoOnceInTheSameMessage() throws Exception {
+        // B-1 (production review 2): a belt earned with the button was never told
+        setUpFather("+19995550620", true);
+        jdbc.update("UPDATE father SET total_quality_times_completed = 2, current_belt = 'WHITE' WHERE id = ?", father.getId());
+        QualityTime qt = session(Duration.ofMinutes(-90), 60);
+
+        webhook(tap("wamid.belt1", "dc:done:" + qt.getId(), "היה מעולה"));
+
+        assertThat(lastSentText()).isEqualTo("❤️ דאד קואץ׳:\nאיזה כיף! רשמתי את הזמן שלך עם נועה.\nהשבוע: שעה.\n"
+                + "עלית ל*חגורה צהובה* 💪");
+        assertThat(jdbc.queryForObject("SELECT current_belt FROM father WHERE id = ?", String.class, father.getId())).isEqualTo("YELLOW");
+        // the next completion does not say it again
+        QualityTime second = session(Duration.ofMinutes(-30), 20);
+        webhook(tap("wamid.belt2", "dc:done:" + second.getId(), "היה מעולה"));
+        assertThat(lastSentText()).doesNotContain("חגורה");
+    }
+
+    @Test
+    void aTimerMessageIsTheReadyOneAboutASessionThatIsReallyThere() throws Exception {
+        // D-034: the model's own words are replaced by the ready message; a cancelled session gets no reminder at all
+        setUpFather("+19995550621", true);
+        QualityTime next = session(Duration.ofMinutes(60), 45);
+        callback("r-21", "SESSION_REMINDER_1H", "❤️ דאד קואץ׳:\\nתזכורת: עוד שעה מפגש עם נועה ב-13:00 😊 יש רעיונות?");
+        assertThat(lastSend().path("interactive").path("body").path("text").asText())
+                .isEqualTo("❤️ דאד קואץ׳:\nעוד שעה הזמן שלך ושל נועה 🙂\nיש כבר רעיון מה תעשו?");
+        assertThat(jdbc.queryForObject("SELECT mentioned_on FROM quality_time WHERE id = ?", java.time.LocalDate.class, next.getId()))
+                .isNotNull();
+
+        // D-15: he named the activity today - a wish instead of the question is kept
+        callback("r-22", "SESSION_REMINDER_1H", "❤️ דאד קואץ׳:\\nעוד שעה הזמן שלך ושל נועה 🙂\\nבהצלחה עם הבישול!");
+        assertThat(lastSend().path("interactive").path("body").path("text").asText()).endsWith("\nבהצלחה עם הבישול!");
+
+        // cancelled on his page: the timer still fires, nothing goes out
+        jdbc.update("UPDATE quality_time SET status = 'CANCELLED' WHERE id = ?", next.getId());
+        int before = fake.metaSends().size();
+        callback("r-23", "SESSION_REMINDER_1H", "❤️ דאד קואץ׳:\\nעוד שעה הזמן שלך ושל נועה 🙂\\nיש כבר רעיון מה תעשו?");
+        assertThat(fake.metaSends()).hasSize(before);
+    }
+
+    @Test
     void aSessionWithTwoChildrenIsDoneOnceAndItsIdeasNameBoth() throws Exception {
         setUpFather("+19995550609", true);
         Child matar = data.child(father, "מטר", 3);

@@ -20,8 +20,12 @@ class ScheduledResponseCallbackTest extends AbstractIntegrationTest {
     @Autowired ObjectMapper json;
 
     MvcResult callback(String triggerId, String key, String userId, String content) throws Exception {
+        return callback(triggerId, key, userId, content, "ACTIVE_COACHING");
+    }
+
+    MvcResult callback(String triggerId, String key, String userId, String content, String state) throws Exception {
         String body = "{\"triggerId\":\"" + triggerId + "\",\"workflowInstanceId\":\"w1\",\"userId\":\"" + userId
-                + "\",\"channel\":\"whatsapp\",\"targetStateKey\":\"SESSION_REMINDER_1H\",\"responseContent\":\"" + content + "\"}";
+                + "\",\"channel\":\"whatsapp\",\"targetStateKey\":\"" + state + "\",\"responseContent\":\"" + content + "\"}";
         return mvc.perform(post("/api/integration/workflow/scheduled-response").header("X-API-Key", CALLBACK_KEY)
                 .header("X-Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON).content(body)).andReturn();
     }

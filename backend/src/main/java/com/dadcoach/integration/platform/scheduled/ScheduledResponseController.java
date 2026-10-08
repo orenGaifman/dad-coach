@@ -34,10 +34,17 @@ public class ScheduledResponseController {
 
     private final PlatformUserResolver userResolver;
     private final ScheduledResponseDeliveryService deliveryService;
+    private final ScheduledReplies replies;
+    private final com.dadcoach.replies.CoachMentions mentions;
 
-    public ScheduledResponseController(PlatformUserResolver userResolver, ScheduledResponseDeliveryService deliveryService) {
+    static final String IDENTITY = "❤️ דאד קואץ׳:\n";
+
+    public ScheduledResponseController(PlatformUserResolver userResolver, ScheduledResponseDeliveryService deliveryService,
+                                       ScheduledReplies replies, com.dadcoach.replies.CoachMentions mentions) {
         this.userResolver = userResolver;
         this.deliveryService = deliveryService;
+        this.replies = replies;
+        this.mentions = mentions;
     }
 
     @PostMapping(value = PATH, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -64,7 +71,33 @@ public class ScheduledResponseController {
                     .body(new ScheduledResponseResult("REJECTED", "Unknown recipient"));
         }
 
-        ScheduledResponseResult result = deliveryService.deliver(father.get(), request, expectedKey);
+        // D-034: a session timer's message is the ready one, about a session that is really there (ScheduledReplies);
+        // every message keeps to the standard (ReplyStyleGuard)
+        Optional<ScheduledReplies.Planned> planned = replies.plan(father.get(), request.targetStateKey());
+        String content = request.responseContent().strip();
+        if (planned.isPresent()) {
+            if (planned.get().text() == null) {
+                log.atInfo().setMessage("proactive.callback.result").addKeyValue("triggerId", request.triggerId())
+                        .addKeyValue("targetStateKey", request.targetStateKey()).addKeyValue("fatherId", father.get().getId())
+                        .addKeyValue("status", "SKIPPED").addKeyValue("reason", "NO_VALID_SESSION").log();
+                return ResponseEntity.ok(new ScheduledResponseResult("SKIPPED", "No valid session for this timer"));
+            }
+            String body = content.startsWith(IDENTITY) ? content.substring(IDENTITY.length()) : content;
+            String chosen = ScheduledReplies.choose(body, planned.get(), request.targetStateKey());
+            if (!chosen.equals(body.strip())) {
+                log.atWarn().setMessage("proactive.callback.ready_text_used").addKeyValue("triggerId", request.triggerId())
+                        .addKeyValue("targetStateKey", request.targetStateKey()).log();
+            }
+            content = IDENTITY + chosen;
+        }
+        content = com.dadcoach.whatsapp.ReplyStyleGuard.clean(content);
+        ScheduledResponseRequest effective = new ScheduledResponseRequest(request.triggerId(), request.workflowInstanceId(),
+                request.userId(), request.channel(), request.targetStateKey(), content);
+        ScheduledResponseResult result = deliveryService.deliver(father.get(), effective, expectedKey);
+        if ("DELIVERED".equals(result.status())) {
+            mentions.sent(father.get(), content);
+            planned.ifPresent(p -> mentions.sessionsNamed(father.get(), p.sessions()));
+        }
         log.atInfo().setMessage("proactive.callback.result")
                 .addKeyValue("triggerId", request.triggerId())
                 .addKeyValue("targetStateKey", request.targetStateKey())
