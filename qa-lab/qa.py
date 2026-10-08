@@ -20,8 +20,8 @@ import uuid
 
 LAB = os.path.dirname(os.path.abspath(__file__))
 SENT = f"{LAB}/sent.jsonl"
-BACKEND = "http://localhost:8397"
-PLATFORM = "http://localhost:8396"
+BACKEND = "http://localhost:" + os.environ.get("BACKEND_PORT", "8397")
+PLATFORM = "http://localhost:" + os.environ.get("PLATFORM_PORT", "8396")
 SECRET = b"qa-webhook-secret"
 ADMIN_KEY = "qa-admin-key-0123456789abcdef"
 TOOL_KEY = "qa-dc-tool-key-0123456789abcdef0123456789"
@@ -75,7 +75,7 @@ def platform(method, path, body=None):
     return call(PLATFORM, method, path, body, {"X-API-Key": ADMIN_KEY})
 
 
-def psql(sql, db="qa-dc-db", name="dadcoach"):
+def psql(sql, db="qa-dc-db", name=os.environ.get("DC_DB", "dadcoach")):
     r = subprocess.run(["docker", "exec", db, "psql", "-U", "postgres", "-d", name, "-At", "-F", "\t", "-c", sql],
                        capture_output=True, text=True)
     if r.returncode != 0:
