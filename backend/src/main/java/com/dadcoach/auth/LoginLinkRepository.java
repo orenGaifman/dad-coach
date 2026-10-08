@@ -27,4 +27,8 @@ public interface LoginLinkRepository extends JpaRepository<LoginLink, UUID> {
     @Query("update LoginLink l set l.revokedAt = :now, l.revokedReason = :reason "
             + "where l.revokedAt is null and l.staffUserId = :staffUserId")
     int revokeAllForStaff(@Param("staffUserId") UUID staffUserId, @Param("now") Instant now, @Param("reason") String reason);
+
+    /** A button to his page went out to him since then (delivery SENT) - the dashboard card of this turn. */
+    @Query("select count(l) > 0 from LoginLink l where l.fatherId = :fatherId and l.createdAt >= :since and l.deliveryStatus = 'SENT'")
+    boolean sentToFatherSince(@Param("fatherId") Long fatherId, @Param("since") Instant since);
 }

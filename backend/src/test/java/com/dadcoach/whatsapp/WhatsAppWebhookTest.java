@@ -122,6 +122,27 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
         assertThat(fake.metaSends()).isEmpty();
     }
 
+    /** Owner, 2026-10-08: the button to his page is the whole answer - no "sent you a button" line under it. */
+    @Test
+    void theButtonToHisPageIsTheWholeAnswer() throws Exception {
+        Father father = data.activeFather("+19995550102");
+        String sentLine = com.dadcoach.api.tools.DashboardTools.SENT_REPLY;
+        // the coach's tool sends the button in this turn (a SENT link row at the turn's time; the test clock stands
+        // still), then the coach says only that
+        jdbc.update("INSERT INTO login_link (id, father_id, token_hash, created_at, expires_at, delivery_status) "
+                + "VALUES (?, ?, ?, ?, ?, 'SENT')", java.util.UUID.randomUUID(), father.getId(), "h" + System.nanoTime(),
+                java.sql.Timestamp.from(clock.instant()), java.sql.Timestamp.from(clock.instant().plusSeconds(3600)));
+        fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\n" + sentLine, "GENERATED")));
+        webhook(Webhooks.text(father.getPhone(), "wamid.page1", "תן לי דשבורד")).andExpect(status().isOk());
+        assertThat(fake.metaSends()).isEmpty();
+
+        // no button this turn (already sent a minute ago): his line goes
+        fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\n" + sentLine, "GENERATED")));
+        clock.advance(java.time.Duration.ofMinutes(1));
+        webhook(Webhooks.text(father.getPhone(), "wamid.page2", "תן לי דשבורד")).andExpect(status().isOk());
+        assertThat(fake.metaSends()).hasSize(1);
+    }
+
     @Test
     void aPlatformFailureGetsOneShortHebrewLineNeverEnglish() throws Exception {
         fake.onTurn(c -> new FakeServers.Reply(500, "{\"error\":\"boom\"}"));

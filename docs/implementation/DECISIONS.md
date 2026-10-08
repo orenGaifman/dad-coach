@@ -306,3 +306,8 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 - **Tests:** ProactiveSenderTest, ActivityIdeasTest (new); SessionButtonsTest, WhatsAppWebhookTest,
   VoiceNoteWebhookTest, WeeklyPlanContextBuilderTest, ScheduledResponseCallbackTest updated; provisioning
   test_manifests / test_provision_publish / test_provision_workers.
+
+## D-033 — The button to his page is the whole answer (2026-10-08)
+
+- **Why:** the owner saw two messages for one request in Tair ("📊 לוח הבקרה" card, then "✔ שלחתי לך כפתור..."); Dad Coach did the same (the coach wrote a free "it's on its way" line under the button).
+- **Decision:** `dad_dashboard_link` returns a fixed `reply` line (`DashboardTools.SENT_REPLY`) and the prompt says to reply exactly with it when he only asked for his page; when the button went out in this turn (a SENT `login_link` row since the turn started) and the reply is only that line, `InboundMessageHandler` drops it (outcome `DASHBOARD_CARD`). A reply with more in it (a child to fix, connecting the calendar) still goes; so do rate-limited and failed sends.

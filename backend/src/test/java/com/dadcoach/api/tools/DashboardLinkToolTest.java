@@ -82,7 +82,8 @@ class DashboardLinkToolTest extends AbstractIntegrationTest {
         assertThat(result.path("success").asBoolean()).isTrue();
         assertThat(result.path("data").path("sent").asBoolean()).isTrue();
         assertThat(result.path("data").path("delivery").asText()).isEqualTo("SENT");
-        assertThat(result.path("data").path("note").asText()).contains("on its way").contains("Never write a link");
+        assertThat(result.path("data").path("note").asText()).contains("exactly the reply line").contains("Never write a link");
+        assertThat(result.path("data").path("reply").asText()).isEqualTo(DashboardTools.SENT_REPLY);
         assertThat(result.toString()).doesNotContain("token").doesNotContain("http");
 
         assertThat(fake.metaSends()).hasSize(1);

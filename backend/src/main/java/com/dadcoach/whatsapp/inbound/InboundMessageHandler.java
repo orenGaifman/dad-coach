@@ -80,6 +80,7 @@ public class InboundMessageHandler {
     private final SentMessageRecorder recorder;
     private final VoiceNotes voiceNotes;
     private final Clock clock;
+    private com.dadcoach.auth.LoginLinkRepository loginLinks;
 
     public InboundMessageHandler(FatherRepository fathers, WhatsAppEndpoints endpoints, DeletedSenders deletedSenders,
                                  WhatsAppDeletionRequests deletionRequests, WorkflowPlatformClient platform,
@@ -209,6 +210,10 @@ public class InboundMessageHandler {
             if (!hebrew.get().equals(reply.strip())) {
                 log.atWarn().setMessage("whatsapp.reply.english_note_removed").addKeyValue("correlationId", in.idempotencyKey()).log();
             }
+            if (cardSaysItAll(father, hebrew.get(), platformStart)) {
+                outcome = "DASHBOARD_CARD";
+                return;
+            }
             send(phone, VoiceNoteReplies.withHeard(hebrew.get(), heard));
         } catch (PlatformUnavailableException | WorkflowPlatformClient.PlatformRejectedException e) {
             outcome = "PLATFORM_FAILED";
@@ -227,6 +232,26 @@ public class InboundMessageHandler {
                     .addKeyValue("deliveryMs", Duration.between(deliveryStart, end).toMillis())
                     .log();
         }
+    }
+
+    /**
+     * The button to his page went out in this turn and the coach's reply only says so: the button message is the whole
+     * answer (owner, 2026-10-08). A reply with anything else in it still goes.
+     */
+    private boolean cardSaysItAll(Optional<Father> father, String reply, Instant turnStarted) {
+        return loginLinks != null && father.isPresent() && isOnlyTheSentLine(reply)
+                && loginLinks.sentToFatherSince(father.get().getId(), turnStarted);
+    }
+
+    static boolean isOnlyTheSentLine(String reply) {
+        String r = reply == null ? "" : reply.strip();
+        r = r.startsWith(IDENTITY) ? r.substring(IDENTITY.length()).strip() : r;  // the platform puts the identity line on top
+        return r.equals(com.dadcoach.api.tools.DashboardTools.SENT_REPLY);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setLoginLinks(com.dadcoach.auth.LoginLinkRepository loginLinks) {
+        this.loginLinks = loginLinks;
     }
 
     /**

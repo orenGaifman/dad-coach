@@ -11,9 +11,13 @@ import org.springframework.stereotype.Component;
 /** The father's dashboard. */
 public final class DashboardTools {
 
-    static final String SENT_NOTE = "The button to his page went out to him as its own WhatsApp message. Say in one short "
-            + "line that it is on its way (and that the same button keeps working whenever he wants to come back). "
-            + "Never write a link or an address yourself.";
+    /** The whole reply when he only asked for his page: the button message says it all, so the product drops this line
+     *  when the button went out in the same turn (owner, 2026-10-08: one message, not a card and a "sent you" line). */
+    public static final String SENT_REPLY = "שלחתי לך כפתור לדף שלך, בהודעה נפרדת.";
+    static final String SENT_NOTE = "The button to his page went out to him as its own WhatsApp message. When he only asked for "
+            + "his page, your reply is exactly the reply line above (it is not shown when the button arrived). When the "
+            + "button goes with something else you tell him (where to fix a child, how to connect his calendar), say that "
+            + "in one short line. Never write a link or an address yourself.";
     static final String RATE_LIMITED_NOTE = "A button to his page was already sent to him a few minutes ago, so no new one "
             + "went out. Tell him in one short line to tap the button in that recent message - it keeps working. "
             + "Never write a link or an address yourself.";
@@ -50,6 +54,9 @@ public final class DashboardTools {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("sent", outcome == SendOutcome.SENT);
             data.put("delivery", outcome.name());
+            if (outcome == SendOutcome.SENT) {
+                data.put("reply", SENT_REPLY);
+            }
             data.put("note", switch (outcome) {
                 case SENT -> SENT_NOTE;
                 case RATE_LIMITED -> RATE_LIMITED_NOTE;
