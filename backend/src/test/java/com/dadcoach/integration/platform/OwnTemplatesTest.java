@@ -126,13 +126,16 @@ class OwnTemplatesTest extends AbstractIntegrationTest {
         session(noa, Duration.ofHours(3), 60);   // 15:00
         session(noa, Duration.ofDays(1), 60);    // tomorrow: not today's
 
-        callback("o-3", "SESSION_MORNING_REMINDER", "❤️ דאד קואץ׳:\\n*היום ב-15:00 ו-17:00* זה הזמן שלך ושל נועה ויובל 🙂");
+        callback("o-3", "SESSION_MORNING_REMINDER", "❤️ דאד קואץ׳:\\n*היום ב-15:00 וב-17:00* זה הזמן שלך ושל נועה ויובל 🙂");
 
         JsonNode sent = lastSend();
         assertThat(sent.path("template").path("name").asText()).isEqualTo("dad_coach_session_morning_he");
-        assertThat(component(sent, 0).path("parameters").get(0).path("text").asText()).isEqualTo("15:00 ו-17:00");
+        assertThat(component(sent, 0).path("parameters").get(0).path("text").asText()).isEqualTo("15:00 וב-17:00");
         assertThat(component(sent, 0).path("parameters").get(1).path("text").asText()).isEqualTo("נועה ויובל");
         assertThat(sent.path("template").path("components")).hasSize(1);
+        assertThat(com.dadcoach.channel.template.WhatsAppTemplateCatalog.require("dad_coach_session_morning_he")
+                .render(java.util.List.of("15:00 וב-17:00", "נועה ויובל")))
+                .isEqualTo("❤️ דאד קואץ׳:\n*היום ב-15:00 וב-17:00* זה הזמן שלך ושל נועה ויובל 🙂");
     }
 
     @Test
