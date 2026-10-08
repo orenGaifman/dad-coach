@@ -162,6 +162,21 @@ export interface VoiceNotesStatus {
   lastError: string | null
 }
 
+/** The templates screen: a catalog entry exactly as submitted to Meta, beside its state here. */
+export interface AdminTemplateRow {
+  name: string
+  language: string
+  category: string
+  body: string
+  maxVariables: number
+  example: string
+  sample: string
+  configured: boolean
+  configuredName: string | null
+  registeredStatus: string | null
+  registeredBodyMatches: boolean
+}
+
 export interface AdminTraining {
   mediaConfigured: boolean
   videos: { slug: string; primary: boolean; order: number; title: string; description: string; durationSeconds: number; active: boolean; hasFile: boolean }[]

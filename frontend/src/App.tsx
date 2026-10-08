@@ -14,6 +14,7 @@ import { FatherDetailPage } from './pages/admin/FatherDetail'
 import { FatherViewAs } from './pages/admin/FatherViewAs'
 import { IntegrationsPage } from './pages/admin/Integrations'
 import { Undelivered } from './pages/admin/Undelivered'
+import { TemplatesPage } from './pages/admin/Templates'
 import { Deletions } from './pages/admin/Deletions'
 import { AdminTrainingPage } from './pages/admin/Training'
 import { DataDeletion, Privacy, Terms } from './pages/legal/Legal'
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="fathers/:id" element={<FatherDetailPage />} />
         <Route path="fathers/:id/home" element={<FatherViewAs />} />
         <Route path="undelivered" element={<Undelivered />} />
+        <Route path="templates" element={<TemplatesPage />} />
         <Route path="integrations" element={<IntegrationsPage />} />
         <Route path="deletions" element={<Deletions />} />
         <Route path="training" element={<AdminTrainingPage />} />

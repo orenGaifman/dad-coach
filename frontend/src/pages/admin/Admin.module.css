@@ -19,3 +19,18 @@
 .ok { color: var(--dc-success-600); font-weight: 700; }
 .bad { color: var(--dc-danger-600); font-weight: 700; }
 .kv dd.num, .kv dd.ltr { text-align: right; }
+
+/* Templates screen: the body as submitted to Meta, and the message as the father reads it. */
+.tplName { font-family: var(--dc-mono, ui-monospace, monospace); font-size: var(--dc-fs-sm); color: var(--dc-ink-500); }
+.tplLabelRow { display: flex; align-items: center; justify-content: space-between; gap: var(--dc-sp-2); }
+.tplRaw {
+  margin: 0; padding: var(--dc-sp-3); border-radius: var(--dc-r-md); background: var(--dc-ink-100);
+  white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: var(--dc-fs-sm); line-height: 1.6;
+}
+.tplVar { color: var(--dc-navy-700); background: var(--dc-navy-050); border-radius: 4px; padding: 0 3px; font-weight: 700; direction: ltr; unicode-bidi: embed; }
+.tplScreen { background: #E5DDD5; border-radius: var(--dc-r-md); padding: var(--dc-sp-4); }
+.tplBubble {
+  background: #fff; border-radius: 8px 8px 8px 0; padding: var(--dc-sp-2) var(--dc-sp-3);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.12); white-space: pre-wrap; word-break: break-word;
+  font-size: var(--dc-fs-sm); line-height: 1.6; max-inline-size: 420px;
+}
