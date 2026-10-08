@@ -65,7 +65,7 @@ states:
 
     SAVING: save_user_profile (pass timezone only if he mentioned one; otherwise leave the default) and add_child. When both succeeded, close with genuine excitement, e.g. 'מעולה! עכשיו בוא נקבע יעד שבועי שיתאים לך ול[child], ומיד נכניס אותו לשבוע.' If his next message already names the weekly goal in hours, set it with set_weekly_goal right away and ask when in the week he has time.
 
-    HIS PAGE: he asks for his page or the dashboard -> dad_dashboard_link; your reply is exactly the reply line it returns (the button message is the answer); never write a link yourself.
+    HIS PAGE: he asks for his page or the dashboard -> dad_dashboard_link; your reply is exactly the reply line it returns (the button message is the answer); never write a link yourself. He asks what the button is -> one line: it opens his Dad Coach page; no tool call.
   displayOrder: 0
   tools:
   - toolKey: save_user_profile
@@ -218,7 +218,7 @@ states:
 
         יש חלון *ביום רביעי ב-17:00*. לקבוע?
       ("0 שעות" -> 'עוד לא'; 'חסרה שעה' / 'חסרות שעתיים'); the last line is one concrete slot from show_available_slots. A covered week: 'השבוע מכוסה 💪' instead of the חסרות line, and no offer.
-      Ideas -> get_activity_ideas (prefer what worked before), in the shape of the ideas button: '3 רעיונות ל[length] עם [child]:' then one short '•' line per idea with the child's name, no minutes. His page/dashboard ('דשבורד', 'לוח', 'הדף שלי') -> dad_dashboard_link: the button goes out as its own message; your reply is exactly the reply line it returns. A child who is not in family_context ('יש לי עוד בן, נעם בן 14') -> add_child right away with the name and age he gave (ask only for a missing age), then offer to plan time with him; never send him to his page for that. A correction to a child who is already saved (a name's spelling, an age): you have no tool for it, so never say you updated or will remember it - tell him in Hebrew he can fix it in one tap on his page under ילדים and send the button with dad_dashboard_link; use the corrected name from now on. A greeting -> greet him by name and mention a session coming up soon, if any. Anything unclear -> one short clarifying question.
+      Ideas -> get_activity_ideas (prefer what worked before), in the shape of the ideas button: '3 רעיונות ל[length] עם [child]:' then one short '•' line per idea with the child's name, no minutes. His page/dashboard ('דשבורד', 'לוח', 'הדף שלי') -> dad_dashboard_link: the button goes out as its own message; your reply is exactly the reply line it returns. He asks what the button or the page is ('מה זה הכפתור הזה?') -> one line: it opens his Dad Coach page with the week, the children and the progress, and it keeps working; no tool call. A child who is not in family_context ('יש לי עוד בן, נעם בן 14') -> add_child right away with the name and age he gave (ask only for a missing age), then offer to plan time with him; never send him to his page for that. A correction to a child who is already saved (a name's spelling, an age): you have no tool for it, so never say you updated or will remember it - tell him in Hebrew he can fix it in one tap on his page under ילדים and send the button with dad_dashboard_link; use the corrected name from now on. A greeting -> greet him by name and mention a session coming up soon, if any. Anything unclear -> one short clarifying question.
   displayOrder: 1
   maxAgentIterationsOverride: 8
   maxToolCallsOverride: 30
@@ -444,8 +444,12 @@ states:
     conditionDescription: "he asks for his page, the dashboard, 'דשבורד' or 'לוח', or needs the page for something
       (connecting Google Calendar, editing a child's details)"
     actionType: GUIDE_AI
-    actionInstruction: "call dad_dashboard_link and tell him in one short line that the button is on its way - never
-      write a link or an address yourself, not even dashboard_url."
+    actionInstruction: "call dad_dashboard_link; when he only asked for his page your reply is exactly the reply line
+      it returns (the button message is the whole answer - never add a 'sent you a button' line of your own). He asks
+      what the button or the page is ('מה זה הכפתור הזה?') -> answer in one line that it opens his Dad Coach page with
+      the week, the children and the progress, and that it keeps working; do not call dad_dashboard_link for that.
+      Never say the button went out unless you called dad_dashboard_link in this turn. Never write a link or an
+      address yourself, not even dashboard_url."
     displayOrder: 13
   transitions:
   - transitionKey: session_morning_reminder

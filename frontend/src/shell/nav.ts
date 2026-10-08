@@ -25,6 +25,7 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'סקירה', icon: 'grid', end: true, primary: true },
   { to: '/admin/fathers', label: 'אבות', icon: 'users', primary: true },
   { to: '/admin/undelivered', label: 'הודעות שלא נמסרו', short: 'לא נמסרו', icon: 'alert', primary: true },
+  { to: '/admin/templates', label: 'תבניות וואטסאפ', short: 'תבניות', icon: 'whatsapp' },
   { to: '/admin/integrations', label: 'אינטגרציות', icon: 'link', primary: true },
   { to: '/admin/deletions', label: 'השבתה ומחיקה', icon: 'trash' },
   { to: '/admin/training', label: 'הדרכה', icon: 'play' },

@@ -139,12 +139,40 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply(sentLine.replace(".", " 🙂"), "GENERATED")));
         webhook(Webhooks.text(father.getPhone(), "wamid.page1b", "שלח לי את הדף שלי")).andExpect(status().isOk());
         assertThat(fake.metaSends()).isEmpty();
+        // his own words (prod 2026-10-08 12:46 - this one went out under the card)
+        fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\nשלחתי לך כפתור לדף שלך 😊", "GENERATED")));
+        webhook(Webhooks.text(father.getPhone(), "wamid.page1c", "הייתי לי דשבורד")).andExpect(status().isOk());
+        assertThat(fake.metaSends()).isEmpty();
+        fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("הנה הכפתור לדף שלך בדאד קואץ׳, הוא ממשיך לעבוד תמיד 👇", "GENERATED")));
+        webhook(Webhooks.text(father.getPhone(), "wamid.page1d", "דשבורד")).andExpect(status().isOk());
+        assertThat(fake.metaSends()).isEmpty();
+        // a reply that says more than "sent" still goes, even with the button in the same turn
+        fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply(
+                "❤️ דאד קואץ׳:\\nאפשר לתקן את השם בדף שלך תחת ילדים, שלחתי לך כפתור", "GENERATED")));
+        webhook(Webhooks.text(father.getPhone(), "wamid.page1e", "השם של הבן שלי נכתב לא נכון")).andExpect(status().isOk());
+        assertThat(fake.metaSends()).hasSize(1);
 
-        // no button this turn (already sent a minute ago): his line goes
+        // no button this turn, but his button from a minute ago is on his screen: no second card, a line about it
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\n" + sentLine, "GENERATED")));
         clock.advance(java.time.Duration.ofMinutes(1));
         webhook(Webhooks.text(father.getPhone(), "wamid.page2", "תן לי דשבורד")).andExpect(status().isOk());
+        assertThat(fake.metaSends()).hasSize(2);
+        assertThat(sentText(1)).isEqualTo("❤️ דאד קואץ׳:\n" + com.dadcoach.api.tools.DashboardTools.ON_SCREEN_REPLY);
+    }
+
+    /** Prod simulate 2026-10-08: 7 in 10 times the coach said "שלחתי לך את הכפתור" without calling the tool. */
+    @Test
+    void sayingTheButtonWentOutSendsIt() throws Exception {
+        Father father = data.activeFather("+19995550103");
+        data.endpoint(father, true);
+        fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\nשלחתי לך את הכפתור לדף שלך 😊", "GENERATED")));
+        webhook(Webhooks.text(father.getPhone(), "wamid.nocall", "הייתי לי דשבורד")).andExpect(status().isOk());
         assertThat(fake.metaSends()).hasSize(1);
+        JsonNode card = json.readTree(fake.metaSends().get(0).body());
+        assertThat(card.path("type").asText()).isEqualTo("interactive");
+        assertThat(card.path("interactive").path("type").asText()).isEqualTo("cta_url");
+        assertThat(jdbc.queryForObject("SELECT delivery_status FROM login_link WHERE father_id = ?", String.class,
+                father.getId())).isEqualTo("SENT");
     }
 
     @Test
