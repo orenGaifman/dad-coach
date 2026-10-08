@@ -136,6 +136,13 @@ class WeeklyPlanContextBuilderTest {
                 .containsEntry("covered_minutes", 105)
                 .containsEntry("uncovered_minutes", 75)
                 .containsEntry("is_covered", false);
+        // D-032: the same week in the hour words the father reads, so the coach never converts minutes
+        assertThat(map(map(data, "coverage"), "in_hours"))
+                .containsEntry("goal", "3 שעות")
+                .containsEntry("completed", "שעה")
+                .containsEntry("planned", "שלושת רבעי שעה")
+                .containsEntry("covered", "שעה ו-45 דקות")
+                .containsEntry("uncovered", "שעה ורבע");
         assertThat(map(data, "sessions_this_week")).containsOnlyKeys(
                 "2026-09-27 17:00", "2026-09-28 17:00", "2026-09-30 17:00", "2026-10-01 17:00");
         assertThat(lines(data, "sessions_this_week")).extracting(line -> line.split(" \\| ")[0])
@@ -232,6 +239,7 @@ class WeeklyPlanContextBuilderTest {
                 .containsEntry("goal_met", false).containsEntry("completed_minutes", 90)
                 .containsEntry("completed_sessions", 1).containsEntry("not_completed_sessions", 1)
                 .containsEntry("goal_status", "ACTIVE").containsEntry("goal_target_minutes", 120);
+        assertThat(map(previous, "in_hours")).containsEntry("completed", "שעה וחצי").containsEntry("goal", "שעתיים");
         assertThat(map(data, "previous_week_completion_notes")).containsExactly(Map.entry("note_1", "baked a cake"));
         assertThat(map(data, "goal_history")).containsEntry("has_any_goal", true)
                 .containsEntry("latest_previous_target_hours", 2);

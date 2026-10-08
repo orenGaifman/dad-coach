@@ -32,7 +32,9 @@ Phone legend: there is one phone, **F** = the father's phone (chat header "דא�
 own messages are outgoing (green, left side in Hebrew WhatsApp); the coach's are incoming (white,
 right side). A coach message marked **🔔 lock screen** is proactive (a timer or the daily check woke
 the coach up): the widget first shows it as a WhatsApp notification on the locked phone, then it
-lands in the chat. `—` in the buttons column means plain text (Dad Coach sends no reply buttons today).
+lands in the chat. `—` in the buttons column means plain text; the 1-hour reminder and the follow-up
+carry reply buttons (D-026). `<br>` is a line break inside one bubble; `*...*` is WhatsApp bold (the
+session's day and time, D-032).
 
 Captions: rows of kind **scene** replace the caption next to the phone while the scenario plays (the
 static, reduced-motion view keeps the opening scene).
@@ -49,7 +51,7 @@ Scene: יום ראשון, 21:10. אורי ראה מודעה, השאיר שם ו�
 | # | Phone | From | Time | Message | buttons |
 |---|---|---|---|---|---|
 | 1 | F | אורי | 21:10 | היי, אני רוצה להתחיל | — |
-| 2 | F | דאד קואץ׳ `draft` | 21:10 | היי, כיף שבאת 🙂 אני דאד קואץ׳. אתה בוחר כמה זמן אתה רוצה עם הילדים בכל שבוע, ואני עוזר שזה באמת יקרה: נכניס את הזמן לשבוע, אזכיר לפני ואשאל אחרי איך היה. כל מפגש שקרה מקדם אותך בחגורות, מהלבנה ועד השחורה. איך לקרוא לך? | — |
+| 2 | F | דאד קואץ׳ `draft` | 21:10 | היי, כיף שהצטרפת 🙂 אני דאד קואץ׳.<br>אתה בוחר כמה זמן בשבוע עם הילדים, ואני דואג שזה יקרה:<br>• קובע איתך מתי<br>• מזכיר לפני<br>• שואל אחרי איך היה<br><br>איך קוראים לך? | — |
 | 3 | F | אורי | 21:11 | אורי | — |
 | 4 | F | דאד קואץ׳ `draft` | 21:11 | נעים מאוד, אורי. ספר לי על אחד הילדים: מה השם ובאיזה גיל? | — |
 | 5 | F | אורי | 21:11 | נועה, בת 7 | — |
@@ -57,14 +59,14 @@ Scene: יום ראשון, 21:10. אורי ראה מודעה, השאיר שם ו�
 | 7 | F | אורי | 21:12 | כן | — |
 | 8 | F | דאד קואץ׳ `draft` | 21:12 | מעולה! עכשיו בוא נקבע יעד שבועי שיתאים לך ולנועה, ומיד נכניס אותו לשבוע. | — |
 | 9 | F | אורי | 21:12 | יאללה | — |
-| 10 | F | דאד קואץ׳ `draft` | 21:12 | אז נועה בת 7, גיל מדהים! להתחלה אני ממליץ על 2–3 שעות בשבוע: מספיק כדי להרגיש את זה, בלי לחץ. מתי בשבוע יש לך בדרך כלל זמן? | — |
+| 10 | F | דאד קואץ׳ `draft` | 21:12 | אז נועה בת 7, גיל מעולה למבצרים.<br>להתחלה אני ממליץ על 2-3 שעות בשבוע, בלי לחץ.<br>מתי בשבוע יש לך בדרך כלל זמן? | — |
 | 11 | F | אורי | 21:13 | אחר הצהריים. נלך על 3 שעות | — |
-| 12 | F | דאד קואץ׳ `draft` | 21:13 | קבעתי: 3 שעות השבוע 💪 יש חלון בשלישי ב-17:00. לקבוע שם שעה עם נועה? | — |
+| 12 | F | דאד קואץ׳ `draft` | 21:13 | קבעתי יעד: 3 שעות השבוע 💪<br>יש חלון *ביום שלישי ב-17:00*.<br>לקבוע שם שעה עם נועה? | — |
 | p | — | progress | — | goal 3h · done 0 · planned 0 · belt לבן | — |
 
 Takeaway: שלוש דקות בוואטסאפ: שם, ילדה אחת, יעד. בלי להוריד אפליקציה ובלי טופס.
 
-Faithful to: ONBOARDING (value in 2–3 sentences incl. belts from white; one question at a time; name,
+Faithful to: ONBOARDING (the approved welcome list, D-032 - belts come after the first session; one question at a time; name,
 then one child's name and age; summarize and confirm before saving — the REQUIRED behavior rule; the
 closing line is the workflow's own example), then ACTIVE_COACHING B "first goal" (reference the child's
 age, suggest 2–3 hours, ask when he has time; valid range 1–7) and C (propose a concrete slot).
@@ -76,25 +78,27 @@ Scene: יום ראשון, 21:20. אורי קובע את המפגש הראשון 
 | # | Phone | From | Time | Message | buttons |
 |---|---|---|---|---|---|
 | 1 | F | אורי | 21:20 | נועה, שלישי 17:00, שעה | — |
-| 2 | F | דאד קואץ׳ `draft` | 21:20 | יופי, קבעתי! אזכיר לך ביום עצמו ושעה לפני. השבוע: שעה מתוכננת מתוך 3. | — |
+| 2 | F | דאד קואץ׳ `draft` | 21:20 | קבעתי 🎉 *יום שלישי 13.10 ב-17:00*, שעה עם נועה.<br>אזכיר לך בבוקר ושעה לפני, ואשאל אחר כך איך היה.<br>השבוע: שעה מתוכננת מתוך 3. | — |
 | p | — | progress | — | goal 3h · done 0 · planned 1h · belt לבן | — |
 | day | — | — | — | יום שלישי | — |
 | scene | — | caption | — | יום שלישי, יום המפגש. דאד קואץ׳ כותב שלוש פעמים, קצר: בבוקר, שעה לפני, ואחרי. | — |
-| 3 | F | דאד קואץ׳ `draft` 🔔 lock screen | 08:00 | היום ב-17:00 זה הזמן שלך ושל נועה 🙂 | — |
-| 4 | F | דאד קואץ׳ `draft` 🔔 lock screen | 16:00 | עוד שעה הזמן שלך ושל נועה. אם עוד אין תוכנית, כמה רעיונות לגיל 7: מבצר מכריות בסלון, אפייה של עוגיות, או סיבוב אופניים בפארק. | — |
-| 5 | F | דאד קואץ׳ `draft` 🔔 lock screen | 18:30 | נו, איך היה לכם עם נועה? | — |
+| 3 | F | דאד קואץ׳ `draft` 🔔 lock screen | 08:00 | *היום ב-17:00* זה הזמן שלך ושל נועה 🙂 | — |
+| 4 | F | דאד קואץ׳ `draft` 🔔 lock screen | 16:00 | עוד שעה הזמן שלך ושל נועה 🙂<br>יש כבר רעיון מה תעשו? | רוצה רעיונות |
+| 4a | F | אורי (לחיצה) | 16:02 | רוצה רעיונות | — |
+| 4b | F | דאד קואץ׳ (הודעה קבועה, `SessionButtonTaps`) | 16:02 | 3 רעיונות לשעה עם נועה:<br>• פנקייקים יחד, ונועה מודדת ומערבבת<br>• משחק לוח שנועה בוחרת<br>• סיבוב אופניים בפארק או בשכונה<br><br>תספר לי אחר כך איך היה 🙂 | — |
+| 5 | F | דאד קואץ׳ `draft` 🔔 lock screen | 18:30 | נו, איך היה לכם עם נועה? | היה מעולה · לא יצא |
 | 6 | F | אורי | 18:41 | היה מעולה. בנינו מבצר מכריות והיא לא הסכימה לצאת ממנו 😄 | — |
-| 7 | F | דאד קואץ׳ `draft` | 18:41 | איזה כיף! רשמתי ✔ השבוע: שעה מתוך 3 כבר קרתה. זה המפגש הראשון שלך, עוד 2 לחגורה הצהובה. | — |
+| 7 | F | דאד קואץ׳ `draft` | 18:41 | איזה כיף! מבצר שאי אפשר לצאת ממנו.<br>רשמתי את השעה עם נועה.<br>השבוע: שעה מתוך 3 💪 | — |
 | p | — | progress | — | goal 3h · done 1h · planned 0 · belt לבן · עוד 2 לצהובה | — |
 
 Takeaway: הודעה אחת קבעה את המפגש. שלוש תזכורות קטנות בזמן הנכון, ותשובה במילה אחת סגרה אותו.
 
 Faithful to: D SCHEDULE (the confirmation line is the workflow's own example + one coverage line from
 week_coverage), SESSION_MORNING_REMINDER (08:00, the workflow's own example line, no question),
-SESSION_REMINDER_1H (one light line, 2–3 age-fitting ideas from get_activity_ideas), SESSION_FOLLOW_UP
+SESSION_REMINDER_1H (two lines, no ideas in the text; the ideas come from the [רוצה רעיונות] button, row 4b is Dad Coach's fixed reply to the tap, catalog `ActivityIdeas` for age 6-10), SESSION_FOLLOW_UP
 (30 minutes after the 18:00 end, the workflow's own example line, nothing else), D IT HAPPENED (celebrate,
-no extra question because he already told what they did, complete with his notes, progress in one line;
-yellow belt is at 3 completed sessions).
+no extra question because he already told what they did, complete with his notes, progress in one line in hours;
+the belt is named only when one is earned - yellow at 3 completed sessions, the card shows the count).
 
 ## Scenario 3 — "משהו התבטל" (a cancelled session → no guilt, a replacement slot)
 
@@ -104,10 +108,10 @@ Scene: יום חמישי, 15:20. נקבעה לאורי שעה עם נועה ב-1
 |---|---|---|---|---|---|
 | p | — | progress | — | goal 3h · done 2h · planned 1h · belt לבן | — |
 | 1 | F | אורי | 15:20 | היום לא אצליח עם נועה, נתקעתי בעבודה | — |
-| 2 | F | דאד קואץ׳ `draft` | 15:20 | אין בעיה, קורה. ביטלתי את היום. כדי לא לאבד את הזמן השבוע: יש חלון בשישי ב-10:00, לקבוע במקום? | — |
+| 2 | F | דאד קואץ׳ `draft` | 15:20 | אין בעיה, ביטלתי את היום עם נועה.<br>כדי לא לאבד את הזמן השבוע, יש חלון *ביום שישי ב-10:00*.<br>לקבוע במקום? | — |
 | p | — | progress | — | goal 3h · done 2h · planned 0 · belt לבן | — |
 | 3 | F | אורי | 15:24 | כן, שישי בבוקר מעולה | — |
-| 4 | F | דאד קואץ׳ `draft` | 15:24 | יופי, קבעתי לשישי ב-10:00! אזכיר לך ביום עצמו ושעה לפני. השבוע שוב מכוסה 💪 | — |
+| 4 | F | דאד קואץ׳ `draft` | 15:24 | קבעתי 🎉 *מחר, יום שישי 16.10 ב-10:00*, שעה עם נועה.<br>אזכיר לך בבוקר ושעה לפני, ואשאל אחר כך איך היה.<br>השבוע מכוסה. | — |
 | p | — | progress | — | goal 3h · done 2h · planned 1h · belt לבן | — |
 
 Takeaway: בלי "חבל" ובלי "שוב?". הביטול לא הקטין את השבוע: דאד קואץ׳ הציע זמן אחר מיד, ואורי אמר כן. ביטול גם לא שובר את הרצף.
@@ -124,12 +128,12 @@ Scene: יום ראשון, 09:00. שבוע חדש מתחיל, ועוד אין ל�
 | # | Phone | From | Time | Message | buttons |
 |---|---|---|---|---|---|
 | p | — | progress | — | goal — · done 0 · planned 0 · belt צהוב | — |
-| 1 | F | דאד קואץ׳ `draft` 🔔 lock screen | 09:00 | בוקר טוב אורי ☀️ בשבוע שעבר עמדת ביעד: 3 שעות מתוך 3 עם נועה, כולל מבצר המכריות. נשאיר 3 שעות גם השבוע, או לשנות? | — |
+| 1 | F | דאד קואץ׳ `draft` 🔔 lock screen | 09:00 | בוקר טוב אורי 🙂<br>בשבוע שעבר: 3 שעות מתוך 3 עם נועה, כולל מבצר המכריות.<br>נשאיר 3 שעות גם השבוע, או לשנות? | — |
 | 2 | F | אורי | 09:14 | בוא נעלה ל-4 | — |
-| 3 | F | דאד קואץ׳ `draft` | 09:14 | סגור, 4 שעות השבוע. יש חלונות בשלישי ובחמישי ב-17:00, שעתיים בכל פעם. לקבוע את שניהם עם נועה? | — |
+| 3 | F | דאד קואץ׳ `draft` | 09:14 | סגור, 4 שעות השבוע 💪<br>• *יום שלישי ב-17:00*, שעתיים<br>• *יום חמישי ב-17:00*, שעתיים<br>לקבוע את שניהם עם נועה? | — |
 | p | — | progress | — | goal 4h · done 0 · planned 0 · belt צהוב | — |
 | 4 | F | אורי | 09:15 | כן | — |
-| 5 | F | דאד קואץ׳ `draft` | 09:15 | יופי, קבעתי! אזכיר לך ביום עצמו ושעה לפני. השבוע מתוכנן כולו: 4 מתוך 4 שעות. | — |
+| 5 | F | דאד קואץ׳ `draft` | 09:15 | קבעתי 🎉 שעתיים עם נועה בכל אחד:<br>• *יום שלישי 20.10 ב-17:00*<br>• *יום חמישי 22.10 ב-17:00*<br>אזכיר לך בבוקר ושעה לפני, ואשאל אחר כך איך היה.<br>השבוע מכוסה. | — |
 | p | — | progress | — | goal 4h · done 0 · planned 4h · belt צהוב | — |
 
 Takeaway: פעם בשבוע, הודעה אחת: איך היה השבוע שעבר, וכמה זמן השבוע. שתי תשובות, והשבוע בלוח.
@@ -153,7 +157,7 @@ event bars outside the phone, and the locked phone with no notification.
 | e2 | — | event | רביעי 09:00 | עדיין מכוסה. גם היום, שום הודעה. | — |
 | scene | — | caption | — | יום חמישי, 08:00. היום יש מפגש, אז יש סיבה לכתוב. | — |
 | day | — | — | — | יום חמישי | — |
-| 1 | F | דאד קואץ׳ `draft` 🔔 lock screen | 08:00 | היום ב-17:00 זה הזמן שלך ושל נועה 🙂 | — |
+| 1 | F | דאד קואץ׳ `draft` 🔔 lock screen | 08:00 | *היום ב-17:00* זה הזמן שלך ושל נועה 🙂 | — |
 
 Takeaway: כשהשבוע מכוסה, דאד קואץ׳ שקט. לא "רק בודק מה נשמע", לא "אולי עוד מפגש?". הוא כותב כשיש בשביל מה: לפני מפגש, אחריו, או כשמשהו צריך תיקון.
 

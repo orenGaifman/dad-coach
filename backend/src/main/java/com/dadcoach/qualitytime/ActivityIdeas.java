@@ -13,7 +13,37 @@ public final class ActivityIdeas {
     private ActivityIdeas() {
     }
 
-    public record ActivityIdea(String title, String description, int durationMinutes, boolean indoor) {
+    /**
+     * @param line the idea as one short line for the father's WhatsApp (Hebrew only, null in English): "{child}" is
+     *             the session's children, "{boy|girl|several}" the verb in their form - see {@link #line}
+     */
+    public record ActivityIdea(String title, String description, int durationMinutes, boolean indoor, String line) {
+        ActivityIdea(String title, String description, int durationMinutes, boolean indoor) {
+            this(title, description, durationMinutes, indoor, null);
+        }
+    }
+
+    /** Who the idea is for, so its verb agrees: one boy, one girl, several children, or one child of unknown gender. */
+    public enum Form { BOY, GIRL, SEVERAL, UNKNOWN }
+
+    private static final java.util.regex.Pattern VERB = java.util.regex.Pattern.compile("\\{([^{}|]+)\\|([^{}|]+)\\|([^{}|]+)}");
+
+    /**
+     * The idea's short line with the children's names (D-032): "מגדל קוביות ענק, ומאיה בוחרת את הצבעים". A child whose
+     * gender is unknown is never given a guessed form: the father joins in and the verb is plural ("ומאיה ואתה
+     * בוחרים"). No names: "אתם".
+     */
+    public static String line(ActivityIdea idea, String names, Form form) {
+        String text = idea.line() != null ? idea.line() : idea.title();
+        boolean plural = form == Form.SEVERAL || form == Form.UNKNOWN || names == null;
+        String who = names == null ? "אתם" : form == Form.UNKNOWN ? names + " ואתה" : names;
+        java.util.regex.Matcher m = VERB.matcher(text.replace("{child}", who));
+        StringBuilder out = new StringBuilder();
+        while (m.find()) {
+            m.appendReplacement(out, java.util.regex.Matcher.quoteReplacement(
+                    plural ? m.group(3) : form == Form.GIRL ? m.group(2) : m.group(1)));
+        }
+        return m.appendTail(out).toString();
     }
 
     public static List<ActivityIdea> forChild(int childAge, String locale, String activityType) {
@@ -25,17 +55,17 @@ public final class ActivityIdeas {
         if (childAge <= 5) {
             if (hebrew) {
                 if (!outdoorOnly) {
-                    allIdeas.add(new ActivityIdea("בניית מגדל קוביות", 
-                            "בנו יחד מגדל מקוביות או לגו. תן לילד להוביל את הבנייה ולבחור את הצבעים.",
-                            20, true));
+                    allIdeas.add(new ActivityIdea("בניית מגדל קוביות",
+                            "מגדל ענק מקוביות או לגו, והילד בוחר את הצבעים.", 20, true,
+                            "מגדל קוביות ענק, ו{child} {בוחר|בוחרת|בוחרים} את הצבעים"));
                     allIdeas.add(new ActivityIdea("סיפור עם קולות",
-                            "קראו יחד ספר אהוב ועשו קולות שונים לכל דמות. תן לילד לבחור את הקולות.",
-                            15, true));
+                            "ספר אהוב, ואתה עושה קול אחר לכל דמות.", 15, true,
+                            "ספר אהוב עם קול אחר לכל דמות"));
                 }
                 if (!indoorOnly) {
                     allIdeas.add(new ActivityIdea("ציד אוצרות בחצר",
-                            "צאו לחצר או לפארק הקרוב וחפשו יחד אוצרות טבע: עלים, אבנים מיוחדות, או פרחים.",
-                            30, false));
+                            "ציד אוצרות בחצר או בפארק: עלים, אבנים ופרחים.", 30, false,
+                            "ציד אוצרות בחצר: עלים, אבנים ופרחים"));
                 }
             } else {
                 if (!outdoorOnly) {
@@ -56,16 +86,16 @@ public final class ActivityIdeas {
             if (hebrew) {
                 if (!outdoorOnly) {
                     allIdeas.add(new ActivityIdea("בישול יחד",
-                            "הכינו יחד מתכון פשוט כמו פנקייקים או עוגיות. תן לילד למדוד חומרים ולערבב.",
-                            30, true));
+                            "פנקייקים או עוגיות, והילד מודד ומערבב.", 30, true,
+                            "פנקייקים יחד, ו{child} {מודד ומערבב|מודדת ומערבבת|מודדים ומערבבים}"));
                     allIdeas.add(new ActivityIdea("משחק לוח",
-                            "שחקו יחד במשחק לוח מתאים לגיל. זה מפתח חשיבה אסטרטגית.",
-                            30, true));
+                            "משחק לוח שמתאים לגיל, שהילד בוחר.", 30, true,
+                            "משחק לוח ש{child} {בוחר|בוחרת|בוחרים}"));
                 }
                 if (!indoorOnly) {
                     allIdeas.add(new ActivityIdea("טיול אופניים",
-                            "צאו לרכיבת אופניים יחד בפארק או בשכונה. זמן איכות נהדר לשיחה.",
-                            45, false));
+                            "סיבוב אופניים בפארק או בשכונה, עם זמן לדבר.", 45, false,
+                            "סיבוב אופניים בפארק או בשכונה"));
                 }
             } else {
                 if (!outdoorOnly) {
@@ -86,16 +116,16 @@ public final class ActivityIdeas {
             if (hebrew) {
                 if (!outdoorOnly) {
                     allIdeas.add(new ActivityIdea("פרויקט בנייה",
-                            "בנו יחד משהו - בית ציפורים, מדף, או כל פרויקט יצירתי שהילד בוחר.",
-                            45, true));
+                            "פרויקט בנייה שהילד בוחר, כמו בית ציפורים או מדף.", 45, true,
+                            "פרויקט בנייה ש{child} {בוחר|בוחרת|בוחרים}, כמו בית ציפורים או מדף"));
                     allIdeas.add(new ActivityIdea("לימוד מיומנות חדשה",
-                            "למדו יחד משהו חדש - נגינה, שפה, או תכנות בסיסי.",
-                            30, true));
+                            "ללמוד יחד משהו חדש: נגינה, שפה או קצת תכנות.", 30, true,
+                            "ללמוד יחד משהו חדש: נגינה, שפה או קצת תכנות"));
                 }
                 if (!indoorOnly) {
                     allIdeas.add(new ActivityIdea("משחק כדורסל",
-                            "צאו לשחק כדורסל או כדורגל יחד. זמן פעילות גופנית משותפת מחזק את הקשר.",
-                            40, false));
+                            "כדורסל או כדורגל בחוץ, יחד.", 40, false,
+                            "כדורסל או כדורגל בחוץ"));
                 }
             } else {
                 if (!outdoorOnly) {

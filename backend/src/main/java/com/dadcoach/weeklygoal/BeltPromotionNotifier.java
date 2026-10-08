@@ -93,7 +93,8 @@ public class BeltPromotionNotifier {
     /** Calm and factual: belts count completed sessions; no streak hype, no "great dad" (the site's "מה הוא אף פעם לא יעשה"). */
     private String buildPromotionMessage(WeeklyGoalService.BeltPromotionResult result) {
         Belt newBelt = result.newBelt();
-        StringBuilder sb = new StringBuilder("🥋 *").append(newBelt.getDisplayName("he")).append("*\n\n");
+        // D-032: opens with the identity line like every message on the shared number (the template body carries it)
+        StringBuilder sb = new StringBuilder("❤️ דאד קואץ׳:\n🥋 *").append(newBelt.getDisplayName("he")).append("*\n");
         sb.append("כל מפגש שקרה ואישרת נספר, והם הצטברו לחגורה חדשה.");
         Belt next = newBelt.getNextBelt();
         if (next != null) {

@@ -314,6 +314,8 @@ a:hover { color: var(--dc-navy-900); }
 .signup-head { display: block; }
 .signup-title { font-size: var(--dc-fs-xl); font-weight: 800; }
 .bub-id { display: block; }
+.bub-btns { align-self: flex-start; max-inline-size: 86%; display: flex; flex-wrap: wrap; gap: 4px; margin-block-start: -2px; }
+.bub-btn { flex: 1 1 auto; text-align: center; background: var(--dc-wa-in); color: var(--dc-navy-700); font-size: var(--dc-fs-sm); font-weight: 600; border-radius: var(--dc-r-md); padding: 6px var(--dc-sp-3); box-shadow: 0 1px 1px rgb(0 0 0 / 8%); }
 .lock-card-text { white-space: pre-line; }
 
 /* ---------- how it works ---------- */

@@ -218,6 +218,15 @@ public class WeeklyPlanContextBuilder {
                 targetMinutes == null ? null : Math.max(0, targetMinutes - completedMinutes - plannedMinutes));
         coverage.put("is_covered", targetMinutes == null ? null : completedMinutes + plannedMinutes >= targetMinutes);
         coverage.put("awaiting_confirmation_minutes", awaitingMinutes);
+        // D-032: the week is told in hours - ready Hebrew phrases, so the coach never converts minutes itself
+        Map<String, Object> inHours = new LinkedHashMap<>();
+        inHours.put("goal", targetMinutes == null ? null : HebrewHours.of(targetMinutes));
+        inHours.put("completed", HebrewHours.of(completedMinutes));
+        inHours.put("planned", HebrewHours.of(plannedMinutes));
+        inHours.put("covered", HebrewHours.of(completedMinutes + plannedMinutes));
+        inHours.put("uncovered", targetMinutes == null ? null
+                : HebrewHours.of(Math.max(0, targetMinutes - completedMinutes - plannedMinutes)));
+        coverage.put("in_hours", inHours);
         data.put("coverage", coverage);
 
         data.put("sessions_this_week", lines(thisWeek));
@@ -238,6 +247,10 @@ public class WeeklyPlanContextBuilder {
         });
         previous.put("completed_minutes", previousCompletedMinutes);
         previous.put("completed_sessions", previousCompletedSessions);
+        Map<String, Object> previousInHours = new LinkedHashMap<>();
+        previousInHours.put("completed", HebrewHours.of(previousCompletedMinutes));
+        previousInHours.put("goal", previousGoal.map(goal -> HebrewHours.of(goal.getTargetHours() * 60)).orElse(null));
+        previous.put("in_hours", previousInHours);
         previous.put("not_completed_sessions", previousNotCompletedSessions);
         data.put("previous_week", previous);
         Map<String, Object> notes = new LinkedHashMap<>();

@@ -44,14 +44,16 @@ class ScheduledResponseCallbackTest extends AbstractIntegrationTest {
     @Test
     void aFatherWithNoEndpointGetsOneAndOutsideTheWindowTheTemplateCarriesTheMessage() throws Exception {
         Father f = data.activeFather("+19995550401"); // onboarded on WhatsApp before F1: no endpoint row
-        MvcResult r = callback("t-2", "scheduled-response:t-2", "whatsapp:" + f.getPhone(), "בוקר טוב!\\nהיום ב-18:00 עם נועה");
+        MvcResult r = callback("t-2", "scheduled-response:t-2", "whatsapp:" + f.getPhone(),
+                "❤️ דאד קואץ׳:\\nבוקר טוב!\\nהיום ב-18:00 עם נועה");
         assertThat(json.readTree(r.getResponse().getContentAsString()).path("status").asText()).isEqualTo("DELIVERED");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM communication_endpoints WHERE channel_identity = ?", Integer.class,
                 f.getPhone())).isEqualTo(1);
         JsonNode sent = json.readTree(fake.metaSends().get(0).body());
         assertThat(sent.path("type").asText()).isEqualTo("template");
         assertThat(sent.path("template").path("name").asText()).isEqualTo(TEMPLATE);
-        assertThat(sent.toString()).contains("בוקר טוב! היום ב-18:00 עם נועה");
+        // D-032: one readable line; the template body carries the identity line, so it is not repeated in {{1}}
+        assertThat(sent.toString()).contains("\"בוקר טוב! היום ב-18:00 עם נועה\"").doesNotContain("דאד קואץ׳:");
     }
 
     @Test

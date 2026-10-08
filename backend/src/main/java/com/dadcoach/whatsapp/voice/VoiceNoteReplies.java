@@ -22,9 +22,9 @@ public final class VoiceNoteReplies {
     /** Why a voice note was not heard, when voice notes are on. Never an AI turn. */
     public static String notHeard(VoiceNotes.Outcome outcome) {
         return IDENTITY + switch (outcome) {
-            case VoiceNotes.Outcome.TooLong t -> "🎙️ ההקלטה ארוכה מדי בשבילי - שלח הקלטה קצרה יותר, או כתוב לי במילים 🙏";
-            case VoiceNotes.Outcome.Silent s -> "🎙️ לא שמעתי מילים בהקלטה - נסה שוב, או כתוב לי במילים 🙏";
-            default -> "🎙️ לא הצלחתי לשמוע את ההקלטה - אפשר לכתוב לי במילים? 🙏";
+            case VoiceNotes.Outcome.TooLong t -> "🎙️ ההקלטה ארוכה מדי בשבילי.\nשלח הקלטה קצרה יותר, או כתוב לי במילים.";
+            case VoiceNotes.Outcome.Silent s -> "🎙️ לא שמעתי מילים בהקלטה.\nנסה שוב, או כתוב לי במילים.";
+            default -> "🎙️ לא הצלחתי לשמוע את ההקלטה.\nאפשר לכתוב לי במילים?";
         };
     }
 

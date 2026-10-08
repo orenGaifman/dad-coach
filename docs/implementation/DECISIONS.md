@@ -270,3 +270,39 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   failure to ask sends as before; `dadcoach.whatsapp.shared-number-gate=false` switches it off.
 - **Tests:** WhatsAppApiClientSharedNumberTest, SharedNumberGateIntegrationTest (FakeServers answers the gate); suite
   248/248. Platform side: ai-workflow-platform V119, docs/whatsapp-gateway.md.
+
+## D-032 One message standard: identity line, one fact per line, the week in hours (owner, 2026-10-08)
+
+- **Problem:** the same fact had many shapes: the week in minutes from the coach ("60 מתוך 180 דקות") and in hours from
+  the code ("שעה מתוך 3 שעות"); a 50-word welcome; ideas both inside the one-hour reminder and again behind its button;
+  fixed messages without the identity line (deletion, voice, media, "משהו השתבש"); a stale button that blamed a
+  cancellation when the session simply had not started; and outside the 24-hour window one flattened line that repeated
+  the brand. The owner approved a standard for all three products (before/after page, 2026-10-08).
+- **Decision (Dad Coach voice: a short chat with a friend, not cards):**
+  - Every message opens with `❤️ דאד קואץ׳:` - added to the deletion replies, the spoken-deletion reply, the media
+    reply, the platform-down reply and the belt text. At most one emoji: 🙂 reminders/openings, 🎉 booked, 💪 progress.
+  - The week is told in HOURS everywhere. `HebrewHours` turns minutes into the words ("שעה וחצי", "3 שעות ורבע");
+    the weekly plan's `coverage.in_hours` and `previous_week.in_hours` carry the ready phrases (also in every tool's
+    `week_coverage`), and the prompt tells the coach to copy them, never to convert.
+  - A session's day and time are bold (`when_label`). Booking confirmation, progress ("היה / מתוכנן / חסרות" + one
+    concrete offer), cancellation (what was cancelled + one slot + yes/no) and the welcome list are fixed shapes in the
+    prompt (dad-coach-3 ONBOARDING, ACTIVE_COACHING, SESSION_MORNING_REMINDER, SESSION_FOLLOW_UP).
+  - Ideas come only from the [רוצה רעיונות] button: the one-hour reminder is two lines and its state no longer has
+    `get_activity_ideas`. The ideas reply is three short lines with the child's name (`ActivityIdeas.line`, the verb in
+    the child's form; unknown gender - "ומאיה ואתה בוחרים"), no minutes, ending "תספר לי אחר כך איך היה 🙂".
+  - A button that no longer works says the true reason, one fact per line (not his / cancelled or moved / missed /
+    not started yet / ended).
+  - Deletion is in the coach's voice with a list of what is deleted; the email address, the subject and the phrase to
+    type stand on their own lines so they can be copied. A captionless picture while voice notes are on is no longer
+    told that recordings cannot be heard.
+  - Outside the window the general template takes the message as one readable line: the message's own identity line is
+    dropped (the template body starts with it) and lines become sentences (`ProactiveSender.asTemplateParameter`).
+    Nothing else about delivery changed. The template `dad_coach_update_he` is redrafted in
+    marketing/whatsapp-templates.md for the owner to submit; until it is approved, configured
+    (`WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME`) and registered as APPROVED in `template_messages`, proactive messages to
+    a father silent for 24 hours are still not sent.
+- **Site:** the demo (marketing/whatsapp-demo-flow.md, site/src/demo/scenarios.js) shows the new bubbles, *bold* and the
+  reply buttons.
+- **Tests:** ProactiveSenderTest, ActivityIdeasTest (new); SessionButtonsTest, WhatsAppWebhookTest,
+  VoiceNoteWebhookTest, WeeklyPlanContextBuilderTest, ScheduledResponseCallbackTest updated; provisioning
+  test_manifests / test_provision_publish / test_provision_workers.

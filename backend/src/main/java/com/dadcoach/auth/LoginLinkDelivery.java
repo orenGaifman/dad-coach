@@ -33,11 +33,12 @@ public class LoginLinkDelivery {
     static final String WHATSAPP = "WHATSAPP";
     /** The identity line every message Dad Coach sends by itself opens with (the number is shared). */
     static final String IDENTITY = "❤️ דאד קואץ׳:\n";
-    static final String FATHER_TEXT = IDENTITY + "📊 *הדף שלך בדאד קואץ׳*\nהשבוע, הילדים וההתקדמות - הכול כאן 👇";
+    static final String FATHER_TEXT = IDENTITY + "📊 *הדף שלך בדאד קואץ׳*\nהשבוע, הילדים וההתקדמות, הכול בדף אחד.";
     static final String FATHER_LABEL = "כניסה לדף שלי";
-    static final String STAFF_TEXT = IDENTITY + "🛠️ *ניהול דאד קואץ׳*\nהכניסה שלך לניהול 👇";
+    static final String STAFF_TEXT = IDENTITY + "🛠️ *ניהול דאד קואץ׳*\nהכניסה שלך לניהול.";
     static final String STAFF_LABEL = "כניסה לניהול";
-    static final String FOOTER = "הכפתור אישי, לא להעביר הלאה";
+    /** "הקישור", not "הכפתור": the same footer closes the text fallback, where there is no button (D-032). */
+    static final String FOOTER = "הקישור אישי, לא להעביר הלאה";
 
     private final DeliveryService deliveryService;
     private final ChannelRouter channelRouter;
@@ -83,6 +84,6 @@ public class LoginLinkDelivery {
     }
 
     static String templateLine(String url) {
-        return "📊 הדף שלך: " + url + " (אישי, לא להעביר הלאה).";
+        return "הקישור לדף שלך, אישי ולא להעביר הלאה: " + url;
     }
 }

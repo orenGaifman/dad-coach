@@ -23,10 +23,15 @@ public class WhatsAppDeletionRequests {
     static final java.util.Set<String> PHRASES = java.util.Set.of("delete my data", "מחק את המידע שלי", "מחקו את המידע שלי",
             "מחיקת המידע שלי", "תמחק את המידע שלי");
 
-    static final String CONFIRMATION = "קיבלנו את הבקשה. החשבון שלך בדאד קואץ׳ וכל המידע שלך - מספר הטלפון, השיחות וההעדפות - "
-            + "נמחקים עכשיו. זו ההודעה האחרונה שתקבל מאיתנו.";
-    static final String NO_ACCOUNT = "קיבלנו את הבקשה. למספר הזה אין חשבון בדאד קואץ׳. "
-            + "כדי למחוק כל מידע אחר שאולי שמור אצלנו, כתוב ל-oren26g@gmail.com עם הנושא \"בקשה למחיקת מידע\".";
+    /** The identity line every message Dad Coach sends by itself opens with (D-032). */
+    static final String IDENTITY = "❤️ דאד קואץ׳:\n";
+    /** In the coach's voice, the list = what {@code FatherDataPurger} and the platform deletion remove. */
+    static final String CONFIRMATION = IDENTITY + "קיבלתי. אני מוחק עכשיו את כל המידע שלך:\n"
+            + "• מספר הטלפון\n• השיחות שלנו\n• הילדים, היעדים והמפגשים\n\n"
+            + "זו ההודעה האחרונה ממני. בהצלחה עם הילדים 🙂";
+    /** The address and the subject sit on their own lines, so he can copy them. */
+    static final String NO_ACCOUNT = IDENTITY + "קיבלתי. למספר הזה אין חשבון בדאד קואץ׳.\n"
+            + "כדי למחוק מידע אחר שאולי שמור אצלנו, כתוב למייל:\noren26g@gmail.com\n\nעם הנושא:\nבקשה למחיקת מידע";
 
     private final FatherRepository fathers;
     private final com.dadcoach.domain.father.FatherDeletionService deletions;

@@ -24,7 +24,7 @@ import org.springframework.test.web.servlet.ResultActions;
 class VoiceNoteWebhookTest extends AbstractIntegrationTest {
 
     static final String HEARD = "רוצה לקבוע זמן עם נועה ביום שישי";
-    static final String DOWN = "משהו השתבש אצלי, נסה שוב עוד רגע 🙏";
+    static final String DOWN = "משהו השתבש אצלי. נסה שוב עוד רגע.";
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
@@ -75,7 +75,14 @@ class VoiceNoteWebhookTest extends AbstractIntegrationTest {
         assertThat(fake.mediaCalls()).isEmpty();
         assertThat(fake.speechToTextCalls()).isEmpty();
         assertThat(fake.turns()).isEmpty();
-        assertThat(sentText(0)).isEqualTo("אני עדיין לא יכול לשמוע הקלטות או לראות קבצים 🙏 אפשר לכתוב לי במילים?");
+        assertThat(sentText(0)).isEqualTo("❤️ דאד קואץ׳:\nאני עוד לא שומע הקלטות ולא רואה קבצים.\nאפשר לכתוב לי במילים?");
+    }
+
+    @Test
+    void withVoiceNotesOnAPictureWithoutWordsIsNotToldThatRecordingsCannotBeHeard() throws Exception {
+        webhook(Webhooks.image("+19995550209", "wamid.photo-bare", "")).andExpect(status().isOk());
+        assertThat(fake.turns()).isEmpty();
+        assertThat(sentText(0)).isEqualTo("❤️ דאד קואץ׳:\nאני עוד לא רואה תמונות וקבצים.\nאפשר לכתוב לי במילים?");
     }
 
     @Test
@@ -119,7 +126,7 @@ class VoiceNoteWebhookTest extends AbstractIntegrationTest {
     void thePlatformDownStillShowsWhatWasHeard() throws Exception {
         fake.onTurn(c -> new FakeServers.Reply(500, "{\"error\":\"boom\"}"));
         webhook(Webhooks.audio("+19995550207", "wamid.voice-down")).andExpect(status().isOk());
-        assertThat(sentText(0)).isEqualTo("🎙️ שמעתי: \"" + HEARD + "\"\n\n" + DOWN);
+        assertThat(sentText(0)).isEqualTo("❤️ דאד קואץ׳:\n🎙️ שמעתי: \"" + HEARD + "\"\n\n" + DOWN);
     }
 
     @Test
@@ -130,7 +137,8 @@ class VoiceNoteWebhookTest extends AbstractIntegrationTest {
         webhook(Webhooks.audio(father.getPhone(), "wamid.voice-del")).andExpect(status().isOk());
         assertThat(fake.turns()).isEmpty();
         assertThat(jdbc.queryForObject("SELECT status FROM father WHERE id = ?", String.class, father.getId())).isNotEqualTo("DELETED");
-        assertThat(sentText(0)).contains("🎙️ שמעתי").contains("לא נעשית מהקלטה").contains("כתוב לי במילים: מחק את המידע שלי");
+        assertThat(sentText(0)).startsWith("❤️ דאד קואץ׳:\n🎙️ שמעתי").contains("לא נעשית מהקלטה")
+                .endsWith("כתוב לי במילים:\nמחק את המידע שלי");
     }
 
     @Test

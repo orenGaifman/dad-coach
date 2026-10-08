@@ -127,12 +127,12 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
         fake.onTurn(c -> new FakeServers.Reply(500, "{\"error\":\"boom\"}"));
         webhook(Webhooks.text(NEW_NUMBER, "wamid.down", "היי")).andExpect(status().isOk());
         assertThat(fake.metaSends()).hasSize(1);
-        assertThat(sentText(0)).isEqualTo("משהו השתבש אצלי, נסה שוב עוד רגע 🙏");
+        assertThat(sentText(0)).isEqualTo("❤️ דאד קואץ׳:\nמשהו השתבש אצלי. נסה שוב עוד רגע.");
 
         fake.onTurn(c -> new FakeServers.Reply(409, "{\"code\":\"person.inactive\"}"));
         webhook(Webhooks.text(NEW_NUMBER, "wamid.refused", "היי")).andExpect(status().isOk());
         assertThat(fake.metaSends()).hasSize(2);
-        assertThat(sentText(1)).isEqualTo("משהו השתבש אצלי, נסה שוב עוד רגע 🙏");
+        assertThat(sentText(1)).isEqualTo("❤️ דאד קואץ׳:\nמשהו השתבש אצלי. נסה שוב עוד רגע.");
     }
 
     @Test
@@ -179,7 +179,7 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
         Father father = data.father("+19995550103", "אבי", FatherStatus.ONBOARDING);
         webhook(Webhooks.text(father.getPhone(), "wamid.del", "DELETE MY DATA")).andExpect(status().isOk());
         assertThat(fake.turns()).isEmpty();
-        assertThat(sentText(0)).contains("נמחקים עכשיו");
+        assertThat(sentText(0)).startsWith("❤️ דאד קואץ׳:\nקיבלתי. אני מוחק עכשיו את כל המידע שלך:\n• ");
         assertThat(jdbc.queryForObject("SELECT status FROM father WHERE id = ?", String.class, father.getId())).isEqualTo("DELETED");
         assertThat(jdbc.queryForObject("SELECT purge_local FROM platform_person_deletion WHERE father_id = ?", Boolean.class,
                 father.getId())).isTrue();

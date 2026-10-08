@@ -57,10 +57,16 @@ import org.springframework.stereotype.Component;
 public class InboundMessageHandler {
 
     private static final Logger log = LoggerFactory.getLogger(InboundMessageHandler.class);
-    static final String PLATFORM_DOWN_REPLY = "משהו השתבש אצלי, נסה שוב עוד רגע 🙏";
-    static final String SPOKEN_DELETION_REPLY = "מחיקת כל המידע שלך היא פעולה שאי אפשר לבטל, ולכן היא לא נעשית מהקלטה. "
-            + "אם זה מה שאתה רוצה - כתוב לי במילים: מחק את המידע שלי";
-    static final String MEDIA_REPLY = "אני עדיין לא יכול לשמוע הקלטות או לראות קבצים 🙏 אפשר לכתוב לי במילים?";
+    /** D-032: every fixed line opens with the identity line, like every other message on the shared number. */
+    static final String IDENTITY = "❤️ דאד קואץ׳:\n";
+    static final String PLATFORM_DOWN_REPLY = IDENTITY + "משהו השתבש אצלי. נסה שוב עוד רגע.";
+    /** The phrase to type sits on its own line, so it can be copied. */
+    static final String SPOKEN_DELETION_REPLY = IDENTITY + "את מחיקת המידע אי אפשר לבטל, ולכן היא לא נעשית מהקלטה.\n"
+            + "אם זה מה שאתה רוצה, כתוב לי במילים:\nמחק את המידע שלי";
+    /** Voice notes off: neither a recording nor a file is understood. */
+    static final String MEDIA_REPLY = IDENTITY + "אני עוד לא שומע הקלטות ולא רואה קבצים.\nאפשר לכתוב לי במילים?";
+    /** Voice notes on: a recording is heard, so only a picture, a file or a sticker without words lands here. */
+    static final String FILE_REPLY = IDENTITY + "אני עוד לא רואה תמונות וקבצים.\nאפשר לכתוב לי במילים?";
 
     private final FatherRepository fathers;
     private final WhatsAppEndpoints endpoints;
@@ -141,7 +147,7 @@ public class InboundMessageHandler {
             return;
         }
         if (text == null || text.isBlank()) {
-            send(phone, MEDIA_REPLY);
+            send(phone, in.messageType() != MessageType.AUDIO && voiceNotes.active() ? FILE_REPLY : MEDIA_REPLY);
             return;
         }
         if (!admitted && !rateLimiter.tryAcquire(phone)) {

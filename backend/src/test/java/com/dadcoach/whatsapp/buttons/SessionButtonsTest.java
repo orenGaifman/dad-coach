@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -140,13 +141,13 @@ class SessionButtonsTest extends AbstractIntegrationTest {
 
         assertThat(statusOf(qt)).isEqualTo("COMPLETED");
         assertThat(fake.turns()).isEmpty();
-        assertThat(lastSentText()).isEqualTo("❤️ דאד קואץ׳:\nאיזה כיף! רשמתי את הזמן שלך עם נועה ✅\nהשבוע: שעה.");
+        assertThat(lastSentText()).isEqualTo("❤️ דאד קואץ׳:\nאיזה כיף! רשמתי את הזמן שלך עם נועה.\nהשבוע: שעה 💪");
         JsonNode recorded = json.readTree(fake.recordedOutbound().get(0).body());
         assertThat(recorded.path("content").asText()).startsWith("❤️ דאד קואץ׳:\nאיזה כיף!");
         assertThat(recorded.path("correlationId").asText()).isEqualTo("wamid.done1");
 
         webhook(tap("wamid.done2", "dc:done:" + qt.getId(), "היה מעולה"));
-        assertThat(lastSentText()).isEqualTo("❤️ דאד קואץ׳:\nכבר רשום אצלי ✅");
+        assertThat(lastSentText()).isEqualTo("❤️ דאד קואץ׳:\nאת המפגש הזה כבר רשמתי 🙂");
         assertThat(fake.turns()).isEmpty();
         assertThat(jdbc.queryForObject("SELECT total_quality_times_completed FROM father WHERE id = ?", Integer.class,
                 father.getId())).isEqualTo(1);
@@ -165,12 +166,14 @@ class SessionButtonsTest extends AbstractIntegrationTest {
 
         webhook(tap("wamid.joint1", "dc:done:" + ended.getId(), "היה מעולה"));
         assertThat(statusOf(ended)).isEqualTo("COMPLETED");
-        assertThat(lastSentText()).isEqualTo("❤️ דאד קואץ׳:\nאיזה כיף! רשמתי את הזמן שלך עם נועה ומטר ✅\nהשבוע: שעה.");
+        assertThat(lastSentText()).isEqualTo("❤️ דאד קואץ׳:\nאיזה כיף! רשמתי את הזמן שלך עם נועה ומטר.\nהשבוע: שעה 💪");
         assertThat(jdbc.queryForObject("SELECT total_quality_times_completed FROM father WHERE id = ?", Integer.class,
                 father.getId())).isEqualTo(1);
 
         webhook(tap("wamid.joint2", "dc:ideas:" + next.getId(), "רוצה רעיונות"));
-        assertThat(lastSentText()).startsWith("❤️ דאד קואץ׳:\nכמה רעיונות לזמן שלך עם נועה ומטר:\n\n• ");
+        // the 30-minute session, both names, the plural verb ("בוחרים") for the two of them
+        assertThat(lastSentText()).startsWith("❤️ דאד קואץ׳:\n3 רעיונות לחצי שעה עם נועה ומטר:\n• ")
+                .contains("• מגדל קוביות ענק, ונועה ומטר בוחרים את הצבעים");
         assertThat(fake.turns()).isEmpty();
     }
 
@@ -197,9 +200,10 @@ class SessionButtonsTest extends AbstractIntegrationTest {
 
         assertThat(fake.turns()).isEmpty();
         String reply = lastSentText();
-        assertThat(reply).startsWith("❤️ דאד קואץ׳:\nכמה רעיונות לזמן שלך עם נועה:\n\n• ");
+        assertThat(reply).startsWith("❤️ דאד קואץ׳:\n3 רעיונות לחצי שעה עם נועה:\n• ");
         assertThat(reply.split("\n• ")).hasSize(4);
-        assertThat(reply).endsWith("בהצלחה! 💪");
+        assertThat(reply).doesNotContain("דק׳").doesNotContain("בהצלחה").doesNotContain("💪");
+        assertThat(reply).endsWith("\n\nתספר לי אחר כך איך היה 🙂");
         assertThat(fake.recordedOutbound()).hasSize(1);
     }
 
@@ -222,10 +226,14 @@ class SessionButtonsTest extends AbstractIntegrationTest {
 
         assertThat(fake.turns()).isEmpty();
         assertThat(fake.metaSends()).hasSize(5);
+        // each says the true reason, one fact per line
+        List<String> expected = List.of(SessionButtonTaps.STALE_REPLY, SessionButtonTaps.CANCELLED_REPLY,
+                SessionButtonTaps.NOT_STARTED_REPLY, SessionButtonTaps.CANCELLED_REPLY, SessionButtonTaps.STALE_REPLY);
         for (int i = 0; i < 5; i++) {
             assertThat(json.readTree(fake.metaSends().get(i).body()).path("text").path("body").asText())
-                    .isEqualTo(SessionButtonTaps.STALE_REPLY);
+                    .isEqualTo(expected.get(i));
         }
+        assertThat(SessionButtonTaps.CANCELLED_REPLY).isEqualTo("❤️ דאד קואץ׳:\nהמפגש הזה בוטל או הוזז.\nאפשר פשוט לכתוב לי 🙂");
         assertThat(statusOf(others)).isEqualTo("SCHEDULED");
         assertThat(statusOf(ahead)).isEqualTo("SCHEDULED");
     }
@@ -277,10 +285,15 @@ class SessionButtonsTest extends AbstractIntegrationTest {
 
     @Test
     void hebrewDurations() {
-        assertThat(SessionButtonTaps.hebrewDuration(45)).isEqualTo("45 דקות");
+        assertThat(SessionButtonTaps.hebrewDuration(45)).isEqualTo("שלושת רבעי שעה");
+        assertThat(SessionButtonTaps.hebrewDuration(30)).isEqualTo("חצי שעה");
+        assertThat(SessionButtonTaps.hebrewDuration(20)).isEqualTo("20 דקות");
+        assertThat(SessionButtonTaps.hebrewDuration(0)).isEqualTo("0 שעות");
         assertThat(SessionButtonTaps.hebrewDuration(60)).isEqualTo("שעה");
         assertThat(SessionButtonTaps.hebrewDuration(90)).isEqualTo("שעה וחצי");
         assertThat(SessionButtonTaps.hebrewDuration(150)).isEqualTo("שעתיים וחצי");
-        assertThat(SessionButtonTaps.hebrewDuration(195)).isEqualTo("3 שעות ו-15 דקות");
+        assertThat(SessionButtonTaps.hebrewDuration(180)).isEqualTo("3 שעות");
+        assertThat(SessionButtonTaps.hebrewDuration(195)).isEqualTo("3 שעות ורבע");
+        assertThat(SessionButtonTaps.hebrewDuration(200)).isEqualTo("3 שעות ו-20 דקות");
     }
 }

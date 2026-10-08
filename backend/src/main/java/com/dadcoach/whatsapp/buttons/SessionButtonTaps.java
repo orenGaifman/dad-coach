@@ -10,6 +10,7 @@ import com.dadcoach.qualitytime.QualityTimeRepository;
 import com.dadcoach.qualitytime.QualityTimeService;
 import com.dadcoach.qualitytime.QualityTimeStatus;
 import com.dadcoach.qualitytime.SessionChildren;
+import com.dadcoach.weeklyplan.HebrewHours;
 import com.dadcoach.weeklyplan.WeeklyPlanContextBuilder;
 import java.time.Clock;
 import java.time.Duration;
@@ -30,8 +31,10 @@ import org.springframework.stereotype.Component;
  *   <li>"היה מעולה": his session is completed here, exactly as the coach's complete_quality_time tool does, and a
  *       fixed confirmation with the week's progress goes back; already completed → "כבר רשום";</li>
  *   <li>"לא יצא": handed to the coach as his words "לא יצא" - its rules record it and offer another time;</li>
- *   <li>"רוצה רעיונות": 2-3 ideas for that session's children (fit for the youngest) that fit its length;</li>
- *   <li>a session that is not his, gone, cancelled or not started (for "done"): one fixed line, no AI turn;</li>
+ *   <li>"רוצה רעיונות": 3 one-line ideas for that session's children (fit for the youngest, the longer ones last),
+ *       with their names (D-032);</li>
+ *   <li>a session that is not his, gone, cancelled, ended or not started (for "done"): a fixed reply that says
+ *       which of these it is, no AI turn;</li>
  *   <li>a "dc:" id this version does not know: the tapped title goes to the coach as a normal reply.</li>
  * </ul>
  */
@@ -40,8 +43,14 @@ public class SessionButtonTaps {
 
     private static final Logger log = LoggerFactory.getLogger(SessionButtonTaps.class);
     static final String IDENTITY = "❤️ דאד קואץ׳:\n";
-    static final String STALE_REPLY = IDENTITY + "הכפתור הזה כבר לא בתוקף, המפגש בוטל או השתנה. אפשר פשוט לכתוב לי 🙂";
-    static final String ALREADY_DONE_REPLY = IDENTITY + "כבר רשום אצלי ✅";
+    private static final String WRITE_TO_ME = "\nאפשר פשוט לכתוב לי 🙂";
+    /** D-032: a button that no longer works says why, one fact per line - the true reason, never a guess. */
+    static final String STALE_REPLY = IDENTITY + "הכפתור הזה כבר לא בתוקף." + WRITE_TO_ME;
+    static final String CANCELLED_REPLY = IDENTITY + "המפגש הזה בוטל או הוזז." + WRITE_TO_ME;
+    static final String MISSED_REPLY = IDENTITY + "המפגש הזה רשום אצלי כמפגש שלא יצא." + WRITE_TO_ME;
+    static final String NOT_STARTED_REPLY = IDENTITY + "המפגש הזה עוד לא התחיל.\nאחרי שיתחיל, הכפתור יעבוד 🙂";
+    static final String ENDED_REPLY = IDENTITY + "המפגש הזה כבר נגמר." + WRITE_TO_ME;
+    static final String ALREADY_DONE_REPLY = IDENTITY + "את המפגש הזה כבר רשמתי 🙂";
     static final String MISSED_TEXT = "לא יצא";
     private static final int IDEAS = 3;
 
@@ -89,14 +98,28 @@ public class SessionButtonTaps {
                 if (session.getStatus() == QualityTimeStatus.COMPLETED) {
                     yield new Tap(ALREADY_DONE_REPLY, null);
                 }
-                if (session.getStatus() != QualityTimeStatus.SCHEDULED || session.getScheduledStart().isAfter(now)) {
-                    yield new Tap(STALE_REPLY, null);
+                if (session.getStatus() != QualityTimeStatus.SCHEDULED) {
+                    yield new Tap(closedReply(session), null);
+                }
+                if (session.getScheduledStart().isAfter(now)) {
+                    yield new Tap(NOT_STARTED_REPLY, null);
                 }
                 qualityTime.completeQualityTime(session.getId(), null);
                 yield new Tap(doneReply(father, childName(session)), null);
             }
-            case IDEAS -> session.getStatus() != QualityTimeStatus.SCHEDULED || !session.getScheduledEnd().isAfter(now)
-                    ? new Tap(STALE_REPLY, null) : new Tap(ideasReply(father, session), null);
+            case IDEAS -> session.getStatus() != QualityTimeStatus.SCHEDULED ? new Tap(closedReply(session), null)
+                    : !session.getScheduledEnd().isAfter(now) ? new Tap(ENDED_REPLY, null)
+                    : new Tap(ideasReply(father, session), null);
+        };
+    }
+
+    /** Why a session that is no longer SCHEDULED takes no tap. */
+    private static String closedReply(QualityTime session) {
+        return switch (session.getStatus()) {
+            case CANCELLED -> CANCELLED_REPLY;
+            case MISSED -> MISSED_REPLY;
+            case COMPLETED -> ENDED_REPLY;
+            case SCHEDULED -> STALE_REPLY;
         };
     }
 
@@ -105,7 +128,7 @@ public class SessionButtonTaps {
         if (child != null) {
             reply.append(" עם ").append(child);
         }
-        reply.append(" ✅");
+        reply.append(".");
         try {
             if (weeklyPlan.build(father).get("coverage") instanceof Map<?, ?> coverage
                     && coverage.get("completed_minutes") instanceof Number completed) {
@@ -113,7 +136,7 @@ public class SessionButtonTaps {
                 if (coverage.get("target_minutes") instanceof Number target) {
                     reply.append(" מתוך ").append(hebrewDuration(target.intValue()));
                 }
-                reply.append(".");
+                reply.append(" 💪");
             }
         } catch (RuntimeException e) {
             log.atWarn().setMessage("whatsapp.button.coverage_failed").addKeyValue("error", e.getClass().getSimpleName()).log();
@@ -131,16 +154,29 @@ public class SessionButtonTaps {
         List<ActivityIdeas.ActivityIdea> ideas = ActivityIdeas.forChild(age, "he", null).stream()
                 .sorted(Comparator.comparing(idea -> idea.durationMinutes() > minutes))
                 .limit(IDEAS).toList();
-        StringBuilder reply = new StringBuilder(IDENTITY).append("כמה רעיונות לזמן שלך");
+        // D-032: one short line per idea with the child's name, no minutes (they rarely matched the session)
+        String length = hebrewDuration(minutes);
+        StringBuilder reply = new StringBuilder(IDENTITY).append(ideas.size()).append(" רעיונות ל")
+                .append(Character.isDigit(length.charAt(0)) ? "-" : "").append(length);
         if (names != null) {
             reply.append(" עם ").append(names);
         }
-        reply.append(":\n");
+        reply.append(":");
+        ActivityIdeas.Form form = formOf(childrenOf(session));
         for (ActivityIdeas.ActivityIdea idea : ideas) {
-            reply.append("\n• ").append(idea.title()).append(" (").append(idea.durationMinutes()).append(" דק׳): ")
-                    .append(idea.description());
+            reply.append("\n• ").append(ActivityIdeas.line(idea, names, form));
         }
-        return reply.append("\n\nבהצלחה! 💪").toString();
+        return reply.append("\n\nתספר לי אחר כך איך היה 🙂").toString();
+    }
+
+    /** The verb form of the session's children: one boy, one girl, several, or one whose gender is not known. */
+    static ActivityIdeas.Form formOf(List<Child> kids) {
+        if (kids.size() > 1) {
+            return ActivityIdeas.Form.SEVERAL;
+        }
+        String gender = kids.isEmpty() ? null : kids.get(0).getGender();
+        return "girl".equals(gender) ? ActivityIdeas.Form.GIRL
+                : "boy".equals(gender) ? ActivityIdeas.Form.BOY : ActivityIdeas.Form.UNKNOWN;
     }
 
     /**
@@ -158,20 +194,6 @@ public class SessionButtonTaps {
     }
 
     static String hebrewDuration(int totalMinutes) {
-        int hours = totalMinutes / 60;
-        int minutes = totalMinutes % 60;
-        String h = switch (hours) {
-            case 0 -> "";
-            case 1 -> "שעה";
-            case 2 -> "שעתיים";
-            default -> hours + " שעות";
-        };
-        if (minutes == 0) {
-            return hours == 0 ? "0 דקות" : h;
-        }
-        if (hours == 0) {
-            return minutes + " דקות";
-        }
-        return minutes == 30 ? h + " וחצי" : h + " ו-" + minutes + " דקות";
+        return HebrewHours.of(totalMinutes);
     }
 }

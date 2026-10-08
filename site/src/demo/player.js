@@ -25,6 +25,15 @@ function el(tag, className, text) {
   return node;
 }
 
+// WhatsApp formatting the coach uses: *bold* (the session's day and time). Built as nodes, never innerHTML.
+function appendRich(parent, text) {
+  text.split(/(\*[^*\n]+\*)/).forEach((part) => {
+    if (/^\*[^*\n]+\*$/.test(part)) parent.append(el('strong', '', part.slice(1, -1)));
+    else if (part) parent.append(document.createTextNode(part));
+  });
+}
+const plain = (text) => text.replace(/\*([^*\n]+)\*/g, '$1');
+
 const typingDuration = (text) => Math.min(2200, Math.max(800, 450 + text.length * 14));
 const hours = (n) => (n === 1 ? 'שעה' : `${n} שעות`);
 const happened = (n) => (n === 1 ? 'שעה אחת כבר קרתה' : `${n} שעות כבר קרו`);
@@ -91,9 +100,15 @@ export function initDemo(root, options) {
     if (!coach) b.append(el('span', 'visually-hidden', 'אורי: '));
     if (step.notify) b.append(el('span', 'bub-proactive', 'הודעה יזומה'));
     if (coach) b.append(el('span', 'bub-id', COACH_LINE));
-    b.append(document.createTextNode(step.text));
+    appendRich(b, step.text);
     b.append(el('span', 'bub-time', step.time));
     chat.append(b);
+    if (coach && step.buttons) {
+      // reply buttons under the coach's message, like WhatsApp (plain text, no emoji)
+      const row = el('div', `bub-btns${animate ? ' bub-enter' : ''}`);
+      step.buttons.forEach((title) => row.append(el('span', 'bub-btn', title)));
+      chat.append(row);
+    }
     statusTime.textContent = step.time;
     scrollChat(!animate);
   }
@@ -142,7 +157,7 @@ export function initDemo(root, options) {
       icon.src = '/img/logo-mark.webp';
       icon.alt = '';
       head.append(icon, el('b', '', 'דאד קואץ׳'), el('span', '', 'עכשיו'));
-      card.append(head, el('p', 'lock-card-text', `${COACH_LINE}\n${step.text}`));
+      card.append(head, el('p', 'lock-card-text', `${COACH_LINE}\n${plain(step.text)}`));
       lockList.append(card);
     } else {
       lockList.append(el('p', 'lock-empty', 'אין התראות חדשות'));
