@@ -1,4 +1,4 @@
-// node film/posters.mjs (from marketing/training, marketing/ served on 127.0.0.1:8788) -> release/training/v2/father-<slug>.jpg
+// node film/posters.mjs (from marketing/training, marketing/ served on 127.0.0.1:8788) -> release/training/v3/father-<slug>.jpg
 // and ../ad/release/dad-coach-ad-v2.jpg: one frame of each film (720x1280) without the caption - a poster shows the
 // screen, not half a sentence. Frames are named by beat + seconds into it, so they follow a retimed voice.
 import { chromium } from 'playwright';
@@ -15,7 +15,7 @@ async function shot(v, id, lt, tries = 3) {
   const beat = await page.evaluate((id) => window.TIMELINE.beats.find((b) => b.id === id), id);
   await page.evaluate((t) => window.renderAt(t), beat.start + lt);
   await page.evaluate(() => document.querySelectorAll('.caption').forEach((e) => e.remove()));
-  const path = v === 'ad' ? '../ad/release/dad-coach-ad-v2.jpg' : `release/training/v2/father-${v}.jpg`;
+  const path = v === 'ad' ? '../ad/release/dad-coach-ad-v2.jpg' : `release/training/v3/father-${v}.jpg`;
   await page.screenshot({ path, type: 'jpeg', quality: 80 });
   await page.close();
   if (errors.length && tries > 1) return shot(v, id, lt, tries - 1);

@@ -138,7 +138,7 @@ export function install({ S, beats, total, assets = [], fadeColor = 'var(--bg)' 
   };
   window.ready = (async () => {
     await document.fonts.ready;
-    const imgs = ['logo-mark.webp', 'logo-full.webp', ...assets];
+    const imgs = ['logo-mark.webp', 'logo-full.webp', 'coach-black-belt.webp', ...assets];
     await Promise.all(imgs.map((src) => new Promise((r) => { const i = new Image(); i.onload = i.onerror = r; i.src = A(src); })));
     await window.renderAt(0);
     return true;

@@ -31,13 +31,13 @@ const scrollAt = (lt, a, b, from, to) => lerp(from, to, ease(clamp((lt - a) / (b
 const titleCard = (lt, title, lede, o = {}) => {
   const p = fadeIn(lt, 0.1, 0.6);
   return `<div class="center" style="top:${o.top ?? 520}px;opacity:${p};transform:translateY(${lerp(30, 0, p)}px)">
-    <div class="logo"><img src="${asset('logo-mark.webp')}"></div>
+    <div class="coach"><img src="${asset('coach-black-belt.webp')}"></div>
     <div class="title" style="margin-top:80px">${title}</div>${lede ? `<div class="lede">${lede}</div>` : ''}</div>`;
 };
 const endCard = (lt, beat, title, lede) => {
   const e = fadeIn(lt, 0.2, 0.6);
   return `<div class="center" style="top:470px;opacity:${e}">
-    <div class="logo" style="width:360px;height:360px"><img src="${asset('logo-full.webp')}"></div>
+    <div class="coach" style="width:440px"><img src="${asset('coach-black-belt.webp')}"></div>
     <div class="title" style="margin-top:80px;font-size:88px">${title}</div>${lede ? `<div class="lede">${lede}</div>` : ''}</div>`;
 };
 const steps = (lt, items, at, gap, top = 640) => items.map((t, i) => `<div class="step" style="top:${top + i * 200}px;opacity:${fadeIn(lt, at + i * gap, 0.4)}"><span class="n">${i + 1}</span>${t}</div>`).join('');
@@ -102,7 +102,7 @@ S.bAsk = (lt) => {
   return `${ost('"איך אני עומד השבוע?"', lt, { at: 0.1 })}${device(chat(lt, '08:12', msgs, { typing: lt > 0.7 && lt < 1.6 }))}`;
 };
 S.bEnd = (lt, beat) => `${steps(lt, ['עם מי', 'מתי', 'כמה זמן'], 0.3, 0.7, 520)}
-  <div class="center" style="top:1250px;opacity:${fadeIn(lt, 2.4, 0.5)}"><div class="logo" style="width:200px;height:200px"><img src="${asset('logo-mark.webp')}"></div></div>`;
+  <div class="center" style="top:1250px;opacity:${fadeIn(lt, 2.4, 0.5)}"><div class="coach" style="width:260px"><img src="${asset('coach-black-belt.webp')}"></div></div>`;
 
 // ---------------------------------------------------------------- 3. התזכורות
 S.rMorning = (lt) => {
@@ -128,7 +128,7 @@ S.rDash = (lt) => {
   return `${ost('בלוח: מה שסיפרת', lt, { at: 0.1 })}${device(page('05-sessions-past-full.png', lt, { scroll: 0, hl }))}`;
 };
 S.rEnd = (lt) => `${steps(lt, ['בבוקר של היום', 'שעה לפני, עם רעיונות', 'אחרי: "נו, איך היה?"'], 0.3, 1.0, 520)}
-  <div class="center" style="top:1250px;opacity:${fadeIn(lt, 3.4, 0.5)}"><div class="logo" style="width:200px;height:200px"><img src="${asset('logo-mark.webp')}"></div></div>`;
+  <div class="center" style="top:1250px;opacity:${fadeIn(lt, 3.4, 0.5)}"><div class="coach" style="width:260px"><img src="${asset('coach-black-belt.webp')}"></div></div>`;
 
 // ---------------------------------------------------------------- 4. כשמשהו מתבטל (s2: one father's thread, as it happened)
 const S2 = {

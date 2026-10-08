@@ -60,8 +60,8 @@ class TrainingCatalogTest {
         List<TrainingVideo> catalog = TrainingCatalog.validated(shipped);
         assertThat(catalog).filteredOn(TrainingVideo::primary).extracting(TrainingVideo::slug).containsExactly("welcome");
         assertThat(catalog).filteredOn(TrainingVideo::active).isNotEmpty().allSatisfy(v -> {
-            assertThat(v.video()).isEqualTo("dad-coach/training/v2/father-" + v.slug() + ".mp4");
-            assertThat(v.poster()).isEqualTo("dad-coach/training/v2/father-" + v.slug() + ".jpg");
+            assertThat(v.video()).isEqualTo("dad-coach/training/v3/father-" + v.slug() + ".mp4");
+            assertThat(v.poster()).isEqualTo("dad-coach/training/v3/father-" + v.slug() + ".jpg");
             assertThat(v.durationSeconds()).isBetween(20, 90);
         });
     }
