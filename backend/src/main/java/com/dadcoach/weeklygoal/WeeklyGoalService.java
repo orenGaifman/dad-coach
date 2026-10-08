@@ -284,6 +284,11 @@ public class WeeklyGoalService {
     /**
      * Gets the current week's goal (any status) for a father.
      */
+    @Transactional
+    public WeeklyGoal save(WeeklyGoal goal) {
+        return weeklyGoalRepository.save(goal);
+    }
+
     public Optional<WeeklyGoal> getCurrentWeekGoal(Long fatherId) {
         return fatherRepository.findById(fatherId)
             .flatMap(father -> weeklyGoalRepository.findByFatherIdAndWeekStartDate(

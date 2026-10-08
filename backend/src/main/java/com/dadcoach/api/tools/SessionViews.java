@@ -60,25 +60,42 @@ public class SessionViews {
         data.put("timers", SessionTimerPlanner.plan(start, end, zone, clock.instant()));
     }
 
-    private static final String[] DAYS = {"שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"};
-
     /**
      * The session's day and time in Hebrew, for the confirmation to copy (qa-lab night round: the coach booked Thursday 8.10
      * and wrote "מחר, יום שישי 9.10" - it worked the day out itself). "היום, יום חמישי 8.10 ב-17:00".
      */
     static String whenLabel(ZonedDateTime localStart, java.time.LocalDate today) {
-        java.time.LocalDate day = localStart.toLocalDate();
-        String date = "יום " + DAYS[day.getDayOfWeek().getValue() - 1] + " " + day.getDayOfMonth() + "." + day.getMonthValue();
-        String prefix = day.equals(today) ? "היום, " : day.equals(today.plusDays(1)) ? "מחר, " : "";
-        return prefix + date + " ב-" + localStart.toLocalTime().withSecond(0).withNano(0);
+        return com.dadcoach.replies.HebrewWhen.label(localStart, today);
     }
 
-    void putWeekCoverage(Map<String, Object> data, Father father) {
+    public String whenLabel(Father father, Instant start) {
+        ZoneId zone = zone(father);
+        return whenLabel(start.atZone(zone), clock.instant().atZone(zone).toLocalDate());
+    }
+
+    public java.util.Set<String> timerKeys(Father father, Instant start, Instant end) {
+        return SessionTimerPlanner.plan(start, end, zone(father), clock.instant()).keySet();
+    }
+
+    /** Puts this week's coverage after the change and returns its numbers (null when it could not be computed). */
+    com.dadcoach.replies.CoachReplies.Week putWeekCoverage(Map<String, Object> data, Father father) {
         try {
-            data.put("week_coverage", weeklyPlan.build(father).get("coverage"));
+            Object coverage = weeklyPlan.build(father).get("coverage");
+            data.put("week_coverage", coverage);
+            return com.dadcoach.replies.CoachReplies.Week.of(coverage);
         } catch (RuntimeException e) {
             log.warn("Could not compute week coverage: fatherId={}, error={}", father.getId(), e.getClass().getSimpleName());
+            return null;
         }
+    }
+
+    /** D-034: the ready answer a tool returns - the coach's reply is exactly these lines. */
+    static void putReply(Map<String, Object> data, java.util.List<String> lines) {
+        data.put("reply", String.join("\n", lines));
+    }
+
+    Instant now() {
+        return clock.instant();
     }
 
     /**

@@ -60,7 +60,7 @@ class ContextProvidersTest extends AbstractIntegrationTest {
         Father f = data.activeFather("+19995550303");
         JsonNode plan = load("weekly_plan_context", "{\"config\":{\"phone\":\"" + f.getPhone() + "\"}}");
         assertThat(plan.path("data").path("father_found").asBoolean()).isTrue();
-        assertThat(plan.path("data").path("dashboard_url").asText()).isEqualTo("https://app.dadcoach.test/login");
+        assertThat(plan.path("data").has("dashboard_url")).isFalse();
         assertThat(plan.path("data").path("calendar_connected").asBoolean()).isFalse();
         assertThat(plan.toString()).doesNotContain("dadcoach.app").doesNotContain("fatherId");
     }

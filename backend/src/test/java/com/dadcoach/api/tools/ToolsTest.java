@@ -112,6 +112,7 @@ class ToolsTest extends AbstractIntegrationTest {
         Call child = tool("add_child", phone, Map.of("name", "מאיה", "age", 4, "gender", "girl", "interests", java.util.List.of("ציור")));
         assertThat(child.success()).isTrue();
         assertThat(child.data().path("childCount").asInt()).isEqualTo(1);
+        assertThat(child.data().path("reply").asText()).isEqualTo("הוספתי את מאיה, בת 4.");
         assertThat(jdbc.queryForObject("SELECT status FROM father WHERE phone = ?", String.class, phone)).isEqualTo("ACTIVE");
 
         Call again = tool("add_child", phone, Map.of("name", "מאיה", "age", 4));
@@ -173,12 +174,16 @@ class ToolsTest extends AbstractIntegrationTest {
         assertThat(d.path("timers").path("session_reminder_1h").asText()).isEqualTo("2026-11-04T14:30:00Z");
         assertThat(d.path("timers").path("session_follow_up").asText()).isEqualTo("2026-11-04T17:00:00Z");
         assertThat(d.path("week_coverage").path("planned_minutes").asInt()).isEqualTo(60);
+        // D-034 (D-3): the confirmation, written in code from the real timers and the week
+        assertThat(d.path("reply").asText()).isEqualTo("קבעתי 🎉 *מחר, יום רביעי 4.11 ב-17:30*, שעה עם נועה.\n"
+                + "אזכיר לך בבוקר ושעה לפני, ואשאל אחר כך איך היה.\nהשבוע: שעה מתוך שעתיים.");
         String id = d.path("quality_time_id").asText();
 
         Call moved = tool("reschedule_quality_time", f.getPhone(), Map.of("quality_time_id", id, "new_start_time", at("2026-11-05", "18:00")));
         assertThat(moved.success()).as(moved.body().toString()).isTrue();
         String newId = moved.data().path("new_quality_time_id").asText();
         assertThat(moved.data().path("local_start").asText()).isEqualTo("18:00");
+        assertThat(moved.data().path("reply").asText()).startsWith("הזזתי ל*יום חמישי 5.11 ב-18:00*, שעה עם נועה.\n");
         assertThat(jdbc.queryForObject("SELECT status FROM quality_time WHERE id = ?::uuid", String.class, id)).isEqualTo("CANCELLED");
         assertThat(jdbc.queryForObject("SELECT scheduled_end - scheduled_start FROM quality_time WHERE id = ?::uuid", String.class, newId))
                 .isEqualTo("01:00:00"); // keeps its 60 minutes
@@ -186,6 +191,7 @@ class ToolsTest extends AbstractIntegrationTest {
         Call cancelled = tool("cancel_quality_time", f.getPhone(), Map.of("quality_time_id", newId));
         assertThat(cancelled.success()).isTrue();
         assertThat(cancelled.data().path("week_coverage").path("planned_minutes").asInt()).isZero();
+        assertThat(cancelled.data().path("reply").asText()).isEqualTo("ביטלתי את המפגש של *יום חמישי 5.11 ב-18:00* עם נועה.");
 
         Call unknown = tool("cancel_quality_time", f.getPhone(), Map.of("quality_time_id", UUID.randomUUID().toString()));
         assertThat(unknown.error()).isEqualTo("NOT_FOUND");
@@ -205,6 +211,7 @@ class ToolsTest extends AbstractIntegrationTest {
         Call missed = tool("cancel_quality_time", f.getPhone(), Map.of("quality_time_id", id, "reason", "did not happen (missed)"));
         assertThat(missed.success()).as(missed.body().toString()).isTrue();
         assertThat(missed.data().path("status").asText()).isEqualTo("MISSED");
+        assertThat(missed.data().path("reply").asText()).isEqualTo("קורה, העיקר שממשיכים.\nרשמתי שהמפגש עם נועה לא יצא.");
         assertThat(jdbc.queryForObject("SELECT status FROM quality_time WHERE id = ?::uuid", String.class, id)).isEqualTo("MISSED");
         Call again = tool("cancel_quality_time", f.getPhone(), Map.of("quality_time_id", id));
         assertThat(again.success()).isFalse();
@@ -262,6 +269,9 @@ class ToolsTest extends AbstractIntegrationTest {
                 "start_time", at("2026-11-02", "18:00"), "duration_minutes", 60));
         assertThat(past.success()).as(past.body().toString()).isTrue();
         assertThat(past.data().path("timers").isEmpty()).isTrue();
+        // a past time was not "booked": no booking confirmation, the completion's reply is the answer
+        assertThat(past.data().has("reply")).isFalse();
+        assertThat(past.data().path("note").asText()).contains("complete_quality_time");
         String id = past.data().path("quality_time_id").asText();
 
         Call done = tool("complete_quality_time", f.getPhone(), Map.of("quality_time_id", id, "notes", "בנינו מגדל"));
@@ -269,6 +279,8 @@ class ToolsTest extends AbstractIntegrationTest {
         assertThat(done.data().path("status").asText()).isEqualTo("COMPLETED");
         assertThat(done.data().path("week_coverage").path("completed_minutes").asInt()).isEqualTo(60);
         assertThat(done.data().path("week_coverage").path("is_covered").asBoolean()).isTrue();
+        assertThat(done.data().path("reply").asText()).isEqualTo("איזה כיף! רשמתי את הזמן שלך עם נועה.\nהשבוע: שעה מתוך שעה 💪");
+        assertThat(done.data().path("current_belt_name").asText()).isEqualTo("חגורה לבנה");
         assertThat(jdbc.queryForObject("SELECT actual_minutes FROM weekly_goal WHERE father_id = ?", Integer.class, f.getId()))
                 .isEqualTo(60);
         assertThat(jdbc.queryForObject("SELECT total_quality_times_completed FROM father WHERE id = ?", Integer.class, f.getId()))
@@ -289,6 +301,7 @@ class ToolsTest extends AbstractIntegrationTest {
         assertThat(undone.success()).as(undone.body().toString()).isTrue();
         assertThat(undone.data().path("status").asText()).isEqualTo("MISSED");
         assertThat(undone.data().path("completion_undone").asBoolean()).isTrue();
+        assertThat(undone.data().path("reply").asText()).isEqualTo("תיקנתי: המפגש עם נועה רשום עכשיו כמפגש שלא יצא.");
         assertThat(undone.data().path("streak").asInt()).isZero();
         assertThat(undone.data().path("week_coverage").path("completed_minutes").asInt()).isZero();
         assertThat(jdbc.queryForObject("SELECT status FROM quality_time WHERE id = ?::uuid", String.class, id)).isEqualTo("MISSED");
@@ -340,7 +353,16 @@ class ToolsTest extends AbstractIntegrationTest {
         assertThat(set.data().path("week_start_date").asText()).isEqualTo("2026-11-01");
         assertThat(set.data().path("already_existed").asBoolean()).isFalse();
         assertThat(tool("set_weekly_goal", f.getPhone(), Map.of("target_hours", "3")).data().path("already_existed").asBoolean()).isTrue();
-        assertThat(tool("set_weekly_goal", f.getPhone(), Map.of("target_hours", 4)).error()).isEqualTo("INVALID_STATE");
+        // D-034 (D-4): a different number never changes this week's goal - it is saved for next week, and said so
+        Call next = tool("set_weekly_goal", f.getPhone(), Map.of("target_hours", 4));
+        assertThat(next.error()).isEmpty();
+        assertThat(next.data().path("target_hours").asInt()).isEqualTo(3);
+        assertThat(next.data().path("next_week_target_hours").asInt()).isEqualTo(4);
+        assertThat(next.data().path("this_week_line").asText()).isEqualTo("היעד של השבוע נשאר 3 שעות.");
+        assertThat(next.data().path("reply").asText()).isEqualTo("את השבוע הבא נקבע ביום ראשון, ונתחיל מ-4 שעות כמו שרצית.");
+        assertThat(jdbc.queryForObject("SELECT target_hours || '/' || next_week_target_hours FROM weekly_goal", String.class))
+                .isEqualTo("3/4");
+        assertThat(set.data().path("reply").asText()).isEqualTo("סגרנו: השבוע 3 שעות 💪");
         assertThat(tool("set_weekly_goal", f.getPhone(), Map.of("target_hours", "")).error()).isEqualTo("VALIDATION_ERROR");
     }
 

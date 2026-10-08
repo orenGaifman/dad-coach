@@ -97,6 +97,10 @@ public class QualityTime {
     @Column(name = "pre_qt_reminder_sent", nullable = false)
     private boolean preQtReminderSent = false;
 
+    /** D-034: his local date the coach last named this session (a reminder or a reply) - named at most once a day. */
+    @Column(name = "mentioned_on")
+    private java.time.LocalDate mentionedOn;
+
     protected QualityTime() {
         // JPA requires a no-arg constructor
     }
@@ -331,5 +335,13 @@ public class QualityTime {
 
     public void setPreQtReminderSent(boolean preQtReminderSent) {
         this.preQtReminderSent = preQtReminderSent;
+    }
+
+    public java.time.LocalDate getMentionedOn() {
+        return mentionedOn;
+    }
+
+    public void setMentionedOn(java.time.LocalDate mentionedOn) {
+        this.mentionedOn = mentionedOn;
     }
 }

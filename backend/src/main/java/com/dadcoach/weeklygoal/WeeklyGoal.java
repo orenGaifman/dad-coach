@@ -107,6 +107,10 @@ public class WeeklyGoal {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    /** D-034: the number of hours he asked to start NEXT week with while this week's goal already existed. */
+    @Column(name = "next_week_target_hours")
+    private Integer nextWeekTargetHours;
+
     protected WeeklyGoal() {
         // JPA requires a no-arg constructor
     }
@@ -315,5 +319,13 @@ public class WeeklyGoal {
 
     public void setCompletedAt(Instant completedAt) {
         this.completedAt = completedAt;
+    }
+
+    public Integer getNextWeekTargetHours() {
+        return nextWeekTargetHours;
+    }
+
+    public void setNextWeekTargetHours(Integer nextWeekTargetHours) {
+        this.nextWeekTargetHours = nextWeekTargetHours;
     }
 }

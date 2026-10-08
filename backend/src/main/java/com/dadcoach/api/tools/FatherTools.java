@@ -124,6 +124,7 @@ public final class FatherTools {
             data.put("createdAt", saved.getCreatedAt() == null ? null : saved.getCreatedAt().toString());
             data.put("status", "added");
             data.put("childCount", childRepository.countActiveByFatherId(father.getId()));
+            data.put("reply", com.dadcoach.replies.CoachReplies.childAdded(saved.getName(), age, saved.getGender()));
             return data;
         }
     }

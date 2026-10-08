@@ -143,7 +143,7 @@ class JointSessionsTest extends AbstractIntegrationTest {
         assertThat(count("SELECT count(*) FROM quality_time_child")).isEqualTo(1);
 
         JsonNode plan = weeklyPlan();
-        assertThat(plan.path("next_session").asText()).startsWith("UPCOMING | מטר ונעם | 90 min | FRIDAY 2026-11-06 09:00-10:30")
+        assertThat(plan.path("next_session").asText()).startsWith("UPCOMING | מטר ונעם | 90 min | 2026-11-06 09:00-10:30 | יום שישי 6.11 ב-09:00")
                 .endsWith("id=" + id);
 
         // another length or time is another session

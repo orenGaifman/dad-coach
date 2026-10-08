@@ -394,7 +394,8 @@ public class QualityTimeServiceImpl implements QualityTimeService {
                 qualityTimeId, newStreak, totalCompleted, newBelt);
 
         // Return result with or without belt earned
-        if (newBelt != previousBelt) {
+        // a belt is "earned" only when it is higher than before (an old weekly promotion could sit above the count)
+        if (newBelt.ordinal() > (previousBelt == null ? Belt.WHITE : previousBelt).ordinal()) {
             log.info("Father {} earned new belt: {}", father.getId(), newBelt);
             return CompleteQualityTimeResult.withNewBelt(qualityTimeId, newStreak, newBelt);
         } else {

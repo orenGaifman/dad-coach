@@ -12,6 +12,8 @@ import com.dadcoach.weeklygoal.WeeklyGoal;
 import com.dadcoach.weeklygoal.WeeklyGoalRepository;
 import com.dadcoach.weeklygoal.WeeklyGoalService;
 import com.dadcoach.weeklygoal.WeeklyGoalStatus;
+import com.dadcoach.replies.CoachReplies;
+import com.dadcoach.replies.HebrewWhen;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,16 +72,12 @@ public class WeeklyPlanContextBuilder {
     private final WeeklyGoalService weeklyGoalService;
     private final Clock clock;
 
-    private final com.dadcoach.common.DashboardLinks dashboardLinks;
-
     public WeeklyPlanContextBuilder(
             QualityTimeRepository qualityTimeRepository,
             ChildRepository childRepository,
             WeeklyGoalRepository weeklyGoalRepository,
             WeeklyGoalService weeklyGoalService,
-            Clock clock,
-            com.dadcoach.common.DashboardLinks dashboardLinks) {
-        this.dashboardLinks = dashboardLinks;
+            Clock clock) {
         this.qualityTimeRepository = qualityTimeRepository;
         this.childRepository = childRepository;
         this.weeklyGoalRepository = weeklyGoalRepository;
@@ -122,6 +120,14 @@ public class WeeklyPlanContextBuilder {
         int previousCompletedSessions = 0;
         int previousNotCompletedSessions = 0;
         List<String> previousNotes = new ArrayList<>();
+        LocalDate today = localNow.toLocalDate();
+        // D-034: ready answers, built here from the same sessions
+        List<CoachReplies.Upcoming> upcomingThisWeek = new ArrayList<>();
+        Map<String, Object> reminders = new LinkedHashMap<>();
+        List<QualityTime> todayLater = new ArrayList<>();
+        List<String> mentionedToday = new ArrayList<>();
+        QualityTime nextQt = null;
+        QualityTime latestAwaiting = null;
 
         for (QualityTime qt : sessions) {
             Instant start = qt.getScheduledStart();
@@ -134,6 +140,19 @@ public class WeeklyPlanContextBuilder {
             boolean inThisWeek = !start.isBefore(weekStartInstant) && start.isBefore(weekEndInstant);
             boolean inPreviousWeek = !start.isBefore(previousWeekStartInstant) && start.isBefore(weekStartInstant);
             Map<String, Object> view = sessionView(qt, phase, minutes, zone, now, childNames);
+            boolean upcomingOrNow = "UPCOMING".equals(phase) || "IN_PROGRESS".equals(phase);
+            if (upcomingOrNow && inThisWeek) {
+                upcomingThisWeek.add(new CoachReplies.Upcoming((String) view.get("when_label"), (String) view.get("child_name")));
+            }
+            if ("UPCOMING".equals(phase) && start.isBefore(now.plus(LOOKAHEAD))) {
+                reminders.put(view.get("local_date") + " " + view.get("local_start"), remindersOf(qt, zone, now));
+            }
+            if (upcomingOrNow && today.equals(qt.getMentionedOn())) {
+                mentionedToday.add(view.get("local_date") + " " + view.get("local_start"));
+            }
+            if (upcomingOrNow && start.atZone(zone).toLocalDate().equals(today)) {
+                todayLater.add(qt);
+            }
 
             if (inThisWeek) {
                 thisWeek.add(view);
@@ -162,12 +181,14 @@ public class WeeklyPlanContextBuilder {
             }
             if (scheduledAndNotEnded && nextSession == null && start.isBefore(now.plus(LOOKAHEAD))) {
                 nextSession = view;
+                nextQt = qt;
             }
             if (scheduledAndNotEnded && !start.isBefore(weekEndInstant) && start.isBefore(now.plus(LOOKAHEAD))) {
                 scheduledAfterThisWeek.add(view);
             }
             if ("AWAITING_CONFIRMATION".equals(phase) && end.isAfter(now.minus(AWAITING_CONFIRMATION_WINDOW))) {
                 awaitingConfirmation.add(0, view); // most recently ended first
+                latestAwaiting = qt;
             }
         }
 
@@ -203,7 +224,10 @@ public class WeeklyPlanContextBuilder {
         week.put("days_left_including_today", (int) (weekEnd.toEpochDay() - localNow.toLocalDate().toEpochDay()) + 1);
         data.put("current_week", week);
 
-        data.put("goal", goalView(currentGoal));
+        Map<String, Object> goalMap = goalView(currentGoal);
+        // D-034 (D-6): a missing goal is raised at most once a day - the product notes when the coach raised it
+        goalMap.put("asked_today", currentGoal.isEmpty() && today.equals(father.getGoalAskedOn()));
+        data.put("goal", goalMap);
 
         // Completed time is what the goal has actually been credited with (the figure its weekly result is
         // judged on). Without a goal nothing is credited, so the completed sessions are reported instead.
@@ -230,6 +254,8 @@ public class WeeklyPlanContextBuilder {
         data.put("coverage", coverage);
 
         data.put("sessions_this_week", lines(thisWeek));
+        data.put("upcoming_reminders", reminders.isEmpty() ? NONE : reminders);
+        data.put("sessions_mentioned_today", mentionedToday.isEmpty() ? NONE : mentionedToday);
         data.put("sessions_today", lines(sessionsToday));
         data.put("next_session", nextSession != null ? line(nextSession) : NONE);
         data.put("awaiting_confirmation", lines(awaitingConfirmation));
@@ -263,13 +289,21 @@ public class WeeklyPlanContextBuilder {
         history.put("has_any_goal", !allGoals.isEmpty());
         history.put("weeks_with_goal", allGoals.size());
         allGoals.stream()
-                .filter(goal -> goal.getWeekStartDate().isBefore(weekStart))
+                .filter(g -> g.getWeekStartDate().isBefore(weekStart))
                 .findFirst()
-                .ifPresent(goal -> history.put("latest_previous_target_hours", goal.getTargetHours()));
+                .ifPresent(g -> {
+                    history.put("latest_previous_target_hours", g.getTargetHours());
+                    // D-034 (D-4): the number he asked to start this week with, stored last week
+                    if (g.getWeekStartDate().equals(previousWeekStart) && g.getNextWeekTargetHours() != null) {
+                        history.put("asked_for_this_week_hours", g.getNextWeekTargetHours());
+                    }
+                });
         data.put("goal_history", history);
 
         Map<String, Object> progress = new LinkedHashMap<>();
         progress.put("current_belt", father.getCurrentBelt() != null ? father.getCurrentBelt().name() : null);
+        progress.put("current_belt_name", (father.getCurrentBelt() == null ? com.dadcoach.workflow.Belt.WHITE
+                : father.getCurrentBelt()).getDisplayName("he"));
         progress.put("quality_time_streak", father.getQualityTimeStreak());
         progress.put("total_quality_times_completed", father.getTotalQualityTimesCompleted());
         progress.put("current_streak_weeks", father.getCurrentStreakWeeks());
@@ -278,16 +312,30 @@ public class WeeklyPlanContextBuilder {
         com.dadcoach.workflow.Belt belt = father.getCurrentBelt() == null ? com.dadcoach.workflow.Belt.WHITE : father.getCurrentBelt();
         com.dadcoach.workflow.Belt next = belt.getNextBelt();
         progress.put("next_belt", next == null ? null : next.name());
+        progress.put("next_belt_name", next == null ? null : next.getDisplayName("he"));
         progress.put("sessions_to_next_belt", next == null ? null
                 : Math.max(0, next.getMinCompletions() - father.getTotalQualityTimesCompleted()));
         Map<String, Integer> thresholds = new LinkedHashMap<>();
         for (com.dadcoach.workflow.Belt b : com.dadcoach.workflow.Belt.values()) {
-            thresholds.put(b.name(), b.getMinCompletions());
+            thresholds.put(b.getDisplayName("he"), b.getMinCompletions());
         }
         progress.put("belt_at_completed_sessions", thresholds);
         data.put("progress", progress);
 
-        data.put("dashboard_url", dashboardLinks.loginUrl());
+        // D-034: the factual answers, ready - the coach copies them (lists of short lines: a long string is cut at 200)
+        CoachReplies.Week weekNumbers = new CoachReplies.Week(targetMinutes, completedMinutes, plannedMinutes);
+        Map<String, Object> ready = new LinkedHashMap<>();
+        ready.put("week_reply", CoachReplies.week(weekNumbers, upcomingThisWeek));
+        ready.put("progress_reply", CoachReplies.progress(weekNumbers));
+        ready.put("reminder_reply", nextQt == null ? CoachReplies.noUpcomingSession()
+                : reminderReply(nextQt, zone, now, childNames));
+        ready.put("greeting_reply", CoachReplies.greeting(father.getDisplayName()));
+        ready.put("morning_reminder_reply", todayLater.isEmpty() ? NONE : morningReply(todayLater, zone, childNames));
+        ready.put("hour_reminder_reply", nextQt == null || !"UPCOMING".equals(phaseOf(nextQt, now))
+                ? NONE : CoachReplies.hourBefore(SessionChildren.hebrew(nextQt, childNames)));
+        ready.put("follow_up_reply", latestAwaiting == null ? NONE
+                : CoachReplies.followUp(SessionChildren.hebrew(latestAwaiting, childNames)));
+        data.put("ready_replies", ready);
 
         return data;
     }
@@ -311,14 +359,18 @@ public class WeeklyPlanContextBuilder {
         return lines;
     }
 
-    /** e.g. "UPCOMING | Noa | 60 min | TUESDAY 17:00-18:00 | starts in 300 min | id=..." (well under 200 chars). */
+    /**
+     * e.g. "UPCOMING | נועה | 60 min | 2026-11-03 17:00-18:00 | היום, יום שלישי 3.11 ב-17:00 | starts in 300 min | id=..."
+     * (under 200 chars). The Hebrew when-label is the one the coach says (D-8: no weekday of its own).
+     */
     static String line(Map<String, Object> view) {
         StringBuilder sb = new StringBuilder()
                 .append(view.get("phase"))
                 .append(" | ").append(shortNames(view.get("child_name")))
                 .append(" | ").append(view.get("duration_minutes")).append(" min")
-                .append(" | ").append(view.get("weekday")).append(' ').append(view.get("local_date"))
-                .append(' ').append(view.get("local_start")).append('-').append(view.get("local_end"));
+                .append(" | ").append(view.get("local_date"))
+                .append(' ').append(view.get("local_start")).append('-').append(view.get("local_end"))
+                .append(" | ").append(view.get("when_label"));
         if (view.containsKey("starts_in_minutes")) {
             sb.append(" | starts in ").append(view.get("starts_in_minutes")).append(" min");
         }
@@ -329,7 +381,7 @@ public class WeeklyPlanContextBuilder {
     }
 
     /** Keeps the line well under the platform's 200-character cut, so the id at its end always survives. */
-    static final int MAX_LINE_NAMES_LENGTH = 60;
+    static final int MAX_LINE_NAMES_LENGTH = 30;
 
     private static String shortNames(Object names) {
         String text = String.valueOf(names);
@@ -367,6 +419,7 @@ public class WeeklyPlanContextBuilder {
         view.put("phase", phase);
         view.put("local_date", localStart.toLocalDate().toString());
         view.put("weekday", localStart.getDayOfWeek().name());
+        view.put("when_label", HebrewWhen.label(localStart, now.atZone(zone).toLocalDate()));
         view.put("local_start", localStart.format(HH_MM));
         view.put("local_end", localEnd.format(HH_MM));
         view.put("duration_minutes", minutes);
@@ -385,6 +438,35 @@ public class WeeklyPlanContextBuilder {
         return view;
     }
 
+    /** The reminders a session will really get (SessionTimerPlanner, the same policy the booking armed). */
+    private static String remindersOf(QualityTime qt, ZoneId zone, Instant now) {
+        Map<String, String> timers = SessionTimerPlanner.plan(qt.getScheduledStart(), qt.getScheduledEnd(), zone, now);
+        return CoachReplies.remindersInShort(local(timers, SessionTimerPlanner.MORNING_REMINDER, zone),
+                local(timers, SessionTimerPlanner.REMINDER_1H, zone), local(timers, SessionTimerPlanner.FOLLOW_UP, zone));
+    }
+
+    private static List<String> reminderReply(QualityTime qt, ZoneId zone, Instant now, Map<Long, String> childNames) {
+        Map<String, String> timers = SessionTimerPlanner.plan(qt.getScheduledStart(), qt.getScheduledEnd(), zone, now);
+        return CoachReplies.reminders(SessionChildren.hebrew(qt, childNames), local(timers, SessionTimerPlanner.MORNING_REMINDER, zone),
+                local(timers, SessionTimerPlanner.REMINDER_1H, zone), timers.containsKey(SessionTimerPlanner.FOLLOW_UP),
+                now.atZone(zone).toLocalDate());
+    }
+
+    private static String morningReply(List<QualityTime> today, ZoneId zone, Map<Long, String> childNames) {
+        List<String> times = new ArrayList<>();
+        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+        for (QualityTime qt : today) {
+            times.add(HebrewWhen.time(qt.getScheduledStart().atZone(zone).toLocalTime()));
+            names.addAll(SessionChildren.names(qt, childNames));
+        }
+        return CoachReplies.morning(times, SessionChildren.joinHebrew(new ArrayList<>(names)));
+    }
+
+    private static ZonedDateTime local(Map<String, String> timers, String key, ZoneId zone) {
+        String at = timers.get(key);
+        return at == null ? null : Instant.parse(at).atZone(zone);
+    }
+
     private static Map<String, Object> goalView(Optional<WeeklyGoal> goal) {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("exists", goal.isPresent());
@@ -394,6 +476,9 @@ public class WeeklyPlanContextBuilder {
             view.put("target_hours", g.getTargetHours());
             view.put("target_minutes", g.getTargetHours() * 60);
             view.put("credited_minutes", g.getActualMinutes());
+            if (g.getNextWeekTargetHours() != null) {
+                view.put("next_week_target_hours", g.getNextWeekTargetHours());
+            }
         });
         return view;
     }

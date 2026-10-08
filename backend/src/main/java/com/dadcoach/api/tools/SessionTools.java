@@ -11,6 +11,8 @@ import com.dadcoach.qualitytime.dto.CompleteQualityTimeResult;
 import com.dadcoach.qualitytime.dto.ScheduleQualityTimeResult;
 import com.dadcoach.systemstate.AvailableSlot;
 import com.dadcoach.systemstate.AvailableSlotFinder;
+import com.dadcoach.qualitytime.SessionChildren;
+import com.dadcoach.replies.CoachReplies;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -67,6 +69,18 @@ public final class SessionTools {
     static final String JOINED_NOTE = "This child was added to the existing session at the same time - one session "
             + "with all of these children (child_names), not a second session. Tell him in one line.";
     static final String ALREADY_IN_NOTE = "This child is already in this session - nothing changed.";
+    static final String PAST_NOTE = "This time already passed: nothing was booked ahead and no reminder will come. "
+            + "Record it now with complete_quality_time for this quality_time_id and reply with that result's reply.";
+
+    static int minutesOf(ScheduleQualityTimeResult result) {
+        return (int) Duration.between(result.startTime(), result.endTime()).toMinutes();
+    }
+
+    static String names(ScheduleQualityTimeResult result) {
+        String joined = SessionChildren.joinHebrew(result.childNames());
+        return joined != null ? joined : result.childName();
+    }
+
     static final String MERGED_NOTE = "The new time is exactly the time of another session of his - the children were "
             + "added to that session (new_quality_time_id), one session with all of them. Tell him in one line.";
 
@@ -101,9 +115,18 @@ public final class SessionTools {
             data.put("end_time", result.endTime().toString());
             data.put("status", result.status().name());
             views.putSessionTimers(data, father, result.startTime(), result.endTime());
-            views.putWeekCoverage(data, father);
+            CoachReplies.Week week = views.putWeekCoverage(data, father);
+            String when = views.whenLabel(father, result.startTime());
             if (result.joinedExistingSession()) {
                 data.put("note", result.childAlreadyInSession() ? ALREADY_IN_NOTE : JOINED_NOTE);
+                SessionViews.putReply(data, result.childAlreadyInSession()
+                        ? CoachReplies.alreadyInSession(child.getName(), when)
+                        : CoachReplies.joined(child.getName(), when, SessionChildren.joinHebrew(result.childNames())));
+            } else if (result.startTime().isAfter(views.now())) {
+                SessionViews.putReply(data, CoachReplies.booked(when, minutesOf(result), names(result),
+                        views.timerKeys(father, result.startTime(), result.endTime()), week));
+            } else {
+                data.put("note", PAST_NOTE);
             }
             return data;
         }
@@ -159,10 +182,12 @@ public final class SessionTools {
             data.put("new_end_time", result.endTime().toString());
             data.put("status", result.status().name());
             views.putSessionTimers(data, father, result.startTime(), result.endTime());
-            views.putWeekCoverage(data, father);
+            CoachReplies.Week week = views.putWeekCoverage(data, father);
             if (result.joinedExistingSession()) {
                 data.put("note", MERGED_NOTE);
             }
+            SessionViews.putReply(data, CoachReplies.moved(views.whenLabel(father, result.startTime()), minutesOf(result),
+                    names(result), views.timerKeys(father, result.startTime(), result.endTime()), week));
             return data;
         }
     }
@@ -190,10 +215,17 @@ public final class SessionTools {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("quality_time_id", existing.getId().toString());
             data.put("status", status);
+            String children = SessionChildren.hebrew(existing);
             if (undoesCompletion) {
                 data.put("completion_undone", true);
                 data.put("streak", existing.getFather().getQualityTimeStreak());
                 data.put("belt", existing.getFather().getCurrentBelt().name());
+                data.put("belt_name", existing.getFather().getCurrentBelt().getDisplayName("he"));
+                SessionViews.putReply(data, CoachReplies.completionUndone(children));
+            } else if ("MISSED".equals(status)) {
+                SessionViews.putReply(data, CoachReplies.missed(children));
+            } else {
+                SessionViews.putReply(data, CoachReplies.cancelled(views.whenLabel(father, existing.getScheduledStart()), children));
             }
             views.putWeekCoverage(data, father);
             return data;
@@ -222,11 +254,16 @@ public final class SessionTools {
             data.put("status", result.status().name());
             data.put("new_streak", result.newStreak());
             data.put("current_belt", result.currentBelt().name());
+            data.put("current_belt_name", result.currentBelt().getDisplayName("he"));
             data.put("points_awarded", result.pointsAwarded());
+            String belt = null;
             if (result.beltEarned() != null) {
                 data.put("belt_earned", result.beltEarned().name());
+                belt = result.beltEarned().getDisplayName("he");
+                data.put("belt_earned_name", belt);
             }
-            views.putWeekCoverage(data, father);
+            CoachReplies.Week week = views.putWeekCoverage(data, father);
+            SessionViews.putReply(data, CoachReplies.done(SessionChildren.hebrew(existing), week, belt));
             return data;
         }
     }

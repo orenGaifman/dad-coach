@@ -70,7 +70,7 @@ class WeeklyPlanContextBuilderTest {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         WeeklyGoalService weeklyGoalService = new WeeklyGoalService(weeklyGoalRepository, fatherRepository, clock);
         builder = new WeeklyPlanContextBuilder(qualityTimeRepository, childRepository, weeklyGoalRepository,
-                weeklyGoalService, clock, new com.dadcoach.common.DashboardLinks("https://app.dadcoach.test/"));
+                weeklyGoalService, clock);
 
         when(childRepository.findByFatherIdAndStatus(7L, "ACTIVE")).thenReturn(List.of(child));
         when(qualityTimeRepository.findByFatherIdOrderByScheduledStartDesc(7L)).thenReturn(sessions);
@@ -171,7 +171,7 @@ class WeeklyPlanContextBuilderTest {
         assertThat(map(data, "coverage")).containsEntry("planned_minutes", 0)
                 .containsEntry("awaiting_confirmation_minutes", 60);
         assertThat(lines(data, "awaiting_confirmation")).singleElement()
-                .satisfies(line -> assertThat(line).startsWith("AWAITING_CONFIRMATION | Noa | 60 min | MONDAY 2026-09-28 17:00-18:00")
+                .satisfies(line -> assertThat(line).startsWith("AWAITING_CONFIRMATION | Noa | 60 min | 2026-09-28 17:00-18:00 | יום שני 28.9 ב-17:00")
                         .contains("| ended 1080 min ago | id="));
     }
 
@@ -184,12 +184,12 @@ class WeeklyPlanContextBuilderTest {
 
         QualityTime today = sessions.get(0);
         assertThat(lines(data, "sessions_today")).containsExactly(
-                "UPCOMING | Noa | 60 min | TUESDAY 2026-09-29 17:00-18:00 | starts in 300 min | id=" + today.getId());
+                "UPCOMING | Noa | 60 min | 2026-09-29 17:00-18:00 | היום, יום שלישי 29.9 ב-17:00 | starts in 300 min | id=" + today.getId());
         assertThat(data.get("next_session")).isEqualTo(lines(data, "sessions_today").get(0));
     }
 
     @Test
-    @DisplayName("renders safely: no top-level nulls, empty collections say none, every value fits 200 chars")
+    @DisplayName("renders safely: no top-level nulls, empty collections say none, every text value fits 200 chars")
     void renderSafe() {
         goal(WEEK, 2, 0, WeeklyGoalStatus.ACTIVE);
         for (int day = 0; day < 6; day++) {
@@ -198,9 +198,12 @@ class WeeklyPlanContextBuilderTest {
         session("2026-09-30T14:00:00Z", 30); // same local slot twice -> distinct keys
         Map<String, Object> data = builder.build(father);
         assertThat(data.values()).doesNotContainNull();
-        assertThat(data.values()).noneMatch(value -> value instanceof List);
+        // the platform cuts a text value at 200 characters; lists and maps are rendered whole (PromptBuilder.formatAny),
+        // so long answers travel as lists of short lines (D-034 ready_replies)
         data.values().stream().filter(Map.class::isInstance).map(Map.class::cast)
                 .flatMap(nested -> nested.values().stream())
+                .flatMap(value -> value instanceof List<?> list ? list.stream() : java.util.stream.Stream.of(value))
+                .filter(value -> !(value instanceof Map))
                 .forEach(value -> assertThat(String.valueOf(value)).hasSizeLessThanOrEqualTo(200));
 
         sessions.clear();
@@ -252,8 +255,8 @@ class WeeklyPlanContextBuilderTest {
     void calendarAndDashboard() {
         Map<String, Object> data = builder.build(father);
 
-        assertThat(data).containsEntry("calendar_connected", false)
-                .containsEntry("dashboard_url", "https://app.dadcoach.test/login");
+        // D-034 (D-7): no address in the model's hands - his page is a button (dad_dashboard_link)
+        assertThat(data).containsEntry("calendar_connected", false).doesNotContainKey("dashboard_url");
     }
 
     @Test
@@ -262,8 +265,7 @@ class WeeklyPlanContextBuilderTest {
         // Saturday 22:30Z = Sunday 01:30 in Jerusalem
         Clock clock = Clock.fixed(Instant.parse("2026-10-03T22:30:00Z"), ZoneOffset.UTC);
         WeeklyPlanContextBuilder sunday = new WeeklyPlanContextBuilder(qualityTimeRepository, childRepository,
-                weeklyGoalRepository, new WeeklyGoalService(weeklyGoalRepository, fatherRepository, clock), clock,
-                new com.dadcoach.common.DashboardLinks("https://app.dadcoach.test"));
+                weeklyGoalRepository, new WeeklyGoalService(weeklyGoalRepository, fatherRepository, clock), clock);
         goal(WEEK, 2, 120, WeeklyGoalStatus.ACTIVE);
 
         Map<String, Object> data = sunday.build(father);
@@ -272,5 +274,49 @@ class WeeklyPlanContextBuilderTest {
         assertThat(map(data, "goal")).containsEntry("exists", false);
         assertThat(map(data, "previous_week")).containsEntry("week_start", "2026-09-27")
                 .containsEntry("goal_met", true);
+    }
+
+    @Test
+    @DisplayName("D-034: ready answers from the same data - the week, progress, the reminders, the timers' messages")
+    void readyReplies() {
+        goal(WEEK, 2, 0, WeeklyGoalStatus.ACTIVE);
+        session("2026-09-29T14:00:00Z", 30);  // today 17:00-17:30
+        session("2026-10-02T06:00:00Z", 90);  // Friday 09:00 - before 10:00: no morning reminder
+        Map<String, Object> ready = map(builder.build(father), "ready_replies");
+
+        assertThat(ready.get("week_reply")).isEqualTo(List.of("השבוע מכוסה 💪", "• *היום, יום שלישי 29.9 ב-17:00* עם Noa",
+                "• *יום שישי 2.10 ב-09:00* עם Noa"));
+        assertThat(ready.get("progress_reply")).isEqualTo(List.of("השבוע עד עכשיו:", "היה: עוד לא", "מתוכנן: שעתיים", "השבוע מכוסה 💪"));
+        // D-1: 17:00-17:30 -> reminded at 16:00, asked at 18:00; nothing "at 17:00"
+        assertThat(ready.get("reminder_reply")).isEqualTo(List.of("אזכיר לך *היום ב-16:00*, שעה לפני המפגש עם Noa.",
+                "חצי שעה אחרי שתסיימו, אשאל איך היה 🙂"));
+        assertThat(ready.get("greeting_reply")).isEqualTo("היי Oren 🙂 מה נשמע?");
+        assertThat(ready.get("morning_reminder_reply")).isEqualTo("*היום ב-17:00* זה הזמן שלך ושל Noa 🙂");
+        assertThat(ready.get("hour_reminder_reply")).isEqualTo(List.of("עוד שעה הזמן שלך ושל Noa 🙂", "יש כבר רעיון מה תעשו?"));
+        assertThat(ready.get("follow_up_reply")).isEqualTo("none");
+
+        Map<String, Object> reminders = map(builder.build(father), "upcoming_reminders");
+        assertThat(reminders).containsEntry("2026-09-29 17:00", "תזכורת שעה לפני ב-16:00 · שאלה איך היה ב-18:00")
+                .containsEntry("2026-10-02 09:00", "תזכורת שעה לפני ב-08:00 · שאלה איך היה ב-11:00");
+    }
+
+    @Test
+    @DisplayName("D-034: what was said today, belts in Hebrew, and next week's number he asked for")
+    void mentionsBeltsAndNextWeek() {
+        QualityTime today = session("2026-09-29T14:00:00Z", 30);
+        today.setMentionedOn(LocalDate.parse("2026-09-29"));
+        father.setGoalAskedOn(LocalDate.parse("2026-09-29"));
+        WeeklyGoal last = goal(PREVIOUS_WEEK, 2, 120, WeeklyGoalStatus.COMPLETED);
+        last.setNextWeekTargetHours(3);
+        when(weeklyGoalRepository.findByFatherIdOrderByWeekStartDateDesc(7L)).thenReturn(List.of(last));
+
+        Map<String, Object> data = builder.build(father);
+
+        assertThat(data.get("sessions_mentioned_today")).isEqualTo(List.of("2026-09-29 17:00"));
+        assertThat(map(data, "goal")).containsEntry("asked_today", true);
+        assertThat(map(data, "goal_history")).containsEntry("asked_for_this_week_hours", 3);
+        assertThat(map(data, "progress")).containsEntry("current_belt_name", "חגורה לבנה")
+                .containsEntry("next_belt_name", "חגורה צהובה");
+        assertThat(map(map(data, "progress"), "belt_at_completed_sessions")).containsEntry("חגורה צהובה", 3);
     }
 }

@@ -113,6 +113,10 @@ public class Father {
     @Column(name = "goals_started_at")
     private LocalDate goalsStartedAt;
 
+    /** D-034: his local date the coach last raised a missing weekly goal (raised at most once a day). */
+    @Column(name = "goal_asked_on")
+    private LocalDate goalAskedOn;
+
     @Column(name = "current_streak_weeks", nullable = false)
     private Integer currentStreakWeeks = 0;
 
@@ -515,5 +519,13 @@ public class Father {
 
     public void setCurrentBelt(Belt currentBelt) {
         this.currentBelt = currentBelt;
+    }
+
+    public LocalDate getGoalAskedOn() {
+        return goalAskedOn;
+    }
+
+    public void setGoalAskedOn(LocalDate goalAskedOn) {
+        this.goalAskedOn = goalAskedOn;
     }
 }
