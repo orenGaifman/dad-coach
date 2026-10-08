@@ -35,7 +35,7 @@ public class LoginLinkDelivery {
     static final String IDENTITY = "❤️ דאד קואץ׳:\n";
     static final String FATHER_TEXT = IDENTITY + "📊 *הדף שלך בדאד קואץ׳*\nהשבוע, הילדים וההתקדמות, הכול בדף אחד.";
     static final String FATHER_LABEL = "כניסה לדף שלי";
-    static final String STAFF_TEXT = IDENTITY + "🛠️ *ניהול דאד קואץ׳*\nהכניסה שלך לניהול.";
+    static final String STAFF_TEXT = IDENTITY + "📊 *ניהול דאד קואץ׳*\nהכניסה שלך לניהול.";
     static final String STAFF_LABEL = "כניסה לניהול";
     /** "הקישור", not "הכפתור": the same footer closes the text fallback, where there is no button (D-032). */
     static final String FOOTER = "הקישור אישי, לא להעביר הלאה";

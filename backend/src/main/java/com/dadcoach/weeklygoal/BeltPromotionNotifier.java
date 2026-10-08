@@ -18,6 +18,9 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
+ * Not used since D-030 (the weekly job no longer promotes); a belt is told where it is earned - the session's
+ * completion reply (B-1, D-034). Kept for the job's wiring; its texts follow the vocabulary (💪 progress).
+ *
  * Tells a father who earned a new belt (the weekly completion job): the belt image while his 24-hour window is open
  * (images cannot go in a template), then the congratulation text through the channel layer ({@link ProactiveSender}:
  * free-form in the window, the approved template outside it). A sent congratulation is recorded into his platform
@@ -62,7 +65,7 @@ public class BeltPromotionNotifier {
         try {
             boolean windowOpen = sessionWindows.isOpen(endpoints.ensure(father));
             if (windowOpen && beltImageConfig.hasImage(newBelt)) {
-                String caption = String.format("🎉 מזל טוב! עלית ל%s!", newBelt.getDisplayName("he"));
+                String caption = String.format("עלית ל*%s* 💪", newBelt.getDisplayName("he"));
                 var image = whatsAppApiClient.sendMessage(messageFormatter.formatImageMessage(
                         father.getPhone(), beltImageConfig.getImageUrl(newBelt), caption));
                 if (!image.success()) {
@@ -94,7 +97,7 @@ public class BeltPromotionNotifier {
     private String buildPromotionMessage(WeeklyGoalService.BeltPromotionResult result) {
         Belt newBelt = result.newBelt();
         // D-032: opens with the identity line like every message on the shared number (the template body carries it)
-        StringBuilder sb = new StringBuilder("❤️ דאד קואץ׳:\n🥋 *").append(newBelt.getDisplayName("he")).append("*\n");
+        StringBuilder sb = new StringBuilder("❤️ דאד קואץ׳:\n💪 *").append(newBelt.getDisplayName("he")).append("*\n");
         sb.append("כל מפגש שקרה ואישרת נספר, והם הצטברו לחגורה חדשה.");
         Belt next = newBelt.getNextBelt();
         if (next != null) {
