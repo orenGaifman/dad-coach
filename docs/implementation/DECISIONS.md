@@ -257,3 +257,16 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 - **Site claims fixed to the product:** a cancellation never lowers a belt but can break the weekly streak; no
   "replaced by" view; children by message or on the page; no stop word exists (silence does not stop the Sunday and
   goal invites - see the open item); the footer starts with the signup because an unclaimed number is dropped.
+
+## D-031 On the shared number, a message for a father who is on another product waits (owner, 2026-10-08)
+
+- **Problem:** the owner was on Dad Coach in WhatsApp and still got Tair's and Big Boss's 08:00 messages; the platform's
+  gateway only routed what people wrote, and each product sends on the shared number itself.
+- **Decision:** before every send `WhatsAppApiClient` asks the platform (`SharedNumberGate`, `POST
+  /api/v1/worker/whatsapp/outbound-gate` with the worker key and the Meta body). When the father is on another product
+  the platform keeps the message and sends it when he moves to Dad Coach (picker, `@dadcoach`, a `dc:` button, writing
+  to it); Dad Coach treats it as sent (message id `held:<n>`). Owner's choices: kept until he switches (not dropped),
+  for everyone who belongs to several products. A first message (no Dad Coach conversation yet) is never held. Any
+  failure to ask sends as before; `dadcoach.whatsapp.shared-number-gate=false` switches it off.
+- **Tests:** WhatsAppApiClientSharedNumberTest, SharedNumberGateIntegrationTest (FakeServers answers the gate); suite
+  248/248. Platform side: ai-workflow-platform V119, docs/whatsapp-gateway.md.
