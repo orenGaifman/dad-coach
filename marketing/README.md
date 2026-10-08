@@ -98,7 +98,7 @@ Needs ffmpeg, Python 3, and Playwright: `marketing/node_modules` is a symlink to
 cd marketing/training
 node film/sheet.mjs <slug>          # contact sheet out/qa/<slug>_sheet_<n>.jpg - check a film before rendering it
 ./build.sh welcome book-a-session reminders when-cancelled my-dashboard ad
-node film/posters.mjs               # release/training/v2/father-<slug>.jpg + ../ad/release/dad-coach-ad-v2.jpg
+node film/posters.mjs               # release/training/v3/father-<slug>.jpg + ../ad/release/dad-coach-ad-v2.jpg
 python3 release.py                  # release/media.json, checked against the catalog
 ./qa.sh welcome ad                  # length, size, loudness, a frame scan in out/qa
 python3 ../review/make_page.py      # the review page
@@ -117,7 +117,7 @@ regenerated with `audio/vo.py` (ElevenLabs; `--wav` rebuilds the ignored wavs fr
 
 ### Release and upload
 
-`training/release/training/v2/father-<slug>.mp4|.jpg` go to the Bunny zone (shared with Big Boss) as
-`dad-coach/training/v2/father-<slug>.mp4|.jpg` (`provisioning/scripts/upload_training_media.py`), the paths the catalog names; `release/media.json` lists each file with
+`training/release/training/v3/father-<slug>.mp4|.jpg` go to the Bunny zone (shared with Big Boss) as
+`dad-coach/training/v3/father-<slug>.mp4|.jpg` (`provisioning/scripts/upload_training_media.py`), the paths the catalog names; `release/media.json` lists each file with
 its size, sha256 and length. The dashboard shows them once `TRAINING_MEDIA_BASE_URL` and the token key are set. The ad
 is `ad/release/dad-coach-ad-v2.mp4` (+ `.jpg`), for the campaign, not the CDN.
