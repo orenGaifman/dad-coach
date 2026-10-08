@@ -6,7 +6,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** D-034 (D-2): a reply confirms only what this turn really did - the production examples of review 2. */
+/** D-036 (D-2): a reply confirms only what this turn really did - the production examples of review 2. */
 class ClaimGuardTest {
 
     static final List<String> KIDS = List.of("איתמר", "מטר", "נעם");

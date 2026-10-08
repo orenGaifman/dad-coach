@@ -11,7 +11,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The last check before a coach reply goes out (D-034, D-2): the reply may say something was done only when this turn
+ * The last check before a coach reply goes out (D-036, D-2): the reply may say something was done only when this turn
  * really did it ({@link TurnLedger.Changes}). Production (review 2, 2026-10-08): "מעולה, קובע את זה - יום שישי
  * 09:00-10:30 עם מטר ונעם 💪" with nothing booked (the father: "אני לא רואה שקבעת"); "מעולה, רשום אצלי 😊" for an
  * activity nothing can store; "... רק רגע ונמשיך משם." and nothing came; "אעדכן אותך בבוקר" for a session that has no

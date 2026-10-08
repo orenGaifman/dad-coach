@@ -7,7 +7,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The message standard, enforced in code on every coach reply and scheduled message (D-034; findings D-9, D-10 of the
+ * The message standard, enforced in code on every coach reply and scheduled message (D-036; findings D-9, D-10 of the
  * production review 2, 2026-10-08: 😊 in 26 of 40 replies, 👍 ✅ 🙏 🎮 🍳 🥞 🎲 🚲, three bubbles with two or more emoji,
  * and " - " joining two sentences in 25 of 40). The prompt says the same; this is the last line before WhatsApp:
  * <ul>

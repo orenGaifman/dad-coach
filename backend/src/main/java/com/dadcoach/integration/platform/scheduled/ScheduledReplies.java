@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The session timers' messages, from data (D-034; findings D-1, D-11, D-15). The scheduled turn's model decides whether
+ * The session timers' messages, from data (D-036; findings D-1, D-11, D-15). The scheduled turn's model decides whether
  * to write; what it writes about a session must be this message:
  * <ul>
  *   <li>no valid session for the timer (cancelled on his page, moved, already done): nothing is sent, whatever the

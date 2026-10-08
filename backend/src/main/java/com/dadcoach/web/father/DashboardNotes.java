@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * What the father did on his page, noted in his WhatsApp conversation with the coach (D-034, the Big Boss D-180
+ * What the father did on his page, noted in his WhatsApp conversation with the coach (D-036, the Big Boss D-180
  * pattern): he cancelled a session on the page, then wrote "מה יש לי השבוע?" - the weekly plan is fresh, but the chat
  * history still said "קבעתי ... מחר ב-17:00", and in a long chat the model trusts its history. The note is history only
  * (never sent on WhatsApp - he did it himself, he knows), Hebrew, and opens with "📊 בדף שלך:" so it never reads like

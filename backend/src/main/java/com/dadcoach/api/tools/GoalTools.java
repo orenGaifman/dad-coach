@@ -22,7 +22,7 @@ public final class GoalTools {
 
     /**
      * Create-only and idempotent by meaning: the same target for this week's existing goal succeeds without
-     * creating anything; a different one never changes this week's goal - it is kept as next week's number (D-034).
+     * creating anything; a different one never changes this week's goal - it is kept as next week's number (D-036).
      */
     @Component
     public static class SetWeeklyGoal implements ToolHandler {
@@ -46,7 +46,7 @@ public final class GoalTools {
             Optional<WeeklyGoal> existing = goals.getCurrentWeekGoal(father.getId());
             Map<String, Object> data = new LinkedHashMap<>();
             if (existing.isPresent() && existing.get().getTargetHours() != target) {
-                // D-034 (D-4): this week's goal never changes; the new number is kept for next week and offered at
+                // D-036 (D-4): this week's goal never changes; the new number is kept for next week and offered at
                 // Sunday's check-in - so "נתחיל מ-3 שעות" is true, not a promise nothing keeps
                 WeeklyGoal current = existing.get();
                 current.setNextWeekTargetHours(target);

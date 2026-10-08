@@ -19,7 +19,7 @@ import java.util.List;
 
 /**
  * Not used since D-030 (the weekly job no longer promotes); a belt is told where it is earned - the session's
- * completion reply (B-1, D-034). Kept for the job's wiring; its texts follow the vocabulary (💪 progress).
+ * completion reply (B-1, D-036). Kept for the job's wiring; its texts follow the vocabulary (💪 progress).
  *
  * Tells a father who earned a new belt (the weekly completion job): the belt image while his 24-hour window is open
  * (images cannot go in a template), then the congratulation text through the channel layer ({@link ProactiveSender}:

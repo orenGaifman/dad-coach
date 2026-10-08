@@ -89,7 +89,7 @@ public class SessionViews {
         }
     }
 
-    /** D-034: the ready answer a tool returns - the coach's reply is exactly these lines. */
+    /** D-036: the ready answer a tool returns - the coach's reply is exactly these lines. */
     static void putReply(Map<String, Object> data, java.util.List<String> lines) {
         data.put("reply", String.join("\n", lines));
     }

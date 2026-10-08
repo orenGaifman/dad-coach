@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The coach's factual answers, written in code from this turn's data (D-034): what was booked, moved, cancelled or
+ * The coach's factual answers, written in code from this turn's data (D-036): what was booked, moved, cancelled or
  * recorded, the week, the reminders, the goal. The model copies them ("your reply is exactly the ready answer");
  * the product checks the copy and falls back to these exact lines. Production showed why (review 2, 2026-10-08):
  * invented reminders ("ועוד אחת ב-17:00"), "אעדכן אותך בבוקר" for a 09:00 session that has no morning reminder, the
@@ -156,7 +156,7 @@ public final class CoachReplies {
         return "היעד של השבוע נשאר " + HebrewHours.of(hours * 60) + ".";
     }
 
-    /** D-034 (D-4): a different number while this week's goal exists is kept for next week - and said so. */
+    /** D-036 (D-4): a different number while this week's goal exists is kept for next week - and said so. */
     public static String nextWeekGoal(int hours) {
         return "את השבוע הבא נקבע ביום ראשון, ונתחיל " + from(HebrewHours.of(hours * 60)) + " כמו שרצית.";
     }

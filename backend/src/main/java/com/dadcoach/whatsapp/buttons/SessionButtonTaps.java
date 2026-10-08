@@ -125,7 +125,7 @@ public class SessionButtonTaps {
         };
     }
 
-    /** The same lines as complete_quality_time's reply (D-034): what was recorded, the week, a belt only when earned. */
+    /** The same lines as complete_quality_time's reply (D-036): what was recorded, the week, a belt only when earned. */
     private String doneReply(Father father, String child, String beltEarned) {
         com.dadcoach.replies.CoachReplies.Week week = null;
         try {

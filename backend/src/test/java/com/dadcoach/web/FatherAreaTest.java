@@ -114,7 +114,7 @@ class FatherAreaTest extends AbstractWebIntegrationTest {
         mvc.perform(browser.on(post("/api/father/sessions/" + s.awaiting() + "/confirm"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"note\":\"בנינו מגדל לגו\"}")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.beltEarned").doesNotExist());
-        // D-034: his AI conversation learns what he did on the page (history only, nothing sent on WhatsApp)
+        // D-036: his AI conversation learns what he did on the page (history only, nothing sent on WhatsApp)
         assertThat(fake.recordedOutbound()).singleElement().satisfies(c -> assertThat(content(c))
                 .contains("📊 בדף שלך: סימנת שהמפגש של *").contains("עם איתי היה."));
         assertThat(fake.metaSends()).isEmpty();
@@ -176,7 +176,7 @@ class FatherAreaTest extends AbstractWebIntegrationTest {
         mvc.perform(browser.on(put("/api/father/children/" + id)).contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"מיה רוז\",\"age\":6}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("מיה רוז")).andExpect(jsonPath("$.age").value(6));
         mvc.perform(browser.on(get("/api/father/children"))).andExpect(jsonPath("$.length()").value(2));
-        // D-034: each change is noted in his conversation with the coach, so "בן כמה מיה?" is answered from it
+        // D-036: each change is noted in his conversation with the coach, so "בן כמה מיה?" is answered from it
         assertThat(fake.recordedOutbound()).extracting(this::content).anySatisfy(b -> assertThat(b)
                 .contains("📊 בדף שלך: הוספת את מיה, בגיל 5.")).anySatisfy(b -> assertThat(b)
                 .contains("📊 בדף שלך: עדכנת את מיה: השם עכשיו מיה רוז, בגיל 6."));

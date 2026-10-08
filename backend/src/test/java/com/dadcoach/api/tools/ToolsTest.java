@@ -174,7 +174,7 @@ class ToolsTest extends AbstractIntegrationTest {
         assertThat(d.path("timers").path("session_reminder_1h").asText()).isEqualTo("2026-11-04T14:30:00Z");
         assertThat(d.path("timers").path("session_follow_up").asText()).isEqualTo("2026-11-04T17:00:00Z");
         assertThat(d.path("week_coverage").path("planned_minutes").asInt()).isEqualTo(60);
-        // D-034 (D-3): the confirmation, written in code from the real timers and the week
+        // D-036 (D-3): the confirmation, written in code from the real timers and the week
         assertThat(d.path("reply").asText()).isEqualTo("קבעתי 🎉 *מחר, יום רביעי 4.11 ב-17:30*, שעה עם נועה.\n"
                 + "אזכיר לך בבוקר ושעה לפני, ואשאל אחר כך איך היה.\nהשבוע: שעה מתוך שעתיים.");
         String id = d.path("quality_time_id").asText();
@@ -353,7 +353,7 @@ class ToolsTest extends AbstractIntegrationTest {
         assertThat(set.data().path("week_start_date").asText()).isEqualTo("2026-11-01");
         assertThat(set.data().path("already_existed").asBoolean()).isFalse();
         assertThat(tool("set_weekly_goal", f.getPhone(), Map.of("target_hours", "3")).data().path("already_existed").asBoolean()).isTrue();
-        // D-034 (D-4): a different number never changes this week's goal - it is saved for next week, and said so
+        // D-036 (D-4): a different number never changes this week's goal - it is saved for next week, and said so
         Call next = tool("set_weekly_goal", f.getPhone(), Map.of("target_hours", 4));
         assertThat(next.error()).isEmpty();
         assertThat(next.data().path("target_hours").asInt()).isEqualTo(3);

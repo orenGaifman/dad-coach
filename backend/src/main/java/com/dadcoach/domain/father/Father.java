@@ -113,7 +113,7 @@ public class Father {
     @Column(name = "goals_started_at")
     private LocalDate goalsStartedAt;
 
-    /** D-034: his local date the coach last raised a missing weekly goal (raised at most once a day). */
+    /** D-036: his local date the coach last raised a missing weekly goal (raised at most once a day). */
     @Column(name = "goal_asked_on")
     private LocalDate goalAskedOn;
 

@@ -11,7 +11,7 @@ import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** D-034: the coach's factual answers, written in code - the approved shapes, from data only. */
+/** D-036: the coach's factual answers, written in code - the approved shapes, from data only. */
 class CoachRepliesTest {
 
     static final ZoneId IL = ZoneId.of("Asia/Jerusalem");

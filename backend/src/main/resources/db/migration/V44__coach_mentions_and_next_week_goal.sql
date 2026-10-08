@@ -1,4 +1,4 @@
--- D-034: what the coach already said today, kept in code so the context can tell it (production review 2, 2026-10-08:
+-- D-036: what the coach already said today, kept in code so the context can tell it (production review 2, 2026-10-08:
 -- the same session repeated in 12 of 19 replies, the missing goal pushed in 4 replies in 7 minutes).
 --   father.goal_asked_on        his local date the coach last raised a missing weekly goal
 --   quality_time.mentioned_on   his local date the coach last named this session (a reminder or a reply)

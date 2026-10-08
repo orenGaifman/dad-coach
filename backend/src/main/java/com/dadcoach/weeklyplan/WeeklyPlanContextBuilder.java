@@ -121,7 +121,7 @@ public class WeeklyPlanContextBuilder {
         int previousNotCompletedSessions = 0;
         List<String> previousNotes = new ArrayList<>();
         LocalDate today = localNow.toLocalDate();
-        // D-034: ready answers, built here from the same sessions
+        // D-036: ready answers, built here from the same sessions
         List<CoachReplies.Upcoming> upcomingThisWeek = new ArrayList<>();
         Map<String, Object> reminders = new LinkedHashMap<>();
         List<QualityTime> todayLater = new ArrayList<>();
@@ -225,7 +225,7 @@ public class WeeklyPlanContextBuilder {
         data.put("current_week", week);
 
         Map<String, Object> goalMap = goalView(currentGoal);
-        // D-034 (D-6): a missing goal is raised at most once a day - the product notes when the coach raised it
+        // D-036 (D-6): a missing goal is raised at most once a day - the product notes when the coach raised it
         goalMap.put("asked_today", currentGoal.isEmpty() && today.equals(father.getGoalAskedOn()));
         data.put("goal", goalMap);
 
@@ -293,7 +293,7 @@ public class WeeklyPlanContextBuilder {
                 .findFirst()
                 .ifPresent(g -> {
                     history.put("latest_previous_target_hours", g.getTargetHours());
-                    // D-034 (D-4): the number he asked to start this week with, stored last week
+                    // D-036 (D-4): the number he asked to start this week with, stored last week
                     if (g.getWeekStartDate().equals(previousWeekStart) && g.getNextWeekTargetHours() != null) {
                         history.put("asked_for_this_week_hours", g.getNextWeekTargetHours());
                     }
@@ -322,7 +322,7 @@ public class WeeklyPlanContextBuilder {
         progress.put("belt_at_completed_sessions", thresholds);
         data.put("progress", progress);
 
-        // D-034: the factual answers, ready - the coach copies them (lists of short lines: a long string is cut at 200)
+        // D-036: the factual answers, ready - the coach copies them (lists of short lines: a long string is cut at 200)
         CoachReplies.Week weekNumbers = new CoachReplies.Week(targetMinutes, completedMinutes, plannedMinutes);
         Map<String, Object> ready = new LinkedHashMap<>();
         ready.put("week_reply", CoachReplies.week(weekNumbers, upcomingThisWeek));

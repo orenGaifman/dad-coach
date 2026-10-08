@@ -328,7 +328,7 @@ public class InboundMessageHandler {
     }
 
     /**
-     * D-034 (D-2): the reply may confirm only what this turn really did ({@link ClaimGuard}); a button it says was sent
+     * D-036 (D-2): the reply may confirm only what this turn really did ({@link ClaimGuard}); a button it says was sent
      * is sent now, so the sentence is true - or the reply says it could not be.
      */
     private String checkClaims(String reply, TurnLedger.Snapshot before, Optional<Father> father, String phone,

@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** D-034 (D-9, D-10): the message standard in code - the vocabulary, one emoji, no " - " joining sentences. */
+/** D-036 (D-9, D-10): the message standard in code - the vocabulary, one emoji, no " - " joining sentences. */
 class ReplyStyleGuardTest {
 
     @Test

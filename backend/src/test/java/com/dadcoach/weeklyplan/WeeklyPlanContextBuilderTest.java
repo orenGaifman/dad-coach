@@ -199,7 +199,7 @@ class WeeklyPlanContextBuilderTest {
         Map<String, Object> data = builder.build(father);
         assertThat(data.values()).doesNotContainNull();
         // the platform cuts a text value at 200 characters; lists and maps are rendered whole (PromptBuilder.formatAny),
-        // so long answers travel as lists of short lines (D-034 ready_replies)
+        // so long answers travel as lists of short lines (D-036 ready_replies)
         data.values().stream().filter(Map.class::isInstance).map(Map.class::cast)
                 .flatMap(nested -> nested.values().stream())
                 .flatMap(value -> value instanceof List<?> list ? list.stream() : java.util.stream.Stream.of(value))
@@ -255,7 +255,7 @@ class WeeklyPlanContextBuilderTest {
     void calendarAndDashboard() {
         Map<String, Object> data = builder.build(father);
 
-        // D-034 (D-7): no address in the model's hands - his page is a button (dad_dashboard_link)
+        // D-036 (D-7): no address in the model's hands - his page is a button (dad_dashboard_link)
         assertThat(data).containsEntry("calendar_connected", false).doesNotContainKey("dashboard_url");
     }
 
@@ -277,7 +277,7 @@ class WeeklyPlanContextBuilderTest {
     }
 
     @Test
-    @DisplayName("D-034: ready answers from the same data - the week, progress, the reminders, the timers' messages")
+    @DisplayName("D-036: ready answers from the same data - the week, progress, the reminders, the timers' messages")
     void readyReplies() {
         goal(WEEK, 2, 0, WeeklyGoalStatus.ACTIVE);
         session("2026-09-29T14:00:00Z", 30);  // today 17:00-17:30
@@ -301,7 +301,7 @@ class WeeklyPlanContextBuilderTest {
     }
 
     @Test
-    @DisplayName("D-034: what was said today, belts in Hebrew, and next week's number he asked for")
+    @DisplayName("D-036: what was said today, belts in Hebrew, and next week's number he asked for")
     void mentionsBeltsAndNextWeek() {
         QualityTime today = session("2026-09-29T14:00:00Z", 30);
         today.setMentionedOn(LocalDate.parse("2026-09-29"));

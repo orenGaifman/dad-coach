@@ -16,7 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * What the coach already said today, noted in code (D-034; production review 2: today's session repeated in 12 of 19
+ * What the coach already said today, noted in code (D-036; production review 2: today's session repeated in 12 of 19
  * replies - "היי אורן 😊 מזכיר שהיום ב-17:00..." 34 minutes after the morning reminder - and the missing goal pushed in
  * 4 replies in 7 minutes). The weekly plan shows it ({@code sessions_mentioned_today}, {@code goal.asked_today}) and the
  * rules say: a session named today is not named again unless he asks; a missing goal is raised at most once a day.

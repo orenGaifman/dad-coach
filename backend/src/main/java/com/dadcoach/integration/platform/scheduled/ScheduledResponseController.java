@@ -71,7 +71,7 @@ public class ScheduledResponseController {
                     .body(new ScheduledResponseResult("REJECTED", "Unknown recipient"));
         }
 
-        // D-034: a session timer's message is the ready one, about a session that is really there (ScheduledReplies);
+        // D-036: a session timer's message is the ready one, about a session that is really there (ScheduledReplies);
         // every message keeps to the standard (ReplyStyleGuard)
         Optional<ScheduledReplies.Planned> planned = replies.plan(father.get(), request.targetStateKey());
         String content = request.responseContent().strip();

@@ -173,7 +173,7 @@ class SessionButtonsTest extends AbstractIntegrationTest {
 
     @Test
     void aTimerMessageIsTheReadyOneAboutASessionThatIsReallyThere() throws Exception {
-        // D-034: the model's own words are replaced by the ready message; a cancelled session gets no reminder at all
+        // D-036: the model's own words are replaced by the ready message; a cancelled session gets no reminder at all
         setUpFather("+19995550621", true);
         QualityTime next = session(Duration.ofMinutes(60), 45);
         callback("r-21", "SESSION_REMINDER_1H", "❤️ דאד קואץ׳:\\nתזכורת: עוד שעה מפגש עם נועה ב-13:00 😊 יש רעיונות?");

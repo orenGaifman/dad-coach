@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * What really changed for a father during one AI turn (D-034, D-2): his sessions, children and this week's goal are
+ * What really changed for a father during one AI turn (D-036, D-2): his sessions, children and this week's goal are
  * read before the turn and again after it, and compared. The reply may confirm only what is in the difference - the
  * tools' own results never leave the platform, but their effect is in the database. Ids and statuses are compared,
  * not timestamps, so a clock never decides.

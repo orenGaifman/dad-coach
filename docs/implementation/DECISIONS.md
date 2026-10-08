@@ -317,3 +317,54 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 - **Why:** in prod (12:46) "הייתי לי דשבורד" got the card and then "שלחתי לך כפתור לדף שלך 😊" - the coach dropped "בהודעה נפרדת", so D-033's exact match let it through. A minute later "מה זה הכפתור הזה?" got the same card again under the explanation. Owner: "לא צריך את ההודעה הזאת שלחתי כפתור".
 - **Decision:** when the card went out in this turn, a reply whose every word is a "sent / button / your page" word (`InboundMessageHandler.SENT_LINE_WORDS`) is dropped, in any wording; a reply with anything else in it (fix a child under ילדים, the calendar) still goes. `dad_dashboard_link` sends no new card when one went out in the last 10 minutes (`LoginLinkService.ON_SCREEN`, outcome `ALREADY_SENT`) and returns a fixed line that says what the button is. The prompt (`dashboard-by-button` rule, ACTIVE_COACHING, onboarding) answers "what is this button" in one line without calling the tool.
 - **After deploy (prod simulate, 10 runs):** the coach wrote "שלחתי לך את הכפתור" without calling the tool 7 times in 10 (he copies his earlier replies) - no card, a false line. So a "sent" line with no card behind it in this turn sends the card from `InboundMessageHandler` (`LoginLinkService.sendTo`) and the line is dropped; a card still on his screen gets the one line about it instead. What he says about the button is always true.
+
+## D-036 — Facts and confirmations are written in code; a reply confirms only what really happened (owner, 2026-10-08)
+
+- **Why (production review 2, 2026-10-08):** the coach confirmed things no tool did ("מעולה, קובע את זה - יום שישי
+  09:00-10:30 עם מטר ונעם 💪" with nothing booked; "רשום אצלי" for an activity nothing stores; "רק רגע ונמשיך משם"
+  and nothing came), invented reminders ("ועוד אחת ב-17:00"; "אעדכן אותך בבוקר" for a 09:00 session that has no
+  morning reminder), confirmed next week's goal that nothing stored, built "מה יש לי השבוע" from English weekdays and
+  minutes, repeated today's session in 12 of 19 replies, pushed the missing goal 4 times in 7 minutes, used 😊 👍 ✅ 🙏
+  🎮 and " - " everywhere, never told a belt earned with "היה מעולה", and stayed silent after an English reply.
+  Owner: every message rests on current data; an action is confirmed only after it really happened.
+- **Ready answers from data** (`com.dadcoach.replies.CoachReplies`, the Tair D-041 pattern): every session / goal /
+  child tool returns `reply` - the confirmation, built from the real result: booking (`קבעתי 🎉 *when_label*, length
+  עם children.` / only the reminders its timers really have / the week in hours), move, cancel, missed, completion
+  (a belt only when one was earned now), a child added, the goal. The weekly plan carries `ready_replies`
+  (week_reply, progress_reply, reminder_reply, greeting_reply and the three timer messages, as lists of short lines -
+  a text value is cut at 200), `upcoming_reminders`, `when_label` on every session line (no English weekday),
+  Hebrew belt names, `sessions_mentioned_today` and `goal.asked_today`; `dashboard_url` is gone (the page is a
+  button). The prompt: these lines are the answer, word for word (rule `ready-answers`).
+- **Whole-message fact questions before the AI** (`ReadyQuestions`): "מה יש לי השבוע?", "איך אני עומד?", "מתי
+  התזכורת?" are answered from this moment's data and recorded in his conversation - the lab showed the model listing
+  a session he had cancelled on his page, from its own history.
+- **The check before sending** (`ClaimGuard` + `TurnLedger`): his sessions, children and goal are read before and
+  after the turn; a booking / cancellation / "רשמתי, שמרתי, עדכנתי" / goal / "אזכיר לך" sentence with no matching
+  change is dropped and an honest line is said ("רק מוודא: *יום שישי ב-09:00*, שעה וחצי עם מטר ונעם." / "לקבוע?";
+  "את זה אין לי איפה לשמור."); "רק רגע / אחזור אליך / אעדכן אותך" never goes; a booking made this turn goes out as
+  the ready confirmation; a "sent you the button" sentence inside a longer reply sends the card (D-035 covers the
+  whole-line case). The corrected text is recorded in his conversation.
+- **Next week's goal is stored** (V44 `weekly_goal.next_week_target_hours`): `set_weekly_goal` with a different number
+  while this week's goal exists keeps this week's goal and saves the number for next week (was: refused); Sunday's
+  check-in offers it (`goal_history.asked_for_this_week_hours`). No tool input schema changed.
+- **Once a day** (V44 `father.goal_asked_on`, `quality_time.mentioned_on`, `CoachMentions`): what went out today is
+  noted; a session named today is not named again, a missing goal is raised at most once a day (rules
+  `session-once-a-day`, `goal-once-a-day`); a greeting is answered as a greeting.
+- **Timer messages** (`ScheduledReplies`): the morning reminder, the hour before and the follow-up are the ready
+  lines (the model's own words replaced; the hour-before may end "בהצלחה עם <activity>!" when he named it today -
+  D-15); a timer whose session was cancelled, moved or done sends nothing. Their templates are D-11's (another
+  session, PR #23); the three default lines are unchanged.
+- **The standard in code** (`ReplyStyleGuard`, on every reply and scheduled message): vocabulary 🙂 🎉 💪 📊 🎙️ only
+  (😊→🙂, 👍✅🔥→💪, others dropped), one emoji per message, emoji list items → "•", " - " between words → ", "
+  (time and number ranges untouched).
+- **English is never silence** (B-4): the coach rewrites once in Hebrew (a Hebrew system note, correlation id
+  `:he`), then a short Hebrew line.
+- **Page ↔ WhatsApp:** what he does on his page (a session confirmed or cancelled, a child added or edited, his name)
+  is noted in his AI conversation as a history-only line "📊 בדף שלך: ..." (the Big Boss D-180 pattern); confirming on
+  the page returns and shows the belt it earned, once. WhatsApp actions show on the page (one database).
+- **Not done (needs the platform):** whether a session's timers were really armed is known only to the platform (the
+  model arms them; there is no product API to read or arm them) - the reminder answer states the policy that the
+  booking turn arms.
+- **Tests:** CoachRepliesTest, ClaimGuardTest, ReadyQuestionsTest, ReplyStyleGuardTest, TruthfulRepliesTest (new);
+  ToolsTest, JointSessionsTest, WeeklyPlanContextBuilderTest, SessionButtonsTest, FatherAreaTest,
+  ScheduledResponseCallbackTest, ContextProvidersTest updated. Lab transcripts: qa-lab/transcripts/r2-*.md.
