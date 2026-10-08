@@ -167,10 +167,14 @@ export interface AdminTemplateRow {
   name: string
   language: string
   category: string
+  purpose: string
   body: string
   maxVariables: number
-  example: string
+  examples: string[]
+  quickReplies: string[]
   sample: string
+  /** The general template: the one the server setting names; the others are the messages' own. */
+  general: boolean
   configured: boolean
   configuredName: string | null
   registeredStatus: string | null

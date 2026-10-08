@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 
 /**
@@ -25,8 +26,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class SessionButtonOffers {
 
-    static final String FOLLOW_UP_STATE = "SESSION_FOLLOW_UP";
-    static final String REMINDER_STATE = "SESSION_REMINDER_1H";
+    public static final String FOLLOW_UP_STATE = "SESSION_FOLLOW_UP";
+    public static final String REMINDER_STATE = "SESSION_REMINDER_1H";
     /** The coach asks only about a session that ended up to about three hours ago; a wider net costs nothing. */
     static final Duration FOLLOW_UP_WINDOW = Duration.ofHours(12);
     /** The reminder fires about an hour before; anything starting later is not the session it is about. */
@@ -41,23 +42,27 @@ public class SessionButtonOffers {
     }
 
     public List<ReplyButton> forScheduledMessage(Father father, String targetStateKey) {
+        return sessionFor(father, targetStateKey).map(qt -> FOLLOW_UP_STATE.equals(targetStateKey)
+                        ? List.of(new SessionButton(SessionButton.Action.DONE, qt.getId()).toReplyButton(),
+                                new SessionButton(SessionButton.Action.MISSED, qt.getId()).toReplyButton())
+                        : List.of(new SessionButton(SessionButton.Action.IDEAS, qt.getId()).toReplyButton()))
+                .orElse(List.of());
+    }
+
+    /** The session a follow-up or a 1-hour reminder is about (the buttons' and the message's own template's). */
+    public Optional<QualityTime> sessionFor(Father father, String targetStateKey) {
         if (!FOLLOW_UP_STATE.equals(targetStateKey) && !REMINDER_STATE.equals(targetStateKey)) {
-            return List.of();
+            return Optional.empty();
         }
         Instant now = clock.instant();
         List<QualityTime> scheduled = sessions.findByFatherIdAndStatus(father.getId(), QualityTimeStatus.SCHEDULED);
         if (FOLLOW_UP_STATE.equals(targetStateKey)) {
             return scheduled.stream()
                     .filter(qt -> !qt.getScheduledEnd().isAfter(now) && qt.getScheduledEnd().isAfter(now.minus(FOLLOW_UP_WINDOW)))
-                    .max(Comparator.comparing(QualityTime::getScheduledEnd))
-                    .map(qt -> List.of(new SessionButton(SessionButton.Action.DONE, qt.getId()).toReplyButton(),
-                            new SessionButton(SessionButton.Action.MISSED, qt.getId()).toReplyButton()))
-                    .orElse(List.of());
+                    .max(Comparator.comparing(QualityTime::getScheduledEnd));
         }
         return scheduled.stream()
                 .filter(qt -> qt.getScheduledStart().isAfter(now) && qt.getScheduledStart().isBefore(now.plus(REMINDER_WINDOW)))
-                .min(Comparator.comparing(QualityTime::getScheduledStart))
-                .map(qt -> List.of(new SessionButton(SessionButton.Action.IDEAS, qt.getId()).toReplyButton()))
-                .orElse(List.of());
+                .min(Comparator.comparing(QualityTime::getScheduledStart));
     }
 }

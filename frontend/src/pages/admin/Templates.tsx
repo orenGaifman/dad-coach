@@ -51,7 +51,7 @@ function TemplateCard({ t }: { t: AdminTemplateRow }) {
   return (
     <section className={ui.card} aria-label={t.name}>
       <div className={ui.cardHead}>
-        <h2 className={ui.cardTitle}>התבנית הכללית</h2>
+        <h2 className={ui.cardTitle}>{t.purpose}</h2>
         <span className={styles.tplName}><bdi dir="ltr">{t.name}</bdi></span>
       </div>
       <div className={ui.row}>
@@ -60,9 +60,11 @@ function TemplateCard({ t }: { t: AdminTemplateRow }) {
         <span className={`${ui.chip} ${registeredOk ? ui.chipSuccess : ui.chipWarning}`}>
           {registeredOk ? 'רשומה כמאושרת במסד' : t.registeredStatus ? `במסד: ${t.registeredStatus}` : 'עוד לא רשומה במסד'}
         </span>
-        <span className={`${ui.chip} ${t.configured ? ui.chipSuccess : ui.chipWarning}`}>
-          {t.configured ? 'מוגדרת בשרת' : 'לא מוגדרת בשרת'}
-        </span>
+        {t.general && (
+          <span className={`${ui.chip} ${t.configured ? ui.chipSuccess : ui.chipWarning}`}>
+            {t.configured ? 'מוגדרת בשרת' : 'לא מוגדרת בשרת'}
+          </span>
+        )}
       </div>
       {t.registeredStatus && !t.registeredBodyMatches && (
         <p className={styles.bad} role="note">הגוף שרשום במסד שונה מהגוף כאן - סימון כמאושרת יעדכן אותו לגוף שלמטה.</p>
@@ -74,24 +76,43 @@ function TemplateCard({ t }: { t: AdminTemplateRow }) {
             <CopyButton text={t.body} label="העתקה" />
           </div>
           <RawBody body={t.body} />
-          <div className={styles.tplLabelRow}>
-            <span className={ui.label}>דוגמה ל-{'{{1}}'} בטופס של Meta</span>
-            <CopyButton text={t.example} label="העתקה" />
-          </div>
-          <pre className={styles.tplRaw}>{t.example}</pre>
+          {t.examples.map((example, i) => (
+            <Fragment key={i}>
+              <div className={styles.tplLabelRow}>
+                <span className={ui.label}>דוגמה ל-<bdi dir="ltr">{`{{${i + 1}}}`}</bdi> בטופס של Meta</span>
+                <CopyButton text={example} label="העתקה" />
+              </div>
+              <pre className={styles.tplRaw}>{example}</pre>
+            </Fragment>
+          ))}
+          {t.quickReplies.length > 0 && (
+            <>
+              <span className={ui.label}>כפתורי תשובה מהירה (Quick reply), לפי הסדר</span>
+              <div className={ui.row}>{t.quickReplies.map((b) => <span key={b} className={ui.chip}>{b}</span>)}</div>
+            </>
+          )}
         </div>
         <div className={ui.stackSm}>
           <span className={ui.label}>כך זה ייקרא אצל האבא</span>
           <div className={styles.tplScreen}>
             <div className={styles.tplBubble}>{t.sample}</div>
+            {t.quickReplies.map((b) => <div key={b} className={styles.tplButton}>{b}</div>)}
           </div>
         </div>
       </div>
-      <p className={ui.hint}>
-        {'{{1}}'} הוא ההודעה של המאמן, משוטחת לשורה אחת; שורת הזהות יורדת ממנה כי היא כבר בגוף. ההגשה נעשית ידנית
-        ב-Meta Business Manager (קטגוריה Utility, שפה Hebrew). אחרי שמטא מאשרת: בשרת{' '}
-        <bdi dir="ltr">WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME={t.name}</bdi>, וכאן - סימון כמאושרת.
-      </p>
+      {t.general ? (
+        <p className={ui.hint}>
+          {'{{1}}'} הוא ההודעה של המאמן, משוטחת לשורה אחת; שורת הזהות יורדת ממנה כי היא כבר בגוף. ההגשה נעשית ידנית
+          ב-Meta Business Manager (קטגוריה Utility, שפה Hebrew). אחרי שמטא מאשרת: בשרת{' '}
+          <bdi dir="ltr">WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME={t.name}</bdi>, וכאן - סימון כמאושרת.
+        </p>
+      ) : (
+        <p className={ui.hint}>
+          הערכים נלקחים מהנתונים (המפגש, הילד, החגורה), לא מהטקסט של המאמן. ההגשה ידנית ב-Meta Business Manager
+          (קטגוריה Utility, שפה Hebrew){t.quickReplies.length > 0 ? ', עם הכפתורים בסדר הזה' : ''}. אחרי שמטא מאשרת - סימון
+          כמאושרת כאן, ומאותו רגע ההודעה הזו יוצאת בתבנית משלה. עד אז היא יוצאת בתבנית הכללית.
+        </p>
+      )}
       {!registeredOk && (
         <div className={ui.stackSm}>
           <label className={ui.check}>
@@ -113,13 +134,13 @@ export function TemplatesPage() {
   const list = useAdminTemplates()
   return (
     <Page title="תבניות וואטסאפ"
-          subtitle="כל הודעה יזומה לאבא שלא כתב 24 שעות יוצאת בתבנית שמטא אישרה. בלי תבנית מאושרת ורשומה - ההודעה לא נשלחת בכלל.">
+          subtitle="הודעה יזומה לאבא שלא כתב 24 שעות יוצאת בתבנית שמטא אישרה: בתבנית משלה כשיש לה אחת מאושרת, אחרת בתבנית הכללית. בלי אף אחת - ההודעה לא נשלחת.">
       {list.isPending ? <Skeleton lines={6} /> : list.error ? <ErrorState error={list.error} onRetry={() => list.refetch()} />
         : !list.data || list.data.length === 0 ? <EmptyState title="אין תבניות בקטלוג" icon="message" />
         : <div className={ui.stack}>{list.data.map((t) => <TemplateCard key={t.name} t={t} />)}</div>}
-      {list.data && list.data.some((t) => t.registeredStatus === 'APPROVED' && t.registeredBodyMatches && !t.configured) && (
+      {list.data && list.data.some((t) => t.general && t.registeredStatus === 'APPROVED' && t.registeredBodyMatches && !t.configured) && (
         <p className={styles.bad} role="note">
-          התבנית רשומה כמאושרת אבל השרת לא מוגדר לשלוח בה - חסר{' '}
+          התבנית הכללית רשומה כמאושרת אבל השרת לא מוגדר לשלוח בה - חסר{' '}
           <bdi dir="ltr">WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME</bdi> ב-Render.
         </p>
       )}

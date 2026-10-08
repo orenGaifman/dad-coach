@@ -38,14 +38,17 @@ public class ScheduledResponseDeliveryService {
     private final ProactiveSender sender;
     private final com.dadcoach.channel.WhatsAppEndpoints endpoints;
     private final SessionButtonOffers buttons;
+    private final ScheduledMessageTemplates templates;
 
     public ScheduledResponseDeliveryService(
             ScheduledResponseDeliveryRepository repository,
             ProactiveSender sender,
             com.dadcoach.channel.WhatsAppEndpoints endpoints,
-            SessionButtonOffers buttons) {
+            SessionButtonOffers buttons,
+            ScheduledMessageTemplates templates) {
         this.endpoints = endpoints;
         this.buttons = buttons;
+        this.templates = templates;
         this.repository = repository;
         this.sender = sender;
     }
@@ -83,15 +86,16 @@ public class ScheduledResponseDeliveryService {
         String content = hebrew.get();
         endpoints.ensure(father); // F1: fathers onboarded on WhatsApp before the fix have no endpoint row yet
         List<OutboundMessageDto.ReplyButton> offered = buttons.forScheduledMessage(father, request.targetStateKey());
-        ProactiveSender.Outcome outcome = sender.send(father, content, offered);
+        ProactiveSender.Outcome outcome = sender.send(father, content, offered,
+                () -> templates.forScheduledMessage(father, request.targetStateKey()).orElse(null));
         DeliveryResult result = outcome.result();
         ScheduledResponseDelivery.Mode mode = outcome.mode() == ProactiveSender.Mode.TEMPLATE
                 ? ScheduledResponseDelivery.Mode.TEMPLATE : ScheduledResponseDelivery.Mode.FREE_FORM;
 
         if (result.isSuccessful()) {
             delivery.markDelivered(mode);
-            log.info("Scheduled response delivered: triggerId={}, targetStateKey={}, mode={}, buttons={}, father={}",
-                    request.triggerId(), request.targetStateKey(), mode,
+            log.info("Scheduled response delivered: triggerId={}, targetStateKey={}, mode={}, template={}, buttons={}, father={}",
+                    request.triggerId(), request.targetStateKey(), mode, outcome.template(),
                     mode == ScheduledResponseDelivery.Mode.FREE_FORM ? offered.size() : 0, MaskingUtils.maskPhone(father.getPhone()));
         } else {
             delivery.markFailed(result.failureReason());

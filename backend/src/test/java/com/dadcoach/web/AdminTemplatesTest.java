@@ -25,7 +25,11 @@ class AdminTemplatesTest extends AbstractWebIntegrationTest {
                 .andExpect(jsonPath("$[0].language").value("he"))
                 .andExpect(jsonPath("$[0].body").value(WhatsAppTemplateCatalog.UPDATE_HE_BODY))
                 .andExpect(jsonPath("$[0].registeredStatus").doesNotExist())
-                .andExpect(jsonPath("$[0].registeredBodyMatches").value(false));
+                .andExpect(jsonPath("$[0].registeredBodyMatches").value(false))
+                .andExpect(jsonPath("$[0].general").value(true))
+                .andExpect(jsonPath("$[2].name").value("dad_coach_session_hour_before_he"))
+                .andExpect(jsonPath("$[2].quickReplies[0]").value("רוצה רעיונות"))
+                .andExpect(jsonPath("$[2].examples[0]").value("מאיה"));
     }
 
     @Test
