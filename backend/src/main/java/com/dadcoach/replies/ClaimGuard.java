@@ -44,8 +44,15 @@ public final class ClaimGuard {
     private static final Pattern BOOK = Pattern.compile(LEAD + "(?:קבעתי|קובע|קבענו|נקבע|הזזתי|מזיז|העברתי|רשמתי לך מפגש|שריינתי)"
             + "|קובע את זה|קובע לך|קבעתי לך|קבעתי את|הזזתי את");
     private static final Pattern CANCEL = Pattern.compile(LEAD + "(?:ביטלתי|מבטל|ביטלנו)");
-    private static final Pattern RECORD = Pattern.compile(LEAD + "(?:רשמתי|רשום|נרשם|שמרתי|שומר|עדכנתי|מעדכן|סימנתי|הוספתי|מוסיף)"
-            + "|רשום אצלי|שמור אצלי|שמרתי את|עדכנתי את|רשמתי את|רשמתי ש|רשמתי לי|אני רושם|אני שומר|אני מעדכן");
+    private static final Pattern RECORD = Pattern.compile(LEAD + "(?:רשמתי|נרשם|שמרתי|שומר|עדכנתי|מעדכן|סימנתי|הוספתי|מוסיף)"
+            + "|שמרתי את|עדכנתי את|רשמתי את|רשמתי ש|רשמתי לי|אני רושם|אני שומר|אני מעדכן");
+    /**
+     * "רשום אצלי" alone confirms an action ("מעולה, רשום אצלי 😊"); with what is written ("איתמר רשום אצלי בן 10") it
+     * states a stored fact - not a claim of this turn.
+     */
+    private static final Pattern LEAD_WORD = Pattern.compile("(?:מעולה|סגור|יופי|אוקיי|אוקי|בסדר|יאללה|סבבה|אין בעיה|נהדר|כן|"
+            + "מצוין|בשמחה|בטח|טוב|וואו|איזה כיף|כיף|זהו|בוצע)");
+    private static final Pattern RECORDED_BARE = Pattern.compile("(?:רשום|שמור)(?: לי)? אצלי");
     private static final Pattern GOAL = Pattern.compile("^(?:" + LEAD.substring(1) + ")?סגרנו|קבענו יעד|היעד נקבע|היעד שלך נקבע|"
             + "קבעתי יעד|קבעתי את היעד|היעד שלך עכשיו|היעד מעכשיו");
     private static final Pattern REMIND = Pattern.compile("אזכיר לך|אזכיר אותך|אשלח לך תזכורת|תקבל תזכורת|תקבל ממני תזכורת");
@@ -198,13 +205,22 @@ public final class ClaimGuard {
         if (GOAL.matcher(sentence).find() && !c.goalExists() && !c.sessionBookedOrMoved()) {
             return Claim.GOAL;
         }
-        if (RECORD.matcher(sentence).find() && !c.any()) {
+        if ((RECORD.matcher(sentence).find() || bareRecorded(sentence)) && !c.any()) {
             return Claim.RECORD;
         }
         if (REMIND.matcher(sentence).find() && !c.upcomingSession()) {
             return Claim.REMIND;
         }
         return null;
+    }
+
+    private static boolean bareRecorded(String sentence) {
+        Matcher m = RECORDED_BARE.matcher(sentence);
+        if (!m.find()) {
+            return false;
+        }
+        String rest = words(LEAD_WORD.matcher(sentence.replace(m.group(), " ")).replaceAll(" "));
+        return rest.isEmpty() || rest.split(" ").length <= 1;
     }
 
     /** "קבענו לשישי ב-09:00" about a session he already has is not a claim of a new booking. */

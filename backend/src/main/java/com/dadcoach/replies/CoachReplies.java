@@ -180,6 +180,8 @@ public final class CoachReplies {
             lines.add("השבוע עוד בלי יעד.");
         } else if (week.isCovered()) {
             lines.add("השבוע מכוסה 💪");
+        } else if (week.covered() == 0) {
+            lines.add("השבוע עוד אין זמן מתוכנן, והיעד " + HebrewHours.of(week.goalMinutes()) + ".");
         } else {
             lines.add("השבוע: " + HebrewHours.of(week.covered()) + " מתוך " + HebrewHours.of(week.goalMinutes()) + ".");
         }

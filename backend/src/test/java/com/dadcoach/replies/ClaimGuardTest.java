@@ -97,6 +97,13 @@ class ClaimGuardTest {
     }
 
     @Test
+    @DisplayName("'X רשום אצלי בן 10' states a stored fact - not a claim (lab r2-e false positive)")
+    void aStoredFactIsNotAClaim() {
+        assertThat(ClaimGuard.check("איתמר רשום אצלי בן 10 🙂", nothing(false), false, KIDS).changed()).isFalse();
+        assertThat(ClaimGuard.check("מעולה, רשום אצלי 😊", nothing(false), false, KIDS).changed()).isTrue();
+    }
+
+    @Test
     @DisplayName("an ordinary reply is never touched")
     void ordinary() {
         String reply = "גם זה סוג לגיטימי של זמן איכות.\nהעיקר שאתם יחד ולא כל אחד על המסך שלו 🙂";

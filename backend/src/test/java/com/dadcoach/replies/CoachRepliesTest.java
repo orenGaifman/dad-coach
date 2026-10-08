@@ -61,6 +61,8 @@ class CoachRepliesTest {
         assertThat(CoachReplies.week(new CoachReplies.Week(180, 60, 0), List.of()))
                 .containsExactly("השבוע: שעה מתוך 3 שעות.", "אין עוד מפגשים מתוכננים השבוע.");
         assertThat(CoachReplies.week(null, List.of())).first().isEqualTo("השבוע עוד בלי יעד.");
+        assertThat(CoachReplies.week(new CoachReplies.Week(180, 0, 0), List.of()))
+                .containsExactly("השבוע עוד אין זמן מתוכנן, והיעד 3 שעות.", "אין עוד מפגשים מתוכננים השבוע.");
     }
 
     @Test
