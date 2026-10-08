@@ -33,14 +33,22 @@ public class TurnLedger {
 
     /** The father's state before the turn. */
     public record Snapshot(Long fatherId, Map<UUID, SessionState> sessions, long children, Integer goalHours,
-                           Integer nextWeekHours) {
-        static final Snapshot NO_FATHER = new Snapshot(null, Map.of(), 0, null, null);
+                           Integer nextWeekHours, String profile) {
+        static final Snapshot NO_FATHER = new Snapshot(null, Map.of(), 0, null, null, null);
     }
 
     /** What the turn did. */
     public record Changes(List<QualityTime> booked, List<QualityTime> joined, int cancelled, int completed,
                           boolean childAdded, boolean goalCreated, boolean nextWeekGoalSaved, boolean goalExists,
-                          boolean upcomingSession, List<String> bookingReply, List<String> upcomingStarts) {
+                          boolean upcomingSession, List<String> bookingReply, List<String> upcomingStarts,
+                          boolean profileSaved) {
+
+        public Changes(List<QualityTime> booked, List<QualityTime> joined, int cancelled, int completed, boolean childAdded,
+                       boolean goalCreated, boolean nextWeekGoalSaved, boolean goalExists, boolean upcomingSession,
+                       List<String> bookingReply, List<String> upcomingStarts) {
+            this(booked, joined, cancelled, completed, childAdded, goalCreated, nextWeekGoalSaved, goalExists,
+                    upcomingSession, bookingReply, upcomingStarts, false);
+        }
 
         public static final Changes NONE = new Changes(List.of(), List.of(), 0, 0, false, false, false, false, false, null,
                 List.of());
@@ -50,7 +58,8 @@ public class TurnLedger {
         }
 
         public boolean any() {
-            return sessionBookedOrMoved() || cancelled > 0 || completed > 0 || childAdded || goalCreated || nextWeekGoalSaved;
+            return sessionBookedOrMoved() || cancelled > 0 || completed > 0 || childAdded || goalCreated || nextWeekGoalSaved
+                    || profileSaved;
         }
     }
 
@@ -60,6 +69,12 @@ public class TurnLedger {
     private final WeeklyGoalService goalService;
     private final Clock clock;
     private final com.dadcoach.weeklyplan.WeeklyPlanContextBuilder weeklyPlan;
+    private com.dadcoach.domain.father.FatherRepository fathers;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setFathers(com.dadcoach.domain.father.FatherRepository fathers) {
+        this.fathers = fathers;
+    }
 
     public TurnLedger(QualityTimeRepository sessions, ChildRepository children, WeeklyGoalRepository goals,
                       WeeklyGoalService goalService, Clock clock,
@@ -84,7 +99,8 @@ public class TurnLedger {
         }
         Optional<WeeklyGoal> goal = currentGoal(f);
         return new Snapshot(f.getId(), states, children.countActiveByFatherId(f.getId()),
-                goal.map(WeeklyGoal::getTargetHours).orElse(null), goal.map(WeeklyGoal::getNextWeekTargetHours).orElse(null));
+                goal.map(WeeklyGoal::getTargetHours).orElse(null), goal.map(WeeklyGoal::getNextWeekTargetHours).orElse(null),
+                profile(f));
     }
 
     @Transactional(readOnly = true)
@@ -92,7 +108,7 @@ public class TurnLedger {
         if (father.isEmpty()) {
             return Changes.NONE;
         }
-        Father f = father.get();
+        Father f = fathers.findById(father.get().getId()).orElse(father.get()); // as the turn left it
         List<QualityTime> booked = new ArrayList<>();
         List<QualityTime> joined = new ArrayList<>();
         int cancelled = 0;
@@ -138,7 +154,8 @@ public class TurnLedger {
             bookingReply = bookingReply(f, booked.get(0), cancelled > 0);
         }
         return new Changes(booked, joined, cancelled, completed, children.countActiveByFatherId(f.getId()) > before.children(),
-                goalCreated, nextSaved, goal.isPresent(), upcoming, bookingReply, upcomingStarts);
+                goalCreated, nextSaved, goal.isPresent(), upcoming, bookingReply, upcomingStarts,
+                before.fatherId() == null || !java.util.Objects.equals(before.profile(), profile(f)));
     }
 
     /** The same lines schedule_quality_time / reschedule_quality_time returned as their reply. */
@@ -152,6 +169,11 @@ public class TurnLedger {
         String names = com.dadcoach.qualitytime.SessionChildren.hebrew(qt);
         return moved ? CoachReplies.moved(when, minutes, names, timers, week)
                 : CoachReplies.booked(when, minutes, names, timers, week);
+    }
+
+    /** What save_user_profile changes: his name, timezone, preferred time. */
+    private static String profile(Father f) {
+        return f.getDisplayName() + "|" + f.getTimezone() + "|" + f.getPreferredCoachingTime();
     }
 
     private Optional<WeeklyGoal> currentGoal(Father father) {

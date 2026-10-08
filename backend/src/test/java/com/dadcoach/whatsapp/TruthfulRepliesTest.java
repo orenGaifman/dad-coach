@@ -182,4 +182,17 @@ class TruthfulRepliesTest extends AbstractIntegrationTest {
                 + "חצי שעה אחרי שתסיימו, אשאל איך היה 🙂");
         assertThat(kept.qualityTimeId()).isNotNull();
     }
+
+    @Test
+    @DisplayName("a profile saved in this turn is a real change: 'שמרתי' about it goes as written")
+    void aSavedProfileIsReal() throws Exception {
+        turn(v -> jdbc.update("UPDATE father SET display_name = 'אורן ג' WHERE id = ?", father.getId()),
+                IDENTITY + "שמרתי, מעכשיו אתה אורן ג 🙂");
+        says("תקרא לי אורן ג");
+        assertThat(lastSent()).isEqualTo(IDENTITY + "שמרתי, מעכשיו אתה אורן ג 🙂");
+
+        turn(null, IDENTITY + "שמרתי, מעכשיו אתה אורני 🙂");
+        says("תקרא לי אורני");
+        assertThat(lastSent()).startsWith(IDENTITY + "את זה אין לי איפה לשמור.");
+    }
 }
