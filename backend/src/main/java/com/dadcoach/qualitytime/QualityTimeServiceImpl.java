@@ -60,6 +60,8 @@ public class QualityTimeServiceImpl implements QualityTimeService {
     private final Clock clock;
     /** How far ahead a session may be booked. */
     static final Duration MAX_BOOKING_AHEAD = Duration.ofDays(90);
+    /** A session marked done can be taken back within a day ("בעצם זה לא קרה") - QA 2026-10-08. */
+    public static final Duration UNDO_COMPLETION_WINDOW = Duration.ofHours(24);
 
     @Value("${google.calendar.client-id:}")
     private String clientId;
@@ -457,11 +459,12 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         QualityTime qualityTime = qualityTimeRepository.findById(qualityTimeId)
                 .orElseThrow(() -> new IllegalArgumentException("Quality Time not found: " + qualityTimeId));
 
-        // Step 2: Validate status - cannot cancel if already COMPLETED or CANCELLED
+        // Step 2: Validate status - a COMPLETED one only within a day of marking it (then it did not happen: MISSED,
+        // and what it added to his streak, belt and week is taken back); never one already CANCELLED or MISSED
         QualityTimeStatus currentStatus = qualityTime.getStatus();
         if (currentStatus == QualityTimeStatus.COMPLETED) {
-            throw new IllegalStateException(
-                    "Cannot cancel Quality Time that is already COMPLETED: " + qualityTimeId);
+            undoCompletion(qualityTime);
+            return;
         }
         if (currentStatus == QualityTimeStatus.CANCELLED || currentStatus == QualityTimeStatus.MISSED) {
             throw new IllegalStateException(
@@ -510,6 +513,34 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         qualityTimeRepository.save(qualityTime);
         
         log.info("Quality Time {} cancelled successfully", qualityTimeId);
+    }
+
+    private void undoCompletion(QualityTime qualityTime) {
+        Instant completedAt = qualityTime.getCompletedAt();
+        if (completedAt == null || completedAt.isBefore(Instant.now().minus(UNDO_COMPLETION_WINDOW))) {
+            throw new IllegalStateException(
+                    "Cannot cancel Quality Time marked COMPLETED more than a day ago: " + qualityTime.getId());
+        }
+        // the minutes it was credited with, counted as at completion - before it stops being COMPLETED
+        int creditedMinutes = creditedMinutes(qualityTime);
+        qualityTime.markMissed();
+        qualityTime.setCompletedAt(null);
+
+        Father father = qualityTime.getFather();
+        int streak = father.getQualityTimeStreak();
+        // the record goes back with it when this completion set it
+        if (streak > 0 && father.getQualityTimeLongestStreak() == streak) {
+            father.setQualityTimeLongestStreak(streak - 1);
+        }
+        father.setQualityTimeStreak(Math.max(0, streak - 1));
+        int totalCompleted = Math.max(0, father.getTotalQualityTimesCompleted() - 1);
+        father.setTotalQualityTimesCompleted(totalCompleted);
+        father.setCurrentBelt(Belt.fromCompletionCount(totalCompleted));
+
+        qualityTimeRepository.save(qualityTime);
+        fatherRepository.save(father);
+        weeklyGoalService.undoCompletedQualityTime(father.getId(), qualityTime.getScheduledStart(), creditedMinutes);
+        log.info("Quality Time {} completion undone. Streak: {}, Total: {}", qualityTime.getId(), father.getQualityTimeStreak(), totalCompleted);
     }
 
     @Override

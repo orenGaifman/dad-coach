@@ -276,6 +276,40 @@ class ToolsTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void aCompletionTakenBackWithinADayIsMissedAndGivesBackItsCredit() throws Exception {
+        // QA 2026-10-08: "בעצם זה לא קרה" right after "היה מעולה" had no way back - the session stayed done
+        Father f = fatherWithChild("+19995550241");
+        tool("set_weekly_goal", f.getPhone(), Map.of("target_hours", 1));
+        String id = tool("schedule_quality_time", f.getPhone(), Map.of("child_id", childId(f),
+                "start_time", at("2026-11-02", "18:00"), "duration_minutes", 60)).data().path("quality_time_id").asText();
+        assertThat(tool("complete_quality_time", f.getPhone(), Map.of("quality_time_id", id)).success()).isTrue();
+
+        Call undone = tool("cancel_quality_time", f.getPhone(), Map.of("quality_time_id", id, "reason", "it did not happen"));
+
+        assertThat(undone.success()).as(undone.body().toString()).isTrue();
+        assertThat(undone.data().path("status").asText()).isEqualTo("MISSED");
+        assertThat(undone.data().path("completion_undone").asBoolean()).isTrue();
+        assertThat(undone.data().path("streak").asInt()).isZero();
+        assertThat(undone.data().path("week_coverage").path("completed_minutes").asInt()).isZero();
+        assertThat(jdbc.queryForObject("SELECT status FROM quality_time WHERE id = ?::uuid", String.class, id)).isEqualTo("MISSED");
+        assertThat(jdbc.queryForObject("SELECT actual_minutes FROM weekly_goal WHERE father_id = ?", Integer.class, f.getId())).isZero();
+        assertThat(jdbc.queryForObject("SELECT total_quality_times_completed FROM father WHERE id = ?", Integer.class, f.getId())).isZero();
+        assertThat(jdbc.queryForObject("SELECT quality_time_streak FROM father WHERE id = ?", Integer.class, f.getId())).isZero();
+    }
+
+    @Test
+    void aCompletionMarkedMoreThanADayAgoStays() throws Exception {
+        Father f = fatherWithChild("+19995550242");
+        String id = tool("schedule_quality_time", f.getPhone(), Map.of("child_id", childId(f),
+                "start_time", at("2026-11-02", "18:00"), "duration_minutes", 60)).data().path("quality_time_id").asText();
+        assertThat(tool("complete_quality_time", f.getPhone(), Map.of("quality_time_id", id)).success()).isTrue();
+        jdbc.update("UPDATE quality_time SET completed_at = now() - interval '25 hours' WHERE id = ?::uuid", id);
+
+        assertThat(tool("cancel_quality_time", f.getPhone(), Map.of("quality_time_id", id)).success()).isFalse();
+        assertThat(jdbc.queryForObject("SELECT status FROM quality_time WHERE id = ?::uuid", String.class, id)).isEqualTo("COMPLETED");
+    }
+
+    @Test
     void aSessionBeforeThisWeekIsRefused() throws Exception {
         Father f = fatherWithChild("+19995550236");
         Call before = tool("schedule_quality_time", f.getPhone(), Map.of("child_id", childId(f),
