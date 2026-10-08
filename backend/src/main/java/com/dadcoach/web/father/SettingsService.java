@@ -29,8 +29,8 @@ public class SettingsService {
     /** Where Google sends him back after connecting (a dashboard path; the signed OAuth state carries it). */
     static final String CALENDAR_RETURN_PATH = "/settings";
 
-    public record SettingsView(String name, String timezone, boolean calendarConnected, boolean calendarAvailable,
-                               String deleteConfirmation) {
+    public record SettingsView(String name, String timezone, boolean calendarConnected,
+                               boolean calendarReconnectRequired, boolean calendarAvailable, String deleteConfirmation) {
     }
 
     private final FatherRepository fathers;
@@ -53,8 +53,8 @@ public class SettingsService {
 
     public SettingsView view(Father father) {
         return new SettingsView(father.getDisplayName() == null ? "" : father.getDisplayName(),
-                weeklyGoals.zoneFor(father).getId(), father.hasGoogleCalendarConfigured(), calendarAvailable(),
-                DELETE_CONFIRMATION);
+                weeklyGoals.zoneFor(father).getId(), father.hasGoogleCalendarConfigured(),
+                father.calendarNeedsReconnect(), calendarAvailable(), DELETE_CONFIRMATION);
     }
 
     @Transactional
@@ -86,7 +86,7 @@ public class SettingsService {
 
     @Transactional
     public SettingsView disconnectCalendar(Father father) {
-        if (father.hasGoogleCalendarConfigured()) {
+        if (father.hasGoogleCalendarConfigured() || father.calendarNeedsReconnect()) {
             calendar.disconnectCalendar(father);
         }
         return view(fathers.findById(father.getId()).orElse(father));

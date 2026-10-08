@@ -4,6 +4,7 @@ import com.dadcoach.calendar.CalendarLinkSigner;
 import com.dadcoach.calendar.GoogleCalendarService;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.father.FatherStatus;
+import com.dadcoach.qualitytime.QualityTimeService;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -36,11 +37,14 @@ public class CalendarOAuthController {
     private final GoogleCalendarService calendar;
     private final FatherRepository fathers;
     private final CalendarLinkSigner signer;
+    private final QualityTimeService sessions;
 
-    public CalendarOAuthController(GoogleCalendarService calendar, FatherRepository fathers, CalendarLinkSigner signer) {
+    public CalendarOAuthController(GoogleCalendarService calendar, FatherRepository fathers, CalendarLinkSigner signer,
+                                   QualityTimeService sessions) {
         this.calendar = calendar;
         this.fathers = fathers;
         this.signer = signer;
+        this.sessions = sessions;
     }
 
     @GetMapping("/api/v1/calendar/connect/{fatherId}")
@@ -72,6 +76,14 @@ public class CalendarOAuthController {
         boolean connected = calendar.handleOAuthCallback(code, signed.get().fatherId());
         log.atInfo().setMessage("calendar.connect.result").addKeyValue("fatherId", signed.get().fatherId())
                 .addKeyValue("connected", connected).log();
+        if (connected) {
+            // Sessions booked while the calendar was off (or its authorization had expired) go in now.
+            try {
+                sessions.addUpcomingToCalendar(signed.get().fatherId());
+            } catch (RuntimeException e) {
+                log.warn("Adding upcoming sessions to the calendar failed: {}", e.getMessage());
+            }
+        }
         return redirect(connected ? withParam(back, "calendar_connected", "true")
                 : withParam(back, "calendar_error", "token_exchange_failed"));
     }

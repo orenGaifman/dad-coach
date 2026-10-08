@@ -41,7 +41,7 @@ function SettingsForm({ s }: { s: Settings }) {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (params.get('calendar_connected')) toast('היומן מחובר. מפגשים חדשים ייכנסו אליו.')
+    if (params.get('calendar_connected')) toast('היומן מחובר. המפגשים הקרובים שלך נכנסים אליו.')
     if (params.get('calendar_error')) toast('החיבור ליומן לא הושלם. אפשר לנסות שוב.', 'error')
     if (params.has('calendar_connected') || params.has('calendar_error')) window.history.replaceState(null, '', '/settings')
   }, [toast])
@@ -109,16 +109,24 @@ function CalendarCard({ s }: { s: Settings }) {
     <section className={ui.card} aria-labelledby="cal-title">
       <div className={ui.cardHead}>
         <h2 id="cal-title" className={ui.cardTitle}>יומן גוגל</h2>
-        {s.calendarConnected ? <span className={cx(ui.chip, ui.chipSuccess)}>מחובר</span> : <span className={ui.chip}>לא מחובר</span>}
+        {s.calendarConnected ? <span className={cx(ui.chip, ui.chipSuccess)}>מחובר</span>
+          : s.calendarReconnectRequired ? <span className={cx(ui.chip, ui.chipWarning)}>צריך לחבר מחדש</span>
+          : <span className={ui.chip}>לא מחובר</span>}
       </div>
-      <p className={ui.muted} style={{ marginBlockEnd: 16 }}>
-        לא חובה. כשהיומן מחובר, המפגשים שאתה קובע עם המאמן נכנסים אליו, והמאמן רואה מתי אתה פנוי.
-      </p>
+      {s.calendarReconnectRequired ? (
+        <p className={ui.muted} style={{ marginBlockEnd: 16 }}>
+          גוגל ניתק את החיבור ליומן, ולכן מפגשים חדשים לא נכנסים אליו. חבר אותו מחדש, והמפגשים הקרובים שלך ייכנסו ליומן.
+        </p>
+      ) : (
+        <p className={ui.muted} style={{ marginBlockEnd: 16 }}>
+          לא חובה. כשהיומן מחובר, המפגשים שאתה קובע עם המאמן נכנסים אליו, והמאמן רואה מתי אתה פנוי.
+        </p>
+      )}
       {s.calendarConnected ? (
         <button type="button" className={cx(ui.btn, ui.ghost)} disabled={busy} onClick={disconnect}>ניתוק היומן</button>
       ) : s.calendarAvailable ? (
         <button type="button" className={cx(ui.btn, ui.secondary)} disabled={busy} onClick={connect}>
-          <Icon name="calendar" size={18} /> חיבור יומן גוגל
+          <Icon name="calendar" size={18} /> {s.calendarReconnectRequired ? 'חיבור היומן מחדש' : 'חיבור יומן גוגל'}
         </button>
       ) : (
         <p className={ui.note}><Icon name="info" size={18} /> החיבור ליומן עוד לא זמין. בינתיים הכול עובד גם בלעדיו.</p>

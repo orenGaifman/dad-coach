@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URLEncoder;
@@ -44,8 +45,6 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     private static final Logger log = LoggerFactory.getLogger(GoogleCalendarServiceImpl.class);
 
     private static final String GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-    private static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-    private static final String GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
     private static final String CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
     
     /** Keywords to identify Dad Coach related events in calendar. */
@@ -64,6 +63,13 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
     @Value("${google.calendar.client-secret:}")
     private String clientSecret;
+
+    /** Google's addresses (tests point them at a fake server). */
+    @Value("${google.calendar.api-base-url:https://www.googleapis.com/calendar/v3}")
+    private String googleCalendarApi;
+
+    @Value("${google.calendar.token-url:https://oauth2.googleapis.com/token}")
+    private String googleTokenUrl;
 
     @Value("${google.calendar.redirect-uri:}")
     private String redirectUri;
@@ -94,7 +100,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
             String calendarId = father.getGoogleCalendarId() != null ? 
                 father.getGoogleCalendarId() : "primary";
             
-            String url = GOOGLE_CALENDAR_API + "/calendars/" + 
+            String url = googleCalendarApi + "/calendars/" + 
                 URLEncoder.encode(calendarId, StandardCharsets.UTF_8) + "/events" +
                 "?timeMin=" + URLEncoder.encode(from.toString(), StandardCharsets.UTF_8) +
                 "&timeMax=" + URLEncoder.encode(to.toString(), StandardCharsets.UTF_8) +
@@ -250,7 +256,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
             HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
             ResponseEntity<String> response = restTemplate.postForEntity(
-                GOOGLE_TOKEN_URL, request, String.class);
+                googleTokenUrl, request, String.class);
 
             if (response.getStatusCode().is2xxSuccessful()) {
                 JsonNode tokens = objectMapper.readTree(response.getBody());
@@ -343,7 +349,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
             HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
             ResponseEntity<String> response = restTemplate.postForEntity(
-                GOOGLE_TOKEN_URL, request, String.class);
+                googleTokenUrl, request, String.class);
 
             if (response.getStatusCode().is2xxSuccessful()) {
                 JsonNode tokens = objectMapper.readTree(response.getBody());
@@ -358,6 +364,13 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
                 return newAccessToken;
             }
 
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to refresh access token for father {}: {}", father.getId(), e.getMessage());
+            if (e.getResponseBodyAsString().contains("invalid_grant")) {
+                // Expired or revoked: settings must stop saying "connected" (and ask him to reconnect).
+                father.markCalendarReconnectRequired();
+                fatherRepository.save(father);
+            }
         } catch (Exception e) {
             log.error("Failed to refresh access token for father {}: {}", 
                 father.getId(), e.getMessage());

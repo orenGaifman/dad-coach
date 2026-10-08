@@ -17,8 +17,8 @@ import java.util.function.Function;
 /**
  * One JDK HttpServer standing in for everything Dad Coach calls (no @MockBean, playbook §50): the AI Workflow
  * Platform (turns, outbound recording, tenancy person lifecycle), Meta's Graph API (sends, voice-note media) and
- * ElevenLabs speech to text (D-029). Every request is recorded; the platform's turn answer, the media and the
- * transcript are programmable per test.
+ * ElevenLabs speech to text (D-029) and Google (token endpoint and Calendar API under {@code /google/}). Every
+ * request is recorded; the platform's turn answer, the media, the transcript and Google are programmable per test.
  */
 public final class FakeServers {
 
@@ -54,6 +54,7 @@ public final class FakeServers {
     private final AtomicReference<Function<Call, Reply>> speechToText = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> meta = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> gate = new AtomicReference<>();
+    private final AtomicReference<Function<Call, Reply>> google = new AtomicReference<>();
 
     private FakeServers() {
         try {
@@ -85,6 +86,20 @@ public final class FakeServers {
                         + "\",\"mime_type\":\"audio/ogg; codecs=opus\",\"file_size\":7,\"id\":\"media\"}"));
         speechToText.set(c -> Reply.json("{\"language_code\":\"heb\",\"text\":\"רוצה לקבוע זמן עם נועה ביום שישי\"}"));
         gate.set(c -> Reply.json("{\"send\":true,\"route\":\"dad-coach\",\"why\":\"ON_THIS_PRODUCT\"}"));
+        // Google: tokens are granted, the calendar is empty, a new event gets an id
+        google.set(c -> c.path().equals("/google/token")
+                ? Reply.json("{\"access_token\":\"fresh-access\",\"refresh_token\":\"fresh-refresh\",\"expires_in\":3600}")
+                : c.method().equals("POST") ? Reply.json("{\"id\":\"evt-" + sent.incrementAndGet() + "\"}")
+                : Reply.json("{\"items\":[]}"));
+    }
+
+    /** Google: {@code /google/token} and the Calendar API under {@code /google/calendar/v3}. */
+    public void onGoogle(Function<Call, Reply> answer) {
+        google.set(answer);
+    }
+
+    public List<Call> googleEventCreates() {
+        return calls.stream().filter(c -> c.method().equals("POST") && c.path().startsWith("/google/calendar/")).toList();
     }
 
     /** The shared number's gate ({@code POST /api/v1/worker/whatsapp/outbound-gate}; default: send). */
@@ -155,7 +170,9 @@ public final class FakeServers {
         calls.add(call);
         Reply reply;
         String path = call.path();
-        if (path.equals("/api/v1/worker/execute")) {
+        if (path.startsWith("/google/")) {
+            reply = google.get().apply(call);
+        } else if (path.equals("/api/v1/worker/execute")) {
             reply = turn.get().apply(call);
         } else if (path.equals("/api/v1/worker/whatsapp/outbound-gate")) {
             reply = gate.get().apply(call);

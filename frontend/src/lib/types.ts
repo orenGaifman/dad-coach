@@ -78,6 +78,7 @@ export interface Settings {
   name: string
   timezone: string
   calendarConnected: boolean
+  calendarReconnectRequired: boolean
   calendarAvailable: boolean
   deleteConfirmation: string
 }
