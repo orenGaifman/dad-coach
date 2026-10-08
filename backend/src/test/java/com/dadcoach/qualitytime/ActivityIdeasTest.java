@@ -11,17 +11,12 @@ class ActivityIdeasTest {
     private static final ActivityIdeas.ActivityIdea TOWER = ActivityIdeas.forChild(5, "he", null).get(0);
 
     @Test
-    void theVerbAgreesWithTheChild() {
-        assertThat(ActivityIdeas.line(TOWER, "מאיה", ActivityIdeas.Form.GIRL)).isEqualTo("מגדל קוביות ענק, ומאיה בוחרת את הצבעים");
-        assertThat(ActivityIdeas.line(TOWER, "יובל", ActivityIdeas.Form.BOY)).isEqualTo("מגדל קוביות ענק, ויובל בוחר את הצבעים");
-        assertThat(ActivityIdeas.line(TOWER, "מטר ונעם", ActivityIdeas.Form.SEVERAL))
-                .isEqualTo("מגדל קוביות ענק, ומטר ונעם בוחרים את הצבעים");
-    }
-
-    @Test
-    void aChildWhoseGenderIsUnknownIsNeverGivenAGuessedForm() {
-        assertThat(ActivityIdeas.line(TOWER, "שחר", ActivityIdeas.Form.UNKNOWN)).isEqualTo("מגדל קוביות ענק, ושחר ואתה בוחרים את הצבעים");
-        assertThat(ActivityIdeas.line(TOWER, null, ActivityIdeas.Form.UNKNOWN)).isEqualTo("מגדל קוביות ענק, ואתם בוחרים את הצבעים");
+    void theLineNamesTheChildrenWithoutAGenderedVerb() {
+        // the child's gender is often unknown, so the lines never need it (D-032)
+        assertThat(ActivityIdeas.line(TOWER, "מאיה", ActivityIdeas.Form.GIRL)).isEqualTo("מגדל קוביות ענק, בצבעים לבחירת מאיה");
+        assertThat(ActivityIdeas.line(TOWER, "שחר", ActivityIdeas.Form.UNKNOWN)).isEqualTo("מגדל קוביות ענק, בצבעים לבחירת שחר");
+        assertThat(ActivityIdeas.line(TOWER, "מטר ונעם", ActivityIdeas.Form.SEVERAL)).isEqualTo("מגדל קוביות ענק, בצבעים לבחירת מטר ונעם");
+        assertThat(ActivityIdeas.line(TOWER, null, ActivityIdeas.Form.UNKNOWN)).isEqualTo("מגדל קוביות ענק, בצבעים לבחירת הילדים");
     }
 
     @Test

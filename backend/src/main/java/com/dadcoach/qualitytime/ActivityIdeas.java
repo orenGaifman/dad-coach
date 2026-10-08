@@ -29,14 +29,14 @@ public final class ActivityIdeas {
     private static final java.util.regex.Pattern VERB = java.util.regex.Pattern.compile("\\{([^{}|]+)\\|([^{}|]+)\\|([^{}|]+)}");
 
     /**
-     * The idea's short line with the children's names (D-032): "מגדל קוביות ענק, ומאיה בוחרת את הצבעים". A child whose
-     * gender is unknown is never given a guessed form: the father joins in and the verb is plural ("ומאיה ואתה
-     * בוחרים"). No names: "אתם".
+     * The idea's short line with the children's names (D-032): "מגדל קוביות ענק, בצבעים לבחירת מאיה". The lines are
+     * worded without a verb that needs the child's gender (it is often not known); a "{boy|girl|several}" verb is still
+     * resolved by {@link Form} if a line uses one. No names: "הילדים".
      */
     public static String line(ActivityIdea idea, String names, Form form) {
         String text = idea.line() != null ? idea.line() : idea.title();
         boolean plural = form == Form.SEVERAL || form == Form.UNKNOWN || names == null;
-        String who = names == null ? "אתם" : form == Form.UNKNOWN ? names + " ואתה" : names;
+        String who = names == null ? "הילדים" : names;
         java.util.regex.Matcher m = VERB.matcher(text.replace("{child}", who));
         StringBuilder out = new StringBuilder();
         while (m.find()) {
@@ -57,7 +57,7 @@ public final class ActivityIdeas {
                 if (!outdoorOnly) {
                     allIdeas.add(new ActivityIdea("בניית מגדל קוביות",
                             "מגדל ענק מקוביות או לגו, והילד בוחר את הצבעים.", 20, true,
-                            "מגדל קוביות ענק, ו{child} {בוחר|בוחרת|בוחרים} את הצבעים"));
+                            "מגדל קוביות ענק, בצבעים לבחירת {child}"));
                     allIdeas.add(new ActivityIdea("סיפור עם קולות",
                             "ספר אהוב, ואתה עושה קול אחר לכל דמות.", 15, true,
                             "ספר אהוב עם קול אחר לכל דמות"));
@@ -87,10 +87,10 @@ public final class ActivityIdeas {
                 if (!outdoorOnly) {
                     allIdeas.add(new ActivityIdea("בישול יחד",
                             "פנקייקים או עוגיות, והילד מודד ומערבב.", 30, true,
-                            "פנקייקים יחד, ו{child} {מודד ומערבב|מודדת ומערבבת|מודדים ומערבבים}"));
+                            "פנקייקים יחד, עם {child} במדידות ובערבוב"));
                     allIdeas.add(new ActivityIdea("משחק לוח",
                             "משחק לוח שמתאים לגיל, שהילד בוחר.", 30, true,
-                            "משחק לוח ש{child} {בוחר|בוחרת|בוחרים}"));
+                            "משחק לוח לבחירת {child}"));
                 }
                 if (!indoorOnly) {
                     allIdeas.add(new ActivityIdea("טיול אופניים",
@@ -117,7 +117,7 @@ public final class ActivityIdeas {
                 if (!outdoorOnly) {
                     allIdeas.add(new ActivityIdea("פרויקט בנייה",
                             "פרויקט בנייה שהילד בוחר, כמו בית ציפורים או מדף.", 45, true,
-                            "פרויקט בנייה ש{child} {בוחר|בוחרת|בוחרים}, כמו בית ציפורים או מדף"));
+                            "פרויקט בנייה לבחירת {child}, כמו בית ציפורים או מדף"));
                     allIdeas.add(new ActivityIdea("לימוד מיומנות חדשה",
                             "ללמוד יחד משהו חדש: נגינה, שפה או קצת תכנות.", 30, true,
                             "ללמוד יחד משהו חדש: נגינה, שפה או קצת תכנות"));

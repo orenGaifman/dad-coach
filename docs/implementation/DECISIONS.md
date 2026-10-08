@@ -289,7 +289,7 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
     prompt (dad-coach-3 ONBOARDING, ACTIVE_COACHING, SESSION_MORNING_REMINDER, SESSION_FOLLOW_UP).
   - Ideas come only from the [רוצה רעיונות] button: the one-hour reminder is two lines and its state no longer has
     `get_activity_ideas`. The ideas reply is three short lines with the child's name (`ActivityIdeas.line`, the verb in
-    the child's form; unknown gender - "ומאיה ואתה בוחרים"), no minutes, ending "תספר לי אחר כך איך היה 🙂".
+    worded without a gendered verb - "בצבעים לבחירת מאיה"), no minutes, ending "תספר לי אחר כך איך היה 🙂".
   - A button that no longer works says the true reason, one fact per line (not his / cancelled or moved / missed /
     not started yet / ended).
   - Deletion is in the coach's voice with a list of what is deleted; the email address, the subject and the phrase to
