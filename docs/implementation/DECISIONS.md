@@ -499,3 +499,22 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   `/messages/turn-outcome` additively); the switch is reset off before every test; full suite 398/398.
 - **Rollback:** switch off (no code change).
 
+
+## D-040 — A refused belt image never stops the belt promotion text (2026-10-11)
+
+- **Why (code read):** `BeltPromotionNotifier` sends the optional belt image (window open, image configured) straight
+  through `WhatsAppApiClient`, then the text through `ProactiveSender`. The client throws on a refused send (non-2xx,
+  429, timeout) and returns null on an empty 2xx body, so the `!image.success()` branch never ran: the exception reached
+  the method's catch-all and the promotion text was never sent (or reported).
+- **Fix:** the image send is isolated (`sendBeltImage`): a throw, an unsuccessful or a missing answer is logged
+  (`Belt image not sent (text follows)`) and the text follows exactly as before - same order (image, then text), same
+  wording, same reporting (BELT_PROMOTION timeline report with `PLATFORM_DELIVERY_REPORTS` on, the legacy
+  `SentMessageRecorder` record off). Schedule, wording and who is promoted unchanged (the job still promotes no one, D-030).
+- **Not changed (decided):** the image still bypasses `WhatsAppAdapter` (its circuit breaker): the adapter's IMAGE path
+  takes an uploaded media id (`mediaReference`), not a link, so routing it there needs a new link-image shape in
+  `OutboundMessageDto` / the formatter for a path that is unused today. The shared-number gate already applies (it sits
+  in `WhatsAppApiClient.sendMessage`). Consequence: an image failure does not count toward the breaker, and an image is
+  tried while the breaker is open (the text then fails through the adapter as any other send).
+- **Tests:** `BeltPromotionNotifierTest` (unit: throws / unsuccessful / null -> text sent and recorded; OK -> image then
+  text; timeline on; a failed text still not recorded), `BeltPromotionTest` and `PlatformDeliveryReportsTest` (Meta
+  refuses the image with HTTP 500 -> the text reaches Meta and is recorded / reported BELT_PROMOTION).

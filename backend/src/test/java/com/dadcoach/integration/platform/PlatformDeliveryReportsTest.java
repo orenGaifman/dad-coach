@@ -55,6 +55,7 @@ class PlatformDeliveryReportsTest extends AbstractIntegrationTest {
     @Autowired DashboardNotes notes;
     @Autowired com.dadcoach.auth.LoginLinkService links;
     @Autowired com.dadcoach.weeklygoal.BeltPromotionNotifier belts;
+    @Autowired com.dadcoach.config.BeltImageConfig beltImages;
 
     Father father;
     Child itamar;
@@ -435,6 +436,31 @@ class PlatformDeliveryReportsTest extends AbstractIntegrationTest {
         assertThat(promo.path("kind").asText()).isEqualTo("BELT_PROMOTION");
         assertThat(promo.path("content").asText()).startsWith("💪");
         assertThat(promo.path("providerMessageId").asText()).startsWith("wamid.out.");
+    }
+
+    @Test
+    @DisplayName("a belt promotion whose image Meta refuses: the text still goes out and is reported BELT_PROMOTION")
+    void aBeltPromotionAfterARefusedImageIsStillReported() throws Exception {
+        AtomicInteger n = new AtomicInteger();
+        fake.onMetaSend(c -> c.body().contains("\"type\":\"image\"")
+                ? new FakeServers.Reply(500, "{\"error\":{\"message\":\"media download failed\"}}")
+                : FakeServers.Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"wamid.out.b"
+                        + n.incrementAndGet() + "\"}]}"));
+        beltImages.setYellow("https://cdn.example/yellow.png");
+        try {
+            belts.sendPromotionNotification(new com.dadcoach.weeklygoal.WeeklyGoalService.BeltPromotionResult(father.getId(),
+                    true, com.dadcoach.workflow.Belt.WHITE, com.dadcoach.workflow.Belt.YELLOW, 120, 120, 1, false));
+            settle();
+        } finally {
+            beltImages.setYellow("");
+        }
+        assertThat(fake.metaSends()).hasSize(2);
+        assertThat(fake.recordedOutbound()).hasSize(1);
+        JsonNode promo = body(fake.recordedOutbound().get(0));
+        assertThat(promo.path("kind").asText()).isEqualTo("BELT_PROMOTION");
+        assertThat(promo.path("correlationId").asText()).isEqualTo("belt-promotion:" + father.getId() + ":YELLOW");
+        assertThat(promo.path("content").asText()).startsWith("💪");
+        assertThat(promo.path("providerMessageId").asText()).isEqualTo("wamid.out.b1");
     }
 
     // ------------------------------------------------------------------------------------------------- scheduled

@@ -74,12 +74,7 @@ public class BeltPromotionNotifier {
         try {
             boolean windowOpen = sessionWindows.isOpen(endpoints.ensure(father));
             if (windowOpen && beltImageConfig.hasImage(newBelt)) {
-                String caption = String.format("עלית ל*%s* 💪", newBelt.getDisplayName("he"));
-                var image = whatsAppApiClient.sendMessage(messageFormatter.formatImageMessage(
-                        father.getPhone(), beltImageConfig.getImageUrl(newBelt), caption));
-                if (!image.success()) {
-                    log.warn("Belt image not sent (text follows): fatherId={}", father.getId());
-                }
+                sendBeltImage(father, newBelt);
             }
             String text = buildPromotionMessage(result);
             ProactiveSender.Outcome outcome = sender.send(father, text);
@@ -107,6 +102,25 @@ public class BeltPromotionNotifier {
             }
         } catch (RuntimeException e) {
             log.error("Belt promotion notification failed: fatherId={}", father.getId(), e);
+        }
+    }
+
+    /**
+     * D-040: the image is optional - a refused image (the client throws on a non-2xx, a 429, a timeout) or an
+     * unsuccessful/empty answer is logged and the congratulation text still follows. It goes straight to the API client
+     * (which applies the shared-number gate): the adapter's media path takes an uploaded media id, not a link.
+     */
+    private void sendBeltImage(Father father, Belt newBelt) {
+        try {
+            String caption = String.format("עלית ל*%s* 💪", newBelt.getDisplayName("he"));
+            WhatsAppApiClient.SendResponse image = whatsAppApiClient.sendMessage(messageFormatter.formatImageMessage(
+                    father.getPhone(), beltImageConfig.getImageUrl(newBelt), caption));
+            if (image == null || !image.success()) {
+                log.warn("Belt image not sent (text follows): fatherId={} detail={}", father.getId(),
+                        image == null ? "no response" : image.errorDetail());
+            }
+        } catch (RuntimeException e) {
+            log.warn("Belt image not sent (text follows): fatherId={} error={}", father.getId(), e.getMessage());
         }
     }
 
