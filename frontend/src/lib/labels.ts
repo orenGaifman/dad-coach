@@ -23,9 +23,11 @@ export function reasonLabel(reason: string | null | undefined): string {
 export const GOAL_STATUS: Record<string, string> = { ACTIVE: 'פעיל', COMPLETED: 'הושלם', MISSED: 'לא הושג', CANCELLED: 'בוטל' }
 
 export const DELIVERY_STATUS: Record<string, string> = {
-  DELIVERED: 'נמסר', FAILED: 'נכשל', SKIPPED: 'דולג', PENDING: 'ממתין', HELD: 'ממתין לשעה מתאימה', ISSUED: 'הונפק',
+  DELIVERED: 'נמסר', FAILED: 'נכשל', SKIPPED: 'דולג', PENDING: 'ממתין', ISSUED: 'הונפק',
   // D-038: ACCEPTED = Meta took it (no delivery receipt yet); SENT / READ come from Meta's receipts
   ACCEPTED: 'נשלח', SENT: 'נשלח', READ: 'נקרא',
+  // the shared number's gateway keeps it while the father talks to another product (sent when he is back)
+  HELD: 'ממתין — האב בשיחה עם מוצר אחר',
 }
 
 export const CHILD_STATUS: Record<string, string> = { ACTIVE: 'פעיל', ARCHIVED: 'בארכיון', INACTIVE: 'לא פעיל' }

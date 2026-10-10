@@ -5,14 +5,17 @@ import com.dadcoach.channel.dto.StatusUpdateDto;
 import com.dadcoach.integration.platform.SharedNumberGate;
 import java.sql.Timestamp;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
  * "delivered" and "read" close together, in any order) never move it back. FAILED is final. A wamid Dad Coach never
  * recorded (a conversational reply, someone else's message) matches nothing and changes nothing; a gateway hold id
  * ({@code held:<n>}) is never a wamid.
+ *
+ * <p>Meta can answer a send with "failed" (e.g. 131047) within milliseconds - before the row holding the wamid is
+ * committed. A "failed" receipt that matches no row is therefore kept in memory for {@link #PENDING_FAILED_FOR} and
+ * re-applied every 15 seconds until its row appears (at most {@link #PENDING_MAX} at once; lost on a restart).
  */
 @Component
 public class DeliveryReceipts {
@@ -44,6 +51,12 @@ public class DeliveryReceipts {
             DeliveryStatus.READ, List.of("SENT", "DELIVERED"),
             DeliveryStatus.FAILED, List.of("SENT"));
 
+    static final Duration PENDING_FAILED_FOR = Duration.ofMinutes(2);
+    static final int PENDING_MAX = 500;
+
+    private record Pending(StatusUpdateDto receipt, Instant until) {}
+
+    private final ConcurrentHashMap<String, Pending> pendingFailed = new ConcurrentHashMap<>();
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
@@ -55,6 +68,57 @@ public class DeliveryReceipts {
     /** Applies one receipt; returns how many recorded messages it moved (0: unknown wamid, stale or ignored). */
     @Transactional
     public int apply(StatusUpdateDto receipt) {
+        int moved = move(receipt);
+        if (moved == 0 && "failed".equalsIgnoreCase(receipt.status()) && receipt.providerMessageId() != null
+                && !receipt.providerMessageId().startsWith(SharedNumberGate.HELD_PREFIX)
+                && !recorded(receipt.providerMessageId())) {
+            remember(receipt);
+        }
+        return moved;
+    }
+
+    /**
+     * Re-applies the "failed" receipts that came before their row was committed; drops one once its row exists (moved
+     * or not) or its time is up.
+     */
+    @Scheduled(fixedDelayString = "PT15S", initialDelayString = "PT15S")
+    public void retryPendingFailed() {
+        Instant now = clock.instant();
+        for (Map.Entry<String, Pending> e : pendingFailed.entrySet()) {
+            if (now.isAfter(e.getValue().until())) {
+                pendingFailed.remove(e.getKey(), e.getValue());
+                continue;
+            }
+            try {
+                if (move(e.getValue().receipt()) > 0 || recorded(e.getKey())) {
+                    pendingFailed.remove(e.getKey(), e.getValue());
+                }
+            } catch (RuntimeException failure) {
+                log.atWarn().setMessage("whatsapp.receipt.retry_failed").addKeyValue("error", failure.getClass().getSimpleName()).log();
+            }
+        }
+    }
+
+    /** Test isolation: wamids repeat across tests. */
+    public void forgetPending() {
+        pendingFailed.clear();
+    }
+
+    private void remember(StatusUpdateDto receipt) {
+        if (pendingFailed.size() >= PENDING_MAX) {
+            log.atWarn().setMessage("whatsapp.receipt.pending_full").log();
+            return;
+        }
+        pendingFailed.put(receipt.providerMessageId(), new Pending(receipt, clock.instant().plus(PENDING_FAILED_FOR)));
+    }
+
+    private boolean recorded(String wamid) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM scheduled_response_delivery WHERE "
+                + "provider_message_id = ?) OR EXISTS (SELECT 1 FROM login_link WHERE provider_message_id = ?)",
+                Boolean.class, wamid, wamid));
+    }
+
+    private int move(StatusUpdateDto receipt) {
         String wamid = receipt.providerMessageId();
         DeliveryStatus to = receipt.status() == null ? null : switch (receipt.status().toLowerCase(Locale.ROOT)) {
             case "sent" -> DeliveryStatus.SENT;

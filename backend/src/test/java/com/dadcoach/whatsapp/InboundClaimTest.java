@@ -114,6 +114,30 @@ class InboundClaimTest extends AbstractIntegrationTest {
         assertThat(inboundStatus("wamid.third")).isEqualTo("SUCCEEDED");
     }
 
+    /** D-038: an error before anything reached him leaves the message unanswered - its redelivery is answered. */
+    @Test
+    void anErrorBeforeAnyReplyReleasesTheMessageForItsRedelivery() throws Exception {
+        Father f = data.activeFather("+19995550817");
+        data.endpoint(f, true);
+        jdbc.execute("CREATE OR REPLACE FUNCTION d038_fail() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'd038 test'; END $$ "
+                + "LANGUAGE plpgsql");
+        jdbc.execute("CREATE TRIGGER d038_reply_guard BEFORE INSERT ON tool_idempotency FOR EACH ROW "
+                + "WHEN (NEW.scope = 'WHATSAPP_REPLY') EXECUTE FUNCTION d038_fail()");
+        try {
+            webhook(Webhooks.text(f.getPhone(), "wamid.boom", "היי"));
+            assertThat(fake.metaSends()).isEmpty();
+            assertThat(inboundStatus("wamid.boom")).as("released").isNull();
+        } finally {
+            jdbc.execute("DROP TRIGGER IF EXISTS d038_reply_guard ON tool_idempotency");
+            jdbc.execute("DROP FUNCTION IF EXISTS d038_fail()");
+        }
+
+        webhook(Webhooks.text(f.getPhone(), "wamid.boom", "היי"));
+
+        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(inboundStatus("wamid.boom")).isEqualTo("SUCCEEDED");
+    }
+
     @Test
     void aCachedReplyIsSentOnceAndItsGuardStays() throws Exception {
         Father f = data.activeFather("+19995550816");

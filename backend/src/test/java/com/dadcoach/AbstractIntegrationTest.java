@@ -95,6 +95,7 @@ public abstract class AbstractIntegrationTest {
     @Autowired protected TestClock clock;
     @Autowired protected TestData data;
     protected final FakeServers fake = FakeServers.INSTANCE;
+    @Autowired private com.dadcoach.whatsapp.DeliveryReceipts receipts;
 
     @BeforeEach
     void cleanSlate() {
@@ -106,6 +107,7 @@ public abstract class AbstractIntegrationTest {
                 + "VALUES (?, 'he', 'UTILITY', '{{1}}', 'APPROVED', 1)", TEMPLATE);
         clock.set(TUESDAY_NOON_IL);
         fake.reset();
+        receipts.forgetPending(); // D-038: early "failed" receipts are kept in memory; wamids repeat across tests
     }
 
     @TestConfiguration

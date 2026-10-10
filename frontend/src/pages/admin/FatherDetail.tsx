@@ -86,7 +86,8 @@ export function FatherDetailPage() {
               {d.deliveries.map((r, i) => <tr key={`d${i}`}><td>{dateTime(r.at)}</td><td>{DELIVERY_KIND[r.kind]} <span className="ltr">{r.what ?? ''}</span></td>
                 <td className={r.status === 'FAILED' ? styles.bad : styles.ok}>{DELIVERY_STATUS[r.status] ?? r.status}</td><td>{reasonLabel(r.reason)}</td></tr>)}
               {d.loginLinks.map((l, i) => <tr key={`l${i}`}><td>{dateTime(l.createdAt)}</td><td>{linkLabel(l)}</td>
-                <td className={l.deliveryStatus === 'FAILED' ? styles.bad : styles.ok}>{l.deliveryStatus}</td><td>{reasonLabel(l.deliveryError)}</td></tr>)}
+                <td className={l.deliveryStatus === 'FAILED' ? styles.bad : styles.ok}>{DELIVERY_STATUS[l.deliveryStatus] ?? l.deliveryStatus}
+                  {l.receiptStatus && l.receiptStatus !== 'FAILED' ? ` · ${DELIVERY_STATUS[l.receiptStatus] ?? l.receiptStatus}` : ''}</td><td>{reasonLabel(l.deliveryError)}</td></tr>)}
             </tbody>
           </table></div>
         )}

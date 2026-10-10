@@ -36,6 +36,7 @@ class DeliveryReceiptsTest extends AbstractIntegrationTest {
     @Autowired LoginLinkService links;
     @Autowired LoginLinkRepository linkRows;
     @Autowired LoginLinkRateLimiter rateLimiter;
+    @Autowired DeliveryReceipts receipts;
 
     @BeforeEach
     void freshBudget() {
@@ -175,6 +176,40 @@ class DeliveryReceiptsTest extends AbstractIntegrationTest {
         fake.onMetaSend(c -> FakeServers.Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"wamid.d038.again\"}]}"));
         assertThat(links.sendTo(f.getPhone())).as("the failed button is not 'on his screen'").isEqualTo(LoginLinkService.SendOutcome.SENT);
         assertThat(fake.metaSends()).hasSize(2);
+    }
+
+    private void acceptedRow(Father f, String triggerId, String wamid) {
+        jdbc.update("INSERT INTO scheduled_response_delivery (idempotency_key, trigger_id, father_id, status, delivery_mode, "
+                + "provider_message_id) VALUES (?, ?, ?, 'ACCEPTED', 'FREE_FORM', ?)", "scheduled-response:" + triggerId, triggerId,
+                f.getId(), wamid);
+    }
+
+    /** Meta's "failed" can come before the row with the wamid is committed: it is applied once the row is there. */
+    @Test
+    void aFailedReceiptThatCameBeforeItsRowIsAppliedWhenTheRowAppears() throws Exception {
+        Father f = data.activeFather("+19995550806");
+        failedReceipt("wamid.d038.early", f);
+        acceptedRow(f, "d038-early", "wamid.d038.early");
+
+        receipts.retryPendingFailed();
+
+        assertThat(row(f, "d038-early").get("status")).isEqualTo("FAILED");
+        assertThat((String) row(f, "d038-early").get("failure_reason")).contains("131047");
+    }
+
+    @Test
+    void anEarlyFailedReceiptIsKeptOnlyForAWhileAndOnlyForAnUnknownWamid() throws Exception {
+        Father f = accepted("+19995550807", "d038-kept");
+        receipt(WAMID, "delivered", f);
+        failedReceipt(WAMID, f);               // its row exists (DELIVERED): ignored, not kept for later
+        failedReceipt("wamid.d038.late", f);    // no row yet: kept
+        clock.advance(DeliveryReceipts.PENDING_FAILED_FOR.plusSeconds(1));
+        acceptedRow(f, "d038-late", "wamid.d038.late");
+
+        receipts.retryPendingFailed();
+
+        assertThat(row(f, "d038-kept").get("status")).isEqualTo("DELIVERED");
+        assertThat(row(f, "d038-late").get("status")).as("too late: dropped").isEqualTo("ACCEPTED");
     }
 
     @Test

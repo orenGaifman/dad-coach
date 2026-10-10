@@ -140,7 +140,11 @@ public class WhatsAppWebhookController {
         return ResponseEntity.ok().build();
     }
 
-    /** Runs the claimed message; done only when it was answered - otherwise the claim goes, for the redelivery. */
+    /**
+     * Runs the claimed message; done only when it was answered - otherwise the claim goes, for the redelivery. The
+     * handler reports the outcome itself also when its processing threw (HANDLED once something reached him), so only
+     * an Error escaping it leaves the default UNANSWERED.
+     */
     private void answer(InboundMessageDto in, Instant receivedAt) {
         InboundMessageHandler.Outcome outcome = InboundMessageHandler.Outcome.UNANSWERED;
         try {

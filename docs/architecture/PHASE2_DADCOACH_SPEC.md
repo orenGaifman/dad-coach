@@ -90,6 +90,13 @@ send.
 - `WhatsAppWebhookController.receive`: with `dad-coach.whatsapp.receipts.enabled` (default true) every status update goes
   to `DeliveryReceipts.apply`, each in its own try/catch; Meta always gets 200. Off = today's log-and-ignore.
 - `WhatsAppAdapter.getDeliveryStatus(id)` = `DeliveryReceipts.statusOf(id)`.
+- **Early "failed" receipt (review follow-up).** Meta can answer a send with "failed" (131047 and similar) within
+  milliseconds, before the row holding the wamid is committed (the send happens before `repository.save` /
+  the end of `LoginLinkService.sendTo`'s transaction). Such a receipt matches no row. `DeliveryReceipts` keeps a "failed"
+  receipt whose wamid is in no row in memory for 2 minutes (at most 500 at once) and re-applies it every 15 seconds
+  (`retryPendingFailed`); it is dropped once its row exists or the time is up. Limits: only "failed" is kept (a lost
+  early "sent"/"delivered" is corrected by the next receipt; a lost "failed" never would be), and the memory is lost on
+  a restart or on another instance - an early "failed" can still be lost then.
 
 **Readers of DELIVERED checked.**
 - `ScheduledResponseResult.of` (the HTTP answer to the platform, also used for a replayed callback): ACCEPTED, HELD,
@@ -102,7 +109,9 @@ send.
   behaviour through the mapping above (a held message is recorded as mentioned, as today).
 - `AdminQueries` (failedDeliveriesSince, undelivered, lastFailure): read FAILED only - a receipt-failed row now shows up
   there, which is the point. `deliveriesOf` shows the raw status; `frontend/src/lib/labels.ts` DELIVERY_STATUS gains
-  ACCEPTED / SENT / READ labels (HELD and DELIVERED exist).
+  ACCEPTED / SENT / READ labels, and HELD (unused before D-038; it read "waiting for a suitable hour") now says what a
+  gateway hold is: "ממתין — האב בשיחה עם מוצר אחר". `AdminQueries.loginLinksOf` also returns `receipt_status`, shown
+  next to a link's status in the father page.
 - `FatherDataPurger` deletes by father_id - unaffected.
 
 **Existing tests changed (explicit, not weakened).** `ScheduledDeliveryBaselineTest` PASS tests
@@ -134,7 +143,11 @@ logs), the redelivered message is dropped as `whatsapp.inbound.duplicate`.
   - existing `complete` / `release` reused (release deletes only IN_PROGRESS rows).
 - `InboundMessageHandler.handle` returns `Outcome { HANDLED, UNANSWERED }`. A per-call `Attempt` is passed to every
   `send`; UNANSWERED when a send was refused by Meta, or the platform was unavailable (`PlatformUnavailableException`:
-  5xx after the client's retries, timeout, circuit open). A definitive refusal (`PlatformRejectedException`, 4xx) is
+  5xx after the client's retries, timeout, circuit open). When the processing throws, `handle` catches it and decides
+  by what already happened (`Attempt.afterError`, review follow-up): something reached him (a fixed line, a ready
+  answer, a button reply, the AI reply) and no send failed -> HANDLED, so a Meta redelivery can never send that line
+  again; nothing reached him -> UNANSWERED. A ready answer (D-036) that went out before an error is the answer - it no
+  longer falls through to an AI turn and a second reply. A definitive refusal (`PlatformRejectedException`, 4xx) is
   HANDLED - processing it again gets the same refusal. Deliberate non-answers (deleted father, reaction, rate limited,
   suppressed / blank) are HANDLED.
 - `WhatsAppWebhookController`: with `dad-coach.whatsapp.inbound.retry-unanswered` (default true): `claim(...)`; DONE or
@@ -145,6 +158,13 @@ logs), the redelivered message is dropped as `whatsapp.inbound.duplicate`.
   sender on `InboundTurnExecutor`.
 - An answered message's redelivery is still dropped (row SUCCEEDED): `WhatsAppWebhookTest.aMetaRetryOfTheSameMessage...`
   (103-111, one row) and `InboundDedupBaselineTest` PASS (c) keep passing unchanged.
+
+**Double booking on a released platform timeout.** A turn whose platform call timed out is released and re-run on the
+redelivery with the same correlation id (Meta's message id). If the first call did run on the platform (its tools
+booked a session), the re-run must not book again: that relies on the platform's duplicate-request check
+(`workflow.duplicate-request-check-enabled`, env `WORKFLOW_DUPLICATE_CHECK_ENABLED`, default true, also switchable in the
+platform admin's Settings), which answers the repeated correlation id as a duplicate with the cached reply (sent once,
+DC-B4) instead of running the tools again. With that check turned off, a released timeout can repeat the turn's tools.
 
 **Limit (documented, not fixed here).** Meta redelivers a webhook only when it did not get a 2xx (or by its own
 at-least-once duplicates); Dad Coach always answers 200 at once. DC-B3 makes a redelivery processable; it does not
@@ -185,7 +205,10 @@ Changed: the three row-status assertions listed under DC-B2 (with their display 
 class Javadocs now say the KNOWN-BUG tests are fixed by D-038. Added: `DeliveryReceiptsTest` (forward only: a late
 delivered / failed after READ changes nothing; sent then failed is final and a replayed callback answers FAILED; a held
 message is HELD with `held:<n>` kept apart and never matched; a link's receipts keep it SENT for the coach, a failed
-link is sent again when asked; unknown wamid PENDING), `InboundClaimTest` (a claim being processed is not started twice,
+link is sent again when asked; unknown wamid PENDING; an early "failed" is applied when its row appears, and dropped
+after 2 minutes or when its row already exists), `InboundAttemptTest` (after an error: HANDLED once something reached him and nothing failed, else UNANSWERED),
+`InboundClaimTest` (an error before any reply releases the message and its redelivery is answered once, a claim being
+processed is not started twice,
 a stale claim is taken over, answered = SUCCEEDED and a failed turn leaves no row, a 4xx refusal is an answer, a cached
 reply whose guard exists is never sent again, a cached reply is sent once and its guard stays), `DeliveryFlagsOffTest`
 (both switches off: receipts ignored, the message marked on arrival - the rollback behaviour).
@@ -197,7 +220,9 @@ reply whose guard exists is never sent again, a cached reply is sent once and it
   picks them up (Render env change).
 - Code: revert the commit. V45 stays applied (additive, never edited); the old code ignores the new columns. Rows
   written ACCEPTED / HELD / SENT / READ would not load into the old `Status` enum (JPA would fail on a replayed
-  callback of such a trigger), so a code revert must run first:
+  callback of such a trigger), so once the revert deploy is LIVE (the new code no longer writes them) run
   `UPDATE scheduled_response_delivery SET status = 'DELIVERED' WHERE status IN ('ACCEPTED','HELD','SENT','READ');`
-  (data only, no schema change). Login links need nothing (`delivery_status` vocabulary unchanged).
+  and run it once more a few minutes later, to catch rows the old instance wrote while the deploy switched over (data
+  only, no schema change). Until it has run, only a replayed callback of such a trigger fails (the platform's retry);
+  new callbacks are unaffected. Login links need nothing (`delivery_status` vocabulary unchanged).
 - Inbound IN_PROGRESS rows left by the new code are harmless to the old code (`firstTime` treats any row as seen).

@@ -84,13 +84,22 @@ public class InboundMessageHandler {
     public enum Outcome { HANDLED, UNANSWERED }
 
     /** One message's processing: set when it could not be answered (a refused send, the platform unavailable). */
-    private static final class Attempt {
+    static final class Attempt {
         boolean unanswered;
         /** Sends Meta accepted so far. */
         int sent;
 
         Outcome outcome() {
             return unanswered ? Outcome.UNANSWERED : Outcome.HANDLED;
+        }
+
+        /**
+         * The processing threw. Something already reached him (a fixed line, a ready answer, a button reply, the AI
+         * reply) and nothing failed: HANDLED - a redelivery must not send that line again. Nothing reached him, or a
+         * send failed: UNANSWERED - the redelivery is processed again.
+         */
+        Outcome afterError() {
+            return sent > 0 && !unanswered ? Outcome.HANDLED : Outcome.UNANSWERED;
         }
     }
     /** D-032: every fixed line opens with the identity line, like every other message on the shared number. */
@@ -160,7 +169,14 @@ public class InboundMessageHandler {
 
     public Outcome handle(InboundMessageDto in, Instant receivedAt) {
         Attempt attempt = new Attempt();
-        process(in, receivedAt, attempt);
+        try {
+            process(in, receivedAt, attempt);
+        } catch (RuntimeException e) {
+            Outcome outcome = attempt.afterError();
+            log.atError().setMessage("whatsapp.turn.failed").addKeyValue("messageId", in.idempotencyKey())
+                    .addKeyValue("sent", attempt.sent).addKeyValue("outcome", outcome).setCause(e).log();
+            return outcome;
+        }
         return attempt.outcome();
     }
 
@@ -354,6 +370,7 @@ public class InboundMessageHandler {
         if (kind.isEmpty() || weeklyPlan == null) {
             return false;
         }
+        int sentBefore = attempt.sent;
         try {
             // D-037: "מתי התזכורת?" is answered from the timers the platform holds (one read), never from the policy
             com.dadcoach.weeklyplan.ArmedTimers armed = kind.get() == ReadyQuestions.Kind.REMINDER && sessionTimers != null
@@ -377,7 +394,8 @@ public class InboundMessageHandler {
             return true;
         } catch (RuntimeException e) {
             log.atWarn().setMessage("whatsapp.reply.ready_answer_failed").addKeyValue("error", e.getClass().getSimpleName()).log();
-            return false;
+            // D-038: once the ready answer reached him it is the answer - never a second (AI) reply after it
+            return attempt.sent > sentBefore;
         }
     }
 

@@ -138,7 +138,8 @@ public class AdminQueries {
         return jdbc.queryForList("""
                 SELECT created_at AS "createdAt", expires_at AS "expiresAt", used_at AS "usedAt",
                        last_used_at AS "lastUsedAt", use_count AS "useCount", revoked_at AS "revokedAt",
-                       delivery_status AS "deliveryStatus", delivery_error AS "deliveryError"
+                       delivery_status AS "deliveryStatus", delivery_error AS "deliveryError",
+                       receipt_status AS "receiptStatus"
                 FROM login_link WHERE father_id = ? ORDER BY created_at DESC LIMIT ?""", fatherId, limit);
     }
 

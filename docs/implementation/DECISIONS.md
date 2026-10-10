@@ -433,13 +433,19 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   final; one conditional UPDATE, race-safe), stores Meta's error as `META_<code>: <title>`. A link's
   `delivery_status` stays SENT through delivered/read (the coach's "already on his screen" check reads it) and turns
   FAILED on a failed receipt, so the next request sends a new button and the admin's undelivered list shows it.
-  `WhatsAppAdapter.getDeliveryStatus` answers from the rows. The platform still hears `DELIVERED` for every message handed
+  `WhatsAppAdapter.getDeliveryStatus` answers from the rows. A "failed" receipt that comes before its row is committed
+  (Meta can answer within milliseconds) is kept in memory 2 minutes and re-applied every 15 s; it can still be lost on
+  a restart or another instance (only "failed" is kept - a later receipt corrects a lost sent/delivered). The platform still hears `DELIVERED` for every message handed
   over (it reads only the HTTP status). Switch: `dad-coach.whatsapp.receipts.enabled` (default true).
 - **DC-B3:** the webhook claims Meta's message id IN_PROGRESS (`IdempotencyService.claim`, atomic insert) and marks it
   done only when `InboundMessageHandler.handle` says HANDLED; UNANSWERED (platform unavailable after retries, a reply Meta
   refused, an exception) releases it, so the redelivery is processed. A message answered or being processed is dropped;
   a claim older than `dad-coach.whatsapp.inbound.claim-lease` (PT10M) is taken over. A platform refusal (4xx) is an
-  answer, not a retry. Per-sender order unchanged. Switch: `dad-coach.whatsapp.inbound.retry-unanswered` (default true).
+  answer, not a retry. An error after something already reached him (a fixed line, a ready answer, a button reply,
+  the AI reply) counts as HANDLED, so a redelivery never sends it again. Per-sender order unchanged. A released platform
+  timeout re-runs the turn with the same correlation id: that it does not book twice relies on the platform's
+  duplicate-request check (`WORKFLOW_DUPLICATE_CHECK_ENABLED`, on by default, also in the platform admin's Settings),
+  which answers it as a duplicate with the cached reply. Switch: `dad-coach.whatsapp.inbound.retry-unanswered` (default true).
   Limit: Meta redelivers only when it got no 2xx; this makes a redelivery processable, it does not create one.
 - **DC-B4:** a duplicate answer with content is sent once: the durable guard `tool_idempotency(WHATSAPP_REPLY, wamid)` is
   taken before any reply to the message goes out and released only when that send failed (or the turn threw before
@@ -451,6 +457,7 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   WhatsAppWebhookTest `statusReceiptsAreAcknowledgedAndIgnored` renamed `...AndNeverRunATurn` (assertions unchanged).
   New: DeliveryReceiptsTest, InboundClaimTest, DeliveryFlagsOffTest.
 - **Rollback:** the two switches (env `DAD_COACH_WHATSAPP_RECEIPTS_ENABLED`, `DAD_COACH_WHATSAPP_INBOUND_RETRY_UNANSWERED`)
-  restore the old behaviour without a code change. A code revert keeps V45 and first needs
+  restore the old behaviour without a code change. A code revert keeps V45; once the revert is live, run
   `UPDATE scheduled_response_delivery SET status = 'DELIVERED' WHERE status IN ('ACCEPTED','HELD','SENT','READ')` (the old
-  enum cannot load the new values).
+  enum cannot load the new values), and once more a few minutes later for rows written during the switch-over.
+- **Admin:** HELD reads "ממתין — האב בשיחה עם מוצר אחר"; a login link shows its receipt status next to its status.
