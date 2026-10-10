@@ -461,3 +461,39 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   `UPDATE scheduled_response_delivery SET status = 'DELIVERED' WHERE status IN ('ACCEPTED','HELD','SENT','READ')` (the old
   enum cannot load the new values), and once more a few minutes later for rows written during the switch-over.
 - **Admin:** HELD reads "ממתין — האב בשיחה עם מוצר אחר"; a login link shows its receipt status next to its status.
+
+## D-039 — The platform's conversation shows what the father got (Phase 3.4, 2026-10-11)
+
+- **Why:** the platform's conversation (the model's history, the admin view, reviews) held the model's drafts: a reply
+  that ClaimGuard / TimerClaims / ReplyStyleGuard changed, an English reply rewritten in Hebrew (and the rewrite note as
+  if the father wrote it), a "שלחתי לך את הכפתור" line that never went, a timer message replaced by the ready one, a
+  skipped timer, and none of the messages answered without a turn (taps, ready answers, files, unheard notes).
+  Spec: `docs/architecture/PHASE3_DADCOACH_SPEC.md` (path -> platform call table); platform contract: implementation spec
+  §3.2/§3.4/§3.8.
+- **Switch:** `workflow.platform.delivery-reports` (env `PLATFORM_DELIVERY_REPORTS`, default false). Off = exactly the
+  pre-Phase-3 calls and bodies (no `internal`, the `:corrected` record, every `SentMessageRecorder` record, callback answer
+  `{status, detail}`). On after the platform's Phase 3 is live.
+- **Turn replies:** sent as written (identity / heard lines aside) -> turn-outcome AS_IS with Meta's wamid; changed ->
+  `/messages/outbound` `{cid}:delivered` with `replacesDraft` and exactly what was sent (no identity line), which replaces
+  the `:corrected` record; the Hebrew rewrite runs `/execute` `internal: true` and the delivered text supersedes `{cid}:he`;
+  the sent-line drop -> the card (recorded where it is sent, linked to the turn when the handler sent it) + DROPPED
+  `SENT_LINE_CARD`; a DC-B4 duplicate reply is reported like a first one.
+- **Not reported (decided):** a reply Meta refused (DC-B3 redelivers it; FAILED is final on the platform and would turn
+  the redelivery's report into a 409); a platform failure on the first `/execute`; the typed deletion request (he is
+  deleted now - a report could re-open a conversation); anything from a number with no father; reactions.
+- **Code-answered:** `/messages/inbound` (his words, the button title + `{buttonId, title}`, or a marker `[photo]` /
+  `[voice note]`...) before the product's `/messages/outbound` (kind BUTTON_REPLY / READY_ANSWER / FIXED_LINE).
+- **Product sends:** dashboard card - its text and button title, never the link (DASHBOARD_LINK; the template form
+  without the link); dashboard notes - kind DASHBOARD_NOTE with no provider id and no status (the platform keeps
+  `delivery_status` null); belt promotion - BELT_PROMOTION with its wamid / template.
+- **Scheduled callbacks:** the 2xx body adds `outcome` AS_IS (daily check as written) / DROPPED (`NO_VALID_SESSION`,
+  `BLOCKED_NOT_HEBREW`) / FAILED (the send's reason), or `deliveredContent` (the ready message, the cleaned text, the
+  template as rendered - the `{{1}}` line when the catalog has no body - with `template {name, params}` and the `dc:`
+  buttons) + the wamid. A replayed trigger answers as before (what was sent is not stored per trigger).
+- **Sender:** `TimelineReports` - one daemon thread, in order, 3 attempts (1 s, 2 s; 5xx / 408 / 429 / no answer),
+  bounded queue; `timeline.report_failed` when a report does not land (the draft then stays, as before). Never blocks a
+  delivery.
+- **Tests:** `PlatformDeliveryReportsTest` (24, contract against FakeServers, which answers `/messages/inbound` and
+  `/messages/turn-outcome` additively); the switch is reset off before every test; full suite 397/397.
+- **Rollback:** switch off (no code change).
+

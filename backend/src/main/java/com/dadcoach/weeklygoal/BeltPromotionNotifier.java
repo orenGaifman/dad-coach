@@ -1,5 +1,8 @@
 package com.dadcoach.weeklygoal;
 
+import com.dadcoach.integration.platform.timeline.TimelineReports;
+import com.dadcoach.integration.platform.timeline.TimelineText;
+
 import com.dadcoach.channel.WhatsAppEndpoints;
 import com.dadcoach.channel.delivery.ProactiveSender;
 import com.dadcoach.channel.session.SessionWindowService;
@@ -39,6 +42,7 @@ public class BeltPromotionNotifier {
     private final SentMessageRecorder recorder;
     private final WhatsAppEndpoints endpoints;
     private final SessionWindowService sessionWindows;
+    private TimelineReports timeline;
 
     public BeltPromotionNotifier(WhatsAppApiClient whatsAppApiClient, WhatsAppMessageFormatter messageFormatter,
                                  BeltImageConfig beltImageConfig, FatherRepository fatherRepository, ProactiveSender sender,
@@ -51,6 +55,11 @@ public class BeltPromotionNotifier {
         this.recorder = recorder;
         this.endpoints = endpoints;
         this.sessionWindows = sessionWindows;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setTimeline(TimelineReports timeline) {
+        this.timeline = timeline;
     }
 
     public void sendPromotionNotification(WeeklyGoalService.BeltPromotionResult result) {
@@ -82,7 +91,19 @@ public class BeltPromotionNotifier {
                     .addKeyValue("failure", outcome.result().failureReason())
                     .log();
             if (outcome.result().isSuccessful()) {
-                recorder.recordSent(father, text, "belt-promotion:" + father.getId() + ":" + newBelt.name());
+                String correlationId = "belt-promotion:" + father.getId() + ":" + newBelt.name();
+                if (timeline != null && timeline.enabled()) {
+                    // D-039: what he read (the template as rendered, when it went as one) and its delivery
+                    TimelineReports.Part part = TimelineReports.Part.sent(correlationId,
+                            TimelineText.withoutIdentity(outcome.sentText() != null ? outcome.sentText() : text),
+                            outcome.result(), TimelineReports.KIND_BELT_PROMOTION);
+                    if (outcome.mode() == ProactiveSender.Mode.TEMPLATE) {
+                        part = part.withTemplate(TimelineText.template(outcome.template(), outcome.templateParams()));
+                    }
+                    timeline.outbound(TimelineReports.Person.of(father), part);
+                } else {
+                    recorder.recordSent(father, text, correlationId);
+                }
             }
         } catch (RuntimeException e) {
             log.error("Belt promotion notification failed: fatherId={}", father.getId(), e);

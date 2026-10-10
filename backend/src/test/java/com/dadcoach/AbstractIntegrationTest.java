@@ -96,6 +96,7 @@ public abstract class AbstractIntegrationTest {
     @Autowired protected TestData data;
     protected final FakeServers fake = FakeServers.INSTANCE;
     @Autowired private com.dadcoach.whatsapp.DeliveryReceipts receipts;
+    @Autowired private com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties;
 
     @BeforeEach
     void cleanSlate() {
@@ -108,6 +109,7 @@ public abstract class AbstractIntegrationTest {
         clock.set(TUESDAY_NOON_IL);
         fake.reset();
         receipts.forgetPending(); // D-038: early "failed" receipts are kept in memory; wamids repeat across tests
+        platformProperties.setDeliveryReports(false); // D-039: the switch is off unless a test turns it on
     }
 
     @TestConfiguration

@@ -1,5 +1,8 @@
 package com.dadcoach.auth;
 
+import com.dadcoach.integration.platform.timeline.TimelineReports;
+import com.dadcoach.integration.platform.timeline.TimelineText;
+
 import com.dadcoach.channel.delivery.DeliveryResult;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -47,6 +50,8 @@ public class LoginLinkService {
     private final LoginLinkRateLimiter rateLimiter;
     private final Clock clock;
     private final String webBaseUrl;
+    private TimelineReports timeline;
+    private com.dadcoach.domain.father.FatherRepository fathers;
 
     public LoginLinkService(LoginLinkRepository links, SignInPolicy policy, LoginLinkDelivery delivery,
                             LoginLinkRateLimiter rateLimiter, Clock clock,
@@ -78,7 +83,7 @@ public class LoginLinkService {
             log.info("auth.login_link.rate_limited scope=person");
             return;
         }
-        DeliveryResult result = issueAndSend(subject.get(), phone.get(), next);
+        DeliveryResult result = issueAndSend(subject.get(), phone.get(), next, null);
         log.info("auth.login_link.requested delivered={} reason={}", result.isSuccessful(),
                 result.isSuccessful() ? "" : result.failureReason());
     }
@@ -89,6 +94,12 @@ public class LoginLinkService {
      */
     @Transactional
     public SendOutcome sendTo(String e164) {
+        return sendTo(e164, null);
+    }
+
+    /** @param turnCorrelationId D-039: the turn this card is part of (the inbound handler's), or null */
+    @Transactional
+    public SendOutcome sendTo(String e164, String turnCorrelationId) {
         Optional<SignInSubject> subject = policy.forPhone(e164);
         if (subject.isEmpty()) {
             return SendOutcome.NOT_ALLOWED;
@@ -102,7 +113,7 @@ public class LoginLinkService {
             log.info("auth.login_link.rate_limited scope=person source=coach");
             return SendOutcome.RATE_LIMITED;
         }
-        DeliveryResult result = issueAndSend(subject.get(), e164, null);
+        DeliveryResult result = issueAndSend(subject.get(), e164, null, turnCorrelationId);
         log.info("auth.login_link.sent source=coach delivered={} reason={}", result.isSuccessful(),
                 result.isSuccessful() ? "" : result.failureReason());
         return result.isSuccessful() ? SendOutcome.SENT : SendOutcome.FAILED;
@@ -131,13 +142,44 @@ public class LoginLinkService {
         return links.findByTokenHash(hash).map(l -> new SignInSubject(l.getFatherId(), l.getStaffUserId()));
     }
 
-    private DeliveryResult issueAndSend(SignInSubject subject, String phone, String next) {
+    private DeliveryResult issueAndSend(SignInSubject subject, String phone, String next, String turnCorrelationId) {
         String raw = TokenHashing.newRawToken();
         LoginLink link = save(subject, raw);
-        DeliveryResult result = delivery.send(subject, phone, url(raw, next));
+        LoginLinkDelivery.Sent sent = delivery.deliver(subject, phone, url(raw, next));
+        DeliveryResult result = sent.result();
         link.recordDelivery(result);
         links.save(link);
+        report(subject, link, sent, turnCorrelationId);
         return result;
+    }
+
+    /**
+     * D-039: a father's card goes into his platform conversation as what he saw - the card's text and its button
+     * title, never the link (a staff user has no conversation). Only with the delivery-reports switch on.
+     */
+    private void report(SignInSubject subject, LoginLink link, LoginLinkDelivery.Sent sent, String turnCorrelationId) {
+        if (timeline == null || fathers == null || subject.fatherId() == null || !sent.result().isSuccessful()
+                || !timeline.enabled()) {
+            return;
+        }
+        try {
+            fathers.findById(subject.fatherId()).ifPresent(father -> {
+                boolean template = sent.template() != null;
+                TimelineReports.Part part = TimelineReports.Part.sent("dashboard-link:" + link.getId(),
+                        LoginLinkDelivery.reportedText(template), sent.result(), TimelineReports.KIND_DASHBOARD_LINK);
+                part = template ? part.withTemplate(TimelineText.template(sent.template(), null))
+                        : part.withButtons(TimelineText.linkButton(LoginLinkDelivery.fatherLabel()));
+                timeline.outbound(TimelineReports.Person.of(father), part.forTurn(turnCorrelationId));
+            });
+        } catch (RuntimeException e) {
+            log.warn("timeline.report_failed kind=DASHBOARD_LINK error={}", e.getClass().getSimpleName());
+        }
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setTimeline(TimelineReports timeline, com.dadcoach.domain.father.FatherRepository fathers) {
+        this.timeline = timeline;
+        this.fathers = fathers;
     }
 
     private LoginLink save(SignInSubject subject, String raw) {

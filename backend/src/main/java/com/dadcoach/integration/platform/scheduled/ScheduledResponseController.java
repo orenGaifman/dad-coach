@@ -36,11 +36,14 @@ public class ScheduledResponseController {
     private final ScheduledResponseDeliveryService deliveryService;
     private final ScheduledReplies replies;
     private final com.dadcoach.replies.CoachMentions mentions;
+    private final com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties;
 
     static final String IDENTITY = "❤️ דאד קואץ׳:\n";
 
     public ScheduledResponseController(PlatformUserResolver userResolver, ScheduledResponseDeliveryService deliveryService,
-                                       ScheduledReplies replies, com.dadcoach.replies.CoachMentions mentions) {
+                                       ScheduledReplies replies, com.dadcoach.replies.CoachMentions mentions,
+                                       com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties) {
+        this.platformProperties = platformProperties;
         this.userResolver = userResolver;
         this.deliveryService = deliveryService;
         this.replies = replies;
@@ -80,7 +83,12 @@ public class ScheduledResponseController {
                 log.atInfo().setMessage("proactive.callback.result").addKeyValue("triggerId", request.triggerId())
                         .addKeyValue("targetStateKey", request.targetStateKey()).addKeyValue("fatherId", father.get().getId())
                         .addKeyValue("status", "SKIPPED").addKeyValue("reason", "NO_VALID_SESSION").log();
-                return ResponseEntity.ok(new ScheduledResponseResult("SKIPPED", "No valid session for this timer"));
+                ScheduledResponseResult skipped = new ScheduledResponseResult("SKIPPED", "No valid session for this timer");
+                // D-039: nothing reached him - the platform hides the turn's text (and its trigger)
+                return ResponseEntity.ok(platformProperties.isDeliveryReports()
+                        ? skipped.withOutcome(com.dadcoach.integration.platform.timeline.TimelineReports.DROPPED,
+                                "NO_VALID_SESSION", null)
+                        : skipped);
             }
             String body = content.startsWith(IDENTITY) ? content.substring(IDENTITY.length()) : content;
             String chosen = ScheduledReplies.choose(body, planned.get(), request.targetStateKey());
@@ -93,7 +101,8 @@ public class ScheduledResponseController {
         content = com.dadcoach.whatsapp.ReplyStyleGuard.clean(content);
         ScheduledResponseRequest effective = new ScheduledResponseRequest(request.triggerId(), request.workflowInstanceId(),
                 request.userId(), request.channel(), request.targetStateKey(), content);
-        ScheduledResponseResult result = deliveryService.deliver(father.get(), effective, expectedKey);
+        ScheduledResponseResult result = deliveryService.deliver(father.get(), effective, expectedKey,
+                request.responseContent());
         if ("DELIVERED".equals(result.status())) {
             mentions.sent(father.get(), content);
             planned.ifPresent(p -> mentions.sessionsNamed(father.get(), p.sessions()));

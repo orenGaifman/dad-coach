@@ -1,5 +1,7 @@
 package com.dadcoach.integration.platform.scheduled;
 
+import com.dadcoach.integration.platform.timeline.TimelineReports;
+import com.dadcoach.integration.platform.timeline.TimelineText;
 import com.dadcoach.channel.delivery.DeliveryResult;
 import com.dadcoach.channel.delivery.ProactiveSender;
 import com.dadcoach.common.MaskingUtils;
@@ -41,6 +43,7 @@ public class ScheduledResponseDeliveryService {
     private final SessionButtonOffers buttons;
     private final ScheduledMessageTemplates templates;
     private final Clock clock;
+    private final com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties;
 
     public ScheduledResponseDeliveryService(
             ScheduledResponseDeliveryRepository repository,
@@ -48,7 +51,9 @@ public class ScheduledResponseDeliveryService {
             com.dadcoach.channel.WhatsAppEndpoints endpoints,
             SessionButtonOffers buttons,
             ScheduledMessageTemplates templates,
-            Clock clock) {
+            Clock clock,
+            com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties) {
+        this.platformProperties = platformProperties;
         this.clock = clock;
         this.endpoints = endpoints;
         this.buttons = buttons;
@@ -58,6 +63,16 @@ public class ScheduledResponseDeliveryService {
     }
 
     public ScheduledResponseResult deliver(Father father, ScheduledResponseRequest request, String idempotencyKey) {
+        return deliver(father, request, idempotencyKey, request.responseContent());
+    }
+
+    /**
+     * @param drafted D-039: the platform's own text for the turn (before ScheduledReplies / ReplyStyleGuard); with
+     *                {@code workflow.platform.delivery-reports} on, the answer says what went out compared to it. A
+     *                replayed trigger answers as before (what was sent is not stored per trigger).
+     */
+    public ScheduledResponseResult deliver(Father father, ScheduledResponseRequest request, String idempotencyKey,
+                                           String drafted) {
         Optional<ScheduledResponseDelivery> existing = repository.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
             log.info("Scheduled response already handled, not sending again: idempotencyKey={}, status={}",
@@ -85,7 +100,8 @@ public class ScheduledResponseDeliveryService {
             repository.save(delivery);
             log.warn("Scheduled response blocked, not Hebrew: triggerId={}, targetStateKey={}", request.triggerId(),
                     request.targetStateKey());
-            return ScheduledResponseResult.of(delivery, false);
+            ScheduledResponseResult blocked = ScheduledResponseResult.of(delivery, false);
+            return reporting() ? blocked.withOutcome(TimelineReports.DROPPED, "BLOCKED_NOT_HEBREW", null) : blocked;
         }
         String content = hebrew.get();
         endpoints.ensure(father); // F1: fathers onboarded on WhatsApp before the fix have no endpoint row yet
@@ -107,7 +123,34 @@ public class ScheduledResponseDeliveryService {
             log.warn("Scheduled response not delivered: triggerId={}, reason={}", request.triggerId(), result.failureReason());
         }
         repository.save(delivery);
-        return ScheduledResponseResult.of(delivery, false);
+        ScheduledResponseResult answer = ScheduledResponseResult.of(delivery, false);
+        return reporting() ? report(answer, outcome, content, drafted) : answer;
+    }
+
+    private boolean reporting() {
+        return platformProperties.isDeliveryReports();
+    }
+
+    /**
+     * D-039: AS_IS when the text went out free-form exactly as the platform wrote it (identity line aside) and alone;
+     * otherwise what was sent (the ready message, the cleaned text, the template as he reads it, the buttons with it).
+     * A failed send is FAILED with its reason.
+     */
+    private static ScheduledResponseResult report(ScheduledResponseResult answer, ProactiveSender.Outcome outcome,
+                                                  String content, String drafted) {
+        DeliveryResult result = outcome.result();
+        if (!result.isSuccessful()) {
+            return answer.withOutcome(TimelineReports.FAILED, result.failureReason(), null);
+        }
+        String sent = outcome.sentText() != null ? outcome.sentText() : content;
+        boolean template = outcome.mode() == ProactiveSender.Mode.TEMPLATE;
+        List<java.util.Map<String, Object>> buttons = TimelineText.buttons(outcome.buttons());
+        if (!template && buttons.isEmpty() && TimelineText.sameAsDraft(sent, drafted)) {
+            return answer.withOutcome(TimelineReports.AS_IS, null, result);
+        }
+        return answer.withDelivered(TimelineText.withoutIdentity(sent), result,
+                template ? TimelineText.template(outcome.template(), outcome.templateParams()) : null, buttons,
+                TimelineReports.KIND_SCHEDULED);
     }
 
 }

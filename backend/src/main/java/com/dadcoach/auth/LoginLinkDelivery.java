@@ -55,7 +55,25 @@ public class LoginLinkDelivery {
                 ? com.dadcoach.channel.template.WhatsAppTemplateCatalog.UPDATE_HE : templateName.strip();
     }
 
+    /** D-039: what went out - the result and, when the window was closed, the template that carried the link. */
+    public record Sent(DeliveryResult result, String template) {
+    }
+
+    /** The card as the timeline records it: its text without the identity line, never the link. */
+    public static String reportedText(boolean asTemplate) {
+        return asTemplate ? TEMPLATE_LINE_PREFIX.strip().replaceAll(":$", "")
+                : com.dadcoach.integration.platform.timeline.TimelineText.withoutIdentity(FATHER_TEXT);
+    }
+
+    public static String fatherLabel() {
+        return FATHER_LABEL;
+    }
+
     public DeliveryResult send(SignInSubject subject, String phone, String url) {
+        return deliver(subject, phone, url).result();
+    }
+
+    public Sent deliver(SignInSubject subject, String phone, String url) {
         boolean father = subject.fatherId() != null;
         LinkButton button = new LinkButton(father ? FATHER_LABEL : STAFF_LABEL, url, FOOTER);
         String text = father ? FATHER_TEXT : STAFF_TEXT;
@@ -64,17 +82,18 @@ public class LoginLinkDelivery {
                 UUID fatherUuid = new UUID(0L, subject.fatherId());
                 DeliveryResult result = deliveryService.deliver(OutboundMessageDto.withLinkButton(fatherUuid, text, button, clock.instant()));
                 if (!result.isSuccessful() && DeliveryService.SESSION_CLOSED.equals(result.failureReason()) && !templateName.isEmpty()) {
-                    result = deliveryService.deliver(template(fatherUuid, url));
+                    return new Sent(deliveryService.deliver(template(fatherUuid, url)), templateName);
                 }
-                return result;
+                return new Sent(result, null);
             }
             if (!channelRouter.supportsChannel(WHATSAPP)) {
-                return DeliveryResult.failed("WHATSAPP_NOT_CONFIGURED");
+                return new Sent(DeliveryResult.failed("WHATSAPP_NOT_CONFIGURED"), null);
             }
-            return channelRouter.getAdapter(WHATSAPP).sendMessage(OutboundMessageDto.withLinkButton(null, text, button, clock.instant()), phone);
+            return new Sent(channelRouter.getAdapter(WHATSAPP).sendMessage(
+                    OutboundMessageDto.withLinkButton(null, text, button, clock.instant()), phone), null);
         } catch (RuntimeException e) {
             log.warn("auth.login_link.delivery_error type={}", e.getClass().getSimpleName());
-            return DeliveryResult.failed("DELIVERY_ERROR: " + e.getClass().getSimpleName());
+            return new Sent(DeliveryResult.failed("DELIVERY_ERROR: " + e.getClass().getSimpleName()), null);
         }
     }
 
@@ -85,7 +104,9 @@ public class LoginLinkDelivery {
                 clock.instant());
     }
 
+    static final String TEMPLATE_LINE_PREFIX = "הקישור לדף שלך, אישי ולא להעביר הלאה: ";
+
     static String templateLine(String url) {
-        return "הקישור לדף שלך, אישי ולא להעביר הלאה: " + url;
+        return TEMPLATE_LINE_PREFIX + url;
     }
 }

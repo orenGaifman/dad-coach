@@ -36,11 +36,20 @@ public class ProactiveSender {
 
     public enum Mode { FREE_FORM, TEMPLATE }
 
-    /** {@code template} is the template that went out (or was tried), null for a free-form message. */
-    public record Outcome(DeliveryResult result, Mode mode, String template) {
+    /**
+     * {@code template} is the template that went out (or was tried), null for a free-form message. D-039: what the
+     * father reads ({@code sentText}: the message, or the template with its values when the catalog has its body,
+     * else the {{1}} line), the buttons that went with it and the template's values - for the timeline report.
+     */
+    public record Outcome(DeliveryResult result, Mode mode, String template, String sentText,
+                          List<OutboundMessageDto.ReplyButton> buttons, List<String> templateParams) {
 
         public Outcome(DeliveryResult result, Mode mode) {
             this(result, mode, null);
+        }
+
+        public Outcome(DeliveryResult result, Mode mode, String template) {
+            this(result, mode, template, null, List.of(), List.of());
         }
     }
 
@@ -86,17 +95,21 @@ public class ProactiveSender {
                     for (int i = 0; i < titles.size(); i++) {
                         taps.add(new OutboundMessageDto.ReplyButton(own.buttonPayloads().get(i), titles.get(i)));
                     }
+                    List<String> values = own.values().stream().map(ProactiveSender::oneLine).toList();
                     return new Outcome(delivery.deliver(new OutboundMessageDto(UUID.randomUUID(), fatherUuid, null,
                             MessageType.TEXT, own.text(), null, true, own.name(),
-                            WhatsAppTemplateCatalog.parameters(own.values().stream().map(ProactiveSender::oneLine).toList()),
-                            MessagePriority.IMMEDIATE, clock.instant(), taps)), Mode.TEMPLATE, own.name());
+                            WhatsAppTemplateCatalog.parameters(values),
+                            MessagePriority.IMMEDIATE, clock.instant(), taps)), Mode.TEMPLATE, own.name(),
+                            own.entry().render(values), List.copyOf(taps), values);
                 }
                 String template = config.effectiveTemplateName();
+                String line = asTemplateParameter(content);
+                String rendered = WhatsAppTemplateCatalog.named(template).map(e -> e.render(List.of(line))).orElse(line);
                 return new Outcome(delivery.deliver(new OutboundMessageDto(UUID.randomUUID(), fatherUuid, null, MessageType.TEXT,
-                        content, null, true, template, Map.of("1", asTemplateParameter(content)), MessagePriority.IMMEDIATE,
-                        clock.instant())), Mode.TEMPLATE, template);
+                        content, null, true, template, Map.of("1", line), MessagePriority.IMMEDIATE,
+                        clock.instant())), Mode.TEMPLATE, template, rendered, List.of(), List.of(line));
             }
-            return new Outcome(result, Mode.FREE_FORM);
+            return new Outcome(result, Mode.FREE_FORM, null, content, withButtons ? List.copyOf(buttons) : List.of(), List.of());
         } catch (RuntimeException e) {
             return new Outcome(DeliveryResult.failed("Delivery error: " + e.getClass().getSimpleName()), Mode.FREE_FORM);
         }

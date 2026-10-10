@@ -1,5 +1,7 @@
 package com.dadcoach.web.father;
 
+import com.dadcoach.integration.platform.timeline.TimelineReports;
+
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.integration.platform.SentMessageRecorder;
 import com.dadcoach.qualitytime.QualityTime;
@@ -31,12 +33,18 @@ public class DashboardNotes {
     private final QualityTimeRepository sessions;
     private final WeeklyGoalService goals;
     private final Clock clock;
+    private TimelineReports timeline;
 
     public DashboardNotes(SentMessageRecorder recorder, QualityTimeRepository sessions, WeeklyGoalService goals, Clock clock) {
         this.recorder = recorder;
         this.sessions = sessions;
         this.goals = goals;
         this.clock = clock;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setTimeline(TimelineReports timeline) {
+        this.timeline = timeline;
     }
 
     /** After the page confirmed or cancelled a session (the change is committed). */
@@ -78,8 +86,15 @@ public class DashboardNotes {
     }
 
     private void note(Father father, String key, String text) {
+        String correlationId = "dashboard:" + key + ":" + clock.instant().toEpochMilli();
         try {
-            recorder.recordSent(father, PREFIX + text, "dashboard:" + key + ":" + clock.instant().toEpochMilli());
+            if (timeline != null && timeline.enabled()) {
+                // D-039: history only - a kind and no delivery status (it was never sent on WhatsApp)
+                timeline.outbound(TimelineReports.Person.of(father), TimelineReports.Part.sent(correlationId, PREFIX + text,
+                        null, TimelineReports.KIND_DASHBOARD_NOTE));
+                return;
+            }
+            recorder.recordSent(father, PREFIX + text, correlationId);
         } catch (RuntimeException e) {
             log.atWarn().setMessage("dashboard.note.failed").addKeyValue("error", e.getClass().getSimpleName()).log();
         }

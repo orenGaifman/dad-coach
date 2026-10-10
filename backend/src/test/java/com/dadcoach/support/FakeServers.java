@@ -71,6 +71,8 @@ public final class FakeServers {
     private final AtomicReference<Function<Call, Reply>> google = new AtomicReference<>();
     /** null: the in-memory platform below answers {@code /api/v1/worker/scheduled-transitions}. */
     private final AtomicReference<Function<Call, Reply>> scheduledTransitions = new AtomicReference<>();
+    /** null: the D-039 timeline reports (/messages/inbound, /messages/turn-outcome) are accepted. */
+    private final AtomicReference<Function<Call, Reply>> timelineReports = new AtomicReference<>();
     private final List<Timer> timers = new CopyOnWriteArrayList<>();
     private final AtomicInteger triggerIds = new AtomicInteger();
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -96,6 +98,7 @@ public final class FakeServers {
         calls.clear();
         timers.clear();
         scheduledTransitions.set(null);
+        timelineReports.set(null);
         meta.set(c -> Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"wamid.out." + sent.incrementAndGet() + "\"}]}"));
         turn.set(c -> Reply.json(turnReply("שלום! מה שלומך?", "GENERATED")));
         tenancy.set(c -> c.method().equals("DELETE")
@@ -294,6 +297,33 @@ public final class FakeServers {
         return calls("/api/v1/worker/messages/outbound");
     }
 
+    // ---- D-039: the platform's timeline reports (Phase 3.4) -----------------------------------------------------------
+
+    /** {@code POST /api/v1/worker/messages/inbound}: a father's message the product answered without a turn. */
+    public List<Call> recordedInbound() {
+        return calls("/api/v1/worker/messages/inbound");
+    }
+
+    /** {@code POST /api/v1/worker/messages/turn-outcome}. */
+    public List<Call> turnOutcomes() {
+        return calls("/api/v1/worker/messages/turn-outcome");
+    }
+
+    /** Every timeline call (inbound, outbound, turn-outcome), in the order they arrived. */
+    public List<Call> timelineCalls() {
+        return calls.stream().filter(c -> c.path().equals("/api/v1/worker/messages/inbound")
+                || c.path().equals("/api/v1/worker/messages/outbound")
+                || c.path().equals("/api/v1/worker/messages/turn-outcome")).toList();
+    }
+
+    /**
+     * How the platform answers the timeline calls (inbound, outbound, turn-outcome), e.g. down or refusing. Default: the
+     * platform's answers ({@code /messages/outbound} keeps its {@code {"recorded":true}}).
+     */
+    public void onTimelineReports(Function<Call, Reply> answer) {
+        timelineReports.set(answer);
+    }
+
     private void handle(HttpExchange ex) throws IOException {
         // ISO-8859-1 keeps a multipart body's bytes one char each (the audio inside is not text)
         byte[] in = ex.getRequestBody().readAllBytes();
@@ -311,8 +341,11 @@ public final class FakeServers {
         } else if (path.equals("/api/v1/worker/scheduled-transitions")) {
             Function<Call, Reply> override = scheduledTransitions.get();
             reply = override != null ? override.apply(call) : platformTimers(call, query(ex));
-        } else if (path.equals("/api/v1/worker/messages/outbound")) {
-            reply = Reply.json("{\"recorded\":true}");
+        } else if (path.equals("/api/v1/worker/messages/outbound") || path.equals("/api/v1/worker/messages/inbound")
+                || path.equals("/api/v1/worker/messages/turn-outcome")) {
+            Function<Call, Reply> override = timelineReports.get();
+            reply = override != null ? override.apply(call)
+                    : path.endsWith("/turn-outcome") ? Reply.json("{\"applied\":true}") : Reply.json("{\"recorded\":true}");
         } else if (path.startsWith("/api/v1/tenancy/")) {
             reply = tenancy.get().apply(call);
         } else if (path.equals("/v1/speech-to-text")) {

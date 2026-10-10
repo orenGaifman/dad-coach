@@ -22,6 +22,11 @@ public class WorkflowPlatformProperties {
     private int readTimeoutMs = 90000;
     /** Dad Coach's one tenant on the platform (multi-tenancy: a product with a single, fixed tenant). */
     private UUID tenantId = UUID.fromString("20082bcd-a7bf-57a8-a382-4bad32144b2f");
+    /**
+     * Phase 3.4 (D-039, env PLATFORM_DELIVERY_REPORTS): tell the platform what was actually delivered (turn outcomes,
+     * replacements, code-answered messages, the scheduled-callback answer). Off = exactly the pre-Phase-3 calls.
+     */
+    private volatile boolean deliveryReports = false;
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -39,4 +44,6 @@ public class WorkflowPlatformProperties {
     public void setReadTimeoutMs(int readTimeoutMs) { this.readTimeoutMs = readTimeoutMs; }
     public UUID getTenantId() { return tenantId; }
     public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
+    public boolean isDeliveryReports() { return deliveryReports; }
+    public void setDeliveryReports(boolean deliveryReports) { this.deliveryReports = deliveryReports; }
 }

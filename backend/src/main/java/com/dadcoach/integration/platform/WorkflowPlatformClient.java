@@ -130,6 +130,48 @@ public class WorkflowPlatformClient {
         }
     }
 
+    // ---- Phase 3.4 timeline reports (D-039) -------------------------------------------------------------------------
+    // What Dad Coach actually delivered, reported after the send (TimelineReports: async, in order, 3 attempts). Outside
+    // the breaker: a report never decides whether a turn may run.
+
+    public static final String INBOUND_PATH = "/api/v1/worker/messages/inbound";
+    public static final String OUTBOUND_PATH = "/api/v1/worker/messages/outbound";
+    public static final String TURN_OUTCOME_PATH = "/api/v1/worker/messages/turn-outcome";
+    private static final Duration REPORT_TIMEOUT = Duration.ofSeconds(10);
+
+    /** One report attempt that did not land: the HTTP status (0 = no answer) and whether another attempt may help. */
+    public static class ReportFailure extends RuntimeException {
+        private final int status;
+        private final boolean retryable;
+
+        public ReportFailure(int status, String error, boolean retryable) {
+            super(error);
+            this.status = status;
+            this.retryable = retryable;
+        }
+
+        public int status() {
+            return status;
+        }
+
+        public boolean retryable() {
+            return retryable;
+        }
+    }
+
+    /** One attempt of one report. Throws {@link ReportFailure}; a 4xx other than 408/429 is final. */
+    public void report(String path, Object body) {
+        try {
+            web.post().uri(path).bodyValue(body).retrieve().toBodilessEntity().timeout(REPORT_TIMEOUT).block();
+        } catch (WebClientResponseException e) {
+            int status = e.getStatusCode().value();
+            throw new ReportFailure(status, "HTTP_" + status,
+                    e.getStatusCode().is5xxServerError() || status == 408 || status == 429);
+        } catch (RuntimeException e) {
+            throw new ReportFailure(0, failure(e), true);
+        }
+    }
+
     // ---- session timers on the platform (D-037; platform TASKS.md §32) ----------------------------------------------
     // Never called from inside a tool call: the turn holds the conversation's row lock on the platform, so arming would
     // wait for the turn to end. Called after the turn returned, or outside any turn. Outside the breaker, short timeouts:
