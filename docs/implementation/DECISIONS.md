@@ -490,10 +490,12 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   `BLOCKED_NOT_HEBREW`) / FAILED (the send's reason), or `deliveredContent` (the ready message, the cleaned text, the
   template as rendered - the `{{1}}` line when the catalog has no body - with `template {name, params}` and the `dc:`
   buttons) + the wamid. A replayed trigger answers as before (what was sent is not stored per trigger).
-- **Sender:** `TimelineReports` - one daemon thread, in order, 3 attempts (1 s, 2 s; 5xx / 408 / 429 / no answer),
-  bounded queue; `timeline.report_failed` when a report does not land (the draft then stays, as before). Never blocks a
-  delivery.
-- **Tests:** `PlatformDeliveryReportsTest` (24, contract against FakeServers, which answers `/messages/inbound` and
-  `/messages/turn-outcome` additively); the switch is reset off before every test; full suite 397/397.
+- **Sender:** `TimelineReports` - 4 lanes, a father's reports always on one lane (in order); 3 attempts (1 s, 2 s; 5xx /
+  408 / 429 / no answer) within 115 s per report; a turn-tied report (it waits on the platform behind an in-flight turn)
+  gets 100 s and a timeout is `timeline.report_outcome_unknown`, never retried; others 10 s. Bounded queues
+  (QUEUE_FULL / SHUTDOWN logged apart); `timeline.report_failed` when a report does not land (the draft then stays, as
+  before). Never blocks a delivery, never throws to its caller (review follow-up).
+- **Tests:** `PlatformDeliveryReportsTest` (25, contract against FakeServers, which answers `/messages/inbound` and
+  `/messages/turn-outcome` additively); the switch is reset off before every test; full suite 398/398.
 - **Rollback:** switch off (no code change).
 

@@ -29,17 +29,27 @@ import org.springframework.stereotype.Component;
  * {@code workflow.platform.delivery-reports} (env PLATFORM_DELIVERY_REPORTS, default off): off, callers keep their
  * pre-Phase-3 records and nothing here is called.
  *
- * <p>Reports never block a delivery: one daemon thread sends them in submission order (his message before the product's
- * answer, a card before its turn's outcome), each up to {@link #ATTEMPTS} times (connection errors, timeouts, 5xx, 408,
- * 429; any other 4xx is final). A report that does not land is logged {@code timeline.report_failed} - the platform then
- * shows the draft, as before this phase.</p>
+ * <p>Reports never block a delivery. They go out on {@link #LANES} daemon threads; a father's reports always take the same
+ * lane, so his arrive in submission order (his message before the product's answer, a card before its turn's outcome)
+ * and a report stuck behind one father's turn holds only that lane. Each report gets up to {@link #ATTEMPTS} attempts
+ * (connection errors, 5xx, 408, 429; any other 4xx is final) within {@link #BUDGET}. A report tied to a turn
+ * (turn-outcome, or outbound with a turnCorrelationId) waits on the platform for the conversation's lock - behind an
+ * in-flight turn, up to ~90 s - so it gets {@link #TURN_TIMEOUT}; when it times out its fate is unknown (the platform may
+ * still apply it): {@code timeline.report_outcome_unknown}, never retried. Other reports: 10 s, a timeout is retried. A
+ * report that does not land is logged {@code timeline.report_failed} - the platform then shows the draft, as before this
+ * phase.</p>
  */
 @Component
 public class TimelineReports {
 
     private static final Logger log = LoggerFactory.getLogger(TimelineReports.class);
     static final int ATTEMPTS = 3;
-    static final int QUEUE = 1000;
+    static final int LANES = 4;
+    static final int QUEUE_PER_LANE = 250;
+    /** Platform turns take up to ~90 s; a turn-tied report waits for the turn's lock. */
+    static final Duration TURN_TIMEOUT = Duration.ofSeconds(100);
+    /** All attempts of one report, together: one report never holds its lane longer. */
+    static final Duration BUDGET = Duration.ofSeconds(115);
     static final String CHANNEL = "whatsapp";
 
     public static final String AS_IS = "AS_IS";
@@ -126,13 +136,17 @@ public class TimelineReports {
     private final WorkflowPlatformClient platform;
     private final WorkflowPlatformProperties properties;
     private final AtomicInteger inFlight = new AtomicInteger();
-    private final ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-            new LinkedBlockingQueue<>(QUEUE), runnable -> {
-                Thread t = new Thread(runnable, "timeline-reports");
-                t.setDaemon(true);
-                return t;
-            });
+    private final List<ThreadPoolExecutor> lanes = java.util.stream.IntStream.range(0, LANES)
+            .mapToObj(i -> new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                    new LinkedBlockingQueue<Runnable>(QUEUE_PER_LANE), runnable -> {
+                        Thread t = new Thread(runnable, "timeline-reports-" + i);
+                        t.setDaemon(true);
+                        return t;
+                    })).toList();
     private volatile Duration retryDelay = Duration.ofSeconds(1);
+    private volatile Duration turnTimeout = TURN_TIMEOUT;
+    private volatile Duration otherTimeout = WorkflowPlatformClient.REPORT_TIMEOUT;
+    private volatile Duration budget = BUDGET;
 
     public TimelineReports(WorkflowPlatformClient platform, WorkflowPlatformProperties properties) {
         this.platform = platform;
@@ -147,13 +161,22 @@ public class TimelineReports {
     /** A father's message Dad Coach answered without a turn (recorded before the product's answer). */
     public void inbound(Person person, String correlationId, String content, String messageType, String buttonId,
                         String buttonTitle) {
+        try {
+            buildInbound(person, correlationId, content, messageType, buttonId, buttonTitle);
+        } catch (RuntimeException e) {
+            notBuilt(WorkflowPlatformClient.INBOUND_PATH, correlationId, e);
+        }
+    }
+
+    private void buildInbound(Person person, String correlationId, String content, String messageType, String buttonId,
+                              String buttonTitle) {
         Map<String, Object> structured = null;
         if (buttonId != null) {
             structured = new LinkedHashMap<>();
             structured.put("buttonId", buttonId);
             structured.put("title", buttonTitle);
         }
-        submit(WorkflowPlatformClient.INBOUND_PATH, correlationId, new InboundBody(properties.getWorkerKey(),
+        submit(WorkflowPlatformClient.INBOUND_PATH, correlationId, person.phone(), false, new InboundBody(properties.getWorkerKey(),
                 properties.getWorkflowKey(), PersonRefs.whatsappId(person.phone()), CHANNEL, correlationId,
                 content == null ? "" : content, messageType, structured, metadata(person), properties.getTenantId(),
                 personRef(person), person.name()));
@@ -161,10 +184,19 @@ public class TimelineReports {
 
     /** One message Dad Coach sent (delivery fields from {@code part.sent()}; none for a history-only note). */
     public void outbound(Person person, Part part) {
+        try {
+            buildOutbound(person, part);
+        } catch (RuntimeException e) {
+            notBuilt(WorkflowPlatformClient.OUTBOUND_PATH, part == null ? null : part.correlationId(), e);
+        }
+    }
+
+    private void buildOutbound(Person person, Part part) {
         DeliveryResult sent = part.sent();
         String providerId = sent != null && sent.isSuccessful() ? sent.providerMessageId() : null;
         String status = sent == null || !sent.isSuccessful() ? null : sent.isHeld() ? "HELD" : "ACCEPTED";
-        submit(WorkflowPlatformClient.OUTBOUND_PATH, part.correlationId(), new OutboundBody(properties.getWorkerKey(),
+        submit(WorkflowPlatformClient.OUTBOUND_PATH, part.correlationId(), person.phone(), part.turnCorrelationId() != null,
+                new OutboundBody(properties.getWorkerKey(),
                 PersonRefs.whatsappId(person.phone()), CHANNEL, part.correlationId(), part.content(), metadata(person),
                 properties.getTenantId(), personRef(person), person.name(), properties.getWorkflowKey(),
                 part.turnCorrelationId(), part.replacesDraft() ? Boolean.TRUE : null, providerId, status, part.template(),
@@ -175,9 +207,18 @@ public class TimelineReports {
     /** What happened to a turn's reply: AS_IS (with the send), DROPPED (nothing of it went out), FAILED. */
     public void turnOutcome(Person person, String turnCorrelationId, String outcome, DeliveryResult sent, String reason,
                             List<String> supersededTurns) {
+        try {
+            buildTurnOutcome(person, turnCorrelationId, outcome, sent, reason, supersededTurns);
+        } catch (RuntimeException e) {
+            notBuilt(WorkflowPlatformClient.TURN_OUTCOME_PATH, turnCorrelationId, e);
+        }
+    }
+
+    private void buildTurnOutcome(Person person, String turnCorrelationId, String outcome, DeliveryResult sent,
+                                  String reason, List<String> supersededTurns) {
         String providerId = sent != null && sent.isSuccessful() ? sent.providerMessageId() : null;
         String status = sent == null || !sent.isSuccessful() ? null : sent.isHeld() ? "HELD" : "ACCEPTED";
-        submit(WorkflowPlatformClient.TURN_OUTCOME_PATH, turnCorrelationId, new TurnOutcomeBody(properties.getWorkerKey(),
+        submit(WorkflowPlatformClient.TURN_OUTCOME_PATH, turnCorrelationId, person.phone(), true, new TurnOutcomeBody(properties.getWorkerKey(),
                 properties.getWorkflowKey(), PersonRefs.whatsappId(person.phone()), CHANNEL, properties.getTenantId(),
                 turnCorrelationId, outcome, providerId, status, reason,
                 supersededTurns == null || supersededTurns.isEmpty() ? null : List.copyOf(supersededTurns)));
@@ -191,15 +232,26 @@ public class TimelineReports {
         return person.fatherId() == null ? null : PersonRefs.of(person.fatherId());
     }
 
-    private void submit(String path, String correlationId, Object body) {
+    private void notBuilt(String path, String correlationId, RuntimeException e) {
+        log.atWarn().setMessage("timeline.report_failed").addKeyValue("path", path)
+                .addKeyValue("correlationId", correlationId).addKeyValue("error", "NOT_BUILT: " + e.getClass().getSimpleName())
+                .log();
+    }
+
+    private void submit(String path, String correlationId, String phone, boolean turnTied, Object body) {
         if (!platform.isEnabled()) {
             return;
         }
+        ThreadPoolExecutor lane = lanes.get(Math.floorMod(phone == null ? 0 : phone.hashCode(), LANES));
         inFlight.incrementAndGet();
         try {
-            executor.execute(() -> {
+            lane.execute(() -> {
                 try {
-                    send(path, correlationId, body);
+                    send(path, correlationId, turnTied, body);
+                } catch (RuntimeException e) {
+                    log.atWarn().setMessage("timeline.report_failed").addKeyValue("path", path)
+                            .addKeyValue("correlationId", correlationId).addKeyValue("error", e.getClass().getSimpleName())
+                            .log();
                 } finally {
                     inFlight.decrementAndGet();
                 }
@@ -207,37 +259,46 @@ public class TimelineReports {
         } catch (RejectedExecutionException e) {
             inFlight.decrementAndGet();
             log.atWarn().setMessage("timeline.report_failed").addKeyValue("path", path)
-                    .addKeyValue("correlationId", correlationId).addKeyValue("error", "QUEUE_FULL").log();
+                    .addKeyValue("correlationId", correlationId)
+                    .addKeyValue("error", lane.isShutdown() ? "SHUTDOWN" : "QUEUE_FULL").log();
         }
     }
 
-    private void send(String path, String correlationId, Object body) {
+    private void send(String path, String correlationId, boolean turnTied, Object body) {
+        long started = System.nanoTime();
+        Duration timeout = turnTied ? turnTimeout : otherTimeout;
         for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
+            Duration left = budget.minusNanos(System.nanoTime() - started);
+            Duration attemptTimeout = left.compareTo(timeout) < 0 ? left : timeout;
             try {
-                platform.report(path, body);
+                platform.report(path, body, attemptTimeout);
                 log.atInfo().setMessage("timeline.reported").addKeyValue("path", path)
                         .addKeyValue("correlationId", correlationId).addKeyValue("attempt", attempt).log();
                 return;
             } catch (WorkflowPlatformClient.ReportFailure e) {
-                if (!e.retryable() || attempt == ATTEMPTS) {
+                if (e.timedOut() && turnTied) {
+                    // the platform may still apply it (it waited behind a turn): its fate is unknown, never retried
+                    log.atWarn().setMessage("timeline.report_outcome_unknown").addKeyValue("path", path)
+                            .addKeyValue("correlationId", correlationId).addKeyValue("attempts", attempt)
+                            .addKeyValue("timeoutMs", attemptTimeout.toMillis()).log();
+                    return;
+                }
+                Duration pause = retryDelay.multipliedBy(attempt);
+                boolean noTimeLeft = budget.minusNanos(System.nanoTime() - started).compareTo(pause.plusSeconds(1)) < 0;
+                if (!e.retryable() || attempt == ATTEMPTS || noTimeLeft) {
                     log.atWarn().setMessage("timeline.report_failed").addKeyValue("path", path)
                             .addKeyValue("correlationId", correlationId).addKeyValue("status", e.status())
                             .addKeyValue("error", e.getMessage()).addKeyValue("attempts", attempt).log();
                     return;
                 }
-            } catch (RuntimeException e) {
-                log.atWarn().setMessage("timeline.report_failed").addKeyValue("path", path)
-                        .addKeyValue("correlationId", correlationId).addKeyValue("error", e.getClass().getSimpleName())
-                        .addKeyValue("attempts", attempt).log();
-                return;
-            }
-            try {
-                Thread.sleep(retryDelay.toMillis() * attempt);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.atWarn().setMessage("timeline.report_failed").addKeyValue("path", path)
-                        .addKeyValue("correlationId", correlationId).addKeyValue("error", "INTERRUPTED").log();
-                return;
+                try {
+                    Thread.sleep(pause.toMillis());
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    log.atWarn().setMessage("timeline.report_failed").addKeyValue("path", path)
+                            .addKeyValue("correlationId", correlationId).addKeyValue("error", "INTERRUPTED").log();
+                    return;
+                }
             }
         }
     }
@@ -264,9 +325,16 @@ public class TimelineReports {
         this.retryDelay = retryDelay;
     }
 
+    /** Timeouts (turn-tied reports, others) and the total per report - tests shorten them. */
+    public void setTimeouts(Duration turnTimeout, Duration otherTimeout, Duration budget) {
+        this.turnTimeout = turnTimeout;
+        this.otherTimeout = otherTimeout;
+        this.budget = budget;
+    }
+
     @PreDestroy
     void stop() {
         awaitIdle(Duration.ofSeconds(5));
-        executor.shutdownNow();
+        lanes.forEach(ThreadPoolExecutor::shutdownNow);
     }
 }

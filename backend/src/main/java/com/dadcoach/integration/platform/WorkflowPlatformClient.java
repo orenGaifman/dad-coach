@@ -137,12 +137,18 @@ public class WorkflowPlatformClient {
     public static final String INBOUND_PATH = "/api/v1/worker/messages/inbound";
     public static final String OUTBOUND_PATH = "/api/v1/worker/messages/outbound";
     public static final String TURN_OUTCOME_PATH = "/api/v1/worker/messages/turn-outcome";
-    private static final Duration REPORT_TIMEOUT = Duration.ofSeconds(10);
+    /** A report not tied to a turn (nothing on the platform waits for a conversation lock). */
+    public static final Duration REPORT_TIMEOUT = Duration.ofSeconds(10);
 
     /** One report attempt that did not land: the HTTP status (0 = no answer) and whether another attempt may help. */
     public static class ReportFailure extends RuntimeException {
         private final int status;
         private final boolean retryable;
+
+        /** No answer within the timeout: the platform may still apply it (outcome unknown). */
+        public boolean timedOut() {
+            return status == 0 && "TIMEOUT".equals(getMessage());
+        }
 
         public ReportFailure(int status, String error, boolean retryable) {
             super(error);
@@ -160,9 +166,9 @@ public class WorkflowPlatformClient {
     }
 
     /** One attempt of one report. Throws {@link ReportFailure}; a 4xx other than 408/429 is final. */
-    public void report(String path, Object body) {
+    public void report(String path, Object body, Duration timeout) {
         try {
-            web.post().uri(path).bodyValue(body).retrieve().toBodilessEntity().timeout(REPORT_TIMEOUT).block();
+            web.post().uri(path).bodyValue(body).retrieve().toBodilessEntity().timeout(timeout).block();
         } catch (WebClientResponseException e) {
             int status = e.getStatusCode().value();
             throw new ReportFailure(status, "HTTP_" + status,

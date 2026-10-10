@@ -87,12 +87,21 @@ AS_IS. A dashboard link is never reported with its URL.
 
 ## Reports
 
-`TimelineReports` (new, `com.dadcoach.integration.platform`): one daemon thread, in submission order (inbound before
-outbound, a card before its turn's outcome), so delivery never waits. Each report: up to 3 attempts (1 s, 2 s backoff;
-retried on connection errors, timeouts, 5xx, 408, 429; a 4xx is final). After the last attempt:
-`timeline.report_failed` (WARN: path, correlation id, status) - the platform then shows the draft, as today. Queue
-bounded (1000); a report that does not fit is logged `timeline.report_failed` (reason QUEUE_FULL). Flag checked when a
-report is made. Nothing is reported when the platform client is disabled.
+`TimelineReports` (new, `com.dadcoach.integration.platform.timeline`): 4 daemon lanes, a father's reports always on the
+same lane (by his number), so his arrive in submission order (inbound before outbound, a card before its turn's outcome)
+and delivery never waits. A report tied to a turn (turn-outcome; outbound with `turnCorrelationId`) waits on the platform
+for the conversation's lock - behind a whole in-flight turn (up to ~90 s) - so its timeout is 100 s; when it times out
+its fate is unknown (the platform may still apply it): `timeline.report_outcome_unknown`, never retried. Other reports:
+10 s per attempt. Up to 3 attempts (1 s, 2 s backoff; connection errors, 5xx, 408, 429, and timeouts of reports not tied
+to a turn; any other 4xx is final), all within 115 s per report, so one stuck report holds its lane at most ~2 minutes.
+After the last attempt: `timeline.report_failed` (WARN: path, correlation id, status) - the platform then shows the
+draft, as today. Queue bounded (250 per lane): `timeline.report_failed` with QUEUE_FULL, or SHUTDOWN while stopping.
+Building a report never throws to the caller (`NOT_BUILT`). Flag checked when a report is made. Nothing is reported when
+the platform client is disabled.
+
+**Timeline order (cosmetic).** A card sent before a reply that is then replaced (ClaimGuard's button) appears after the
+reply in the platform's timeline: the replacement row takes the draft's `created_at` (the turn's time), the card row
+its own (later) one.
 
 ## Tests
 

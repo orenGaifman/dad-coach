@@ -82,6 +82,8 @@ public class ProactiveSender {
                         Supplier<TemplateCall> ownTemplate) {
         UUID fatherUuid = new UUID(0L, father.getId());
         boolean withButtons = !buttons.isEmpty() && content.length() <= WhatsAppMessageFormatter.INTERACTIVE_BODY_LIMIT;
+        // D-039: what goes with the send is built before it, so nothing after an accepted send can fail it
+        List<OutboundMessageDto.ReplyButton> sentButtons = withButtons ? List.copyOf(buttons) : List.of();
         DeliveryResult result;
         try {
             result = delivery.deliver(new OutboundMessageDto(UUID.randomUUID(), fatherUuid, null,
@@ -96,11 +98,13 @@ public class ProactiveSender {
                         taps.add(new OutboundMessageDto.ReplyButton(own.buttonPayloads().get(i), titles.get(i)));
                     }
                     List<String> values = own.values().stream().map(ProactiveSender::oneLine).toList();
+                    String ownRendered = own.entry().render(values);
+                    List<OutboundMessageDto.ReplyButton> ownButtons = List.copyOf(taps);
                     return new Outcome(delivery.deliver(new OutboundMessageDto(UUID.randomUUID(), fatherUuid, null,
                             MessageType.TEXT, own.text(), null, true, own.name(),
                             WhatsAppTemplateCatalog.parameters(values),
                             MessagePriority.IMMEDIATE, clock.instant(), taps)), Mode.TEMPLATE, own.name(),
-                            own.entry().render(values), List.copyOf(taps), values);
+                            ownRendered, ownButtons, values);
                 }
                 String template = config.effectiveTemplateName();
                 String line = asTemplateParameter(content);
@@ -109,7 +113,7 @@ public class ProactiveSender {
                         content, null, true, template, Map.of("1", line), MessagePriority.IMMEDIATE,
                         clock.instant())), Mode.TEMPLATE, template, rendered, List.of(), List.of(line));
             }
-            return new Outcome(result, Mode.FREE_FORM, null, content, withButtons ? List.copyOf(buttons) : List.of(), List.of());
+            return new Outcome(result, Mode.FREE_FORM, null, content, sentButtons, List.of());
         } catch (RuntimeException e) {
             return new Outcome(DeliveryResult.failed("Delivery error: " + e.getClass().getSimpleName()), Mode.FREE_FORM);
         }

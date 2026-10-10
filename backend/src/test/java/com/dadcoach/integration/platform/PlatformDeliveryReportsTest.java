@@ -74,6 +74,7 @@ class PlatformDeliveryReportsTest extends AbstractIntegrationTest {
         settle();
         properties.setDeliveryReports(false);
         reports.setRetryDelay(Duration.ofSeconds(1));
+        reports.setTimeouts(Duration.ofSeconds(100), Duration.ofSeconds(10), Duration.ofSeconds(115));
     }
 
     // ------------------------------------------------------------------------------------------------- helpers
@@ -540,6 +541,28 @@ class PlatformDeliveryReportsTest extends AbstractIntegrationTest {
         says("ועוד פעם");
         assertThat(fake.turnOutcomes()).hasSize(1);
         assertThat(fake.metaSends()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a turn-tied report that times out is never retried (outcome unknown); another report's timeout is retried")
+    void aTimedOutTurnReportIsNotRetried() throws Exception {
+        reports.setTimeouts(Duration.ofMillis(300), Duration.ofMillis(300), Duration.ofSeconds(5));
+        fake.onTimelineReports(c -> {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return FakeServers.Reply.json("{}");
+        });
+        turn(IDENTITY + "בסדר גמור 🙂");
+        says("טוב");
+        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.turnOutcomes()).hasSize(1); // timeline.report_outcome_unknown, no second attempt
+
+        notes.childAdded(father, "נועה", 5);
+        settle();
+        assertThat(fake.recordedOutbound()).hasSize(3); // not tied to a turn: a timeout is retried
     }
 
     // ------------------------------------------------------------------------------------------------- switch off
