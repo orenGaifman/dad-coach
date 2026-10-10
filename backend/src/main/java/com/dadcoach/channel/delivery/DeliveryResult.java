@@ -37,4 +37,18 @@ public record DeliveryResult(
     public boolean isSuccessful() {
         return status == DeliveryStatus.SENT;
     }
+
+    /**
+     * Handed to the shared-number gateway, which keeps it until the father is back on Dad Coach: the provider id is
+     * the gateway's {@code held:<n>}, not a Meta wamid, and the message has not reached him yet.
+     */
+    public boolean isHeld() {
+        return isSuccessful() && providerMessageId != null
+                && providerMessageId.startsWith(com.dadcoach.integration.platform.SharedNumberGate.HELD_PREFIX);
+    }
+
+    /** Meta's message id (wamid) of an accepted send - the key of its status receipts; null when held or failed. */
+    public String metaMessageId() {
+        return isSuccessful() && !isHeld() ? providerMessageId : null;
+    }
 }

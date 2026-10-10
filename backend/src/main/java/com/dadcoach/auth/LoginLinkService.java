@@ -135,7 +135,7 @@ public class LoginLinkService {
         String raw = TokenHashing.newRawToken();
         LoginLink link = save(subject, raw);
         DeliveryResult result = delivery.send(subject, phone, url(raw, next));
-        link.recordDelivery(result.isSuccessful(), result.failureReason());
+        link.recordDelivery(result);
         links.save(link);
         return result;
     }

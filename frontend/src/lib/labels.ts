@@ -24,6 +24,8 @@ export const GOAL_STATUS: Record<string, string> = { ACTIVE: 'פעיל', COMPLET
 
 export const DELIVERY_STATUS: Record<string, string> = {
   DELIVERED: 'נמסר', FAILED: 'נכשל', SKIPPED: 'דולג', PENDING: 'ממתין', HELD: 'ממתין לשעה מתאימה', ISSUED: 'הונפק',
+  // D-038: ACCEPTED = Meta took it (no delivery receipt yet); SENT / READ come from Meta's receipts
+  ACCEPTED: 'נשלח', SENT: 'נשלח', READ: 'נקרא',
 }
 
 export const CHILD_STATUS: Record<string, string> = { ACTIVE: 'פעיל', ARCHIVED: 'בארכיון', INACTIVE: 'לא פעיל' }

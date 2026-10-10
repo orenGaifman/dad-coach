@@ -18,6 +18,8 @@ public class LoginLink {
     public static final String SENT = "SENT";
     public static final String FAILED = "FAILED";
     public static final String ISSUED = "ISSUED";
+    /** receipt_status: the shared-number gateway keeps the message until the father is back on Dad Coach. */
+    public static final String HELD = "HELD";
 
     @Id
     private UUID id;
@@ -58,6 +60,22 @@ public class LoginLink {
     @Column(name = "delivery_error", length = 200)
     private String deliveryError;
 
+    /** Meta's wamid of the message that carried the link (DC-B1): the key its status receipts are matched on. */
+    @Column(name = "provider_message_id", length = 128)
+    private String providerMessageId;
+
+    /** The gateway's {@code held:<n>} when the shared number held the message; never a wamid. */
+    @Column(name = "gateway_hold_id", length = 64)
+    private String gatewayHoldId;
+
+    /**
+     * Where the message is (DC-B2): null = accepted by Meta, HELD = kept by the shared-number gateway, then Meta's
+     * receipts SENT / DELIVERED / READ / FAILED. delivery_status keeps SENT for all but FAILED (the "already on his
+     * screen" check reads it).
+     */
+    @Column(name = "receipt_status", length = 20)
+    private String receiptStatus;
+
     protected LoginLink() {
     }
 
@@ -80,8 +98,18 @@ public class LoginLink {
     public int getUseCount() { return useCount; }
     public Instant getRevokedAt() { return revokedAt; }
 
-    public void recordDelivery(boolean sent, String error) {
-        this.deliveryStatus = sent ? SENT : FAILED;
+    public String getProviderMessageId() { return providerMessageId; }
+    public String getReceiptStatus() { return receiptStatus; }
+
+    public void recordDelivery(com.dadcoach.channel.delivery.DeliveryResult result) {
+        String error = result.failureReason();
+        this.deliveryStatus = result.isSuccessful() ? SENT : FAILED;
         this.deliveryError = error == null ? null : error.substring(0, Math.min(error.length(), 200));
+        if (result.isHeld()) {
+            this.gatewayHoldId = result.providerMessageId();
+            this.receiptStatus = HELD;
+        } else {
+            this.providerMessageId = result.metaMessageId();
+        }
     }
 }

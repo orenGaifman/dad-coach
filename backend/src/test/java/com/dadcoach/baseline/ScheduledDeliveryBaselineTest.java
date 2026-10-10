@@ -14,7 +14,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,8 +26,9 @@ import org.springframework.test.web.servlet.MvcResult;
  * DeliveryService / WhatsAppAdapter to a controlled fake Meta (FakeServers), and what Dad Coach keeps about that
  * delivery afterwards - the wamid Meta answered with and Meta's later status receipts for it.
  *
- * <p>PASS tests pin today's correct behaviour. KNOWN-BUG tests state the correct behaviour and are {@link Disabled};
- * run them with {@code -Djunit.jupiter.conditions.deactivate=org.junit.*DisabledCondition} to see them fail.
+ * <p>PASS tests pin the behaviour that was already correct. KNOWN-BUG tests stated the correct behaviour while the bug
+ * was open (they were {@code @Disabled}); D-038 (Phase 2, docs/architecture/PHASE2_DADCOACH_SPEC.md) fixed them and
+ * they run like every other test. Their names keep the bug ids for traceability.
  * The free-form and general-template happy paths are also in ScheduledResponseCallbackTest (status in the HTTP
  * answer, payload type) and the own-template path in OwnTemplatesTest; here the delivery ROW is pinned too.
  */
@@ -82,8 +82,8 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
     // ---- PASS: the successful delivery path ------------------------------------------------------------------------
 
     @Test
-    @DisplayName("PASS: inside the 24h window the message goes out free-form once and the row is DELIVERED / FREE_FORM")
-    void insideTheWindowFreeFormAndTheRowIsDelivered() throws Exception {
+    @DisplayName("PASS: inside the 24h window the message goes out free-form once; the platform hears DELIVERED, the row is ACCEPTED / FREE_FORM")
+    void insideTheWindowFreeFormAndTheRowIsAccepted() throws Exception {
         Father f = data.activeFather("+19995550701");
         data.endpoint(f, true);
 
@@ -97,13 +97,14 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
         assertThat(sent.path("type").asText()).isIn("text", "interactive");
         assertThat(sent.toString()).contains("עוד שעה זמן איכות עם נועה");
         Map<String, Object> row = row(f, "bl-in-1");
-        assertThat(row.get("status")).isEqualTo("DELIVERED");
+        // D-038 (DC-B2): Meta's API accepting the send is ACCEPTED; DELIVERED only comes from Meta's delivery receipt
+        assertThat(row.get("status")).isEqualTo("ACCEPTED");
         assertThat(row.get("delivery_mode")).isEqualTo("FREE_FORM");
         assertThat(row.get("failure_reason")).isNull();
     }
 
     @Test
-    @DisplayName("PASS: outside the window the approved general template goes out with the message as {{1}}; row TEMPLATE")
+    @DisplayName("PASS: outside the window the approved general template goes out with the message as {{1}}; row ACCEPTED / TEMPLATE")
     void outsideTheWindowTheApprovedTemplateCarriesIt() throws Exception {
         Father f = data.activeFather("+19995550702");
         data.endpoint(f, false);
@@ -126,7 +127,7 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
                 .isEqualTo(ProactiveSender.asTemplateParameter(content))
                 .isEqualTo("בוקר טוב! היום ב-18:00 עם נועה");
         Map<String, Object> row = row(f, "bl-out-1");
-        assertThat(row.get("status")).isEqualTo("DELIVERED");
+        assertThat(row.get("status")).isEqualTo("ACCEPTED"); // D-038: accepted by Meta's API, no delivery receipt yet
         assertThat(row.get("delivery_mode")).isEqualTo("TEMPLATE");
     }
 
@@ -160,7 +161,7 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
         webhook(Receipts.of("wamid.someone-else", "read", f.getPhone()));
 
         assertThat(rowText(f, "bl-unknown-1")).isEqualTo(before);
-        assertThat(row(f, "bl-unknown-1").get("status")).isEqualTo("DELIVERED");
+        assertThat(row(f, "bl-unknown-1").get("status")).isEqualTo("ACCEPTED"); // D-038: as Meta's API left it
         assertThat(fake.turns()).isEmpty();
         assertThat(fake.metaSends()).hasSize(1);
     }
@@ -177,7 +178,6 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
      * Correct: the delivery row holds the wamid (any column - the row is read as text).
      */
     @Test
-    @Disabled("KNOWN-BUG DC-B1: the wamid Meta answers a scheduled send with is not persisted on scheduled_response_delivery")
     @DisplayName("KNOWN-BUG DC-B1: after a successful scheduled send the Meta wamid is stored on the delivery row")
     void theWamidIsPersistedOnTheDeliveryRow() throws Exception {
         Father f = deliveredFreeForm("+19995550705", "bl-wamid-1");
@@ -197,7 +197,6 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
      * Correct: the delivery is marked FAILED, with Meta's error code as the reason.
      */
     @Test
-    @Disabled("KNOWN-BUG DC-B2: a 'failed' (131047) receipt for a scheduled message leaves the delivery DELIVERED")
     @DisplayName("KNOWN-BUG DC-B2: a 'failed' receipt from Meta marks the scheduled delivery FAILED")
     void aFailedReceiptMarksTheDeliveryFailed() throws Exception {
         Father f = deliveredFreeForm("+19995550706", "bl-failed-1");
@@ -218,7 +217,6 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
      * Correct: after a "failed" receipt the wamid's status is FAILED.
      */
     @Test
-    @Disabled("KNOWN-BUG DC-B2: WhatsAppAdapter.getDeliveryStatus answers PENDING after Meta reported the message failed")
     @DisplayName("KNOWN-BUG DC-B2: after a 'failed' receipt the adapter reports the message FAILED")
     void theAdapterReportsFailedAfterAFailedReceipt() throws Exception {
         Father f = deliveredFreeForm("+19995550707", "bl-failed-2");
@@ -237,7 +235,6 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
      * the delivery row records it (it changes).
      */
     @Test
-    @Disabled("KNOWN-BUG DC-B2: 'delivered' and 'read' receipts never update the scheduled delivery")
     @DisplayName("KNOWN-BUG DC-B2: 'delivered' then 'read' receipts update the delivery's status")
     void deliveredAndReadReceiptsUpdateTheDelivery() throws Exception {
         Father f = deliveredFreeForm("+19995550708", "bl-read-1");

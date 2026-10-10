@@ -210,8 +210,9 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
         assertThat(fake.metaSends()).isEmpty();
     }
 
+    /** D-038: a receipt is acknowledged and never runs a turn; one for a wamid Dad Coach never recorded changes nothing. */
     @Test
-    void statusReceiptsAreAcknowledgedAndIgnored() throws Exception {
+    void statusReceiptsAreAcknowledgedAndNeverRunATurn() throws Exception {
         webhook(Webhooks.status("wamid.out.1")).andExpect(status().isOk());
         webhook("{\"object\":\"whatsapp_business_account\",\"entry\":[]}").andExpect(status().isOk());
         webhook("not json").andExpect(status().isOk());

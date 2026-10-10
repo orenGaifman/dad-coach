@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Objects;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -29,6 +30,8 @@ public class IdempotencyService {
 
     private static final Logger log = LoggerFactory.getLogger(IdempotencyService.class);
     static final Duration RETENTION = Duration.ofHours(24);
+    /** Inbound dedup and reply guards live 7 days (Meta retries for days). */
+    static final Duration DEDUP_RETENTION = RETENTION.multipliedBy(7);
 
     public sealed interface Outcome {
         record Proceed() implements Outcome {}
@@ -79,21 +82,44 @@ public class IdempotencyService {
         }
     }
 
-    /** For pure dedup (inbound webhooks): true the first time a key is seen in this scope. */
+    /** For pure dedup: true the first time a key is seen in this scope (the row is stored already done). */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean firstTime(String scope, String key) {
-        if (rows.findByScopeAndIdempotencyKey(scope, key).isPresent()) {
-            return false;
-        }
         Instant now = clock.instant();
-        try {
-            ToolIdempotency row = new ToolIdempotency(scope, key, null, null, now, now.plus(RETENTION.multipliedBy(7)));
-            row.complete(true, 200, null, now);
-            rows.saveAndFlush(row);
-            return true;
-        } catch (DataIntegrityViolationException duplicate) {
-            return false;
+        return rows.insertIfAbsent(UUID.randomUUID(), scope, key, "SUCCEEDED", now, now.plus(DEDUP_RETENTION)) == 1;
+    }
+
+    /** What {@link #claim} found: CLAIMED - go ahead; DONE - already handled; BUSY - being handled right now. */
+    public enum Claim { CLAIMED, DONE, BUSY }
+
+    /**
+     * D-038 (DC-B3): claims a key for processing without marking it done. The row is IN_PROGRESS until the caller
+     * {@link #complete}s it (handled: any later arrival is DONE) or {@link #release}s it (not handled: the next arrival
+     * claims it again). A claim older than {@code lease} belongs to a worker that died and is taken over.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Claim claim(String scope, String key, Duration lease) {
+        Instant now = clock.instant();
+        for (int attempt = 0; attempt < 2; attempt++) {
+            if (rows.insertIfAbsent(UUID.randomUUID(), scope, key, "IN_PROGRESS", now, now.plus(DEDUP_RETENTION)) == 1) {
+                return Claim.CLAIMED;
+            }
+            var existing = rows.findByScopeAndIdempotencyKey(scope, key);
+            if (existing.isEmpty()) {
+                continue; // released between the insert and the read: try the insert once more
+            }
+            if (!"IN_PROGRESS".equals(existing.get().getStatus())) {
+                return Claim.DONE;
+            }
+            return rows.takeOverStale(scope, key, now.minus(lease), now) == 1 ? Claim.CLAIMED : Claim.BUSY;
         }
+        return Claim.BUSY;
+    }
+
+    /** Removes a key whatever its state (a guard taken for a send that then failed). */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void forget(String scope, String key) {
+        rows.deleteKey(scope, key);
     }
 
     private Outcome resolve(ToolIdempotency existing, String actorRef, String payloadHash) {

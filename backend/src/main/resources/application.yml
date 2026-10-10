@@ -71,6 +71,15 @@ dad-coach:
     webhook-secret: ${WHATSAPP_WEBHOOK_SECRET:}
     # true = a turn runs on the webhook thread (tests only); production answers Meta first.
     inbound-sync: false
+    # D-038 (DC-B3): an inbound message is marked handled only once it was answered, so Meta's redelivery of one the
+    # platform or Meta failed is processed again; false = marked on arrival (before D-038). A claim older than the
+    # lease belongs to a worker that died and is taken over.
+    inbound:
+      retry-unanswered: ${DAD_COACH_WHATSAPP_INBOUND_RETRY_UNANSWERED:true}
+      claim-lease: ${DAD_COACH_WHATSAPP_INBOUND_CLAIM_LEASE:PT10M}
+    # D-038 (DC-B2): Meta's status receipts update the scheduled message / dashboard link they belong to; false = ignored.
+    receipts:
+      enabled: ${DAD_COACH_WHATSAPP_RECEIPTS_ENABLED:true}
   # D-029 (Big Boss D-176): a WhatsApp voice note is transcribed by ElevenLabs and read like a typed message. Turned
   # on and off in the admin's integrations screen (on unless the admin turned it off); without a key it stays off.
   voice-notes:

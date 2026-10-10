@@ -15,7 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,8 +26,9 @@ import org.springframework.test.web.servlet.MvcResult;
  * Delivery regression baseline (Task 1.2): the dashboard link (dad_dashboard_link, D-027) as a delivery - its
  * login_link row says SENT once Meta accepted the button, and should keep the wamid and follow Meta's receipts.
  *
- * <p>PASS tests pin today's correct behaviour. KNOWN-BUG tests state the correct behaviour and are {@link Disabled};
- * run them with {@code -Djunit.jupiter.conditions.deactivate=org.junit.*DisabledCondition} to see them fail.
+ * <p>PASS tests pin the behaviour that was already correct. KNOWN-BUG tests stated the correct behaviour while the bug
+ * was open (they were {@code @Disabled}); D-038 (Phase 2, docs/architecture/PHASE2_DADCOACH_SPEC.md) fixed them and
+ * they run like every other test. Their names keep the bug ids for traceability.
  */
 class LoginLinkDeliveryBaselineTest extends AbstractIntegrationTest {
 
@@ -112,7 +112,6 @@ class LoginLinkDeliveryBaselineTest extends AbstractIntegrationTest {
      * V33__reusable_login_links.sql). Correct: the login_link row holds the wamid of the message that carried it.
      */
     @Test
-    @Disabled("KNOWN-BUG DC-B1: the wamid of the dashboard-link message is not persisted on login_link")
     @DisplayName("KNOWN-BUG DC-B1: the sent dashboard link keeps Meta's wamid")
     void theLinkRowKeepsTheWamid() throws Exception {
         Father f = sentLink("+19995550724");
@@ -130,7 +129,6 @@ class LoginLinkDeliveryBaselineTest extends AbstractIntegrationTest {
      * Correct: the link is marked FAILED with Meta's reason.
      */
     @Test
-    @Disabled("KNOWN-BUG DC-B2: a 'failed' (131047) receipt for the dashboard-link message leaves login_link SENT")
     @DisplayName("KNOWN-BUG DC-B2: a 'failed' receipt for the dashboard link marks it FAILED")
     void aFailedReceiptMarksTheLinkFailed() throws Exception {
         Father f = sentLink("+19995550725");

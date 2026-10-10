@@ -61,14 +61,38 @@ import org.springframework.stereotype.Component;
  *       sent and recorded in the conversation with no AI turn, or the turn runs with the text it hands over;</li>
  *   <li>the turn: worker + workflow named by the caller, correlation id = Meta's message id, the father's timezone,
  *       person ref and name in the request; a new number is onboarded by the workflow itself (D-002);</li>
- *   <li>the reply goes out as written; a SUPPRESSED, duplicate or blank reply sends nothing; the platform down or
- *       refusing: one short Hebrew line, never English, never silence.</li>
+ *   <li>the reply goes out as written; a SUPPRESSED or blank reply sends nothing; the platform down or refusing: one
+ *       short Hebrew line, never English, never silence;</li>
+ *   <li>D-038 (DC-B4): a duplicate answer (the platform's answer to a retried correlation id) carries the reply the
+ *       first attempt wrote: it goes out once - the durable guard {@link #REPLY_SCOPE}/&lt;Meta's message id&gt; is taken
+ *       before any reply to this message is sent, and released only when that send failed. A duplicate with no content
+ *       sends nothing.</li>
  * </ol>
+ *
+ * <p>D-038 (DC-B3): {@link #handle} says whether the message was answered. {@link Outcome#UNANSWERED} - the platform
+ * was unavailable (after the client's retries) or Meta refused a reply - lets the webhook release its claim, so Meta's
+ * redelivery of the message is processed again instead of being dropped as a duplicate.
  */
 @Component
 public class InboundMessageHandler {
 
     private static final Logger log = LoggerFactory.getLogger(InboundMessageHandler.class);
+    /** D-038: one reply per inbound message, durably (tool_idempotency; the key is Meta's message id). */
+    static final String REPLY_SCOPE = "WHATSAPP_REPLY";
+
+    /** Whether the message was answered: HANDLED - done, a redelivery is dropped; UNANSWERED - process it again. */
+    public enum Outcome { HANDLED, UNANSWERED }
+
+    /** One message's processing: set when it could not be answered (a refused send, the platform unavailable). */
+    private static final class Attempt {
+        boolean unanswered;
+        /** Sends Meta accepted so far. */
+        int sent;
+
+        Outcome outcome() {
+            return unanswered ? Outcome.UNANSWERED : Outcome.HANDLED;
+        }
+    }
     /** D-032: every fixed line opens with the identity line, like every other message on the shared number. */
     static final String IDENTITY = "❤️ דאד קואץ׳:\n";
     static final String PLATFORM_DOWN_REPLY = IDENTITY + "משהו השתבש אצלי. נסה שוב עוד רגע.";
@@ -95,6 +119,7 @@ public class InboundMessageHandler {
     private final TurnLedger ledger;
     private final CoachMentions mentions;
     private final ChildRepository children;
+    private final com.dadcoach.idempotency.IdempotencyService idempotency;
     private com.dadcoach.auth.LoginLinkRepository loginLinks;
     private LoginLinkService loginLinkService;
     private com.dadcoach.weeklyplan.WeeklyPlanContextBuilder weeklyPlan;
@@ -113,7 +138,9 @@ public class InboundMessageHandler {
                                  WorkflowPlatformProperties platformProperties, WhatsAppAdapter whatsapp,
                                  WhatsAppInboundRateLimiter rateLimiter, SessionButtonTaps buttonTaps,
                                  SentMessageRecorder recorder, VoiceNotes voiceNotes, Clock clock, TurnLedger ledger,
-                                 CoachMentions mentions, ChildRepository children) {
+                                 CoachMentions mentions, ChildRepository children,
+                                 com.dadcoach.idempotency.IdempotencyService idempotency) {
+        this.idempotency = idempotency;
         this.ledger = ledger;
         this.mentions = mentions;
         this.children = children;
@@ -131,7 +158,13 @@ public class InboundMessageHandler {
         this.clock = clock;
     }
 
-    public void handle(InboundMessageDto in, Instant receivedAt) {
+    public Outcome handle(InboundMessageDto in, Instant receivedAt) {
+        Attempt attempt = new Attempt();
+        process(in, receivedAt, attempt);
+        return attempt.outcome();
+    }
+
+    private void process(InboundMessageDto in, Instant receivedAt, Attempt attempt) {
         Instant started = clock.instant();
         String phone = in.fatherChannelIdentity();
         if (deletedSenders.isDeleted(phone)) {
@@ -157,17 +190,17 @@ public class InboundMessageHandler {
                 text = heard;
             } else if (!(outcome instanceof VoiceNotes.Outcome.Off)) {
                 fathers.findByPhone(phone).ifPresent(endpoints::recordInbound);
-                send(phone, VoiceNoteReplies.notHeard(outcome));
+                send(attempt, phone, VoiceNoteReplies.notHeard(outcome));
                 return;
             }
         }
         if (WhatsAppDeletionRequests.isRequest(text)) {
             if (heard != null) {
                 // deleting everything cannot be undone - it never rests on a machine transcription; he types it
-                send(phone, VoiceNoteReplies.withHeard(SPOKEN_DELETION_REPLY, heard));
+                send(attempt, phone, VoiceNoteReplies.withHeard(SPOKEN_DELETION_REPLY, heard));
                 return;
             }
-            send(phone, deletionRequests.handle(phone));
+            send(attempt, phone, deletionRequests.handle(phone));
             return;
         }
         Optional<Father> father = fathers.findByPhone(phone);
@@ -178,7 +211,7 @@ public class InboundMessageHandler {
             return;
         }
         if (text == null || text.isBlank()) {
-            send(phone, in.messageType() != MessageType.AUDIO && voiceNotes.active() ? FILE_REPLY : MEDIA_REPLY);
+            send(attempt, phone, in.messageType() != MessageType.AUDIO && voiceNotes.active() ? FILE_REPLY : MEDIA_REPLY);
             return;
         }
         if (!admitted && !rateLimiter.tryAcquire(phone)) {
@@ -192,11 +225,11 @@ public class InboundMessageHandler {
                 tap = buttonTaps.handle(father.get(), in.buttonId());
             } catch (RuntimeException e) {
                 log.atWarn().setMessage("whatsapp.button.failed").addKeyValue("error", e.getClass().getSimpleName()).log();
-                send(phone, PLATFORM_DOWN_REPLY);
+                send(attempt, phone, PLATFORM_DOWN_REPLY);
                 return;
             }
             if (tap.reply() != null) {
-                send(phone, tap.reply());
+                send(attempt, phone, tap.reply());
                 recorder.recordSent(father.get(), tap.reply(), in.idempotencyKey());
                 return;
             }
@@ -204,15 +237,15 @@ public class InboundMessageHandler {
                 text = tap.coachText();
             }
         }
-        if (father.isPresent() && in.buttonId() == null && answeredFromData(in, father.get(), heard != null ? heard : text, heard)) {
+        if (father.isPresent() && in.buttonId() == null && answeredFromData(in, father.get(), heard != null ? heard : text, heard, attempt)) {
             return;
         }
-        runTurn(in, text, heard, father, receivedAt, started);
+        runTurn(in, text, heard, father, receivedAt, started, attempt);
     }
 
     /** @param heard the words of the voice note this message was (D-029), or null for typed text */
     private void runTurn(InboundMessageDto in, String text, String heard, Optional<Father> father, Instant receivedAt,
-                         Instant started) {
+                         Instant started, Attempt attempt) {
         String phone = in.fatherChannelIdentity();
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("timezone", FatherTimezones.of(father.orElse(null)).getId());
@@ -221,14 +254,28 @@ public class InboundMessageHandler {
         Instant platformStart = clock.instant();
         Instant deliveryStart = platformStart;
         String outcome = "REPLIED";
+        boolean replyGuarded = false;
+        int sentAtGuard = 0;
         try {
             WorkerExecuteResponse response = platform.execute(turn(in, phone, in.idempotencyKey(),
                     heard == null ? text : VoiceNoteReplies.TURN_NOTE + text, metadata, father));
             deliveryStart = clock.instant();
             String reply = response.responseContent();
-            if (response.suppressed() || response.isDuplicate() || reply == null || reply.isBlank()) {
+            if (response.suppressed() || reply == null || reply.isBlank()) {
                 outcome = response.suppressed() ? "SUPPRESSED" : response.isDuplicate() ? "DUPLICATE" : "BLANK";
                 return;
+            }
+            // D-038 (DC-B4): a duplicate answer carries the reply of the attempt whose answer was lost - it goes out,
+            // but only once per inbound message, whatever retries or redeliveries follow
+            if (!idempotency.firstTime(REPLY_SCOPE, in.idempotencyKey())) {
+                outcome = response.isDuplicate() ? "DUPLICATE" : "ALREADY_REPLIED";
+                return;
+            }
+            replyGuarded = true;
+            sentAtGuard = attempt.sent;
+            if (response.isDuplicate()) {
+                outcome = "DUPLICATE_REPLAYED";
+                log.atInfo().setMessage("whatsapp.reply.duplicate_replayed").addKeyValue("correlationId", in.idempotencyKey()).log();
             }
             Optional<String> hebrew = ReplyLanguageGuard.clean(reply.strip());
             if (hebrew.isEmpty()) {
@@ -241,10 +288,10 @@ public class InboundMessageHandler {
                         ? Optional.empty() : ReplyLanguageGuard.clean(again.responseContent().strip());
                 if (hebrew.isEmpty()) {
                     outcome = "BLOCKED_NOT_HEBREW";
-                    send(phone, VoiceNoteReplies.withHeard(NOT_HEBREW_FALLBACK, heard));
+                    send(attempt, phone, VoiceNoteReplies.withHeard(NOT_HEBREW_FALLBACK, heard));
                     return;
                 }
-                outcome = "REWRITTEN_IN_HEBREW";
+                outcome = outcome.equals("DUPLICATE_REPLAYED") ? outcome : "REWRITTEN_IN_HEBREW";
             } else if (!hebrew.get().equals(reply.strip())) {
                 log.atWarn().setMessage("whatsapp.reply.english_note_removed").addKeyValue("correlationId", in.idempotencyKey()).log();
             }
@@ -252,12 +299,12 @@ public class InboundMessageHandler {
             if (now.isPresent() && isOnlyTheSentLine(hebrew.get())) {
                 Optional<String> instead = theCardInsteadOfTheLine(now.get(), platformStart);
                 outcome = "DASHBOARD_CARD";
-                instead.ifPresent(line -> send(phone, VoiceNoteReplies.withHeard(line, heard)));
+                instead.ifPresent(line -> send(attempt, phone, VoiceNoteReplies.withHeard(line, heard)));
                 return;
             }
             String checked = checkClaims(hebrew.get(), before, now, phone, platformStart, in.idempotencyKey());
             String out = ReplyStyleGuard.clean(VoiceNoteReplies.withHeard(checked, heard));
-            send(phone, out);
+            send(attempt, phone, out);
             now.ifPresent(f -> mentions.sent(f, out));
             if (!checked.equals(hebrew.get())) {
                 outcome = "CLAIM_CORRECTED";
@@ -268,8 +315,22 @@ public class InboundMessageHandler {
             outcome = "PLATFORM_FAILED";
             log.atWarn().setMessage("whatsapp.turn.platform_failed").addKeyValue("error", e.getMessage()).log();
             deliveryStart = clock.instant();
-            send(phone, VoiceNoteReplies.withHeard(PLATFORM_DOWN_REPLY, heard));
+            // D-038 (DC-B3): unavailable (5xx after retries, timeout, circuit open) - the message was not processed and
+            // a redelivery runs it again; a refusal (4xx) is the platform's answer and would be the same again
+            attempt.unanswered |= e instanceof PlatformUnavailableException;
+            send(attempt, phone, VoiceNoteReplies.withHeard(PLATFORM_DOWN_REPLY, heard));
+        } catch (RuntimeException e) {
+            if (replyGuarded && attempt.sent == sentAtGuard) {
+                // failed before anything reached him: the redelivery (the webhook releases its claim) may send it
+                idempotency.forget(REPLY_SCOPE, in.idempotencyKey());
+            }
+            replyGuarded = false;
+            throw e;
         } finally {
+            if (replyGuarded && attempt.unanswered) {
+                // the reply never reached him: the redelivery DC-B3 lets through may send it
+                idempotency.forget(REPLY_SCOPE, in.idempotencyKey());
+            }
             Instant end = clock.instant();
             log.atInfo().setMessage("whatsapp.turn.timing")
                     .addKeyValue("correlationId", in.idempotencyKey())
@@ -288,7 +349,7 @@ public class InboundMessageHandler {
      * this moment, before any AI turn (the model listed a session cancelled on his page from its own history), and
      * recorded in his conversation so the next turn knows it.
      */
-    private boolean answeredFromData(InboundMessageDto in, Father father, String words, String heard) {
+    private boolean answeredFromData(InboundMessageDto in, Father father, String words, String heard, Attempt attempt) {
         Optional<ReadyQuestions.Kind> kind = ReadyQuestions.of(words);
         if (kind.isEmpty() || weeklyPlan == null) {
             return false;
@@ -309,7 +370,7 @@ public class InboundMessageHandler {
                 answer.append("\n\nרוצה שנמצא עוד זמן השבוע?");
             }
             String out = ReplyStyleGuard.clean(VoiceNoteReplies.withHeard(answer.toString(), heard));
-            send(in.fatherChannelIdentity(), out);
+            send(attempt, in.fatherChannelIdentity(), out);
             recorder.recordSent(father, out, in.idempotencyKey());
             mentions.sent(father, out);
             log.atInfo().setMessage("whatsapp.reply.ready_answer").addKeyValue("kind", kind.get().name()).log();
@@ -505,8 +566,11 @@ public class InboundMessageHandler {
         };
     }
 
-    /** A reply inside the conversation the father just opened (the 24-hour window is open by definition). */
-    private void send(String phone, String text) {
+    /**
+     * A reply inside the conversation the father just opened (the 24-hour window is open by definition). A send Meta
+     * (or the gateway's circuit) refused leaves the message unanswered (DC-B3).
+     */
+    private void send(Attempt attempt, String phone, String text) {
         DeliveryResult result = whatsapp.sendMessage(new OutboundMessageDto(UUID.randomUUID(), null, WhatsAppEndpoints.CHANNEL,
                 MessageType.TEXT, text, null, false, null, Map.of(), MessagePriority.IMMEDIATE, clock.instant()), phone);
         log.atInfo().setMessage("whatsapp.delivery.result")
@@ -514,5 +578,10 @@ public class InboundMessageHandler {
                 .addKeyValue("status", result.status())
                 .addKeyValue("failure", result.failureReason())
                 .log();
+        if (result.isSuccessful()) {
+            attempt.sent++;
+        } else {
+            attempt.unanswered = true;
+        }
     }
 }

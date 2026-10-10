@@ -52,6 +52,7 @@ public class WhatsAppAdapter implements ChannelAdapter {
     private final WhatsAppApiClient apiClient;
     private final SessionWindowService sessionWindowService;
     private final CommunicationEndpointRepository endpointRepository;
+    private final DeliveryReceipts receipts;
     private final Clock clock;
 
     // Circuit breaker state
@@ -66,7 +67,9 @@ public class WhatsAppAdapter implements ChannelAdapter {
             WhatsAppApiClient apiClient,
             SessionWindowService sessionWindowService,
             CommunicationEndpointRepository endpointRepository,
+            DeliveryReceipts receipts,
             Clock clock) {
+        this.receipts = receipts;
         this.parser = parser;
         this.formatter = formatter;
         this.apiClient = apiClient;
@@ -163,11 +166,9 @@ public class WhatsAppAdapter implements ChannelAdapter {
 
     @Override
     public DeliveryStatus getDeliveryStatus(String providerMessageId) {
-        // Delivery status is tracked by the DeliveryRecord entity;
-        // this adapter delegates status queries to the delivery tracking layer.
-        // For now, return PENDING as the baseline; real status comes from webhook updates.
-        log.debug("Delivery status query for providerMessageId={}", providerMessageId);
-        return DeliveryStatus.PENDING;
+        // DC-B2: what Meta's receipts said about a message Dad Coach records (a scheduled message, a dashboard link);
+        // PENDING for a held message or one Dad Coach does not record (DeliveryReceipts)
+        return receipts.statusOf(providerMessageId);
     }
 
     // ─── Circuit Breaker Logic ───────────────────────────────────────────

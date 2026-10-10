@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import com.dadcoach.channel.dto.OutboundMessageDto;
 import com.dadcoach.whatsapp.buttons.SessionButtonOffers;
+import java.time.Clock;
 import java.util.List;
 import com.dadcoach.whatsapp.ReplyLanguageGuard;
 import java.util.Optional;
@@ -39,13 +40,16 @@ public class ScheduledResponseDeliveryService {
     private final com.dadcoach.channel.WhatsAppEndpoints endpoints;
     private final SessionButtonOffers buttons;
     private final ScheduledMessageTemplates templates;
+    private final Clock clock;
 
     public ScheduledResponseDeliveryService(
             ScheduledResponseDeliveryRepository repository,
             ProactiveSender sender,
             com.dadcoach.channel.WhatsAppEndpoints endpoints,
             SessionButtonOffers buttons,
-            ScheduledMessageTemplates templates) {
+            ScheduledMessageTemplates templates,
+            Clock clock) {
+        this.clock = clock;
         this.endpoints = endpoints;
         this.buttons = buttons;
         this.templates = templates;
@@ -65,7 +69,7 @@ public class ScheduledResponseDeliveryService {
         try {
             delivery = repository.saveAndFlush(new ScheduledResponseDelivery(
                     idempotencyKey, request.triggerId(), request.workflowInstanceId(), father.getId(),
-                    request.targetStateKey()));
+                    request.targetStateKey(), clock.instant()));
         } catch (DataIntegrityViolationException concurrentDuplicate) {
             // Another request claimed the same key between the lookup and the insert - the UNIQUE
             // constraint picked exactly one winner; report its outcome.
@@ -77,7 +81,7 @@ public class ScheduledResponseDeliveryService {
         Optional<String> hebrew = ReplyLanguageGuard.clean(request.responseContent().strip());
         if (hebrew.isEmpty()) {
             // the model wrote its reasoning in English instead of a message - never sent (ReplyLanguageGuard)
-            delivery.markFailed("BLOCKED_NOT_HEBREW");
+            delivery.markFailed("BLOCKED_NOT_HEBREW", clock.instant());
             repository.save(delivery);
             log.warn("Scheduled response blocked, not Hebrew: triggerId={}, targetStateKey={}", request.triggerId(),
                     request.targetStateKey());
@@ -93,12 +97,13 @@ public class ScheduledResponseDeliveryService {
                 ? ScheduledResponseDelivery.Mode.TEMPLATE : ScheduledResponseDelivery.Mode.FREE_FORM;
 
         if (result.isSuccessful()) {
-            delivery.markDelivered(mode);
-            log.info("Scheduled response delivered: triggerId={}, targetStateKey={}, mode={}, template={}, buttons={}, father={}",
-                    request.triggerId(), request.targetStateKey(), mode, outcome.template(),
+            // DC-B1/B2: ACCEPTED with Meta's wamid (receipts move it on), or HELD by the shared-number gateway
+            delivery.markAccepted(mode, result, clock.instant());
+            log.info("Scheduled response handed over: triggerId={}, targetStateKey={}, status={}, mode={}, template={}, buttons={}, father={}",
+                    request.triggerId(), request.targetStateKey(), delivery.getStatus(), mode, outcome.template(),
                     mode == ScheduledResponseDelivery.Mode.FREE_FORM ? offered.size() : 0, MaskingUtils.maskPhone(father.getPhone()));
         } else {
-            delivery.markFailed(result.failureReason());
+            delivery.markFailed(result.failureReason(), clock.instant());
             log.warn("Scheduled response not delivered: triggerId={}, reason={}", request.triggerId(), result.failureReason());
         }
         repository.save(delivery);

@@ -20,7 +20,20 @@ import java.util.UUID;
 @Table(name = "scheduled_response_delivery")
 public class ScheduledResponseDelivery {
 
-    public enum Status { SENDING, DELIVERED, FAILED }
+    /**
+     * SENDING (claimed, not sent yet) -> ACCEPTED (Meta's API took it; wamid kept) or HELD (the shared-number gateway
+     * keeps it for later) or FAILED. Meta's receipts then move an ACCEPTED row forward only: SENT -> DELIVERED -> READ,
+     * or FAILED (DeliveryReceipts). DELIVERED means a delivery receipt; rows written before V45 used DELIVERED for
+     * "accepted" and have no wamid.
+     */
+    public enum Status {
+        SENDING, ACCEPTED, HELD, SENT, DELIVERED, READ, FAILED;
+
+        /** Handed over for delivery (the platform is told DELIVERED, as before ACCEPTED existed). */
+        public boolean handedOver() {
+            return this != SENDING && this != FAILED;
+        }
+    }
 
     /** How the message went out: free-form inside the 24h window, or an approved template outside it. */
     public enum Mode { FREE_FORM, TEMPLATE }
@@ -61,30 +74,50 @@ public class ScheduledResponseDelivery {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    /** Meta's wamid of the accepted send (DC-B1): the key Meta's status receipts are matched on. */
+    @Column(name = "provider_message_id", length = 128)
+    private String providerMessageId;
+
+    /** The gateway's {@code held:<n>} when the shared number held the message; never a wamid. */
+    @Column(name = "gateway_hold_id", length = 64)
+    private String gatewayHoldId;
+
+    /** When the latest receipt (SENT / DELIVERED / READ / FAILED from Meta) happened. */
+    @Column(name = "status_at")
+    private Instant statusAt;
+
     protected ScheduledResponseDelivery() {
     }
 
     public ScheduledResponseDelivery(
-            String idempotencyKey, String triggerId, String workflowInstanceId, Long fatherId, String targetStateKey) {
+            String idempotencyKey, String triggerId, String workflowInstanceId, Long fatherId, String targetStateKey,
+            Instant now) {
         this.idempotencyKey = idempotencyKey;
         this.triggerId = triggerId;
         this.workflowInstanceId = workflowInstanceId;
         this.fatherId = fatherId;
         this.targetStateKey = targetStateKey;
         this.status = Status.SENDING;
-        this.createdAt = Instant.now();
+        this.createdAt = now;
     }
 
-    public void markDelivered(Mode mode) {
-        this.status = Status.DELIVERED;
+    /** A successful send: ACCEPTED with Meta's wamid, or HELD with the gateway's id (not delivered yet). */
+    public void markAccepted(Mode mode, com.dadcoach.channel.delivery.DeliveryResult result, Instant now) {
+        if (result.isHeld()) {
+            this.status = Status.HELD;
+            this.gatewayHoldId = result.providerMessageId();
+        } else {
+            this.status = Status.ACCEPTED;
+            this.providerMessageId = result.metaMessageId();
+        }
         this.deliveryMode = mode;
-        this.completedAt = Instant.now();
+        this.completedAt = now;
     }
 
-    public void markFailed(String reason) {
+    public void markFailed(String reason, Instant now) {
         this.status = Status.FAILED;
         this.failureReason = reason;
-        this.completedAt = Instant.now();
+        this.completedAt = now;
     }
 
     public UUID getId() {
@@ -113,5 +146,13 @@ public class ScheduledResponseDelivery {
 
     public String getFailureReason() {
         return failureReason;
+    }
+
+    public String getProviderMessageId() {
+        return providerMessageId;
+    }
+
+    public String getGatewayHoldId() {
+        return gatewayHoldId;
     }
 }

@@ -414,3 +414,43 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   the model armed every timer itself in all lab bookings. Seen, not D-037: the coach refused to add a second child to
   a session ("כל מפגש הוא עם ילד אחד") - joint sessions exist (r3-d).
 - **Deploy order:** the platform first (V120 + the API), then Dad Coach. No re-provisioning.
+
+## D-038 — Delivery reliability: wamids kept, Meta's receipts applied, a message is done only when answered (Phase 2, 2026-10-11)
+
+- **Why:** the Unified Workflow Phase 1 baseline (Task 1.2, `backend/src/test/java/com/dadcoach/baseline/`) pinned four
+  delivery bugs: the wamid Meta answers a send with was dropped (DC-B1), Meta's status receipts were parsed and thrown
+  away (DC-B2), an inbound message was marked handled before it was processed so a redelivery of one the platform or
+  Meta failed was dropped (DC-B3), and a retried turn the platform answered as a duplicate WITH the cached reply sent
+  nothing (DC-B4). Spec: `docs/architecture/PHASE2_DADCOACH_SPEC.md`.
+- **DC-B1:** V45 (additive) adds `provider_message_id`, `gateway_hold_id` (+ `status_at`) to
+  `scheduled_response_delivery` and `provider_message_id`, `gateway_hold_id`, `receipt_status`, `receipt_at` to
+  `login_link`, with partial indexes on the wamid. A message the shared-number gateway held (`held:<n>`) keeps that id
+  apart and is never matched as a wamid. No outbound ledger for the other sends (conversational replies, fixed lines,
+  belt promotions): nothing reads their receipts yet; `getDeliveryStatus` answers PENDING for them as before.
+- **DC-B2:** `scheduled_response_delivery.status` distinguishes ACCEPTED (Meta's API took it) and HELD from SENT /
+  DELIVERED / READ (receipts) and FAILED; DELIVERED now means a delivery receipt (rows before V45 keep DELIVERED = accepted,
+  no wamid). `DeliveryReceipts` moves a row forward only (ACCEPTED < SENT < DELIVERED < READ; FAILED before delivery,
+  final; one conditional UPDATE, race-safe), stores Meta's error as `META_<code>: <title>`. A link's
+  `delivery_status` stays SENT through delivered/read (the coach's "already on his screen" check reads it) and turns
+  FAILED on a failed receipt, so the next request sends a new button and the admin's undelivered list shows it.
+  `WhatsAppAdapter.getDeliveryStatus` answers from the rows. The platform still hears `DELIVERED` for every message handed
+  over (it reads only the HTTP status). Switch: `dad-coach.whatsapp.receipts.enabled` (default true).
+- **DC-B3:** the webhook claims Meta's message id IN_PROGRESS (`IdempotencyService.claim`, atomic insert) and marks it
+  done only when `InboundMessageHandler.handle` says HANDLED; UNANSWERED (platform unavailable after retries, a reply Meta
+  refused, an exception) releases it, so the redelivery is processed. A message answered or being processed is dropped;
+  a claim older than `dad-coach.whatsapp.inbound.claim-lease` (PT10M) is taken over. A platform refusal (4xx) is an
+  answer, not a retry. Per-sender order unchanged. Switch: `dad-coach.whatsapp.inbound.retry-unanswered` (default true).
+  Limit: Meta redelivers only when it got no 2xx; this makes a redelivery processable, it does not create one.
+- **DC-B4:** a duplicate answer with content is sent once: the durable guard `tool_idempotency(WHATSAPP_REPLY, wamid)` is
+  taken before any reply to the message goes out and released only when that send failed (or the turn threw before
+  anything was sent). A duplicate without content
+  still sends nothing.
+- **In passing:** `ScheduledResponseDelivery` takes its times from the injected clock.
+- **Tests:** the 9 known-bug baseline tests run (no longer `@Disabled`); three PASS assertions in
+  ScheduledDeliveryBaselineTest now expect the row ACCEPTED (not DELIVERED) after Meta's API accepted the send;
+  WhatsAppWebhookTest `statusReceiptsAreAcknowledgedAndIgnored` renamed `...AndNeverRunATurn` (assertions unchanged).
+  New: DeliveryReceiptsTest, InboundClaimTest, DeliveryFlagsOffTest.
+- **Rollback:** the two switches (env `DAD_COACH_WHATSAPP_RECEIPTS_ENABLED`, `DAD_COACH_WHATSAPP_INBOUND_RETRY_UNANSWERED`)
+  restore the old behaviour without a code change. A code revert keeps V45 and first needs
+  `UPDATE scheduled_response_delivery SET status = 'DELIVERED' WHERE status IN ('ACCEPTED','HELD','SENT','READ')` (the old
+  enum cannot load the new values).

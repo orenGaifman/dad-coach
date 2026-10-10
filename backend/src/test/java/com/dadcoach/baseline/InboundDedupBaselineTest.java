@@ -12,7 +12,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,8 +23,9 @@ import org.springframework.test.web.servlet.MockMvc;
  * Meta redelivery, and never zero times because a first attempt failed or because the platform answered a retried
  * turn as a duplicate. Turns run inline in tests (dad-coach.whatsapp.inbound-sync=true).
  *
- * <p>PASS tests pin today's correct behaviour. KNOWN-BUG tests state the correct behaviour and are {@link Disabled};
- * run them with {@code -Djunit.jupiter.conditions.deactivate=org.junit.*DisabledCondition} to see them fail.
+ * <p>PASS tests pin the behaviour that was already correct. KNOWN-BUG tests stated the correct behaviour while the bug
+ * was open (they were {@code @Disabled}); D-038 (Phase 2, docs/architecture/PHASE2_DADCOACH_SPEC.md) fixed them and
+ * they run like every other test. Their names keep the bug ids for traceability.
  */
 class InboundDedupBaselineTest extends AbstractIntegrationTest {
 
@@ -109,7 +109,6 @@ class InboundDedupBaselineTest extends AbstractIntegrationTest {
      * again, and the father gets the coach's real reply.
      */
     @Test
-    @Disabled("KNOWN-BUG DC-B3: a redelivery of a message whose turn failed (platform 500) is dropped as a duplicate")
     @DisplayName("KNOWN-BUG DC-B3: after the platform failed the turn, a redelivery is processed and gets the real reply")
     void aRedeliveryAfterAFailedTurnIsProcessedAgain() throws Exception {
         Father f = data.activeFather("+19995550713");
@@ -142,7 +141,6 @@ class InboundDedupBaselineTest extends AbstractIntegrationTest {
      * the reply reaches him.
      */
     @Test
-    @Disabled("KNOWN-BUG DC-B3: a redelivery of a message whose reply Meta refused is dropped - the father never gets an answer")
     @DisplayName("KNOWN-BUG DC-B3: after the reply failed to send, a redelivery is processed and the reply reaches him")
     void aRedeliveryAfterTheReplyFailedToSendIsProcessedAgain() throws Exception {
         Father f = data.activeFather("+19995550714");
@@ -177,7 +175,6 @@ class InboundDedupBaselineTest extends AbstractIntegrationTest {
      * Correct: the cached reply reaches the father exactly once.
      */
     @Test
-    @Disabled("KNOWN-BUG DC-B4: isDuplicate=true with responseContent (a retried turn) sends nothing - the reply is lost")
     @DisplayName("KNOWN-BUG DC-B4: a retried turn answered as a duplicate with the cached reply still reaches the father once")
     void aDuplicateAnswerWithTheCachedReplyIsSentOnce() throws Exception {
         Father f = data.activeFather("+19995550715");
