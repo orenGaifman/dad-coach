@@ -1,6 +1,7 @@
 package com.dadcoach.idempotency;
 
 import com.dadcoach.api.error.ApiException;
+import com.dadcoach.config.SchedulingLanes;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -147,7 +148,7 @@ public class IdempotencyService {
         rows.findByScopeAndIdempotencyKey(scope, key).filter(r -> "IN_PROGRESS".equals(r.getStatus())).ifPresent(rows::delete);
     }
 
-    @Scheduled(fixedDelayString = "PT1H", initialDelayString = "PT10M")
+    @Scheduled(fixedDelayString = "PT1H", initialDelayString = "PT10M", scheduler = SchedulingLanes.HOUSEKEEPING)
     @Transactional
     public void purgeExpired() {
         rows.deleteExpired(clock.instant());

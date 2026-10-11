@@ -596,3 +596,74 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   `GATEWAY_HELD_REPORTS=false` (404 and the receipt buffer as before D-042; the platform retries for 24 h, then gives
   up - log noise only). A code revert keeps V46 (indexes only); before it, run
   `UPDATE scheduled_response_delivery SET status = 'HELD' WHERE status = 'UNKNOWN'` (the old enum cannot load UNKNOWN).
+
+## D-043 — Scheduler lanes: the sending job keeps its thread, housekeeping gets a pool (Unified Workflow 6.0b, R6/R18, 2026-10-11)
+
+- **Why:** every `@Scheduled` job ran on Spring Boot's single default scheduler thread `scheduling-1`. A belt
+  promotion run (shared-number gate up to 3 s + Meta up to 10 s per send, image + text: ≈26 s per father) held up the
+  receipt retry (15 s), the template refresh, the idempotency purge, the platform deletions and the keep-warm ping;
+  a slow template read from Meta (15 s per page) held up the belt run the same way. Spec: platform
+  `docs/architecture/PHASE6_SHARED_MESSAGING_SPEC.md` §6.
+- **Switch** `APP_SCHEDULING_LANES` (`app.scheduling.lanes`, default **false**), `config/SchedulingLanes`:
+  - **off** - exactly as before: one `ThreadPoolTaskScheduler` built by Boot's own builder (pool 1, `scheduling-N`,
+    `spring.task.scheduling.*`), under the names `taskScheduler`, `messagingScheduler` and `housekeepingScheduler`.
+    Declaring it makes Boot drop its own `taskScheduler` and (Boot 3.4: it backs off on any `Executor` bean) its
+    `applicationTaskExecutor`, so that executor is declared too, as Boot declares it (lazy, same builder, names
+    `applicationTaskExecutor` / `taskExecutor`; nothing in Dad Coach uses it - no `@Async`, no async MVC - but the
+    context keeps the same executors). Tested against a Boot-only context.
+  - **on** - `taskScheduler` = `messagingScheduler`: one thread, still named `scheduling-1`; `housekeepingScheduler`:
+    pool of 3, `scheduling-housekeeping-N`.
+- **The default is the serial lane** (the spec named the pool as default; inverted on purpose): a job that names no
+  lane - every job added later until someone checks it - runs where every job ran before. Only the jobs below opt into
+  the pool with `@Scheduled(scheduler = SchedulingLanes.HOUSEKEEPING)`. A single `@Scheduled` method never overlaps
+  itself in either mode (one future per method), so the pool only lets *different* housekeeping jobs run side by side.
+
+  | Job | Lane | Sends WhatsApp | Writes |
+  |---|---|---|---|
+  | `WeeklyGoalCompletionJob.run` (belt promotions, Sunday 06:00 UTC; promotes no one since D-030) | messaging (named) | yes: image via `WhatsAppApiClient` + text via `ProactiveSender` | `weekly_goal`, `father` (belt/streak), `communication_endpoints` (`ensure`), timeline / `SentMessageRecorder` (HTTP) |
+  | `DeliveryReceipts.retryPending` (15 s) | housekeeping | no | `scheduled_response_delivery`, `login_link` (forward-only conditional UPDATEs) + the in-memory early-receipt buffer |
+  | `MetaTemplateDirectory.scheduled` (10 min) | housekeeping | no (GET templates) | `template_messages` |
+  | `IdempotencyService.purgeExpired` (1 h) | housekeeping | no | `tool_idempotency` (expired rows) |
+  | `PlatformPersonDeletions.sendPeriodically` (5 min) | housekeeping | no (platform HTTP) | `platform_person_deletion`; `FatherDataPurger` deletes the father's rows (incl. `scheduled_response_delivery`, `login_link`, `tool_idempotency`) |
+  | `KeepWarmJob.keepWarm` (5 min) | housekeeping | no (GET own health) | nothing |
+
+- **Cross-lane checks (switch on), shared rows first:**
+  - **`DeliveryReceipts` vs every writer of `scheduled_response_delivery` / `login_link`:** the writers are
+    `ScheduledResponseDeliveryService` (platform callback, Tomcat), `HeldOutcomes` (D-042 report, Tomcat),
+    `LoginLinkService` / `LoginLinkDelivery` / `InboundMessageHandler` (Tomcat, `wa-turn`), `FatherDataPurger`
+    (deletions). **None runs on the messaging lane** - the belt job writes neither table. Each receipt move is one
+    conditional, forward-only UPDATE per table (row locks order it against any other writer; FAILED is final), and
+    `retryPending` already ran concurrently with all of them (webhook / Tomcat / `wa-turn` threads) - only its own
+    thread changes. **D-042 buffer (`GATEWAY_HELD_REPORTS`):** a `ConcurrentHashMap`; `retryPending` takes a wamid's
+    kept receipts with `remove(key, value)` (on) or replays and then `remove(key, value)` (off), `applyPending` with
+    `remove(key)`, `remember` with `compute` - whoever removes first replays, a value replaced in between is kept for
+    the next round. These callers were already on different threads (scheduler vs Tomcat); unchanged.
+  - **`DeliveryReceipts` vs `PlatformPersonDeletions`** (both housekeeping, may now overlap): an UPDATE on a row being
+    deleted either lands first or matches nothing - the same pair already ran concurrently (webhook receipts vs the
+    deletion's own `platform-person-deletion` thread).
+  - **`PlatformPersonDeletions` vs the belt job** (purge of a father being promoted): `sendDue` is `synchronized` and
+    already runs on its own `platform-person-deletion` thread right after every deletion, concurrently with the old
+    scheduler thread; the scheduled scan moving lanes adds no new interleaving. The belt notifier skips a DELETED father.
+  - **`IdempotencyService.purgeExpired` vs `FatherDataPurger`** (both delete `tool_idempotency` rows): overlapping
+    DELETEs, the second skips rows already gone; already concurrent via the deletion thread.
+  - **`MetaTemplateDirectory` vs the belt job:** the belt text reads `template_messages` (approved or not) while a
+    refresh may update it - each row update is committed on its own, so a send sees the state just before or just
+    after one row's change; the same interleaving already exists for `wa-turn` replies, platform callbacks and the
+    admin's on-demand refresh. `refresh` is `synchronized`; the snapshot is a `volatile` reference swap.
+  - **`KeepWarmJob`:** no data.
+  - **Doubtful, kept on the messaging lane:** none of today's housekeeping jobs - none sends and none shares a row
+    with the belt job. Everything not listed above (any future job) stays on the messaging lane by default.
+- **Not changed:** what is sent, when, and in which order among sending jobs; the belt job's thread name
+  (`scheduling-1` in both modes); `PlatformPersonDeletions`' own thread, `TimelineReports` lanes, `wa-turn`.
+  Further (6.2): move Meta waits off the messaging lane entirely.
+- **Tests:** `SchedulingLanesTest` (7, no DB: every `@Scheduled` method of the product is in the lane table above, so
+  a new job fails until it gets a lane; the thread each real job is routed to - Spring's `TaskSchedulerRouter` with
+  the job's own qualifier - off: all `scheduling-1`, on: belt `scheduling-1`, housekeeping `scheduling-housekeeping-N`;
+  off = Boot's scheduler and executor (names, aliases, pool sizes, prefixes, lazy executor); on: a housekeeping job
+  keeps running while a belt send waits on a slow fake Meta (latch) and the other messaging-lane job waits; off: it
+  waits too (today); on: two messaging-lane jobs never run at once (max concurrent = 1)), `SchedulingLanesAppTest`
+  (real context, switch off: every registered job on `scheduling-1`), `SchedulingLanesOnAppTest` (real context, switch
+  on, closed after the class: every registered job on the pool, the default on `scheduling-1`).
+- **Rollout:** deploy (switch off = no change) → `APP_SCHEDULING_LANES=true` → restart; the JSON logs' `thread_name`
+  of `whatsapp.receipt` / `meta.templates.refreshed` read `scheduling-housekeeping-N`, `weekly_goal.completion`
+  `scheduling-1`. **Rollback:** `APP_SCHEDULING_LANES=false` and restart; nothing in the data (DEPLOYMENT.md, Runbooks).

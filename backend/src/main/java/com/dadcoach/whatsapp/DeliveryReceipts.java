@@ -2,6 +2,7 @@ package com.dadcoach.whatsapp;
 
 import com.dadcoach.channel.delivery.DeliveryStatus;
 import com.dadcoach.channel.dto.StatusUpdateDto;
+import com.dadcoach.config.SchedulingLanes;
 import com.dadcoach.integration.platform.GatewayHeldReports;
 import com.dadcoach.integration.platform.SharedNumberGate;
 import java.sql.Timestamp;
@@ -133,7 +134,7 @@ public class DeliveryReceipts {
      * Re-applies the receipts that came before their row was committed; drops a wamid's receipts once its row exists
      * (applied, moved or not) or their time is up.
      */
-    @Scheduled(fixedDelayString = "PT15S", initialDelayString = "PT15S")
+    @Scheduled(fixedDelayString = "PT15S", initialDelayString = "PT15S", scheduler = SchedulingLanes.HOUSEKEEPING)
     public void retryPending() {
         Instant now = clock.instant();
         for (Map.Entry<String, Pending> e : pending.entrySet()) {

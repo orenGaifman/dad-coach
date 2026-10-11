@@ -1,5 +1,6 @@
 package com.dadcoach.integration.platform.lifecycle;
 
+import com.dadcoach.config.SchedulingLanes;
 import com.dadcoach.domain.father.FatherDataPurger;
 import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import jakarta.annotation.PreDestroy;
@@ -129,7 +130,8 @@ public class PlatformPersonDeletions {
     }
 
     @Scheduled(initialDelayString = "${dadcoach.platform-person-deletion.initial-delay:PT1M}",
-            fixedDelayString = "${dadcoach.platform-person-deletion.interval:PT5M}")
+            fixedDelayString = "${dadcoach.platform-person-deletion.interval:PT5M}",
+            scheduler = SchedulingLanes.HOUSEKEEPING)
     public void sendPeriodically() {
         sendDue();
     }

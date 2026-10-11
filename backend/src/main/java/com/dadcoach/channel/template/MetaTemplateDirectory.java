@@ -1,5 +1,6 @@
 package com.dadcoach.channel.template;
 
+import com.dadcoach.config.SchedulingLanes;
 import com.dadcoach.config.WhatsAppProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Clock;
@@ -55,7 +56,7 @@ public class MetaTemplateDirectory {
         return notBlank(properties.wabaId()) && notBlank(properties.accessToken());
     }
 
-    @Scheduled(fixedDelayString = "PT10M", initialDelayString = "PT30S")
+    @Scheduled(fixedDelayString = "PT10M", initialDelayString = "PT30S", scheduler = SchedulingLanes.HOUSEKEEPING)
     void scheduled() {
         if (configured()) {
             refresh();

@@ -1,5 +1,6 @@
 package com.dadcoach.common;
 
+import com.dadcoach.config.SchedulingLanes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,7 +38,7 @@ public class KeepWarmJob {
      * Pings the health endpoint every 5 minutes to keep the instance warm.
      * Uses the Render external URL if available, otherwise localhost.
      */
-    @Scheduled(fixedRate = 5 * 60 * 1000) // Every 5 minutes
+    @Scheduled(fixedRate = 5 * 60 * 1000, scheduler = SchedulingLanes.HOUSEKEEPING) // Every 5 minutes
     public void keepWarm() {
         String healthUrl;
         
