@@ -1103,3 +1103,43 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   `BeltPromotionPlatform`, `BeltImageConfig` (+ `belt.images`), the `BELT_PROMOTION` switch (`MESSAGING_MODE_BELT_PROMOTION`
   is now unused) and their tests. `WeeklyGoalCompletionJob` still completes goals and streaks every Sunday; the test that a
   met week keeps the belt and sends nothing stays. The belt earned by a session is still told by the session's own reply.
+
+## D-052 — Delivery status: no lost writes - a receipt racing its row's commit is applied, kept receipts survive a rollback (lost-write audit, 2026-10-11)
+
+- **Why:** the audit after Big Boss 007b26c / Tair D-070 (after-commit work lost in a finished transaction). Dad Coach
+  registers no after-commit work on these paths, but three other lost writes were found and forced in tests:
+  1. **A receipt racing its row's commit** (`DeliveryReceipts.apply`): Meta's receipt UPDATE found no row (the wamid
+     was not committed yet - the send's answer, a platform report, a held outcome or a direct send in flight); that
+     commit and its `applyPending` (nothing kept yet) then ran; the receipt looked for the row, found it, and was dropped
+     as "its row exists". Meta's 131047 "failed" comes within milliseconds, so the window is real.
+  2. **The 15-second re-apply** (`retryPending`, `GATEWAY_HELD_REPORTS` off) the same way: re-applied (no row), the row
+     committed (a direct send calls no `applyPending`), then "its row exists" - dropped.
+  3. **Kept receipts taken out of memory inside a transaction that does not commit**: `PlatformSendFlow.apply` and
+     `LoginLinkPlatform.sendDirectly` ran `applyPending` in the caller's transaction (`LoginLinkService.sendTo`, a
+     tool's `ToolController` transaction); `HeldOutcomes.apply` in its own. A rollback lost the moves and the receipts.
+- **Change:** (1) no row yet - the receipt is kept first, then the row looked for once more (a commit before that look:
+  replayed here; after it: the committer's `applyPending` finds it); a row there now - the move once more (decisive,
+  forward only). (2) the row is looked for before the re-apply, so a row committed during it stays for the next pass.
+  (3) `PlatformSendFlow.apply` and `LoginLinkPlatform.sendDirectly` run `applyPending` in a transaction of their own
+  (their own write is already committed); `HeldOutcomes` keeps joining (its write links the wamid in that transaction),
+  and any `applyPending` whose transaction does not commit puts the receipts back in memory (`afterCompletion`, memory
+  only - no write joins the finished transaction). No migration, no switch; behaviour otherwise unchanged.
+- **Review follow-ups (same decision):** the post-commit `applyPending` in `PlatformSendFlow.apply` /
+  `LoginLinkPlatform.sendDirectly` never fails a send that succeeded (caught, logged
+  `messaging.<event>.pending_receipts_failed`; its receipts are kept again). A receipt whose `apply` threw (Meta got its
+  200 and never resends) is kept (`keepAfterFailure`) for the next pass; receipts the on-mode pass took out and failed to
+  replay go back. The 15-second pass is configurable (`dad-coach.whatsapp.receipts.retry-interval` /
+  `retry-initial-delay`, default PT15S); tests set the first run to PT24H so a forced race is never rescued by it.
+- **Not fixed - removed by Phase 6.4 cleanup** (products drop direct sends, Meta receipts, held outcomes): held outcomes
+  rely on the 15-second pass (their `applyPending` runs before their commit), a held outcome that beats its row's commit
+  is acknowledged `known:false`, a direct link's row is written in the caller's transaction after Meta accepted it.
+- **Checked safe (tests pin them):** platform reports and reconcile lookups use `SELECT ... FOR UPDATE` and forward-only
+  rules against Meta's conditional UPDATEs (concurrent "read" + DELIVERED report always READ, both ledgers); kinds with
+  no ledger (REPLY, FIXED_LINE, BUTTON_REPLY, READY_ANSWER, BELT_PROMOTION) write nothing but the report's key; the
+  O2 resend keeps no state beyond the inbound claim; the session-timer notes are autocommit writes after the callback.
+- **Tests:** `DeliveryLostWritesTest` - each race forced by a test-only statement trigger that parks Meta's FAILED
+  receipt between its UPDATE and its look for the row (SCHEDULED report, LOGIN_LINK report, held outcome, direct send +
+  re-apply pass); the caller's / held outcome's rollback; concurrency x10 (barrier) failed + ACCEPTED report and read +
+  DELIVERED report on both ledgers; reconcile lookup with a kept receipt; no-ledger reports; session-timer notes; a
+  failing kept-receipt apply never fails the send; a receipt whose apply threw is kept (both forced by a test-only
+  raising trigger).
