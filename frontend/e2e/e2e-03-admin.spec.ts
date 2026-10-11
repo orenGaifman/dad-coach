@@ -41,7 +41,7 @@ test('admin: find a father, see his detail, view his home read-only', async ({ p
   await expect(page.getByRole('listitem').filter({ hasText: 'נועה' })).toBeVisible()
   await page.getByRole('button', { name: 'טעינה מהפלטפורמה' }).click()
   await expect(page.getByText('לא מוגדר: חסר WORKFLOW_PLATFORM_ADMIN_API_KEY.')).toBeVisible()
-  await page.getByRole('link', { name: 'כך הוא רואה את הלוח' }).click()
+  await page.getByRole('link', { name: 'כך הוא רואה את הדף שלו' }).click()
   await expect(page.getByText('תצוגה בלבד, אי אפשר לשנות מכאן.')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'שלום, יואב' })).toBeVisible()
   await expect(page.getByText('מתוך 3 שעות')).toBeVisible()

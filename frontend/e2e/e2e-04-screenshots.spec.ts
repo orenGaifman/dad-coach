@@ -67,7 +67,7 @@ for (const size of SIZES) {
     await expect(page.getByRole('heading', { name: 'הישגים' })).toBeVisible()
     await shoot(page, dir, '07-progress')
     await page.goto('/settings')
-    await expect(page.getByRole('heading', { name: 'יומן Google' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'יומן גוגל' })).toBeVisible()
     await shoot(page, dir, '08-settings')
     await page.goto('/training')
     await shoot(page, dir, '09-training-soon')

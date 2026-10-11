@@ -50,11 +50,11 @@ test('children: add one, edit one', async ({ page }) => {
   await page.getByLabel('גיל').fill('2')
   await page.getByRole('button', { name: 'שמירה' }).click()
   await expect(page.getByText('גאיה ברשימה.')).toBeVisible()
-  await expect(page.getByText('בן שנתיים')).toBeVisible()
+  await expect(page.getByText('גיל שנתיים')).toBeVisible()
   await page.getByRole('button', { name: 'עריכת איתי' }).click()
   await page.getByLabel('גיל').fill('5')
   await page.getByRole('button', { name: 'שמירה' }).click()
-  await expect(page.getByText('בן 5')).toBeVisible()
+  await expect(page.getByText('גיל 5')).toBeVisible()
 })
 
 test('progress and settings; deleting his data needs the typed word', async ({ page }) => {
