@@ -5,7 +5,6 @@ import com.dadcoach.channel.delivery.DeliveryStatus;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.integration.platform.SharedNumberGate;
 import com.dadcoach.integration.platform.messaging.MessagingSettings;
-import com.dadcoach.integration.platform.messaging.MessagingSettings.Mode;
 import com.dadcoach.integration.platform.messaging.PlatformSendFlow;
 import com.dadcoach.integration.platform.messaging.PlatformSendFlow.Settled;
 import com.dadcoach.integration.platform.messaging.PlatformSendFlow.Snapshot;
@@ -53,10 +52,13 @@ import org.springframework.stereotype.Component;
  * the read timeout is short ({@code MESSAGING_REPLY_READ_TIMEOUT_MS}, 5 s - the father is waiting), never a re-POST
  * after a timeout, one immediate re-POST of an ambiguous answer, a 429 re-POSTed once after ≤ 2 s; a 409 carrying the
  * existing message is adopted (an earlier processing of the same message used the key). Provably nothing created on the
- * first POST (503 {@code messaging.disabled}, 401/403, never written) - today's send. Refused (400/422) - nothing sent,
- * the message unanswered. FAILED - unanswered (as a refused send today). ACCEPTED / HELD / QUEUED / UNKNOWN or an
- * ambiguous answer - it reached him or may have: answered, and never sent a second time (spec §16 "UNKNOWN-equivalent",
- * D-042).</p>
+ * first POST (503 {@code messaging.disabled}, 401/403, never written) - today's send. Refused (400/422), or only 429s
+ * (nothing created, v2.1) - nothing sent, the message unanswered (a redelivery posts the same key). FAILED -
+ * unanswered (as a refused send today); on Meta's redelivery the platform replays it, and when its reason is
+ * resendable ({@link #RESENDABLE}: nothing reached him, Meta decided nothing) the line is sent again ONCE as
+ * {@code <key>~r1} with {@code retryOf} (the platform's G1-G5 guards); any other FAILED is final. ACCEPTED / HELD /
+ * QUEUED / UNKNOWN or an ambiguous answer - it reached him or may have: answered, and never sent a second time (spec
+ * §16 "UNKNOWN-equivalent", D-042).</p>
  */
 @Component
 public class ReplyPlatformSend {
@@ -68,6 +70,16 @@ public class ReplyPlatformSend {
     static final Duration RATE_LIMIT_WAIT = Duration.ofSeconds(2);
     /** His message before the answer on the timeline: one synchronous attempt at most this long, else in the background. */
     public static final Duration INBOUND_BEFORE = Duration.ofSeconds(2);
+    /** The resend's key: the failed message's key plus this (spec §10.1 convention). */
+    public static final String RESEND_SUFFIX = "~r1";
+    /**
+     * The platform's resendable reasons ({@code MetaErrorPolicy.RESENDABLE}, spec v2.3): not delivered and Meta took no
+     * decision about the person. Any other FAILED (131026, 131049, 131050, ...) is final.
+     */
+    static final java.util.Set<String> RESENDABLE = java.util.Set.of("META_131047", "META_131056", "META_130429",
+            "META_80007", "META_4", "HTTP_429", "NEVER_SENT_CONNECT", "NEVER_SENT_DNS", "NEVER_SENT_TLS", "HELD_EXPIRED",
+            "HELD_NOT_IN_LATEST", "HELD_INTERRUPTED", "NOT_AFTER", "NO_TEMPLATE", "WINDOW_CLOSED", "SENDER_UNAVAILABLE",
+            "META_131048", "META_131057", "MESSAGING_DISABLED");
 
     /** How the platform records the line on the conversation's timeline (spec §9); {@code mode} null = not recorded. */
     public record Timeline(String mode, String correlationId, String turnCorrelationId, List<String> supersededTurns,
@@ -128,7 +140,7 @@ public class ReplyPlatformSend {
     }
 
     /** The kind's switch, read once per line by the caller (a switch flipped meanwhile never sends a line twice). */
-    public Mode mode(String kind) {
+    public MessagingSettings.Mode mode(String kind) {
         return settings.conversational(kind);
     }
 
@@ -137,20 +149,14 @@ public class ReplyPlatformSend {
     }
 
     /**
-     * PLATFORM: the platform sends it; {@code direct} (today's send) only when it provably created nothing. Any other
-     * mode: {@code direct}, then - SHADOW - the platform's dry run of the same request off this thread.
+     * The platform sends it (the caller calls this only for a kind on PLATFORM; DIRECT and SHADOW stay with the caller,
+     * which sends today's way and calls {@link #shadow}). {@code direct} (today's send) runs only when the platform
+     * provably created nothing on the first POST.
      */
-    public Sent send(Line line, Mode mode, Supplier<DeliveryResult> direct) {
-        if (mode != Mode.PLATFORM) {
-            DeliveryResult r = direct.get();
-            if (mode == Mode.SHADOW) {
-                shadow(line, r);
-            }
-            return new Sent(r, false, false, null);
-        }
+    public Sent send(Line line, Supplier<DeliveryResult> direct) {
         String body;
         try {
-            body = request(line, false);
+            body = request(line, line.key(), line.timeline(), null, false);
         } catch (RuntimeException e) {
             // nothing was posted: the platform cannot have it - today's send
             log.atError().setMessage("messaging.reply.request_failed").addKeyValue("kind", line.kind())
@@ -158,17 +164,61 @@ public class ReplyPlatformSend {
             return new Sent(direct.get(), false, false, null);
         }
         Settled<DeliveryResult> s = flow.sendOnce(EVENT, log, "key", line.key(), body, direct, options());
+        Sent sent = settled(line, line.timeline(), s);
+        Snapshot snap = s.snapshot();
+        if (snap != null && "FAILED".equals(snap.status()) && snap.reason() != null && RESENDABLE.contains(snap.reason())
+                && "true".equals(s.answer().text("replayed"))) {
+            return resend(line, snap, direct);
+        }
+        return sent;
+    }
+
+    /**
+     * D-048 review: Meta's redelivery of a message whose line the platform FAILED without Meta deciding about him
+     * ({@link #RESENDABLE}: nothing reached him) - the line is sent again once, as a new message {@code <key>~r1} with
+     * {@code retryOf} the failed one; the platform enforces G1-G5 (not delivered, once, same person, window, durable key).
+     * A later redelivery posts the same {@code ~r1} bytes (the platform replays it); a resend that fails is final. On
+     * the timeline it is a row of its own ({@code <row>~r1}, NEW_ROW): the failed message keeps its row.
+     */
+    private Sent resend(Line line, Snapshot failed, Supplier<DeliveryResult> direct) {
+        String key = line.key() + RESEND_SUFFIX;
+        Timeline row = resendRow(line);
+        log.atInfo().setMessage("messaging.reply.resend").addKeyValue("key", key).addKeyValue("retryOf", failed.messageId())
+                .addKeyValue("reason", failed.reason()).log();
+        String body;
+        try {
+            body = request(line, key, row, failed.messageId(), false);
+        } catch (RuntimeException e) {
+            log.atError().setMessage("messaging.reply.request_failed").addKeyValue("kind", line.kind())
+                    .addKeyValue("error", e.getClass().getSimpleName()).log();
+            return new Sent(DeliveryResult.failed("PLATFORM_" + failed.reason()), true, false, "FAILED");
+        }
+        // the first message provably did not reach him: today's send is safe if the platform provably creates nothing
+        return settled(line, row, flow.sendOnce(EVENT, log, "key", key, body, direct, options()));
+    }
+
+    static Timeline resendRow(Line line) {
+        Timeline t = line.timeline();
+        if (!t.records()) {
+            return t;
+        }
+        String row = t.correlationId() != null ? t.correlationId() : t.turnCorrelationId() + ":delivered";
+        return Timeline.newRow(row + RESEND_SUFFIX, line.text());
+    }
+
+    private Sent settled(Line line, Timeline row, Settled<DeliveryResult> s) {
         return switch (s.verdict()) {
             case DIRECT -> new Sent(s.direct() != null ? s.direct() : DeliveryResult.failed("DIRECT_SEND_FAILED"), false,
                     false, null);
             case REFUSED -> new Sent(DeliveryResult.failed(s.reason()), true, false, "REFUSED");
-            case AMBIGUOUS -> new Sent(onItsWay(null), true, line.timeline().records(), "AMBIGUOUS");
-            case OWNED, ADOPT -> answered(line, s.snapshot());
+            // nothing was created (every answer a 429): unanswered - a redelivery posts the same key again
+            case RATE_LIMITED -> new Sent(DeliveryResult.failed(s.reason()), true, false, "RATE_LIMITED");
+            case AMBIGUOUS -> new Sent(onItsWay(null), true, row.records(), "AMBIGUOUS");
+            case OWNED, ADOPT -> answered(row, s.snapshot());
         };
     }
 
-    private Sent answered(Line line, Snapshot snap) {
-        boolean records = line.timeline().records();
+    private Sent answered(Timeline row, Snapshot snap) {
         DeliveryResult r = switch (snap.status()) {
             case "FAILED" -> DeliveryResult.failed(PlatformSendFlow.cut("PLATFORM_"
                     + (snap.reason() == null ? "FAILED" : snap.reason()), 200));
@@ -176,7 +226,7 @@ public class ReplyPlatformSend {
             case "ACCEPTED", "DELIVERED", "READ" -> DeliveryResult.sent(snap.providerMessageId());
             default -> onItsWay(null);  // QUEUED (the platform sends it), UNKNOWN (it may have gone out; never again)
         };
-        return new Sent(r, true, records, snap.status());
+        return new Sent(r, true, row.records(), snap.status());
     }
 
     /** It reached him or may have, and Meta's id is not known (yet): answered, never sent a second time. */
@@ -187,7 +237,7 @@ public class ReplyPlatformSend {
     /** SHADOW: the platform's dry run of the same line, compared with what Dad Coach did. */
     public void shadow(Line line, DeliveryResult r) {
         try {
-            flow.shadow(line.kind(), log, "key", line.key(), () -> request(line, true),
+            flow.shadow(line.kind(), log, "key", line.key(), () -> request(line, line.key(), line.timeline(), null, true),
                     new PlatformSendFlow.ShadowFacts(r.isSuccessful(), r.isHeld(), r.failureReason(), null));
         } catch (RuntimeException e) {
             log.atWarn().setMessage("messaging.shadow.failed").addKeyValue("kind", line.kind())
@@ -196,9 +246,9 @@ public class ReplyPlatformSend {
     }
 
     /** The {@code /send} body (class comment). */
-    String request(Line line, boolean dryRun) {
+    String request(Line line, String key, Timeline t, String retryOf, boolean dryRun) {
         Map<String, Object> r = flow.newRequest(line.father(), line.phone());
-        r.put("idempotencyKey", line.key());
+        r.put("idempotencyKey", key);
         r.put("kind", line.kind());
         r.put("messageClass", "SERVICE");
         Map<String, Object> content = new LinkedHashMap<>();
@@ -211,7 +261,6 @@ public class ReplyPlatformSend {
         Instant inbound = line.inboundAt() == null || line.inboundAt().isAfter(now) ? now : line.inboundAt();
         r.put("windowHint", Map.of("lastInboundAt", inbound.toString()));
         r.put("holdPolicy", "GATEWAY");
-        Timeline t = line.timeline();
         Map<String, Object> timeline = new LinkedHashMap<>();
         timeline.put("record", t.records());
         if (t.records()) {
@@ -230,6 +279,9 @@ public class ReplyPlatformSend {
             }
         }
         r.put("timeline", timeline);
+        if (retryOf != null) {
+            r.put("retryOf", retryOf);
+        }
         r.put("wait", "ACCEPTED");
         r.put("dryRun", dryRun);
         return flow.json(r);

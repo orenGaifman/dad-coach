@@ -476,18 +476,105 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
         }
     }
 
+    /**
+     * A fake platform with memory, as the real one: a key it has seen is replayed ({@code replayed:true}, same message
+     * id, same state); a new key gets {@code answers}' next state (status, reason) - the last one repeats.
+     */
+    java.util.function.Function<FakeServers.Call, Reply> platformWithMemory(String[]... answers) {
+        Map<String, String> seen = new java.util.concurrent.ConcurrentHashMap<>();
+        AtomicInteger next = new AtomicInteger();
+        return c -> {
+            try {
+                String key = json.readTree(c.body()).path("idempotencyKey").asText();
+                String replay = seen.get(key);
+                if (replay != null) {
+                    return Reply.json(replay.replace("\"replayed\":false", "\"replayed\":true"));
+                }
+                String[] a = answers[Math.min(next.getAndIncrement(), answers.length - 1)];
+                String body = "{\"messageId\":\"" + UUID.randomUUID() + "\",\"idempotencyKey\":\"" + key
+                        + "\",\"replayed\":false,\"status\":\"" + a[0] + "\""
+                        + ("ACCEPTED".equals(a[0]) ? ",\"providerMessageId\":\"wamid.p" + next.get() + "\"" : "")
+                        + (a.length > 1 ? ",\"reason\":\"" + a[1] + "\"" : "") + "}";
+                seen.put(key, body);
+                return Reply.json(body);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        };
+    }
+
     @Test
-    @DisplayName("FAILED: unanswered (as a refused send today) - Meta's redelivery runs again and posts the same key and "
-            + "the same bytes (the platform replays); never sent directly")
+    @DisplayName("FAILED with a final reason (Meta decided: 131026): unanswered - Meta's redelivery posts the same key and "
+            + "bytes, the platform replays the FAILED; never resent, never sent directly")
     void failedIsUnansweredAndTheRedeliveryReplays() throws Exception {
         messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
-        fake.onPlatformSend(c -> platform("FAILED", "META_131026"));
+        fake.onPlatformSend(platformWithMemory(new String[] {"FAILED", "META_131026"}));
         turn(IDENTITY + "בסדר גמור 🙂");
         String id = says("טוב");
         webhook(Webhooks.text(PHONE, id, "טוב"));
         settle();
         assertThat(fake.platformSends()).hasSize(2);
         assertThat(fake.platformSends().get(1).body()).isEqualTo(fake.platformSends().get(0).body());
+        assertThat(fake.metaSends()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("FAILED with a resendable reason (SENDER_UNAVAILABLE): Meta's redelivery replays it, then sends the line "
+            + "again ONCE as <key>~r1 with retryOf (its own timeline row); answered - a further redelivery is dropped")
+    void resendableFailedIsResentOnceOnTheRedelivery() throws Exception {
+        properties.setDeliveryReports(true);
+        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
+        var memory = platformWithMemory(new String[] {"FAILED", "SENDER_UNAVAILABLE"}, new String[] {"ACCEPTED"});
+        java.util.concurrent.atomic.AtomicReference<String> failedMessageId = new java.util.concurrent.atomic.AtomicReference<>();
+        fake.onPlatformSend(c -> {
+            Reply r = memory.apply(c);
+            try {
+                failedMessageId.compareAndSet(null, json.readTree(r.body()).path("messageId").asText());
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+            return r;
+        });
+        turn(IDENTITY + "בסדר גמור 🙂");
+        String id = says("טוב");
+        assertThat(fake.platformSends()).hasSize(1);   // FAILED on the first processing: unanswered, nothing more
+
+        webhook(Webhooks.text(PHONE, id, "טוב"));       // Meta's redelivery
+        settle();
+        assertThat(fake.platformSends()).hasSize(3);
+        JsonNode first = body(fake.platformSends().get(0));
+        assertThat(fake.platformSends().get(1).body()).isEqualTo(fake.platformSends().get(0).body());
+        JsonNode resend = body(fake.platformSends().get(2));
+        assertThat(resend.path("idempotencyKey").asText()).isEqualTo("reply:" + id + ":0~r1");
+        assertThat(resend.path("retryOf").asText()).isEqualTo(failedMessageId.get());
+        assertThat(resend.path("content")).isEqualTo(first.path("content"));
+        assertThat(resend.path("timeline").path("mode").asText()).isEqualTo("NEW_ROW");
+        assertThat(resend.path("timeline").path("correlationId").asText()).isEqualTo(id + ":delivered~r1");
+        assertThat(resend.path("timeline").path("content").asText()).isEqualTo("בסדר גמור 🙂");
+        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.timelineCalls()).isEmpty();      // the platform records both messages
+
+        webhook(Webhooks.text(PHONE, id, "טוב"));       // answered now: dropped
+        settle();
+        assertThat(fake.platformSends()).hasSize(3);
+    }
+
+    @Test
+    @DisplayName("A resend that FAILS is final: later redeliveries replay the key and its ~r1 - never a ~r2")
+    void aFailedResendIsFinal() throws Exception {
+        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
+        fake.onPlatformSend(platformWithMemory(new String[] {"FAILED", "MESSAGING_DISABLED"}));
+        turn(IDENTITY + "בסדר גמור 🙂");
+        String id = says("טוב");
+        webhook(Webhooks.text(PHONE, id, "טוב"));
+        webhook(Webhooks.text(PHONE, id, "טוב"));
+        settle();
+        List<String> keys = new ArrayList<>();
+        for (FakeServers.Call c : fake.platformSends()) {
+            keys.add(body(c).path("idempotencyKey").asText());
+        }
+        String key = "reply:" + id + ":0";
+        assertThat(keys).containsExactly(key, key, key + "~r1", key, key + "~r1");
         assertThat(fake.metaSends()).isEmpty();
     }
 
@@ -596,8 +683,8 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("A 429: re-POSTed once after its Retry-After (≤ 2 s), same bytes; a second 429 is answered as on its way, "
-            + "never sent directly")
+    @DisplayName("A 429: re-POSTed once after its Retry-After (≤ 2 s), same bytes; only 429s (or Retry-After > 2 s) = "
+            + "nothing created: unanswered, the redelivery posts the same key; never sent directly")
     void rateLimitedOnce() throws Exception {
         messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
         AtomicInteger n = new AtomicInteger();
@@ -609,26 +696,88 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
         assertThat(fake.platformSends().get(1).body()).isEqualTo(fake.platformSends().get(0).body());
         assertThat(fake.metaSends()).isEmpty();
 
+        // only 429s: nothing was created (the platform checks the key before its rate limit) - unanswered, so Meta's
+        // redelivery posts the same key again (and here gets it through); never sent directly
         fake.reset();
-        fake.onPlatformSend(c -> new Reply(429, "{\"error\":\"messaging.rate_limited\"}"));
+        AtomicInteger m = new AtomicInteger();
+        fake.onPlatformSend(c -> m.getAndIncrement() < 2
+                ? new Reply(429, "{\"error\":\"messaging.rate_limited\"}") : platform("ACCEPTED"));
         turn(IDENTITY + "בסדר גמור 🙂");
-        says("טוב");
+        String id = says("טוב");
+        assertThat(fake.platformSends()).hasSize(2);
+        assertThat(fake.metaSends()).isEmpty();
+        webhook(Webhooks.text(PHONE, id, "טוב"));
+        settle();
+        assertThat(fake.platformSends()).hasSize(3);
+        assertThat(fake.platformSends().get(2).body()).isEqualTo(fake.platformSends().get(0).body());
+        webhook(Webhooks.text(PHONE, id, "טוב"));   // answered now: dropped
+        settle();
+        assertThat(fake.platformSends()).hasSize(3);
+
+        // a Retry-After above 2 s: not waited for on the turn's thread - one POST, unanswered
+        fake.reset();
+        fake.onPlatformSend(c -> rateLimited(30));
+        turn(IDENTITY + "בסדר גמור 🙂");
+        String id2 = says("טוב");
+        assertThat(fake.platformSends()).hasSize(1);
+        webhook(Webhooks.text(PHONE, id2, "טוב"));
+        settle();
         assertThat(fake.platformSends()).hasSize(2);
         assertThat(fake.metaSends()).isEmpty();
     }
 
+    /** A 429 with a Retry-After header. */
+    static Reply rateLimited(int seconds) {
+        return new Reply(429, "{\"error\":\"messaging.rate_limited\"}", "application/json", null).withRetryAfter(seconds);
+    }
+
     @Test
-    @DisplayName("A delivery report for a reply (no ledger) is answered known:false and changes nothing")
-    void reportsAreUnknown() throws Exception {
+    @DisplayName("A delivery report for a reply (no ledger) is answered known:false, changes nothing, and is logged at "
+            + "INFO with its key, status and reason (a late FAILED after the 5 s wait is visible)")
+    void reportsAreUnknownAndLogged() throws Exception {
         messaging.setDeliveryStatusEnabled(true);
-        String messageId = UUID.randomUUID().toString();
-        String report = json.writeValueAsString(Map.of("messageId", messageId, "idempotencyKey", "reply:wamid.x:0",
-                "kind", "REPLY", "status", "DELIVERED"));
-        JsonNode a = json.readTree(mvc.perform(post(DeliveryStatusController.PATH).contentType(MediaType.APPLICATION_JSON)
-                .header("X-API-Key", CALLBACK_KEY).header("X-Idempotency-Key", "delivery:" + messageId + ":DELIVERED")
-                .content(report)).andReturn().getResponse().getContentAsString());
-        assertThat(a.path("known").asBoolean()).isFalse();
-        assertThat(a.path("applied").asBoolean()).isFalse();
+        ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
+                .getLogger(DeliveryStatusController.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> logs =
+                new ch.qos.logback.core.read.ListAppender<>();
+        logs.start();
+        logger.addAppender(logs);
+        try {
+            String messageId = UUID.randomUUID().toString();
+            String report = json.writeValueAsString(Map.of("messageId", messageId, "idempotencyKey", "reply:wamid.x:0",
+                    "kind", "REPLY", "status", "FAILED", "reason", "META_131026", "resendable", false));
+            JsonNode a = json.readTree(mvc.perform(post(DeliveryStatusController.PATH).contentType(MediaType.APPLICATION_JSON)
+                    .header("X-API-Key", CALLBACK_KEY).header("X-Idempotency-Key", "delivery:" + messageId + ":FAILED")
+                    .content(report)).andReturn().getResponse().getContentAsString());
+            assertThat(a.path("known").asBoolean()).isFalse();
+            assertThat(a.path("applied").asBoolean()).isFalse();
+            var unmatched = logs.list.stream().filter(e -> "messaging.delivery_status.unmatched".equals(e.getMessage()))
+                    .toList();
+            assertThat(unmatched).hasSize(1);
+            assertThat(unmatched.get(0).getLevel()).isEqualTo(ch.qos.logback.classic.Level.INFO);
+            String pairs = String.valueOf(unmatched.get(0).getKeyValuePairs());
+            assertThat(pairs).contains("reply:wamid.x:0").contains("FAILED").contains("META_131026").contains("REPLY");
+        } finally {
+            logger.detachAppender(logs);
+        }
+    }
+
+    @Test
+    @DisplayName("His message is marked recorded only when the synchronous report landed: when it failed (500) and the "
+            + "platform then created nothing (503), the D-039 report still sends his message")
+    void hisMessageIsReportedAgainWhenTheSynchronousAttemptFailed() throws Exception {
+        properties.setDeliveryReports(true);
+        messaging.setConversational(MessagingSettings.FIXED_LINE, Mode.PLATFORM);   // fake default: 503 disabled
+        AtomicInteger inbound = new AtomicInteger();
+        fake.onTimelineReports(c -> c.path().endsWith("/inbound") && inbound.getAndIncrement() == 0
+                ? new Reply(500, "{\"error\":\"boom\"}") : Reply.json("{\"recorded\":true}"));
+        webhook(Webhooks.image(PHONE, "wamid.pic500", ""));
+        settle();
+        assertThat(fake.metaSends()).hasSize(1);
+        // the failed synchronous attempt, its background retry, and the D-039 report (the platform records it once)
+        assertThat(fake.recordedInbound()).hasSize(3);
+        assertThat(fake.recordedInbound()).allMatch(c -> c.body().contains("wamid.pic500"));
+        assertThat(fake.recordedOutbound()).hasSize(1);
     }
 
     @Test

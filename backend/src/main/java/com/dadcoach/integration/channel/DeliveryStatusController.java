@@ -104,6 +104,18 @@ public class DeliveryStatusController {
         log.atInfo().setMessage("messaging.delivery_status").addKeyValue("messageId", messageId)
                 .addKeyValue("status", report.get("status").asText()).addKeyValue("known", applied.known())
                 .addKeyValue("applied", applied.moved()).log();
+        if (!applied.known()) {
+            // D-048 review: no ledger row holds the key (a conversational line, the belt promotion) - its fate is only
+            // here, e.g. a reply FAILED after Dad Coach's 5 s wait ended
+            log.atInfo().setMessage("messaging.delivery_status.unmatched").addKeyValue("messageId", messageId)
+                    .addKeyValue("kind", report.hasNonNull("kind") ? report.get("kind").asText() : null)
+                    .addKeyValue("idempotencyKey", report.hasNonNull("idempotencyKey")
+                            ? report.get("idempotencyKey").asText() : null)
+                    .addKeyValue("status", report.get("status").asText())
+                    .addKeyValue("reason", report.hasNonNull("reason") ? report.get("reason").asText() : null)
+                    .addKeyValue("resendable", report.hasNonNull("resendable") ? report.get("resendable").asBoolean() : null)
+                    .log();
+        }
         Map<String, Object> body = body(applied.moved(), null);
         body.put("known", applied.known());
         idempotency.complete(SCOPE, key, true, 200, body.toString());

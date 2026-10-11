@@ -182,9 +182,11 @@ Keep: everything in the table above (GOOGLE_* stay).
      (lane full, 100 queued per kind) means only that comparisons were skipped.
   4. **Dad Coach** `MESSAGING_MODE_<KIND>=PLATFORM` (restart). Watch 24 h: `whatsapp.delivery.result via=PLATFORM
      platformStatus=ACCEPTED|HELD`, `messaging.reply.platform`; **zero** `messaging.reply.refused`,
-     `messaging.platform_auth_failed`, `messaging.reply.request_failed`; `messaging.reply.ambiguous` and
-     `platformStatus=FAILED` rare and each explained (an ambiguous line is answered as "on its way" and never sent
-     again; a FAILED one leaves the message unanswered, as a refused send today); `whatsapp.turn.timing deliveryMs`
+     `messaging.platform_auth_failed`, `messaging.reply.request_failed`; `messaging.reply.ambiguous`,
+     `messaging.reply.rate_limited`, `messaging.reply.resend` and `platformStatus=FAILED` rare and each explained (an
+     ambiguous line is answered as "on its way" and never sent again; a FAILED or only-429 one leaves the message
+     unanswered, as a refused send today; a resendable FAILED is resent once as `~r1` on Meta's redelivery);
+     `messaging.delivery_status.unmatched … status=FAILED` = a reply that failed after the 5 s wait; `whatsapp.turn.timing deliveryMs`
      p95 under 3 s (the turn's thread waits at most `MESSAGING_REPLY_READ_TIMEOUT_MS`, 5 s); admin timeline: exactly one
      row per answer - the turn's own row with its delivery (REPLY as written), one `<wamid>:delivered` row in place of
      the draft (a corrected reply, the not-Hebrew line, the line instead of the card), or his message then one

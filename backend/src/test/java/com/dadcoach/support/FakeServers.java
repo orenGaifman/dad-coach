@@ -30,9 +30,18 @@ public final class FakeServers {
         }
     }
 
-    public record Reply(int status, String body, String contentType, byte[] raw) {
+    public record Reply(int status, String body, String contentType, byte[] raw, Map<String, String> headers) {
+        public Reply(int status, String body, String contentType, byte[] raw) {
+            this(status, body, contentType, raw, Map.of());
+        }
+
         public Reply(int status, String body) {
             this(status, body, "application/json", null);
+        }
+
+        /** D-048: the same answer with a {@code Retry-After} header. */
+        public Reply withRetryAfter(int seconds) {
+            return new Reply(status, body, contentType, raw, Map.of("Retry-After", String.valueOf(seconds)));
         }
 
         public static Reply json(String body) {
@@ -395,6 +404,9 @@ public final class FakeServers {
         }
         byte[] bytes = reply.raw() != null ? reply.raw() : reply.body().getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().add("Content-Type", reply.contentType());
+        if (reply.headers() != null) {
+            reply.headers().forEach((k, v) -> ex.getResponseHeaders().add(k, v));
+        }
         ex.sendResponseHeaders(reply.status(), bytes.length);
         try (OutputStream os = ex.getResponseBody()) {
             os.write(bytes);

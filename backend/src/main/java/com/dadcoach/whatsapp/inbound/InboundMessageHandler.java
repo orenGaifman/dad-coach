@@ -102,7 +102,7 @@ public class InboundMessageHandler {
         final java.util.Set<DeliveryResult> recordedByPlatform =
                 java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
 
-        /** D-048: his message was reported before the platform was asked to send the answer. */
+        /** D-048: his message was recorded (synchronously, it landed) before the platform was asked to send the answer. */
         boolean hisReported;
 
         boolean byPlatform(DeliveryResult result) {
@@ -785,12 +785,13 @@ public class InboundMessageHandler {
         }
         attempt.parts++;
         if (his != null && row.records() && reporting() && father.isPresent()) {
-            timeline.inboundBeforeAnswer(TimelineReports.Person.of(father.get()), in.idempotencyKey(), his,
-                    hisType(in, his), in.buttonId(), in.buttonId() == null ? null : in.textContent(),
-                    ReplyPlatformSend.INBOUND_BEFORE);
-            attempt.hisReported = true;
+            // only when it landed: otherwise it is queued in the background, and a D-039 report (DIRECT fallback)
+            // queues it once more - the platform records an inbound id once (review 5)
+            attempt.hisReported = timeline.inboundBeforeAnswer(TimelineReports.Person.of(father.get()),
+                    in.idempotencyKey(), his, hisType(in, his), in.buttonId(),
+                    in.buttonId() == null ? null : in.textContent(), ReplyPlatformSend.INBOUND_BEFORE);
         }
-        ReplyPlatformSend.Sent sent = replies.send(line, mode, () -> deliverDirect(phone, text));
+        ReplyPlatformSend.Sent sent = replies.send(line, () -> deliverDirect(phone, text));
         DeliveryResult result = sent.result();
         log.atInfo().setMessage("whatsapp.delivery.result")
                 .addKeyValue("kind", "CONVERSATIONAL_REPLY")

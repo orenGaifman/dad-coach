@@ -103,7 +103,15 @@ public class PlatformSendFlow {
     public record Applied(boolean known, boolean moved) {}
 
     /** How one answer is acted on (spec §16 table with v2.5 / v2.6). */
-    public enum Verdict { OWNED, ADOPT, DIRECT, REFUSED, AMBIGUOUS }
+    public enum Verdict {
+        OWNED, ADOPT, DIRECT, REFUSED, AMBIGUOUS,
+        /**
+         * D-048 review: only from {@link #sendOnce} with a {@link Options#rateLimitWait}: every answer was a 429 - the
+         * platform answers an existing key before its rate limit (v2.1), so nothing was created; the caller may try the
+         * same key again later (never sends it directly: spec §16).
+         */
+        RATE_LIMITED
+    }
 
     /**
      * How a send ended for its caller. {@code snapshot}: OWNED / ADOPT; {@code reason}: REFUSED; {@code direct}: what the
@@ -618,7 +626,9 @@ public class PlatformSendFlow {
                                    Options options) {
         Answer answer = post(body, options);
         Verdict verdict = verdict(answer, false);
-        if (answer.status() == 429 && options.rateLimitWait().compareTo(Duration.ZERO) > 0) {
+        boolean mayExist = false;
+        boolean rateLimits = options.rateLimitWait().compareTo(Duration.ZERO) > 0;
+        if (answer.status() == 429 && rateLimits) {
             // the platform answers an existing key before its rate limit (v2.1): a 429 created nothing - one more try
             Duration wait = Duration.ofSeconds(answer.retryAfterSeconds() == null ? 1 : answer.retryAfterSeconds());
             if (wait.compareTo(options.rateLimitWait()) <= 0) {
@@ -637,6 +647,10 @@ public class PlatformSendFlow {
                     .addKeyValue("first", answer.summary()).log();
             answer = post(body, options);
             verdict = verdict(answer, true);
+            mayExist = true;
+        }
+        if (verdict == Verdict.AMBIGUOUS && rateLimits && answer.status() == 429 && !mayExist) {
+            verdict = Verdict.RATE_LIMITED;   // every answer a 429: nothing was created
         }
         if (verdict == Verdict.REFUSED && options.conflictAdopts() && answer.status() == 409
                 && PlatformMessagingClient.IDEMPOTENCY_CONFLICT.equals(answer.errorCode())
@@ -663,6 +677,11 @@ public class PlatformSendFlow {
                 String reason = refusal(answer);
                 logRefused(log, event, idKey, id, answer, reason);
                 return new Settled<>(verdict, null, reason, null, answer);
+            }
+            case RATE_LIMITED -> {
+                log.atWarn().setMessage("messaging." + event + ".rate_limited").addKeyValue(idKey, id)
+                        .addKeyValue("retryAfter", answer.retryAfterSeconds()).log();
+                return new Settled<>(verdict, null, "PLATFORM_RATE_LIMITED", null, answer);
             }
             default -> {
                 log.atWarn().setMessage("messaging." + event + ".ambiguous").addKeyValue(idKey, id)

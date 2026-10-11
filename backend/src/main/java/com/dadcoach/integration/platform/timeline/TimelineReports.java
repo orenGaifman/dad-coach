@@ -192,38 +192,41 @@ public class TimelineReports {
      * D-048: his message, recorded BEFORE the platform's Send API sends the answer (the platform records that answer
      * itself, moments later - his message must come first on the timeline). One attempt on the caller's thread, bounded
      * by {@code timeout}; when it does not land, the usual background report (the platform records an inbound id once,
-     * so a late first attempt and the background one never make two rows).
+     * so a late first attempt and the background one never make two rows). Returns whether it landed now.
      */
-    public void inboundBeforeAnswer(Person person, String correlationId, String content, String messageType,
+    public boolean inboundBeforeAnswer(Person person, String correlationId, String content, String messageType,
                                     String buttonId, String buttonTitle, Duration timeout) {
         if (!platform.isEnabled()) {
-            return;
+            return false;
         }
         InboundBody body;
         try {
             body = inboundBody(person, correlationId, content, messageType, buttonId, buttonTitle);
         } catch (RuntimeException e) {
             notBuilt(WorkflowPlatformClient.INBOUND_PATH, correlationId, e);
-            return;
+            return false;
         }
         try {
             platform.report(WorkflowPlatformClient.INBOUND_PATH, body, timeout);
             log.atInfo().setMessage("timeline.reported").addKeyValue("path", WorkflowPlatformClient.INBOUND_PATH)
                     .addKeyValue("correlationId", correlationId).addKeyValue("attempt", 1).addKeyValue("before", true).log();
+            return true;
         } catch (WorkflowPlatformClient.ReportFailure e) {
             if (!e.retryable()) {
                 log.atWarn().setMessage("timeline.report_failed").addKeyValue("path", WorkflowPlatformClient.INBOUND_PATH)
                         .addKeyValue("correlationId", correlationId).addKeyValue("status", e.status())
                         .addKeyValue("error", e.getMessage()).addKeyValue("attempts", 1).log();
-                return;
+                return false;
             }
             log.atInfo().setMessage("timeline.report_deferred").addKeyValue("path", WorkflowPlatformClient.INBOUND_PATH)
                     .addKeyValue("correlationId", correlationId).addKeyValue("error", e.getMessage()).log();
             submit(WorkflowPlatformClient.INBOUND_PATH, correlationId, person.phone(), false, body);
+            return false;
         } catch (RuntimeException e) {
             log.atInfo().setMessage("timeline.report_deferred").addKeyValue("path", WorkflowPlatformClient.INBOUND_PATH)
                     .addKeyValue("correlationId", correlationId).addKeyValue("error", e.getMessage()).log();
             submit(WorkflowPlatformClient.INBOUND_PATH, correlationId, person.phone(), false, body);
+            return false;
         }
     }
 

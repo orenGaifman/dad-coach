@@ -142,6 +142,7 @@ public class LoginLinkPlatform implements PlatformSendFlow.Ledger {
             case DIRECT -> s.direct() != null ? s.direct() : DeliveryResult.sent(null);
             case REFUSED -> DeliveryResult.failed(s.reason());
             case AMBIGUOUS -> DeliveryResult.sent(null);
+            case RATE_LIMITED -> DeliveryResult.failed(s.reason());   // only from sendOnce (D-048): never here
         };
     }
 

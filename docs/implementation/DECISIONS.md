@@ -978,17 +978,29 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   His own message (no-turn lines, D-039 on) is reported by Dad Coach **before** the POST - one synchronous attempt
   ≤ 2 s (`TimelineReports.inboundBeforeAnswer`), else the background report (the platform records an inbound id once) -
   so it comes before the platform's row of the answer; when the platform then sends nothing (DIRECT fallback) the
-  D-039 report skips the inbound already made.
+  D-039 report skips the inbound only if the synchronous attempt landed (else it is reported again - recorded once).
 - **The answer** (`PlatformSendFlow.sendOnce` + new `Options`; default options = the D-046 behaviour, unchanged):
   - **Latency:** the POST's read timeout is `MESSAGING_REPLY_READ_TIMEOUT_MS` (default 5000, clamped 1000 .. the send
     timeout) instead of 12 s - the father waits; today's Meta call blocks up to 10 s. No re-POST after a timeout; one
     immediate re-POST of another ambiguous answer (502 edge, reset); a 429 re-POSTed once after its Retry-After when
     ≤ 2 s (spec §16 "turn replies: once, ≤ 2 s"; a 429 created nothing, v2.1).
   - ACCEPTED / DELIVERED / READ → sent with the wamid; HELD → sent (`held:<n>`, as the gate today); QUEUED, UNKNOWN or an
-    ambiguous answer (timeout, 5xx, edge page, a second 429) → answered as "on its way" (spec §16 UNKNOWN-equivalent,
-    D-042): the message is HANDLED, a redelivery is dropped, the line is **never sent directly and never posted again**.
-  - FAILED → unanswered (as a refused send today: the webhook releases the message; a redelivery posts the same key and
-    bytes - the platform replays the FAILED, nothing is sent twice). Refused (400/422) → unanswered, nothing sent.
+    ambiguous answer (timeout, 5xx, edge page) → answered as "on its way" (spec §16 UNKNOWN-equivalent, D-042): the
+    message is HANDLED, a redelivery is dropped, the line is **never sent directly and never posted again**.
+  - Only 429s (a second 429, or a Retry-After above 2 s) → **nothing was created** (the platform answers an existing key
+    before its rate limit, v2.1): unanswered `PLATFORM_RATE_LIMITED` (new `Verdict.RATE_LIMITED`, only from `sendOnce`
+    with a rate-limit wait), so Meta's redelivery posts the same key again; never sent directly (spec §16). A 429 after
+    an ambiguous attempt stays ambiguous (that attempt may be in flight).
+  - FAILED → unanswered (as a refused send today: the webhook releases the message). On Meta's redelivery the same key
+    and bytes are posted and the platform replays the FAILED. If its reason is **resendable** (the platform's
+    `MetaErrorPolicy.RESENDABLE`, copied as `ReplyPlatformSend.RESENDABLE`: NEVER_SENT_*, SENDER_UNAVAILABLE,
+    MESSAGING_DISABLED, HELD_*, NOT_AFTER, WINDOW_CLOSED, NO_TEMPLATE, 131047/131056/130429/131048/131057/80007/4,
+    HTTP_429 - nothing reached him and Meta decided nothing), the line is sent again **once** as a new message
+    `<key>~r1` with `retryOf` = the failed message (spec §10; the platform enforces G1-G5: not delivered, once, same
+    person, window, durable key) - same content, its own timeline row (`NEW_ROW <row>~r1`, the failed message keeps its
+    FAILED row); a later redelivery replays both keys. A resend that fails, or any other FAILED (131026, 131049,
+    131050 ...), is final. A refused resend (409 `retry_not_permitted`) → unanswered `RESEND_NOT_PERMITTED`.
+    Refused (400/422) → unanswered, nothing sent.
   - A 409 `idempotency_conflict` carrying the existing message is **adopted even on the first POST** (`conflictAdopts`):
     the key belongs to one inbound message, so a 409 means an earlier processing of it (a redelivery whose text came out
     different) already owns it - one answer per message.
@@ -1000,10 +1012,12 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   outlive that deletion (person lifecycle: the platform owns deletion), and a timeline record could reopen a
   conversation (D-039 never reports it). The spoken deletion request ("type it") is an ordinary FIXED_LINE.
 - **Delivery reports:** the conversational kinds keep no ledger - `DeliveryStatusController` answers `known:false`
-  (closes the platform's report), as for BELT_PROMOTION.
+  (closes the platform's report), as for BELT_PROMOTION, and logs every report no row holds at INFO
+  (`messaging.delivery_status.unmatched {messageId, kind, idempotencyKey, status, reason, resendable}`), so a line that
+  FAILED after Dad Coach's 5 s wait is visible.
 - **Not changed:** the reply guard (`WHATSAPP_REPLY`, D-038), the webhook claim and UNANSWERED rule (DC-B3), the turn,
   the guards, mentions; no migration (no ledger; V48 stays the latest).
-- **Tests:** `ReplyPlatformSendTest` (23, integration, fake platform + fake Meta, no real WhatsApp): DIRECT default (4
+- **Tests:** `ReplyPlatformSendTest` (23 at `1bc55c3`, 26 after the review; integration, fake platform + fake Meta, no real WhatsApp): DIRECT default (4
   Meta sends, D-039 reports as today, Send API never asked); DIRECT = SHADOW byte for byte for all four kinds (Meta
   bodies, timeline reports) + one dry run per line with its kind; SHADOW never on the turn's thread (a 3 s dry run, the
   answer < 2.5 s); PLATFORM REPLY as written (every request field, TURN_AS_IS, no Meta / gate / report, redelivery
@@ -1016,4 +1030,12 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   a hanging platform holds the turn ≤ the reply timeout (1 s: answered in 0.9-3 s), one POST, never Meta; timeout
   bounds; 409 with state adopted; 429 once after Retry-After / twice → on its way; report `known:false`; switches
   independent per kind. `PlatformMessagingUnitTest` +1 (the four switches parse and default DIRECT).
+- **Review (independent, `1bc55c3`: APPROVE WITH NITS) - fixed in the follow-up commit:** (1) only-429 answers =
+  nothing created → unanswered `PLATFORM_RATE_LIMITED` (was "on its way"); (2) a resendable FAILED is resent once via
+  `retryOf` `<key>~r1` on the redelivery (was replayed forever); (3) unmatched delivery reports logged at INFO;
+  (4) one PLATFORM path in `ReplyPlatformSend.send` (DIRECT / SHADOW only in the handler); (5) `hisReported` only when
+  the synchronous report landed. Tests: `ReplyPlatformSendTest` 23 → 26 (resend on the redelivery with retryOf and its
+  own row, a failed resend is final - never `~r2`, a final FAILED never resent, only-429 / Retry-After > 2 s
+  unanswered + redelivery re-POST, unmatched report logged at INFO, his message reported again when the synchronous
+  attempt failed). `FakeServers.Reply` can carry a `Retry-After` header.
 - **Rollout / rollback:** DEPLOYMENT.md "Platform Send API for the conversational lines (D-048)".
