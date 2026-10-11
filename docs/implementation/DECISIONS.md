@@ -1143,3 +1143,89 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   DELIVERED report on both ledgers; reconcile lookup with a kept receipt; no-ledger reports; session-timer notes; a
   failing kept-receipt apply never fails the send; a receipt whose apply threw is kept (both forced by a test-only
   raising trigger).
+
+## D-053 — The platform owns delivery: no Dad Coach send to Meta, no switches, no receipts (Unified Workflow Phase 6.4, 2026-10-11)
+
+- **Why:** the owner's 2026-10-11 instruction (finish the Unified Workflow migration) and the reviewed spec
+  `ai-workflow-platform/docs/architecture/PHASE6_4_CLEANUP_SPEC.md` ("Spec v2" authoritative). Production already ran
+  every Dad Coach kind on PLATFORM (D-045/D-046/D-048), but every path still fell back to Dad Coach's own Meta send when
+  the platform provably created nothing, the staff link, the deletion answer and the "something went wrong" line always
+  went directly, and Dad Coach named the Meta template, checked approval against its own Meta read, and parsed Meta's
+  receipts. Now the platform is the only sender and the only owner of template choice and receipts; Dad Coach keeps the
+  business: what is said, to whom, whether it is still true, its ledgers and their reactions.
+- **Removed:** the per-kind switches (`MessagingSettings` modes, `MESSAGING_MODE_*`), SHADOW (lanes, compare/mismatch,
+  `dryRun` requests), the DIRECT transport (`WhatsAppApiClient`, `WhatsAppAdapter`, `ChannelRouter`/`ChannelAdapter`,
+  `ChannelCapabilities`, `MessageDowngrader`, `DeliveryService`, `ProactiveSender` - its two text helpers moved to
+  `TemplateText`), `SharedNumberGate`, the DIRECT branches of `InboundMessageHandler`, `LoginLinkDelivery`'s sends (now the
+  card's copy only), `sendLate` of both ledgers, `MetaTemplateDirectory` (+ its 10-minute refresh job) and
+  `TemplateRegistry`/`TemplateMessage` (the send-path approval check), `DeliveryReceipts` (+ its 15 s retry job),
+  `HeldOutcomeController`/`HeldOutcomes`/`GatewayHeldReports` (`/api/integration/channel/held-outcome`), the Meta payload
+  builders of `WhatsAppMessageFormatter`, `SessionWindowService.checkBeforeDelivery`. Tests of that code went with it.
+  No migration: `template_messages`, `gateway_hold_id`, the receipt columns stay (unused), so a revert runs on the schema.
+  This also retires D-052's receipt-race fixes (the kept-receipt buffer, its 15 s pass, `applyPending` after a report):
+  with no receipt handler there is no receipt to race; `DeliveryLostWritesTest` keeps the paths that remain (reports
+  racing each other forward only on both ledgers, a forwarded receipt changing nothing, the reconcile lookup committed,
+  no-ledger kinds, the session-timer notes).
+- **Requests name no Meta template (spec §2):** `templateData` instead of `template`/`fallbackTemplates`/`expectedBody`.
+  SCHEDULED with its own session template: `{variant: session_morning_he | session_hour_before_he | session_follow_up_he,
+  values, payloads, named: {text}}` (the session's values and `dc:` payloads, `named.text` = the message as one line for
+  the general template); any other scheduled message `{variant: "", named: {text}}`; LOGIN_LINK (father and staff)
+  `{variant: "", named: {text: <the link line>}}`. The platform's seed (V140, `dad_coach`) maps the session variants to
+  their template then `dad_coach_update_he`, and `""` to `dad_coach_update_he`. Replies stay SESSION_ONLY, no
+  `templateData`. `windowPolicy`, `notAfter`, `timeline`, `windowHint`, `holdPolicy`, `timezone` (D-050) unchanged.
+- **Every line through `/send`:** the "something went wrong" line is a FIXED_LINE (SESSION_ONLY) with keys of its own
+  (`reply:<wamid>:down:<n>`, so the redelivery's real reply never replays it); the deletion answer is a FIXED_LINE sent
+  BEFORE the deletion is requested, naming nobody (`to` only - no `userId`/`personRef`/`personName`), `sensitive: true`,
+  `timeline.record: false`, `wait: ACCEPTED` (spec v2 R7; the person deletion that follows removes the platform's row);
+  the staff link is a LOGIN_LINK like a father's but not recorded on any timeline. **Behaviour change (an improvement,
+  spec §4.1 / C5):** a staff link outside his 24-hour window now goes as the general template (the platform decides);
+  before, a free-form message Meta refused (131047) went out.
+- **The answer table (spec §4.1 + v2 R5/R6/R12/R13/R14), no DIRECT row:** 2xx OWNED; 503 `messaging.disabled`
+  (ERROR `messaging.platform_disabled`), 401/403 (ERROR `messaging.platform_auth_failed`) or never written, on an attempt
+  after which nothing may exist = **NOT_CREATED**: a ledger row (bytes persisted before the first POST) stays pending
+  (scheduled: SENDING; link: SENT/QUEUED, so no second card) in `platform_state = NOT_CREATED`, and the reconcile job
+  re-POSTs the same bytes (1 min, doubling, at most every 10 min) while its relevance rule holds - scheduled `notAfter`,
+  a link unrevoked, unexpired and at most 1 h old - then FAILED `PLATFORM_NOT_CREATED`; a line without a ledger: one
+  re-POST after ≤ 2 s (`MESSAGING_NOT_CREATED_REPOST_WAIT`), then WARN `messaging.platform_not_created` and nothing sent -
+  the message stays unanswered, so Meta's redelivery posts the same key. 400/422 and a first-attempt 409 REFUSED; a 409
+  after an ambiguous attempt ADOPT; ambiguous re-POSTed then reconciled by key; reconcile lookup 404 = re-POST the stored
+  bytes (the platform holds nothing under that key), still only while relevant. A request that cannot be built is a bug:
+  FAILED `REQUEST_BUILD_FAILED` + ERROR. A key the platform's shape refuses travels as `h:` + 32 hex of its SHA-256
+  (`PlatformSendFlow.platformKey`, deterministic; a scheduled report by that key still finds its row).
+- **Receipts and reports:** the webhook still accepts a payload with `statuses` (200) and ignores them; the platform's
+  delivery reports (`/api/integration/channel/delivery-status`, forward-only `applyStatus`) and the reconcile lookup are
+  the only source of a message's fate. `MESSAGING_DELIVERY_STATUS_ENABLED` now defaults to true.
+- **Startup sweep (R12):** once at startup, ledger rows still pending (scheduled SENDING/HELD, links QUEUED/HELD or
+  ISSUED with a platform state) with no platform message id, not driven by the reconcile job and older than 1 h, become
+  UNKNOWN (`SWEPT_NO_PLATFORM_MESSAGE`; never failed, never re-sent), counts logged `messaging.pending_swept`.
+- **Templates screen:** reads the platform (`GET /api/v1/worker/whatsapp/templates` and `/messaging/kinds`,
+  `PlatformTemplateStatus`, cached 5 min, a failed read keeps the last good answer); "sync" reads it again. Same JSON
+  shape (+ `usedFor`); `ready` = a mapped candidate is usable now. The integrations card's "template outside 24 h" =
+  the platform could send SCHEDULED's default type as a template now.
+- **What still touches Meta (receiving, spec §4.4):** the voice-note media download (`WhatsAppMediaDownloader`, D-029),
+  the webhook's verify token and signature secret. So `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_API_BASE_URL`/`_VERSION`,
+  `WHATSAPP_WEBHOOK_SECRET`, `WHATSAPP_VERIFY_TOKEN` stay; `WHATSAPP_PHONE_NUMBER_ID` is now only checked by the startup
+  guard and the integrations card, `WHATSAPP_WABA_ID` is read by nothing (the screen shows the platform's WABA).
+- **Env now unused (verified by grep of the code):** `MESSAGING_MODE_LOGIN_LINK`, `MESSAGING_MODE_SCHEDULED`,
+  `MESSAGING_MODE_REPLY`, `MESSAGING_MODE_FIXED_LINE`, `MESSAGING_MODE_BUTTON_REPLY`, `MESSAGING_MODE_READY_ANSWER`
+  (+ `MESSAGING_MODE_BELT_PROMOTION`, already D-051), `GATEWAY_HELD_REPORTS`, `DAD_COACH_WHATSAPP_RECEIPTS_ENABLED`,
+  `WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME`, `WHATSAPP_WABA_ID`, `BELT_IMAGES_BASE_URL` (D-051). New:
+  `MESSAGING_NOT_CREATED_REPOST_WAIT` (optional, default PT2S).
+- **Rollback:** `git revert` of the merge + a new deploy, with the env of today set back BEFORE the deploy (spec §6 / R16):
+  `MESSAGING_MODE_LOGIN_LINK|SCHEDULED|REPLY|FIXED_LINE|BUTTON_REPLY|READY_ANSWER=PLATFORM`, `GATEWAY_HELD_REPORTS=true`,
+  `MESSAGING_DELIVERY_STATUS_ENABLED=true`; on the platform `WORKFLOW_CHANNELS_WHATSAPP_FORWARDSTATUSES=true` and
+  `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_HELDREPORTURL` restored. Without the mode env a reverted Dad Coach sends DIRECT
+  (it keeps its token), a working state. Products first, platform last; never the platform alone (an old platform
+  refuses `templateData` requests, R9). Rows a revert finds in `platform_state = NOT_CREATED` are read by the old code as
+  neither ambiguous nor owned: their `platform_next_at` is cleared by its reconcile (nothing sent, stays pending) - check
+  `SELECT count(*) ... WHERE platform_state = 'NOT_CREATED'` before reverting and expect 0 in normal operation.
+- **Kill switch semantics:** platform `MESSAGING_ENABLED=false` or `dad_coach` out of `MESSAGING_ALLOWED_PRODUCTS` now
+  means "Dad Coach queues and re-POSTs" (ledger kinds, while relevant) or "the line is not sent, the message stays
+  unanswered" (replies) - never a Dad Coach send. Before each deploy the platform allow-list must carry the whole product
+  key `dad_coach` (R2).
+- **Tests:** the test base asserts after every test that fake Meta received no send; every former fake-Meta assertion is
+  an assertion on the `/send` request (`FakeServers.sendRequests`/`sentTexts`, the default fake platform accepts and
+  replays by key); the answer table row by row (`PlatformMessagingUnitTest`, `LoginLinkPlatformSendTest`,
+  `ScheduledPlatformSendTest`, `ReplyPlatformSendTest`); statuses on the webhook ignored; reports drive both ledgers;
+  `KindTemplateSeedContractTest` - every (kind, variant) Dad Coach emits exists in the platform seed (copied as
+  `kind-template-seed.json`) with matching values / payloads / `named.text`; `PendingSweepTest`.

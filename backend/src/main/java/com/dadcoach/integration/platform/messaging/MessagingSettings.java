@@ -1,64 +1,53 @@
 package com.dadcoach.integration.platform.messaging;
 
 import java.time.Duration;
-import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * D-045 (Unified Workflow Phase 6.3-DC): who sends each kind of message - Dad Coach itself, or the platform's Send API
- * ({@code POST /api/v1/worker/messages/send}, platform spec PHASE6_2_SEND_API_SPEC §15.2). One switch per kind:
- * {@code LOGIN_LINK} (a father's dashboard link, D-045), {@code SCHEDULED} (the platform's scheduled-response callbacks:
- * session timers, daily check, weekly plan - D-046; the belt promotion's switch went with the notifier, D-051), and D-048's
- * conversational lines - {@code REPLY} (the coach's turn reply), {@code FIXED_LINE} (Dad Coach's
- * fixed lines: a picture or a voice note not understood, the not-Hebrew line, the line instead of the card),
- * {@code BUTTON_REPLY} (a session button's fixed answer) and {@code READY_ANSWER} (D-036's answers from data).
+ * How Dad Coach talks to the platform's Send API ({@code POST /api/v1/worker/messages/send}, platform spec
+ * PHASE6_2_SEND_API_SPEC). Since D-053 (Unified Workflow 6.4) the platform is the only sender: the per-kind
+ * {@code MESSAGING_MODE_*} switches (D-045/D-046/D-048), SHADOW and Dad Coach's own Meta sends are gone. The kinds
+ * Dad Coach sends: {@link #LOGIN_LINK} (a dashboard link, father or staff), {@link #SCHEDULED} (the platform's
+ * scheduled-response callbacks: session timers, daily check, weekly plan) and the conversational lines {@link #REPLY},
+ * {@link #FIXED_LINE} (incl. the "something went wrong" line and the deletion answer), {@link #BUTTON_REPLY},
+ * {@link #READY_ANSWER}.
  * <ul>
- *   <li>{@code MESSAGING_MODE_LOGIN_LINK} / {@code MESSAGING_MODE_SCHEDULED} /
- *       {@code MESSAGING_MODE_REPLY} / {@code MESSAGING_MODE_FIXED_LINE} / {@code MESSAGING_MODE_BUTTON_REPLY} /
- *       {@code MESSAGING_MODE_READY_ANSWER} = {@code DIRECT} (default; anything not recognised too): today's path, nothing else is called; {@code SHADOW}:
- *       today's path, then (off the send thread) the platform's dry run of the same request, differences logged - never
- *       a second message; {@code PLATFORM}: the platform sends it.</li>
- *   <li>{@code MESSAGING_DELIVERY_STATUS_ENABLED} (default false): the platform's delivery reports
- *       ({@code POST /api/integration/channel/delivery-status}) are applied; off = 404 and nothing changes (the
- *       platform retries for 24 h).</li>
+ *   <li>{@code MESSAGING_DELIVERY_STATUS_ENABLED} (default true since D-053: the platform's reports are the only source
+ *       of a message's fate): the platform's delivery reports ({@code POST /api/integration/channel/delivery-status})
+ *       are applied; off = 404 and nothing changes (the platform retries for 24 h).</li>
  *   <li>{@code MESSAGING_RECONCILE_AFTER} (default 5 min): after an ambiguous answer, when Dad Coach asks the platform
  *       by its key whether the message exists (spec v2.5).</li>
  *   <li>{@code MESSAGING_SEND_READ_TIMEOUT_MS} (default 12000 = the platform's wait of 8 s + 4 s, spec §3.1).
  *       {@code MESSAGING_REPLY_READ_TIMEOUT_MS} (default 5000, 1000 .. the send timeout): a conversational line's POST -
  *       the father is waiting (D-048).</li>
- *   <li>{@code MESSAGING_LOOKUP_READ_TIMEOUT_MS} (default 5000): the reconcile job's {@code GET /messages?idempotencyKey}
- *       (a lookup has no wait on the platform). {@code MESSAGING_RECONCILE_PASS_BUDGET} (default PT15S): one reconcile
- *       pass stops taking rows once it has run this long; the rest are taken the next minute (D-047: the job shares the
- *       scheduler thread with every other job while {@code APP_SCHEDULING_LANES} is off).</li>
+ *   <li>{@code MESSAGING_LOOKUP_READ_TIMEOUT_MS} (default 5000): the reconcile job's {@code GET /messages?idempotencyKey}.
+ *       {@code MESSAGING_RECONCILE_PASS_BUDGET} (default PT15S): one reconcile pass stops taking rows once it has run
+ *       this long (D-047).</li>
+ *   <li>{@code MESSAGING_NOT_CREATED_REPOST_WAIT} (default PT2S, at most 2 s): a line without a ledger the platform
+ *       provably did not create is POSTed once more after this wait, then dropped (D-053).</li>
  * </ul>
- * Rollback of a kind = its switch back to {@code DIRECT}; keep the delivery-status switch on for 48 h after the last
- * PLATFORM send, so messages the platform still owns are reported.
  */
 @Component
 public class MessagingSettings {
 
     private static final Logger log = LoggerFactory.getLogger(MessagingSettings.class);
 
-    public enum Mode { DIRECT, SHADOW, PLATFORM }
-
     public static final String LOGIN_LINK = "LOGIN_LINK";
     public static final String SCHEDULED = "SCHEDULED";
-    /** D-048: the conversational lines, one switch each ({@code MESSAGING_MODE_<KIND>}). */
+    /** D-048: the conversational lines. */
     public static final String REPLY = "REPLY";
     public static final String FIXED_LINE = "FIXED_LINE";
     public static final String BUTTON_REPLY = "BUTTON_REPLY";
     public static final String READY_ANSWER = "READY_ANSWER";
+    /** Every kind Dad Coach can send (the seed contract test walks these). */
+    public static final java.util.List<String> KINDS = java.util.List.of(LOGIN_LINK, SCHEDULED, REPLY, FIXED_LINE,
+            BUTTON_REPLY, READY_ANSWER);
     public static final Duration MIN_RECONCILE_AFTER = Duration.ofMinutes(5);
+    static final Duration MAX_NOT_CREATED_REPOST_WAIT = Duration.ofSeconds(2);
 
-    private volatile Mode loginLink;
-    private volatile Mode scheduled;
-    private volatile Mode reply = Mode.DIRECT;
-    private volatile Mode fixedLine = Mode.DIRECT;
-    private volatile Mode buttonReply = Mode.DIRECT;
-    private volatile Mode readyAnswer = Mode.DIRECT;
     private volatile int replyReadTimeoutMs = 5000;
     private volatile boolean deliveryStatusEnabled;
     private volatile Duration reconcileAfter;
@@ -66,85 +55,17 @@ public class MessagingSettings {
     private volatile int readTimeoutMs;
     private volatile int lookupReadTimeoutMs = 5000;
     private volatile Duration reconcilePassBudget = Duration.ofSeconds(15);
-
-    /** D-045's switches only (the other kinds DIRECT). */
-    public MessagingSettings(String loginLink, boolean deliveryStatusEnabled, Duration reconcileAfter, int connectTimeoutMs,
-                             int readTimeoutMs) {
-        this(loginLink, "DIRECT", deliveryStatusEnabled, reconcileAfter, connectTimeoutMs, readTimeoutMs);
-    }
+    private volatile Duration notCreatedRepostWait = MAX_NOT_CREATED_REPOST_WAIT;
 
     @org.springframework.beans.factory.annotation.Autowired
-    public MessagingSettings(@Value("${dad-coach.messaging.modes.login-link:DIRECT}") String loginLink,
-                             @Value("${dad-coach.messaging.modes.scheduled:DIRECT}") String scheduled,
-                             @Value("${dad-coach.messaging.delivery-status-enabled:false}") boolean deliveryStatusEnabled,
+    public MessagingSettings(@Value("${dad-coach.messaging.delivery-status-enabled:true}") boolean deliveryStatusEnabled,
                              @Value("${dad-coach.messaging.reconcile-after:PT5M}") Duration reconcileAfter,
                              @Value("${dad-coach.messaging.connect-timeout-ms:2000}") int connectTimeoutMs,
                              @Value("${dad-coach.messaging.send-read-timeout-ms:12000}") int readTimeoutMs) {
-        this.loginLink = parse(LOGIN_LINK, loginLink);
-        this.scheduled = parse(SCHEDULED, scheduled);
         this.deliveryStatusEnabled = deliveryStatusEnabled;
         this.reconcileAfter = atLeastMinimum(reconcileAfter);
         this.connectTimeoutMs = connectTimeoutMs;
         this.readTimeoutMs = readTimeoutMs;
-    }
-
-    /** Only the three names, in any case; anything else (empty, a typo) is DIRECT - today's path. */
-    static Mode parse(String kind, String raw) {
-        if (raw == null || raw.isBlank()) {
-            return Mode.DIRECT;
-        }
-        try {
-            return Mode.valueOf(raw.strip().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            log.atWarn().setMessage("messaging.mode_unknown").addKeyValue("kind", kind).addKeyValue("value", raw)
-                    .addKeyValue("using", Mode.DIRECT).log();
-            return Mode.DIRECT;
-        }
-    }
-
-    public Mode loginLink() {
-        return loginLink;
-    }
-
-    public Mode scheduled() {
-        return scheduled;
-    }
-
-    /** D-048: the switch of one conversational kind ({@link #REPLY}, {@link #FIXED_LINE}, ...); any other name DIRECT. */
-    public Mode conversational(String kind) {
-        return switch (kind) {
-            case REPLY -> reply;
-            case FIXED_LINE -> fixedLine;
-            case BUTTON_REPLY -> buttonReply;
-            case READY_ANSWER -> readyAnswer;
-            default -> Mode.DIRECT;
-        };
-    }
-
-    /**
-     * D-048: {@code MESSAGING_MODE_REPLY}, {@code _FIXED_LINE}, {@code _BUTTON_REPLY}, {@code _READY_ANSWER} (default
-     * DIRECT, parsed as the others).
-     */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    public void setConversationalModes(@Value("${dad-coach.messaging.modes.reply:DIRECT}") String reply,
-                                       @Value("${dad-coach.messaging.modes.fixed-line:DIRECT}") String fixedLine,
-                                       @Value("${dad-coach.messaging.modes.button-reply:DIRECT}") String buttonReply,
-                                       @Value("${dad-coach.messaging.modes.ready-answer:DIRECT}") String readyAnswer) {
-        this.reply = parse(REPLY, reply);
-        this.fixedLine = parse(FIXED_LINE, fixedLine);
-        this.buttonReply = parse(BUTTON_REPLY, buttonReply);
-        this.readyAnswer = parse(READY_ANSWER, readyAnswer);
-    }
-
-    /** Tests flip one conversational kind. */
-    public void setConversational(String kind, Mode mode) {
-        switch (kind) {
-            case REPLY -> this.reply = mode;
-            case FIXED_LINE -> this.fixedLine = mode;
-            case BUTTON_REPLY -> this.buttonReply = mode;
-            case READY_ANSWER -> this.readyAnswer = mode;
-            default -> throw new IllegalArgumentException("not a conversational kind: " + kind);
-        }
     }
 
     /**
@@ -185,6 +106,11 @@ public class MessagingSettings {
         return reconcilePassBudget;
     }
 
+    /** D-053: the wait before a ledger-less line's one re-POST after "nothing created" (≤ 2 s, spec §4.1). */
+    public Duration notCreatedRepostWait() {
+        return notCreatedRepostWait;
+    }
+
     /** D-047: {@code MESSAGING_LOOKUP_READ_TIMEOUT_MS} (default 5000); tests shorten it. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setLookupReadTimeoutMs(@Value("${dad-coach.messaging.lookup-read-timeout-ms:5000}") int lookupReadTimeoutMs) {
@@ -197,13 +123,11 @@ public class MessagingSettings {
         this.reconcilePassBudget = budget == null || budget.isNegative() || budget.isZero() ? Duration.ofSeconds(15) : budget;
     }
 
-    /** Tests flip the switches on the one cached context. */
-    public void setLoginLink(Mode mode) {
-        this.loginLink = mode;
-    }
-
-    public void setScheduled(Mode mode) {
-        this.scheduled = mode;
+    /** D-053: {@code MESSAGING_NOT_CREATED_REPOST_WAIT} (default PT2S, clamped to 0..2 s); tests shorten it. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setNotCreatedRepostWait(@Value("${dad-coach.messaging.not-created-repost-wait:PT2S}") Duration wait) {
+        this.notCreatedRepostWait = wait == null || wait.isNegative() ? MAX_NOT_CREATED_REPOST_WAIT
+                : wait.compareTo(MAX_NOT_CREATED_REPOST_WAIT) > 0 ? MAX_NOT_CREATED_REPOST_WAIT : wait;
     }
 
     public void setDeliveryStatusEnabled(boolean enabled) {

@@ -80,7 +80,9 @@ class AdminAreaTest extends AbstractWebIntegrationTest {
         mvc.perform(staff.on(get("/api/admin/fathers/424242424"))).andExpect(status().isNotFound());
         mvc.perform(staff.on(get("/api/admin/integrations"))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.opsApiConfigured").value(true)).andExpect(jsonPath("$.platform.enabled").value(true));
-        // a failed login-link delivery shows up as undelivered
+        // a failed login-link delivery shows up as undelivered (D-053: the platform reports the link FAILED)
+        fake.onPlatformSend(c -> com.dadcoach.support.FakeServers.platformAnswer(200, java.util.UUID.randomUUID().toString(),
+                "FAILED", "WINDOW_CLOSED", null));
         mvc.perform(post("/api/auth/request-link").contentType(MediaType.APPLICATION_JSON).content("{\"phone\":\"" + phoneOf(father) + "\"}"));
         mvc.perform(staff.on(get("/api/admin/undelivered"))).andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.fatherId == " + father + ")].kind").value("LOGIN_LINK"));

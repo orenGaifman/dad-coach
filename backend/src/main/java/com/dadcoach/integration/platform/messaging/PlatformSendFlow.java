@@ -6,26 +6,25 @@ import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import com.dadcoach.integration.platform.lifecycle.PersonRefs;
 import com.dadcoach.integration.platform.messaging.PlatformMessagingClient.Answer;
 import com.dadcoach.integration.platform.messaging.PlatformMessagingClient.Kind;
-import com.dadcoach.whatsapp.DeliveryReceipts;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -33,38 +32,46 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * D-045 / D-046 / D-048 (Unified Workflow Phase 6.3-DC): the mechanics every kind Dad Coach hands to the platform's Send API
- * shares - platform spec {@code PHASE6_2_SEND_API_SPEC.md} §3, §7.4, §8, §16 with "Spec v2" v2.1-v2.6. Extracted from
- * D-045's {@code LoginLinkPlatform} without a change in behaviour; each kind supplies its ledger ({@link Ledger}: its
- * table, how a platform status reads on its row, how it is sent directly) and its own logger, so its log lines keep
- * their names ({@code messaging.<event>.*}).
+ * The mechanics every kind Dad Coach hands to the platform's Send API shares - platform spec
+ * {@code PHASE6_2_SEND_API_SPEC.md} §3, §7.4, §8, §16 with "Spec v2" v2.1-v2.6 (D-045 / D-046 / D-048). Since D-053
+ * (Unified Workflow 6.4, {@code PHASE6_4_CLEANUP_SPEC.md} §4.1) the platform is the only sender: no answer leads to Dad
+ * Coach sending a message itself. Each kind supplies its ledger ({@link Ledger}) and its own logger, so its log lines
+ * keep their names ({@code messaging.<event>.*}).
  *
+ * <p>The answer table (§4.1 with v2 R5/R6/R12/R13/R14):
  * <ul>
- *   <li><b>Ledger kinds</b> ({@link #send}): the row and the exact request bytes are committed first (own transaction),
- *       then {@code POST /send}. 2xx with a status: the platform owns it ({@link #apply}, forward only, bytes cleared).
- *       Provably nothing created - 503 {@code messaging.disabled}, 401/403 or never written, each on the FIRST attempt
- *       only: sent directly, today's way, same row. 400/422 (any attempt) and a first-attempt 409: refused, FAILED, never
- *       sent directly. Anything ambiguous: one immediate re-POST of the same bytes (not after a timeout or a 429), then
- *       {@link #reconcileDue} re-POSTs once more and, {@code MESSAGING_RECONCILE_AFTER} after the first POST, asks by
- *       key: 200 adopt, 404 {@code messaging.message_not_found} = never created (sent directly if the kind says it is
- *       still worth sending), anything else again for 1 h, then UNKNOWN - never sent.</li>
- *   <li><b>Kinds without a ledger</b> ({@link #sendOnce}, spec v2.6: the bytes stay in memory): the same answer rules
- *       and the one immediate re-POST; an ambiguous answer is logged and never sent directly (no reconcile). D-048: a
- *       kind may set {@link Options} - its own read timeout, a 409 with state adopted on the first POST (a key a
- *       redelivery reuses), one re-POST of a 429 after a short Retry-After.</li>
- *   <li><b>SHADOW</b> ({@link #shadow}): the platform's dry run of the same request on a thread of its own
- *       ({@code messaging-shadow}, queue 100, dropped when full); differences logged, never a second message.</li>
+ *   <li>2xx with a status: OWNED - the platform has it ({@link #apply}, forward only, bytes cleared).</li>
+ *   <li>Provably nothing created on an attempt after which no earlier one may exist - 503 {@code messaging.disabled}
+ *       (ERROR {@code messaging.platform_disabled}), 401/403 (ERROR {@code messaging.platform_auth_failed}) or a request
+ *       never written: <b>NOT_CREATED</b>. A ledger row keeps its stored request bytes and stays pending (state
+ *       {@code NOT_CREATED}); {@link #reconcileDue} re-POSTs the same bytes while the kind's relevance rule holds
+ *       ({@link Ledger#stillSendable}: {@code notAfter}, the link's validity), then FAILED {@code PLATFORM_NOT_CREATED}.
+ *       A line without a ledger ({@link #sendOnce}): one re-POST after at most 2 s, then dropped with WARN
+ *       {@code messaging.platform_not_created}.</li>
+ *   <li>400/422 (any attempt) and a first-attempt 409: REFUSED (FAILED with the platform's reason).</li>
+ *   <li>A 409 after an ambiguous attempt: ADOPT.</li>
+ *   <li>Anything ambiguous (timeout, 5xx, an edge page, 429, a connection lost after write): one immediate re-POST of
+ *       the same bytes (not after a timeout or a 429), then the reconcile job re-POSTs once more and, after
+ *       {@code MESSAGING_RECONCILE_AFTER}, asks by key: 200 adopt; 404 {@code messaging.message_not_found} (nothing
+ *       created) - re-POST the stored bytes while still relevant, else FAILED; anything else again for 1 h, then
+ *       UNKNOWN - never sent again.</li>
  * </ul>
+ * A request that cannot be built is a Dad Coach bug: the caller records FAILED {@code REQUEST_BUILD_FAILED} and logs an
+ * ERROR. An idempotency key the platform's key shape refuses is replaced by {@link #platformKey} (deterministic).
  */
 @Component
 public class PlatformSendFlow {
 
     public static final String POSTING = "POSTING";
     public static final String AMBIGUOUS = "AMBIGUOUS";
+    public static final String NOT_CREATED = "NOT_CREATED";
     public static final String OWNED = "OWNED";
-    public static final String DIRECT = "DIRECT";
     public static final String REFUSED = "REFUSED";
     public static final String GAVE_UP = "GAVE_UP";
+    /** A request Dad Coach could not build (a bug): FAILED with this reason, nothing posted. */
+    public static final String REQUEST_BUILD_FAILED = "REQUEST_BUILD_FAILED";
+    /** Nothing was created and it is no longer worth sending (or no longer can be): FAILED with this reason. */
+    public static final String PLATFORM_NOT_CREATED = "PLATFORM_NOT_CREATED";
 
     /** A POST in flight is the sending thread's for this long; after it the job takes the row as ambiguous. */
     public static final Duration LEASE = Duration.ofMinutes(2);
@@ -75,7 +82,13 @@ public class PlatformSendFlow {
     /** A row the platform keeps QUEUED/HELD is looked up by GET while it is this young (held: 24 h at most). */
     public static final Duration OPEN_FOR = Duration.ofHours(26);
     public static final Duration HELD_POLL = Duration.ofHours(1);
+    /** A NOT_CREATED row is re-POSTed after 1 min, then doubling, at most every 10 min (while still relevant). */
+    static final Duration NOT_CREATED_FIRST = Duration.ofMinutes(1);
+    static final Duration NOT_CREATED_MAX = Duration.ofMinutes(10);
     static final int BATCH = 20;
+
+    /** The platform's idempotency key shape ({@code SendRequestValidator.KEY}). */
+    static final Pattern KEY_SHAPE = Pattern.compile("[A-Za-z0-9:_.~@/+=-]{1,200}");
 
     /** The platform's statuses, by rank (forward only); FAILED and UNKNOWN are decided apart. */
     private static final Map<String, Integer> RANK = Map.of("QUEUED", 1, "HELD", 2, "ACCEPTED", 3, "DELIVERED", 5,
@@ -102,22 +115,21 @@ public class PlatformSendFlow {
     /** What applying a report did: whether a row holds the key, and whether the row moved. */
     public record Applied(boolean known, boolean moved) {}
 
-    /** How one answer is acted on (spec §16 table with v2.5 / v2.6). */
+    /** How one answer is acted on (spec 6.4 §4.1). */
     public enum Verdict {
-        OWNED, ADOPT, DIRECT, REFUSED, AMBIGUOUS,
+        OWNED, ADOPT, REFUSED, AMBIGUOUS,
+        /** Provably nothing was created (503 messaging.disabled, 401/403, never written): pending, re-POSTed later. */
+        NOT_CREATED,
         /**
          * D-048 review: only from {@link #sendOnce} with a {@link Options#rateLimitWait}: every answer was a 429 - the
          * platform answers an existing key before its rate limit (v2.1), so nothing was created; the caller may try the
-         * same key again later (never sends it directly: spec §16).
+         * same key again later.
          */
         RATE_LIMITED
     }
 
-    /**
-     * How a send ended for its caller. {@code snapshot}: OWNED / ADOPT; {@code reason}: REFUSED; {@code direct}: what the
-     * direct send returned (DIRECT), null when another path had taken the row meanwhile.
-     */
-    public record Settled<R>(Verdict verdict, Snapshot snapshot, String reason, R direct, Answer answer) {}
+    /** How a send ended for its caller. {@code snapshot}: OWNED / ADOPT; {@code reason}: REFUSED / RATE_LIMITED. */
+    public record Settled(Verdict verdict, Snapshot snapshot, String reason, Answer answer) {}
 
     /** One SET fragment of this class's own constants, with its parameters (never outside input in the SQL). */
     public record Update(String set, Object... params) {}
@@ -141,7 +153,7 @@ public class PlatformSendFlow {
         /** The row id's name in its log lines ({@code linkId}, ...). */
         String idKey();
 
-        /** The row's idempotency key. */
+        /** The row's idempotency key as the platform knows it ({@link PlatformSendFlow#platformKey}). */
         String idempotencyKey(UUID id);
 
         /** The row a delivery report is about, by its idempotency key or else the platform's message id; empty if none. */
@@ -156,7 +168,7 @@ public class PlatformSendFlow {
         /** The platform's status onto the row's own columns; runs in the apply transaction, the row locked. */
         void applyStatus(UUID id, Snapshot snap, Timestamp at);
 
-        /** Extra SET for an ambiguous answer ("" for none). */
+        /** Extra SET while the message is on its way but not owned (ambiguous or not created yet; "" for none). */
         String ambiguousSet();
 
         /** The row's own columns for a refused request (400/422/409). */
@@ -165,51 +177,56 @@ public class PlatformSendFlow {
         /** The row's own columns when no answer came for an hour: UNKNOWN, never sent again. */
         Update gaveUp(String reason, Timestamp at);
 
-        /** The row's own columns when the platform never created it and it is too late to send it directly. */
-        Update ended(Timestamp at);
+        /** The row's own columns when the platform never created it and it is no longer sent: FAILED {@code reason}. */
+        Update ended(String reason, Timestamp at);
 
-        /** Before a reconcile re-POST: null to go on, else why it is given up ({@code NO_FATHER}, ...). */
+        /** Before a reconcile re-POST: null to go on, else why it cannot be sent any more ({@code NO_FATHER}, ...). */
         String blocker(UUID id, String body);
 
-        /** After "never created" (reconcile 404): whether it is still worth sending directly. */
+        /** Nothing created (yet): whether it is still worth sending - the kind's relevance rule. */
         boolean stillSendable(UUID id, String body, Instant now);
-
-        /** Sends it directly after the flow took the row (state DIRECT) in the reconcile job: today's way. */
-        void sendLate(UUID id, String body);
     }
-
-    /** What Dad Coach itself did, for the SHADOW comparison. {@code template} null = free-form. */
-    public record ShadowFacts(boolean successful, boolean held, String failureReason, String template) {}
 
     private final MessagingSettings settings;
     private final PlatformMessagingClient client;
     private final WorkflowPlatformProperties platform;
     private final CommunicationEndpointRepository endpoints;
-    private final DeliveryReceipts receipts;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
     private final ObjectMapper json;
     private final Clock clock;
-    private final boolean receiptsEnabled;
-    /** One SHADOW lane per kind (review N3): a burst of one kind never drops another kind's comparisons. */
-    private final Map<String, ThreadPoolExecutor> shadowLanes = new java.util.concurrent.ConcurrentHashMap<>();
-    private final Map<String, java.util.concurrent.atomic.AtomicLong> shadowDropped = new java.util.concurrent.ConcurrentHashMap<>();
 
     public PlatformSendFlow(MessagingSettings settings, PlatformMessagingClient client, WorkflowPlatformProperties platform,
-                            CommunicationEndpointRepository endpoints, DeliveryReceipts receipts, JdbcTemplate jdbc,
-                            PlatformTransactionManager transactions, ObjectMapper json, Clock clock,
-                            @Value("${dad-coach.whatsapp.receipts.enabled:true}") boolean receiptsEnabled) {
+                            CommunicationEndpointRepository endpoints, JdbcTemplate jdbc,
+                            PlatformTransactionManager transactions, ObjectMapper json, Clock clock) {
         this.settings = settings;
         this.client = client;
         this.platform = platform;
         this.endpoints = endpoints;
-        this.receipts = receipts;
         this.jdbc = jdbc;
         this.tx = new TransactionTemplate(transactions);
         this.tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.json = json;
         this.clock = clock;
-        this.receiptsEnabled = receiptsEnabled;
+    }
+
+    // ------------------------------------------------------------------------------------------------- the key
+
+    /**
+     * The idempotency key as the platform accepts it (spec v2 R5): the key itself when it fits the platform's shape
+     * ({@code [A-Za-z0-9:_.~@/+=-]{1,200}}), else {@code h:} + the first 32 hex digits of its SHA-256 - deterministic, so
+     * every re-POST, lookup and redelivery uses the same key.
+     */
+    public static String platformKey(String key) {
+        if (key != null && KEY_SHAPE.matcher(key).matches()) {
+            return key;
+        }
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256").digest(String.valueOf(key).getBytes(StandardCharsets.UTF_8));
+            return "h:" + HexFormat.of().formatHex(hash).substring(0, 32);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     // ------------------------------------------------------------------------------------------------- the answer
@@ -217,7 +234,7 @@ public class PlatformSendFlow {
     /** @param earlierMayExist an earlier attempt with these bytes may have created the message */
     public static Verdict verdict(Answer a, boolean earlierMayExist) {
         if (a.kind() == Kind.NEVER_WRITTEN) {
-            return earlierMayExist ? Verdict.AMBIGUOUS : Verdict.DIRECT;
+            return earlierMayExist ? Verdict.AMBIGUOUS : Verdict.NOT_CREATED;
         }
         if (a.kind() == Kind.AMBIGUOUS) {
             return Verdict.AMBIGUOUS;
@@ -230,10 +247,10 @@ public class PlatformSendFlow {
             // nothing created by THIS request (an existing key is answered before the kill switch, v2.1) - but after an
             // ambiguous attempt that one may still be in flight on another platform instance (a restart flipping the
             // switch): only the lookup by key, minutes later, may say "never created" (review M1)
-            return earlierMayExist ? Verdict.AMBIGUOUS : Verdict.DIRECT;
+            return earlierMayExist ? Verdict.AMBIGUOUS : Verdict.NOT_CREATED;
         }
         if (s == 401 || s == 403) {
-            return earlierMayExist ? Verdict.AMBIGUOUS : Verdict.DIRECT;   // refused before any handler
+            return earlierMayExist ? Verdict.AMBIGUOUS : Verdict.NOT_CREATED;   // refused before any handler (R13)
         }
         if (s == 409 && PlatformMessagingClient.IDEMPOTENCY_CONFLICT.equals(a.errorCode())) {
             return earlierMayExist && Snapshot.of(a.body()).isPresent() ? Verdict.ADOPT : Verdict.REFUSED;
@@ -278,10 +295,9 @@ public class PlatformSendFlow {
 
     /**
      * Commits the row ({@code reserve}, same transaction) and the exact request bytes, then {@code POST /send}; the
-     * answer is acted on as the class comment says. {@code direct} sends it Dad Coach's own way after the row was
-     * taken for it (state DIRECT).
+     * answer is acted on as the class comment says.
      */
-    public <R> Settled<R> send(Ledger l, UUID id, String body, Runnable reserve, Supplier<R> direct) {
+    public Settled send(Ledger l, UUID id, String body, Runnable reserve) {
         Instant now = clock.instant();
         // the bytes are durable before the first POST (v2.6): every re-POST and reconcile sends exactly these
         tx.executeWithoutResult(s -> {
@@ -300,10 +316,11 @@ public class PlatformSendFlow {
             answer = client.send(body);
             verdict = verdict(answer, true);
         }
-        return settle(l, id, answer, verdict, direct);
+        return settle(l, id, answer, verdict, 1);
     }
 
-    private <R> Settled<R> settle(Ledger l, UUID id, Answer answer, Verdict verdict, Supplier<R> direct) {
+    /** @param notCreatedPosts how many POSTs in a row created nothing (the next re-POST's backoff) */
+    private Settled settle(Ledger l, UUID id, Answer answer, Verdict verdict, int notCreatedPosts) {
         Logger log = l.log();
         switch (verdict) {
             case OWNED, ADOPT -> {
@@ -316,11 +333,12 @@ public class PlatformSendFlow {
                 log.atInfo().setMessage("messaging." + l.event() + ".platform").addKeyValue(l.idKey(), id)
                         .addKeyValue("messageId", snap.messageId()).addKeyValue("status", snap.status())
                         .addKeyValue("reason", snap.reason()).addKeyValue("replayed", answer.text("replayed")).log();
-                return new Settled<>(verdict, snap, null, null, answer);
+                return new Settled(verdict, snap, null, answer);
             }
-            case DIRECT -> {
-                logDirect(log, l.event(), l.idKey(), id, answer);
-                return new Settled<>(verdict, null, null, takeAndSend(l, id, direct).orElse(null), answer);
+            case NOT_CREATED -> {
+                logNotCreated(log, l.event(), l.idKey(), id, answer, true);
+                notCreated(l, id, notCreatedPosts);
+                return new Settled(verdict, null, null, answer);
             }
             case REFUSED -> {
                 String reason = refusal(answer);
@@ -328,12 +346,12 @@ public class PlatformSendFlow {
                 Update u = l.refused(reason, Timestamp.from(clock.instant()));
                 tx.executeWithoutResult(s -> jdbc.update("UPDATE " + l.table() + " SET platform_state = 'REFUSED', "
                         + "platform_request = NULL, platform_next_at = NULL, " + u.set()
-                        + " WHERE id = ? AND platform_state IN ('POSTING','AMBIGUOUS')", append(u.params(), id)));
-                return new Settled<>(verdict, null, reason, null, answer);
+                        + " WHERE id = ? AND platform_state IN ('POSTING','AMBIGUOUS','NOT_CREATED')", append(u.params(), id)));
+                return new Settled(verdict, null, reason, answer);
             }
             default -> {
                 ambiguous(l, id, answer);
-                return new Settled<>(Verdict.AMBIGUOUS, null, null, null, answer);
+                return new Settled(Verdict.AMBIGUOUS, null, null, answer);
             }
         }
     }
@@ -347,21 +365,21 @@ public class PlatformSendFlow {
                 .addKeyValue("answer", answer.summary()).log();
         String extra = l.ambiguousSet();
         tx.executeWithoutResult(s -> jdbc.update("UPDATE " + l.table() + " SET platform_state = 'AMBIGUOUS', platform_next_at = ?"
-                + (extra.isEmpty() ? "" : ", " + extra) + " WHERE id = ? AND platform_state IN ('POSTING','AMBIGUOUS')",
-                Timestamp.from(next), id));
+                + (extra.isEmpty() ? "" : ", " + extra)
+                + " WHERE id = ? AND platform_state IN ('POSTING','AMBIGUOUS','NOT_CREATED')", Timestamp.from(next), id));
     }
 
     /**
-     * The platform provably created nothing: the row is taken (state DIRECT, bytes cleared) and sent Dad Coach's own way.
-     * Empty when another path took the row meanwhile (a report adopted it).
+     * Provably nothing was created: the row keeps its bytes, reads "on its way" (it is pending, never stuck or failed)
+     * and the job re-POSTs the same bytes later (1 min, doubling, at most 10 min) while it is still relevant.
      */
-    private <R> Optional<R> takeAndSend(Ledger l, UUID id, Supplier<R> direct) {
-        Integer taken = tx.execute(s -> jdbc.update("UPDATE " + l.table() + " SET platform_state = 'DIRECT', "
-                + "platform_request = NULL, platform_next_at = NULL WHERE id = ? AND platform_state IN ('POSTING','AMBIGUOUS')", id));
-        if (taken == null || taken == 0) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(direct.get());
+    private void notCreated(Ledger l, UUID id, int posts) {
+        Duration wait = NOT_CREATED_FIRST.multipliedBy(1L << Math.min(Math.max(posts - 1, 0), 4));
+        Instant next = clock.instant().plus(wait.compareTo(NOT_CREATED_MAX) > 0 ? NOT_CREATED_MAX : wait);
+        String extra = l.ambiguousSet();
+        tx.executeWithoutResult(s -> jdbc.update("UPDATE " + l.table() + " SET platform_state = 'NOT_CREATED', platform_next_at = ?"
+                + (extra.isEmpty() ? "" : ", " + extra)
+                + " WHERE id = ? AND platform_state IN ('POSTING','AMBIGUOUS','NOT_CREATED')", Timestamp.from(next), id));
     }
 
     // ------------------------------------------------------------------------------------------------- apply
@@ -381,21 +399,15 @@ public class PlatformSendFlow {
             }
             Map<String, Object> row = rows.get(0);
             String state = (String) row.get("platform_state");
-            if (DIRECT.equals(state)) {
-                // nothing was created, by the platform's own word - yet it speaks of this key: a second message is possible
-                log.atError().setMessage("messaging." + l.event() + ".platform_after_direct").addKeyValue(l.idKey(), id)
-                        .addKeyValue("messageId", snap.messageId()).addKeyValue("status", snap.status())
-                        .addKeyValue("source", source).log();
-                return false;
-            }
             String known = (String) row.get("platform_message_id");
             if (known != null && !known.equals(snap.messageId())) {
                 log.atError().setMessage("messaging." + l.event() + ".other_message").addKeyValue(l.idKey(), id)
                         .addKeyValue("messageId", snap.messageId()).addKeyValue("known", known).log();
                 return false;
             }
-            if (!POSTING.equals(state) && !AMBIGUOUS.equals(state) && !GAVE_UP.equals(state) && !OWNED.equals(state)) {
-                // a row the platform was never asked to send (direct mode) or refused: not this message's
+            if (!POSTING.equals(state) && !AMBIGUOUS.equals(state) && !NOT_CREATED.equals(state) && !GAVE_UP.equals(state)
+                    && !OWNED.equals(state)) {
+                // a row the platform was never asked to send (before D-053: a direct send) or refused: not this message's
                 log.atWarn().setMessage("messaging." + l.event() + ".not_platform").addKeyValue(l.idKey(), id)
                         .addKeyValue("state", state).addKeyValue("status", snap.status()).addKeyValue("source", source).log();
                 return false;
@@ -424,17 +436,6 @@ public class PlatformSendFlow {
             log.atInfo().setMessage("messaging." + l.event() + ".status").addKeyValue(l.idKey(), id)
                     .addKeyValue("messageId", snap.messageId()).addKeyValue("status", snap.status())
                     .addKeyValue("reason", snap.reason()).addKeyValue("source", source).log();
-            if (snap.providerMessageId() != null && receiptsEnabled) {
-                // Meta's receipts that beat the platform's word - committed on their own (D-052): never in a caller's
-                // transaction (the sync answer runs inside LoginLinkService's, a tool's), whose rollback would lose them
-                try {
-                    tx.executeWithoutResult(s -> receipts.applyPending(snap.providerMessageId()));
-                } catch (RuntimeException e) {
-                    // the row moved and is committed: never failed for this - the receipts are kept again (next pass)
-                    log.atWarn().setMessage("messaging." + l.event() + ".pending_receipts_failed").addKeyValue(l.idKey(), id)
-                            .addKeyValue("error", e.getClass().getSimpleName()).log();
-                }
-            }
         }
         return Boolean.TRUE.equals(moved);
     }
@@ -457,9 +458,7 @@ public class PlatformSendFlow {
     /**
      * One reconcile pass over the ledger's due rows; returns how many rows it looked at. D-047: the pass stops taking rows
      * once it has run {@code MESSAGING_RECONCILE_PASS_BUDGET} (real time, 15 s) - a hanging platform must not hold the
-     * scheduler thread (shared by every job while {@code APP_SCHEDULING_LANES} is off) for a batch of timeouts; rows left
-     * are still due and are taken by the next pass. Worst case per pass: the budget plus one call (a lookup 5 s, a
-     * re-POST 12 s).
+     * scheduler thread for a batch of timeouts; rows left are still due and are taken by the next pass.
      */
     public int reconcileDue(Ledger l) {
         long started = System.nanoTime();
@@ -517,7 +516,7 @@ public class PlatformSendFlow {
             next(l, id, now.plus(settings.reconcileAfter()));
             return;
         }
-        if (!POSTING.equals(state) && !AMBIGUOUS.equals(state)) {
+        if (!POSTING.equals(state) && !AMBIGUOUS.equals(state) && !NOT_CREATED.equals(state)) {
             clearNext(l, id);
             return;
         }
@@ -526,12 +525,16 @@ public class PlatformSendFlow {
             giveUp(l, id, "NO_REQUEST");
             return;
         }
+        int posts = ((Number) row.get("platform_posts")).intValue();
+        if (NOT_CREATED.equals(state)) {
+            repostNotCreated(l, id, body, posts);
+            return;
+        }
         String blocker = l.blocker(id, body);
         if (blocker != null) {
             giveUp(l, id, blocker);
             return;
         }
-        int posts = ((Number) row.get("platform_posts")).intValue();
         Instant firstPost = row.get("platform_first_post_at") == null ? now
                 : ((Timestamp) row.get("platform_first_post_at")).toInstant();
         if (posts < MAX_POSTS) {
@@ -545,10 +548,7 @@ public class PlatformSendFlow {
                         : reconcileAt.isAfter(now) ? reconcileAt : now.plus(Duration.ofMinutes(1)));
                 return;
             }
-            settle(l, id, a, v, () -> {
-                l.sendLate(id, body);
-                return Boolean.TRUE;
-            });
+            settle(l, id, a, v, 1);
             return;
         }
         if (firstPost.plus(settings.reconcileAfter()).isAfter(now)) {
@@ -564,20 +564,14 @@ public class PlatformSendFlow {
             return;
         }
         if (a.status() == 404 && PlatformMessagingClient.MESSAGE_NOT_FOUND.equals(a.errorCode())) {
-            // the platform commits a message before any answer; minutes later, "not found" means it never existed (v2.5)
-            if (!l.stillSendable(id, body, clock.instant())) {
-                Update u = l.ended(Timestamp.from(clock.instant()));
-                tx.executeWithoutResult(s -> jdbc.update("UPDATE " + l.table() + " SET platform_state = 'GAVE_UP', "
-                        + "platform_request = NULL, platform_next_at = NULL, " + u.set()
-                        + " WHERE id = ? AND platform_state IN ('POSTING','AMBIGUOUS')", append(u.params(), id)));
-                return;
+            // the platform commits a message before any answer; minutes later, "not found" means it never existed (v2.5):
+            // the platform holds nothing under this key, so the stored bytes are POSTed again (never a second message)
+            log.atWarn().setMessage("messaging." + l.event() + ".not_found_repost").addKeyValue(l.idKey(), id).log();
+            Integer taken = tx.execute(s -> jdbc.update("UPDATE " + l.table() + " SET platform_state = 'NOT_CREATED' "
+                    + "WHERE id = ? AND platform_state IN ('POSTING','AMBIGUOUS')", id));
+            if (taken != null && taken > 0) {
+                repostNotCreated(l, id, body, 1);
             }
-            log.atWarn().setMessage("messaging." + l.event() + ".direct_fallback").addKeyValue(l.idKey(), id)
-                    .addKeyValue("why", "RECONCILE_NOT_FOUND").log();
-            takeAndSend(l, id, () -> {
-                l.sendLate(id, body);
-                return Boolean.TRUE;
-            });
             return;
         }
         if (firstPost.plus(RECONCILE_FOR).isBefore(now)) {
@@ -589,12 +583,45 @@ public class PlatformSendFlow {
         next(l, id, now.plus(settings.reconcileAfter()));
     }
 
+    /**
+     * A row nothing was created for: re-POSTs the same bytes while it is still relevant, else FAILED
+     * {@code PLATFORM_NOT_CREATED} (spec 6.4 §4.1, R14).
+     */
+    private void repostNotCreated(Ledger l, UUID id, String body, int posts) {
+        Instant now = clock.instant();
+        String blocker = l.blocker(id, body);
+        if (blocker != null || !l.stillSendable(id, body, now)) {
+            l.log().atWarn().setMessage("messaging." + l.event() + ".not_created_ended").addKeyValue(l.idKey(), id)
+                    .addKeyValue("why", blocker != null ? blocker : "NO_LONGER_RELEVANT").log();
+            end(l, id, PLATFORM_NOT_CREATED);
+            return;
+        }
+        jdbc.update("UPDATE " + l.table() + " SET platform_posts = platform_posts + 1 WHERE id = ?", id);
+        Answer a = client.send(body);
+        Verdict v = verdict(a, false);   // every earlier attempt provably created nothing
+        if (v == Verdict.AMBIGUOUS) {
+            // it may exist now: the ambiguous path (re-POST, then the lookup by key) takes it from here
+            ambiguous(l, id, a);
+            jdbc.update("UPDATE " + l.table() + " SET platform_first_post_at = ?, platform_posts = ? WHERE id = ?",
+                    Timestamp.from(now), MAX_POSTS - 1, id);
+            return;
+        }
+        settle(l, id, a, v, posts + 1);
+    }
+
+    private void end(Ledger l, UUID id, String reason) {
+        Update u = l.ended(reason, Timestamp.from(clock.instant()));
+        tx.executeWithoutResult(s -> jdbc.update("UPDATE " + l.table() + " SET platform_state = 'GAVE_UP', "
+                + "platform_request = NULL, platform_next_at = NULL, " + u.set()
+                + " WHERE id = ? AND platform_state IN ('POSTING','AMBIGUOUS','NOT_CREATED')", append(u.params(), id)));
+    }
+
     /** No answer for an hour: it may have gone out - UNKNOWN, never sent again (spec §16, v2.5). */
     private void giveUp(Ledger l, UUID id, String why) {
         l.log().atWarn().setMessage("messaging." + l.event() + ".gave_up").addKeyValue(l.idKey(), id).addKeyValue("why", why).log();
         Update u = l.gaveUp("PLATFORM_" + why, Timestamp.from(clock.instant()));
         tx.executeWithoutResult(s -> jdbc.update("UPDATE " + l.table() + " SET platform_state = 'GAVE_UP', platform_request = NULL, "
-                + "platform_next_at = NULL, " + u.set() + " WHERE id = ? AND platform_state IN ('POSTING','AMBIGUOUS')",
+                + "platform_next_at = NULL, " + u.set() + " WHERE id = ? AND platform_state IN ('POSTING','AMBIGUOUS','NOT_CREATED')",
                 append(u.params(), id)));
     }
 
@@ -614,24 +641,19 @@ public class PlatformSendFlow {
      * adopted even on the first POST - for a key an earlier processing of the same business event may have used (D-048:
      * a reply keyed by the father's inbound message, whose redelivery runs again). {@code rateLimitWait}: a 429 whose
      * Retry-After (none = 1 s) is at most this is re-POSTed once after that wait (spec §16: turn replies once, ≤ 2 s).
+     * {@code notCreatedWait}: a "nothing created" answer is re-POSTed once after this wait (D-053, ≤ 2 s).
      */
-    public record Options(Integer readTimeoutMs, boolean conflictAdopts, Duration rateLimitWait) {
-        public static final Options DEFAULT = new Options(null, false, Duration.ZERO);
+    public record Options(Integer readTimeoutMs, boolean conflictAdopts, Duration rateLimitWait, Duration notCreatedWait) {
+        public static final Options DEFAULT = new Options(null, false, Duration.ZERO, Duration.ofSeconds(2));
     }
 
     /**
      * A kind without a ledger row (spec v2.6: the bytes stay in memory): POST, one immediate re-POST of the same bytes
-     * when ambiguous (not after a timeout or a 429), then: OWNED / ADOPT - the platform has it; DIRECT (provably nothing
-     * created, first attempt only) - {@code direct} sends it today's way; REFUSED - logged, never sent directly;
-     * AMBIGUOUS - logged, never sent directly (nothing to reconcile against).
+     * when ambiguous (not after a timeout or a 429), one re-POST after a short wait when nothing was created, then:
+     * OWNED / ADOPT - the platform has it; NOT_CREATED - dropped (WARN {@code messaging.platform_not_created}); REFUSED -
+     * logged; AMBIGUOUS - logged (it may have gone out: never sent a second time).
      */
-    public <R> Settled<R> sendOnce(String event, Logger log, String idKey, Object id, String body, Supplier<R> direct) {
-        return sendOnce(event, log, idKey, id, body, direct, Options.DEFAULT);
-    }
-
-    /** {@link #sendOnce(String, Logger, String, Object, String, Supplier)} with a kind's {@link Options}. */
-    public <R> Settled<R> sendOnce(String event, Logger log, String idKey, Object id, String body, Supplier<R> direct,
-                                   Options options) {
+    public Settled sendOnce(String event, Logger log, String idKey, Object id, String body, Options options) {
         Answer answer = post(body, options);
         Verdict verdict = verdict(answer, false);
         boolean mayExist = false;
@@ -642,13 +664,17 @@ public class PlatformSendFlow {
             if (wait.compareTo(options.rateLimitWait()) <= 0) {
                 log.atInfo().setMessage("messaging." + event + ".rate_limited_repost").addKeyValue(idKey, id)
                         .addKeyValue("waitMs", wait.toMillis()).log();
-                try {
-                    Thread.sleep(wait.toMillis());
+                if (sleep(wait)) {
                     answer = post(body, options);
                     verdict = verdict(answer, false);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
                 }
+            }
+        } else if (verdict == Verdict.NOT_CREATED) {
+            logNotCreated(log, event, idKey, id, answer, false);
+            if (sleep(options.notCreatedWait())) {
+                log.atInfo().setMessage("messaging." + event + ".not_created_repost").addKeyValue(idKey, id).log();
+                answer = post(body, options);
+                verdict = verdict(answer, false);
             }
         } else if (verdict == Verdict.AMBIGUOUS && !"TIMEOUT".equals(answer.error()) && answer.status() != 429) {
             log.atInfo().setMessage("messaging." + event + ".repost").addKeyValue(idKey, id)
@@ -675,27 +701,40 @@ public class PlatformSendFlow {
                 log.atInfo().setMessage("messaging." + event + ".platform").addKeyValue(idKey, id)
                         .addKeyValue("messageId", snap.messageId()).addKeyValue("status", snap.status())
                         .addKeyValue("reason", snap.reason()).addKeyValue("replayed", answer.text("replayed")).log();
-                return new Settled<>(verdict, snap, null, null, answer);
+                return new Settled(verdict, snap, null, answer);
             }
-            case DIRECT -> {
-                logDirect(log, event, idKey, id, answer);
-                return new Settled<>(verdict, null, null, direct.get(), answer);
+            case NOT_CREATED -> {
+                log.atWarn().setMessage("messaging.platform_not_created").addKeyValue("event", event).addKeyValue(idKey, id)
+                        .addKeyValue("answer", answer.summary()).log();
+                return new Settled(verdict, null, PLATFORM_NOT_CREATED, answer);
             }
             case REFUSED -> {
                 String reason = refusal(answer);
                 logRefused(log, event, idKey, id, answer, reason);
-                return new Settled<>(verdict, null, reason, null, answer);
+                return new Settled(verdict, null, reason, answer);
             }
             case RATE_LIMITED -> {
                 log.atWarn().setMessage("messaging." + event + ".rate_limited").addKeyValue(idKey, id)
                         .addKeyValue("retryAfter", answer.retryAfterSeconds()).log();
-                return new Settled<>(verdict, null, "PLATFORM_RATE_LIMITED", null, answer);
+                return new Settled(verdict, null, "PLATFORM_RATE_LIMITED", answer);
             }
             default -> {
                 log.atWarn().setMessage("messaging." + event + ".ambiguous").addKeyValue(idKey, id)
                         .addKeyValue("answer", answer.summary()).addKeyValue("ledger", false).log();
-                return new Settled<>(Verdict.AMBIGUOUS, null, null, null, answer);
+                return new Settled(Verdict.AMBIGUOUS, null, null, answer);
             }
+        }
+    }
+
+    private static boolean sleep(Duration wait) {
+        try {
+            if (!wait.isZero() && !wait.isNegative()) {
+                Thread.sleep(wait.toMillis());
+            }
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         }
     }
 
@@ -703,13 +742,17 @@ public class PlatformSendFlow {
         return options.readTimeoutMs() == null ? client.send(body) : client.send(body, options.readTimeoutMs());
     }
 
-    private static void logDirect(Logger log, String event, String idKey, Object id, Answer answer) {
+    /** ERROR for 401/403 and the kill switch (alertable misconfiguration, R2/R13); WARN for a request never written. */
+    private static void logNotCreated(Logger log, String event, String idKey, Object id, Answer answer, boolean ledger) {
         if (answer.status() == 401 || answer.status() == 403) {
-            log.atError().setMessage("messaging.platform_auth_failed").addKeyValue(idKey, id)
+            log.atError().setMessage("messaging.platform_auth_failed").addKeyValue("event", event).addKeyValue(idKey, id)
                     .addKeyValue("status", answer.status()).addKeyValue("error", answer.errorCode()).log();
+        } else if (answer.status() == 503) {
+            log.atError().setMessage("messaging.platform_disabled").addKeyValue("event", event).addKeyValue(idKey, id)
+                    .addKeyValue("reason", answer.text("reason")).log();
         } else {
-            log.atInfo().setMessage("messaging." + event + ".direct_fallback").addKeyValue(idKey, id)
-                    .addKeyValue("why", answer.summary()).addKeyValue("reason", answer.text("reason")).log();
+            log.atWarn().setMessage("messaging." + event + ".not_created").addKeyValue(idKey, id)
+                    .addKeyValue("why", answer.summary()).addKeyValue("ledger", ledger).log();
         }
     }
 
@@ -717,120 +760,6 @@ public class PlatformSendFlow {
         log.atError().setMessage("messaging." + event + ".refused").addKeyValue(idKey, id)
                 .addKeyValue("status", answer.status()).addKeyValue("error", answer.errorCode())
                 .addKeyValue("reason", reason).addKeyValue("field", answer.text("field")).log();
-    }
-
-    // ------------------------------------------------------------------------------------------------- SHADOW
-
-    /**
-     * SHADOW: the platform's dry run of the request {@code body} builds ({@code dryRun: true}), built and compared on the
-     * kind's own lane ({@code messaging-shadow-<kind>}, queue {@value #SHADOW_QUEUE}), never on the caller's thread. A
-     * full lane drops the comparison and logs {@code messaging.shadow.dropped} with the kind's running count.
-     */
-    public void shadow(String kind, Logger log, String idKey, Object id, Supplier<String> body, ShadowFacts dc) {
-        lane(kind).execute(() -> {
-            String request;
-            try {
-                request = body.get();
-            } catch (RuntimeException e) {
-                log.atWarn().setMessage("messaging.shadow.failed").addKeyValue("kind", kind)
-                        .addKeyValue("error", e.getClass().getSimpleName()).log();
-                return;
-            }
-            compare(kind, log, idKey, id, request, dc);
-        });
-    }
-
-    static final int SHADOW_QUEUE = 100;
-
-    private ThreadPoolExecutor lane(String kind) {
-        return shadowLanes.computeIfAbsent(kind, k -> new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-                new ArrayBlockingQueue<>(SHADOW_QUEUE), r -> {
-                    Thread t = new Thread(r, "messaging-shadow-" + k.toLowerCase(Locale.ROOT));
-                    t.setDaemon(true);
-                    return t;
-                }, (r, executor) -> {
-                    long dropped = shadowDropped.computeIfAbsent(k, x -> new java.util.concurrent.atomic.AtomicLong())
-                            .incrementAndGet();
-                    org.slf4j.LoggerFactory.getLogger(PlatformSendFlow.class).atWarn()
-                            .setMessage("messaging.shadow.dropped").addKeyValue("kind", k).addKeyValue("dropped", dropped).log();
-                }));
-    }
-
-    /** Comparisons dropped so far because the kind's lane was full. */
-    public long shadowDropped(String kind) {
-        java.util.concurrent.atomic.AtomicLong n = shadowDropped.get(kind);
-        return n == null ? 0 : n.get();
-    }
-
-    @jakarta.annotation.PreDestroy
-    void stopShadowLane() {
-        shadowLanes.values().forEach(ThreadPoolExecutor::shutdownNow);
-    }
-
-    /** Tests: whether every shadow lane has nothing left to do. */
-    public boolean shadowIdle() {
-        return shadowLanes.values().stream().allMatch(l -> l.getActiveCount() == 0 && l.getQueue().isEmpty());
-    }
-
-    private void compare(String kind, Logger log, String idKey, Object id, String body, ShadowFacts dc) {
-        try {
-            Answer a = client.send(body);
-            String dcWindow = dc.template() != null ? "TEMPLATE" : "SESSION";
-            String dcOutcome = !dc.successful() ? "FAIL" : dc.held() ? "HOLD" : "SEND";
-            if (a.status() == 400 || a.status() == 409 || a.status() == 422) {
-                // the platform would refuse the request outright (review M2): a mismatch whenever Dad Coach's own send
-                // went out - in PLATFORM mode this message would have FAILED, never been sent directly
-                String code = refusal(a);
-                if (dc.successful()) {
-                    log.atWarn().setMessage("messaging.shadow.mismatch").addKeyValue("kind", kind)
-                            .addKeyValue(idKey, id).addKeyValue("field", "refused").addKeyValue("code", code)
-                            .addKeyValue("product", dcOutcome + (dc.template() == null ? "" : "/" + dc.template()))
-                            .addKeyValue("platform", "HTTP_" + a.status()).addKeyValue("fieldRefused", a.text("field")).log();
-                } else {
-                    log.atInfo().setMessage("messaging.shadow.match").addKeyValue("kind", kind)
-                            .addKeyValue(idKey, id).addKeyValue("platform", code).log();
-                }
-                return;
-            }
-            if (a.status() != 200 || a.body() == null) {
-                log.atInfo().setMessage("messaging.shadow.unavailable").addKeyValue("kind", kind)
-                        .addKeyValue(idKey, id).addKeyValue("answer", a.summary()).log();
-                return;
-            }
-            String wouldBe = a.text("wouldBe");
-            String window = a.text("channelWindow");
-            String template = a.body().path("template").hasNonNull("name") ? a.body().path("template").path("name").asText() : null;
-            String platformOutcome = "HOLD".equals(wouldBe) ? "HOLD" : "SEND".equals(wouldBe) ? "SEND" : "FAIL";
-            int mismatches = 0;
-            if ("HOLD".equals(dcOutcome) != "HOLD".equals(platformOutcome)) {
-                mismatches += mismatch(kind, log, idKey, id, "hold", dcOutcome, platformOutcome + "/" + a.text("holdWhy"));
-            } else if ("FAIL".equals(dcOutcome) != "FAIL".equals(platformOutcome)) {
-                mismatches += mismatch(kind, log, idKey, id, "outcome", dcOutcome + "/" + dc.failureReason(),
-                        platformOutcome + "/" + a.text("reason"));
-            }
-            if (window != null && !"FAIL".equals(dcOutcome) && !"FAIL".equals(platformOutcome)) {
-                if (!dcWindow.equals(window)) {
-                    mismatches += mismatch(kind, log, idKey, id, "window", dcWindow, window);
-                } else if ("TEMPLATE".equals(window) && template != null && !template.equals(dc.template())) {
-                    mismatches += mismatch(kind, log, idKey, id, "template", dc.template(), template);
-                }
-            }
-            if (mismatches == 0) {
-                log.atInfo().setMessage("messaging.shadow.match").addKeyValue("kind", kind)
-                        .addKeyValue(idKey, id).addKeyValue("outcome", dcOutcome).addKeyValue("window", dcWindow).log();
-            }
-        } catch (RuntimeException e) {
-            log.atWarn().setMessage("messaging.shadow.failed").addKeyValue("kind", kind)
-                    .addKeyValue("error", e.getClass().getSimpleName()).log();
-        }
-    }
-
-    private static int mismatch(String kind, Logger log, String idKey, Object id, String field, String product,
-                                String platformValue) {
-        log.atWarn().setMessage("messaging.shadow.mismatch").addKeyValue("kind", kind)
-                .addKeyValue(idKey, id).addKeyValue("field", field).addKeyValue("product", product)
-                .addKeyValue("platform", platformValue).log();
-        return 1;
     }
 
     // ------------------------------------------------------------------------------------------------- the request
@@ -856,10 +785,44 @@ public class PlatformSendFlow {
         return r;
     }
 
+    /**
+     * D-053 (spec v2 R7): a request about nobody - no {@code userId}, {@code personRef} or {@code personName}, only
+     * {@code to} - so the platform opens no conversation for it (the deletion answer: he is being deleted).
+     */
+    public Map<String, Object> newAnonymousRequest(String phone) {
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("workerKey", platform.getWorkerKey());
+        r.put("workflowKey", platform.getWorkflowKey());
+        r.put("channelId", "whatsapp");
+        r.put("to", phone);
+        r.put("tenantId", platform.getTenantId());
+        return r;
+    }
+
     /** Spec v2.13: Dad Coach keeps no inbound time - its window closes 24 h after the last one. */
     public Optional<Instant> lastInbound(Optional<Father> father) {
         return father.flatMap(f -> endpoints.findPrimaryByFatherId(new UUID(0L, f.getId())))
                 .map(e -> e.getSessionClosesAt()).map(closes -> closes.minus(Duration.ofHours(24)));
+    }
+
+    /**
+     * D-053 (spec 6.4 §2): what the platform's kind→template mapping needs - the message type ({@code variant}, "" =
+     * the kind's default), its positional values, named values and quick-reply payloads. Never a Meta template name.
+     */
+    public static Map<String, Object> templateData(String variant, List<String> values, Map<String, String> named,
+                                                   List<String> payloads) {
+        Map<String, Object> d = new LinkedHashMap<>();
+        d.put("variant", variant == null ? "" : variant);
+        if (values != null && !values.isEmpty()) {
+            d.put("values", values);
+        }
+        if (named != null && !named.isEmpty()) {
+            d.put("named", named);
+        }
+        if (payloads != null && !payloads.isEmpty()) {
+            d.put("payloads", payloads);
+        }
+        return d;
     }
 
     public String json(Map<String, Object> request) {

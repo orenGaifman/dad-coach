@@ -36,7 +36,7 @@ class VoiceNoteWebhookTest extends AbstractIntegrationTest {
     }
 
     private String sentText(int index) throws Exception {
-        return json.readTree(fake.metaSends().get(index).body()).path("text").path("body").asText();
+        return fake.sentMessages().get(index).path("content").path("text").asText();   // D-053: via the platform
     }
 
     @Test
@@ -61,7 +61,7 @@ class VoiceNoteWebhookTest extends AbstractIntegrationTest {
         assertThat(turn.path("personRef").asText()).isEqualTo(new java.util.UUID(0L, father.getId()).toString());
         assertThat(turn.path("content").asText()).startsWith("[הודעה קולית").endsWith("\n" + HEARD);
         // the reply: identity line, then what was heard, then the coach
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.sentMessages()).hasSize(1);
         assertThat(sentText(0)).isEqualTo("❤️ דאד קואץ׳:\n🎙️ שמעתי: \"" + HEARD + "\"\n\nמעולה, נקבע לשישי?");
         // his 24-hour window opened, like any message
         assertThat(jdbc.queryForObject("SELECT count(*) FROM communication_endpoints WHERE channel_identity = ?", Integer.class,
@@ -90,7 +90,7 @@ class VoiceNoteWebhookTest extends AbstractIntegrationTest {
         fake.onSpeechToText(c -> new FakeServers.Reply(401, "{\"detail\":{\"status\":\"quota_exceeded\"}}"));
         webhook(Webhooks.audio("+19995550203", "wamid.voice-quota")).andExpect(status().isOk());
         assertThat(fake.turns()).isEmpty();
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.sentMessages()).hasSize(1);
         assertThat(sentText(0)).startsWith("❤️ דאד קואץ׳:\n🎙️ לא הצלחתי לשמוע את ההקלטה");
     }
 

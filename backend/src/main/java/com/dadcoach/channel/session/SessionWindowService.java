@@ -21,7 +21,7 @@ import java.time.Instant;
  * <p>Session state is persisted in the {@code communication_endpoints} table via
  * {@code session_opens_at} and {@code session_closes_at} columns.
  *
- * <p>This service is the authoritative check BEFORE every outbound delivery.
+ * <p>Since D-053 the platform decides window vs template; Dad Coach only tells it when he last wrote (the window hint).
  */
 @Service
 public class SessionWindowService {
@@ -90,28 +90,5 @@ public class SessionWindowService {
             return false;
         }
         return clock.instant().isBefore(closesAt);
-    }
-
-    /**
-     * Validates whether an outbound message can be sent as a free-form message.
-     * This check MUST be performed BEFORE every outbound delivery.
-     *
-     * @param endpoint   the target communication endpoint
-     * @param isTemplate whether the outbound message is a template message
-     * @return the result of the session check
-     */
-    public SessionCheckResult checkBeforeDelivery(CommunicationEndpoint endpoint, boolean isTemplate) {
-        if (isOpen(endpoint)) {
-            return SessionCheckResult.deliveryAllowed();
-        }
-
-        // Session is closed — only template messages may be sent
-        if (isTemplate) {
-            return SessionCheckResult.deliveryAllowed();
-        }
-
-        log.info("Delivery rejected: session closed for endpoint {} (closed at {})",
-                endpoint.getChannelIdentity(), endpoint.getSessionClosesAt());
-        return SessionCheckResult.sessionClosed(endpoint.getSessionClosesAt());
     }
 }

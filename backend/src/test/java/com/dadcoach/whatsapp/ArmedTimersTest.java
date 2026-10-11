@@ -130,8 +130,10 @@ class ArmedTimersTest extends AbstractIntegrationTest {
         assertThat(lastSent()).isEqualTo(IDENTITY + BOOKED + "\n" + TimerClaims.NOT_SET + "\n" + WEEK);
         assertThat(lastSent()).doesNotContain("אזכיר").doesNotContain("אשאל");
         // his conversation gets the corrected text too, so the next turn does not repeat the promise
-        assertThat(fake.recordedOutbound()).singleElement()
-                .satisfies(c -> assertThat(json.readTree(c.body()).path("content").asText()).isEqualTo(lastSent()));
+        // (D-053: the platform records what was sent in place of the draft)
+        JsonNode timeline = fake.sentMessages().get(fake.sentMessages().size() - 1).path("timeline");
+        assertThat(timeline.path("mode").asText()).isEqualTo("REPLACES_DRAFT");
+        assertThat(timeline.path("content").asText()).isEqualTo(lastSent().substring(IDENTITY.length()));
     }
 
     @Test
@@ -282,9 +284,8 @@ class ArmedTimersTest extends AbstractIntegrationTest {
     }
 
     String lastSent() throws Exception {
-        List<FakeServers.Call> sends = fake.metaSends();
-        JsonNode sent = json.readTree(sends.get(sends.size() - 1).body());
-        return sent.path("text").path("body").asText();
+        List<JsonNode> sends = fake.sentMessages();   // D-053: via the platform's Send API
+        return sends.get(sends.size() - 1).path("content").path("text").asText();
     }
 
     JsonNode weeklyPlan() throws Exception {

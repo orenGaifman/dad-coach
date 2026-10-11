@@ -113,13 +113,16 @@ class SessionTimerCardParityTest extends AbstractIntegrationTest {
 
     // ------------------------------------------------------------------------------------------------ the two paths
 
-    /** What reached Meta for one scheduled turn: nothing, or the send's type, text and buttons / template. */
+    /**
+     * What one scheduled turn hands the platform's Send API (D-053: the only sender): nothing, or the content's type, text
+     * and buttons, and the template the platform's mapping would use outside the window (the message type and its values).
+     */
     record Sent(String type, String text, List<String> buttons, String template) {
         static final Sent NOTHING = new Sent("NOTHING", null, List.of(), null);
     }
 
     private Sent callback(String state, String content) throws Exception {
-        int before = fake.metaSends().size();
+        int before = fake.sentMessages().size();
         String trigger = "parity-" + (++triggers);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("triggerId", trigger);
@@ -132,20 +135,15 @@ class SessionTimerCardParityTest extends AbstractIntegrationTest {
                 .header("X-Idempotency-Key", "scheduled-response:" + trigger).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsBytes(body))).andReturn();
         assertThat(r.getResponse().getStatus()).as(state + " callback").isEqualTo(200);
-        if (fake.metaSends().size() == before) {
+        if (fake.sentMessages().size() == before) {
             return Sent.NOTHING;
         }
-        assertThat(fake.metaSends()).as("one send per callback").hasSize(before + 1);
-        JsonNode sent = json.readTree(fake.metaSends().get(before).body());
-        String type = sent.path("type").asText();
+        assertThat(fake.sentMessages()).as("one send per callback").hasSize(before + 1);
+        JsonNode sent = fake.sentMessages().get(before);
         List<String> buttons = new ArrayList<>();
-        sent.path("interactive").path("action").path("buttons").forEach(b -> buttons.add(b.path("reply").path("id").asText()));
-        String text = switch (type) {
-            case "interactive" -> sent.path("interactive").path("body").path("text").asText();
-            case "text" -> sent.path("text").path("body").asText();
-            default -> sent.path("template").toString();
-        };
-        return new Sent(type, text, buttons, sent.path("template").path("name").asText(null));
+        sent.path("content").path("buttons").forEach(b -> buttons.add(b.path("id").asText()));
+        return new Sent(sent.path("content").path("type").asText(), sent.path("content").path("text").asText(), buttons,
+                sent.path("templateData").toString());
     }
 
     JsonNode card(String timer) throws Exception {

@@ -67,12 +67,14 @@ class SessionButtonsTest extends AbstractIntegrationTest {
                 + "{\"type\":\"button_reply\",\"button_reply\":{\"id\":\"" + id + "\",\"title\":\"" + title + "\"}}}]}");
     }
 
-    private JsonNode lastSend() throws Exception {
-        return json.readTree(fake.metaSends().get(fake.metaSends().size() - 1).body());
+    /** D-053: the last message handed to the platform's Send API. */
+    private JsonNode lastSend() {
+        List<JsonNode> sent = fake.sentMessages();
+        return sent.get(sent.size() - 1);
     }
 
-    private String lastSentText() throws Exception {
-        return lastSend().path("text").path("body").asText();
+    private String lastSentText() {
+        return lastSend().path("content").path("text").asText();
     }
 
     private String statusOf(QualityTime qt) {
@@ -89,16 +91,15 @@ class SessionButtonsTest extends AbstractIntegrationTest {
 
         callback("f-1", "SESSION_FOLLOW_UP", "❤️ דאד קואץ׳:\\nנו, איך היה לכם עם נועה?");
 
-        JsonNode sent = lastSend();
-        assertThat(sent.path("type").asText()).isEqualTo("interactive");
-        assertThat(sent.path("interactive").path("type").asText()).isEqualTo("button");
-        assertThat(sent.path("interactive").path("body").path("text").asText()).isEqualTo("❤️ דאד קואץ׳:\nנו, איך היה לכם עם נועה?");
-        JsonNode buttons = sent.path("interactive").path("action").path("buttons");
+        JsonNode sent = lastSend().path("content");
+        assertThat(sent.path("type").asText()).isEqualTo("buttons");
+        assertThat(sent.path("text").asText()).isEqualTo("❤️ דאד קואץ׳:\nנו, איך היה לכם עם נועה?");
+        JsonNode buttons = sent.path("buttons");
         assertThat(buttons).hasSize(2);
-        assertThat(buttons.get(0).path("reply").path("id").asText()).isEqualTo("dc:done:" + justEnded.getId());
-        assertThat(buttons.get(0).path("reply").path("title").asText()).isEqualTo("היה מעולה");
-        assertThat(buttons.get(1).path("reply").path("id").asText()).isEqualTo("dc:missed:" + justEnded.getId());
-        assertThat(buttons.get(1).path("reply").path("title").asText()).isEqualTo("לא יצא");
+        assertThat(buttons.get(0).path("id").asText()).isEqualTo("dc:done:" + justEnded.getId());
+        assertThat(buttons.get(0).path("title").asText()).isEqualTo("היה מעולה");
+        assertThat(buttons.get(1).path("id").asText()).isEqualTo("dc:missed:" + justEnded.getId());
+        assertThat(buttons.get(1).path("title").asText()).isEqualTo("לא יצא");
     }
 
     @Test
@@ -109,10 +110,10 @@ class SessionButtonsTest extends AbstractIntegrationTest {
 
         callback("r-1", "SESSION_REMINDER_1H", "❤️ דאד קואץ׳:\\nעוד שעה הזמן שלך ושל נועה. יש לך כבר רעיון מה תעשו?");
 
-        JsonNode buttons = lastSend().path("interactive").path("action").path("buttons");
+        JsonNode buttons = lastSend().path("content").path("buttons");
         assertThat(buttons).hasSize(1);
-        assertThat(buttons.get(0).path("reply").path("id").asText()).isEqualTo("dc:ideas:" + next.getId());
-        assertThat(buttons.get(0).path("reply").path("title").asText()).isEqualTo("רוצה רעיונות");
+        assertThat(buttons.get(0).path("id").asText()).isEqualTo("dc:ideas:" + next.getId());
+        assertThat(buttons.get(0).path("title").asText()).isEqualTo("רוצה רעיונות");
     }
 
     @Test
@@ -120,14 +121,18 @@ class SessionButtonsTest extends AbstractIntegrationTest {
         setUpFather("+19995550602", true);
         session(Duration.ofMinutes(60), 45);
         callback("m-1", "SESSION_MORNING_REMINDER", "בוקר טוב! היום ב-13:00 עם נועה");
-        assertThat(lastSend().path("type").asText()).isEqualTo("text");
+        assertThat(lastSend().path("content").path("type").asText()).isEqualTo("text");
         callback("f-2", "SESSION_FOLLOW_UP", "נו, איך היה?"); // nothing has ended
-        assertThat(lastSend().path("type").asText()).isEqualTo("text");
+        assertThat(lastSend().path("content").path("type").asText()).isEqualTo("text");
 
         setUpFather("+19995550603", false);
         session(Duration.ofMinutes(-90), 60);
         callback("f-3", "SESSION_FOLLOW_UP", "נו, איך היה לכם עם נועה?");
-        assertThat(lastSend().path("type").asText()).isEqualTo("template"); // outside the window: the template, no buttons
+        // outside the window the platform sends the session's own template (D-053: its mapping), its quick replies
+        // carrying the same payloads as the in-window buttons
+        assertThat(lastSend().path("windowPolicy").asText()).isEqualTo("AUTO");
+        assertThat(lastSend().path("templateData").path("variant").asText()).isEqualTo("session_follow_up_he");
+        assertThat(lastSend().path("templateData").path("payloads")).hasSize(2);
     }
 
     // --- the taps coming back ---
@@ -142,8 +147,10 @@ class SessionButtonsTest extends AbstractIntegrationTest {
         assertThat(statusOf(qt)).isEqualTo("COMPLETED");
         assertThat(fake.turns()).isEmpty();
         assertThat(lastSentText()).isEqualTo("❤️ דאד קואץ׳:\nאיזה כיף! רשמתי את הזמן שלך עם נועה.\nהשבוע: שעה 💪");
-        JsonNode recorded = json.readTree(fake.recordedOutbound().get(0).body());
-        assertThat(recorded.path("content").asText()).startsWith("❤️ דאד קואץ׳:\nאיזה כיף!");
+        // his conversation gets the reply: the platform records it (D-048/D-053), a row of its own for his tap
+        JsonNode recorded = lastSend().path("timeline");
+        assertThat(recorded.path("mode").asText()).isEqualTo("NEW_ROW");
+        assertThat(recorded.path("content").asText()).startsWith("איזה כיף!");
         assertThat(recorded.path("correlationId").asText()).isEqualTo("wamid.done1");
 
         webhook(tap("wamid.done2", "dc:done:" + qt.getId(), "היה מעולה"));
@@ -177,20 +184,20 @@ class SessionButtonsTest extends AbstractIntegrationTest {
         setUpFather("+19995550621", true);
         QualityTime next = session(Duration.ofMinutes(60), 45);
         callback("r-21", "SESSION_REMINDER_1H", "❤️ דאד קואץ׳:\\nתזכורת: עוד שעה מפגש עם נועה ב-13:00 😊 יש רעיונות?");
-        assertThat(lastSend().path("interactive").path("body").path("text").asText())
+        assertThat(lastSend().path("content").path("text").asText())
                 .isEqualTo("❤️ דאד קואץ׳:\nעוד שעה הזמן שלך ושל נועה 🙂\nיש כבר רעיון מה תעשו?");
         assertThat(jdbc.queryForObject("SELECT mentioned_on FROM quality_time WHERE id = ?", java.time.LocalDate.class, next.getId()))
                 .isNotNull();
 
         // D-15: he named the activity today - a wish instead of the question is kept
         callback("r-22", "SESSION_REMINDER_1H", "❤️ דאד קואץ׳:\\nעוד שעה הזמן שלך ושל נועה 🙂\\nבהצלחה עם הבישול!");
-        assertThat(lastSend().path("interactive").path("body").path("text").asText()).endsWith("\nבהצלחה עם הבישול!");
+        assertThat(lastSend().path("content").path("text").asText()).endsWith("\nבהצלחה עם הבישול!");
 
         // cancelled on his page: the timer still fires, nothing goes out
         jdbc.update("UPDATE quality_time SET status = 'CANCELLED' WHERE id = ?", next.getId());
-        int before = fake.metaSends().size();
+        int before = fake.sentMessages().size();
         callback("r-23", "SESSION_REMINDER_1H", "❤️ דאד קואץ׳:\\nעוד שעה הזמן שלך ושל נועה 🙂\\nיש כבר רעיון מה תעשו?");
-        assertThat(fake.metaSends()).hasSize(before);
+        assertThat(fake.sentMessages()).hasSize(before);
     }
 
     @Test
@@ -244,7 +251,8 @@ class SessionButtonsTest extends AbstractIntegrationTest {
         assertThat(reply.split("\n• ")).hasSize(4);
         assertThat(reply).doesNotContain("דק׳").doesNotContain("בהצלחה").doesNotContain("💪");
         assertThat(reply).endsWith("\n\nתספר לי אחר כך איך היה 🙂");
-        assertThat(fake.recordedOutbound()).hasSize(1);
+        assertThat(lastSend().path("kind").asText()).isEqualTo("BUTTON_REPLY");
+        assertThat(lastSend().path("timeline").path("record").asBoolean()).as("recorded by the platform").isTrue();
     }
 
     @Test
@@ -265,12 +273,12 @@ class SessionButtonsTest extends AbstractIntegrationTest {
         webhook(tap("wamid.s5", "dc:done:" + UUID.randomUUID(), "היה מעולה"));
 
         assertThat(fake.turns()).isEmpty();
-        assertThat(fake.metaSends()).hasSize(5);
+        assertThat(fake.sentMessages()).hasSize(5);
         // each says the true reason, one fact per line
         List<String> expected = List.of(SessionButtonTaps.STALE_REPLY, SessionButtonTaps.CANCELLED_REPLY,
                 SessionButtonTaps.NOT_STARTED_REPLY, SessionButtonTaps.CANCELLED_REPLY, SessionButtonTaps.STALE_REPLY);
         for (int i = 0; i < 5; i++) {
-            assertThat(json.readTree(fake.metaSends().get(i).body()).path("text").path("body").asText())
+            assertThat(fake.sentMessages().get(i).path("content").path("text").asText())
                     .isEqualTo(expected.get(i));
         }
         assertThat(SessionButtonTaps.CANCELLED_REPLY).isEqualTo("❤️ דאד קואץ׳:\nהמפגש הזה בוטל או הוזז.\nאפשר פשוט לכתוב לי 🙂");

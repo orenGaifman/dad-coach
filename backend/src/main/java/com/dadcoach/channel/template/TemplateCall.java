@@ -29,6 +29,17 @@ public record TemplateCall(String name, List<String> values, List<String> button
         return WhatsAppTemplateCatalog.require(name);
     }
 
+    /** The catalog's name prefix; the platform's mapping names a message type without it (D-053). */
+    public static final String PREFIX = "dad_coach_";
+
+    /**
+     * D-053: the message type the platform's kind→template mapping knows this message by ({@code templateData.variant}):
+     * the template's name without {@link #PREFIX} ({@code session_morning_he}, ...).
+     */
+    public String variant() {
+        return name.startsWith(PREFIX) ? name.substring(PREFIX.length()) : name;
+    }
+
     /** What the father reads: the template with these values. */
     public String text() {
         return entry().render(values);

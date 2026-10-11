@@ -1,20 +1,18 @@
 package com.dadcoach.channel.template;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
- * Dad Coach's WhatsApp template catalog, in code (the Big Boss D-167 pattern): what the owner submits to
- * Meta is exactly what the code sends, and the admin's templates screen, its "mark approved" and the tests
- * all read this list.
+ * Dad Coach's WhatsApp template catalog, in code (the Big Boss D-167 pattern): the copy the owner submits to Meta,
+ * shown on the admin's templates screen. Since D-053 (Unified Workflow 6.4) it no longer drives sending: Dad Coach
+ * names the message type ({@code templateData.variant} = the template name minus {@code dad_coach_}) and its values,
+ * and the platform's kind→template mapping picks the approved Meta template (seeded from this catalog, platform V140).
  *
- * <p>A message outside the 24-hour window goes out in its own template when there is one for it and it is
- * approved ({@link TemplateRegistry}): the three session timers (the values come from the session, not
- * from the AI's text). Every other proactive message — the daily check's items, the sign-in link — and any
- * of these whose own template is not approved yet goes out in the general
- * {@code dad_coach_update_he}, with the whole message flattened into its {{1}}
- * ({@link com.dadcoach.channel.delivery.ProactiveSender#asTemplateParameter}).</p>
+ * <p>The three session timers have their own templates (the values come from the session, not from the AI's text);
+ * every other proactive message - the daily check's items, the sign-in link - and any of these whose own template is
+ * not usable goes out in the general {@code dad_coach_update_he}, the whole message flattened into its {{1}}
+ * ({@link TemplateText#asTemplateParameter}).</p>
  *
  * <p>Every body opens with the identity line the free-form messages open with ("❤️ דאד קואץ׳:"). Quick-reply
  * buttons carry the same titles as the in-window buttons; their payloads ({@code dc:...}) are sent with each
@@ -88,15 +86,6 @@ public final class WhatsAppTemplateCatalog {
 
     public static Entry require(String name) {
         return named(name).orElseThrow(() -> new IllegalArgumentException("no template " + name));
-    }
-
-    /** The values as the {"1": .., "2": ..} map a template send carries. */
-    public static Map<String, String> parameters(List<String> values) {
-        java.util.LinkedHashMap<String, String> map = new java.util.LinkedHashMap<>();
-        for (int i = 0; i < values.size(); i++) {
-            map.put(String.valueOf(i + 1), values.get(i));
-        }
-        return map;
     }
 
     private WhatsAppTemplateCatalog() {}

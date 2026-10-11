@@ -56,7 +56,7 @@ class InboundClaimTest extends AbstractIntegrationTest {
         webhook(Webhooks.text(f.getPhone(), "wamid.busy", "היי"));
 
         assertThat(fake.turns()).isEmpty();
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.sentMessages()).isEmpty();
         assertThat(inboundStatus("wamid.busy")).isEqualTo("IN_PROGRESS");
     }
 
@@ -69,7 +69,7 @@ class InboundClaimTest extends AbstractIntegrationTest {
         webhook(Webhooks.text(f.getPhone(), "wamid.stale", "היי"));
 
         assertThat(fake.turns()).hasSize(1);
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.sentMessages()).hasSize(1);
         assertThat(inboundStatus("wamid.stale")).isEqualTo("SUCCEEDED");
     }
 
@@ -110,7 +110,7 @@ class InboundClaimTest extends AbstractIntegrationTest {
         webhook(Webhooks.text(f.getPhone(), "wamid.third", "היי"));
 
         assertThat(fake.turns()).hasSize(1);
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.sentMessages()).isEmpty();
         assertThat(inboundStatus("wamid.third")).isEqualTo("SUCCEEDED");
     }
 
@@ -125,7 +125,7 @@ class InboundClaimTest extends AbstractIntegrationTest {
                 + "WHEN (NEW.scope = 'WHATSAPP_REPLY') EXECUTE FUNCTION d038_fail()");
         try {
             webhook(Webhooks.text(f.getPhone(), "wamid.boom", "היי"));
-            assertThat(fake.metaSends()).isEmpty();
+            assertThat(fake.sentMessages()).isEmpty();
             assertThat(inboundStatus("wamid.boom")).as("released").isNull();
         } finally {
             jdbc.execute("DROP TRIGGER IF EXISTS d038_reply_guard ON tool_idempotency");
@@ -134,7 +134,7 @@ class InboundClaimTest extends AbstractIntegrationTest {
 
         webhook(Webhooks.text(f.getPhone(), "wamid.boom", "היי"));
 
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.sentMessages()).hasSize(1);
         assertThat(inboundStatus("wamid.boom")).isEqualTo("SUCCEEDED");
     }
 
@@ -149,7 +149,7 @@ class InboundClaimTest extends AbstractIntegrationTest {
         webhook(Webhooks.text(f.getPhone(), "wamid.cached", "היי"));
 
         assertThat(fake.turns()).hasSize(1);
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.sentMessages()).hasSize(1);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tool_idempotency WHERE scope = 'WHATSAPP_REPLY' "
                 + "AND idempotency_key = 'wamid.cached'", Integer.class)).isEqualTo(1);
     }

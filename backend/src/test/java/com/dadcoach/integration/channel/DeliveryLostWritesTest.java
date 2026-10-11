@@ -10,20 +10,15 @@ import com.dadcoach.auth.LoginLinkService;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.integration.platform.messaging.MessagingSettings;
-import com.dadcoach.integration.platform.messaging.MessagingSettings.Mode;
-import com.dadcoach.integration.platform.messaging.PlatformSendFlow;
 import com.dadcoach.integration.platform.scheduled.ScheduledPlatformSend;
 import com.dadcoach.integration.platform.timeline.TimelineReports;
 import com.dadcoach.qualitytime.QualityTime;
 import com.dadcoach.qualitytime.QualityTimeRepository;
 import com.dadcoach.support.FakeServers.Reply;
 import com.dadcoach.support.Webhooks;
-import com.dadcoach.whatsapp.DeliveryReceipts;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
-import java.sql.Connection;
-import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -37,7 +32,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,34 +40,27 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * D-052 (lost-write audit of delivery-status handling): every path that writes what became of a message Dad Coach
- * recorded - Meta's webhook receipts (and the ones kept for a wamid no row holds yet), the platform's delivery reports and
- * reconcile lookups, the gateway's held outcomes - against the real endpoints and rows, with the races forced, not hoped
- * for. A race is forced by a test-only statement trigger that parks Meta's FAILED receipt between its UPDATE (which found
- * no row: the wamid was not committed yet) and its look for the row - exactly the window a racing commit falls into.
+ * D-052 (lost-write audit of delivery-status handling) after D-053 (Unified Workflow 6.4): the platform's delivery
+ * reports and reconcile lookups are the only writers of what became of a message Dad Coach recorded - Meta's receipts
+ * on the webhook are ignored (the races D-052 forced between a receipt and a report's commit cannot happen any more;
+ * those tests went with the receipt handler). What stays pinned: reports that race each other are applied forward only
+ * under the row's lock (both ledgers), a receipt still forwarded during the rollout changes nothing even when it races
+ * a report, the reconcile lookup commits on the scheduler lane, kinds with no ledger write nothing, the session-timer
+ * notes are committed.
  */
 class DeliveryLostWritesTest extends AbstractIntegrationTest {
 
     static final String IDENTITY = "❤️ דאד קואץ׳:\n";
-    /** The advisory lock the parked receipt waits on (D-052). */
-    static final long PAUSE_KEY = 52052L;
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired MessagingSettings messaging;
-    @Autowired DeliveryReceipts receipts;
-    @Autowired HeldOutcomes outcomes;
     @Autowired LoginLinkService links;
     @Autowired LoginLinkRateLimiter rateLimiter;
     @Autowired LoginLinkPlatform linkPlatform;
     @Autowired ScheduledPlatformSend scheduledPlatform;
-    @Autowired PlatformSendFlow flow;
-    @Autowired PlatformTransactionManager transactions;
-    @Autowired DataSource dataSource;
     @Autowired TimelineReports timelineReports;
     @Autowired QualityTimeRepository sessions;
 
@@ -90,9 +77,6 @@ class DeliveryLostWritesTest extends AbstractIntegrationTest {
     void tearDown() throws InterruptedException {
         threads.shutdownNow();
         assertThat(threads.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
-        for (int i = 0; i < 100 && !flow.shadowIdle(); i++) {
-            Thread.sleep(50);
-        }
         assertThat(timelineReports.awaitIdle(Duration.ofSeconds(10))).isTrue();
     }
 
@@ -105,7 +89,7 @@ class DeliveryLostWritesTest extends AbstractIntegrationTest {
     }
 
     private static String wamid() {
-        return "wamid.d052." + UUID.randomUUID();
+        return "wamid.d053." + UUID.randomUUID();
     }
 
     private static Reply answer(String messageId, String status, String wamid) {
@@ -128,7 +112,7 @@ class DeliveryLostWritesTest extends AbstractIntegrationTest {
     }
 
     private void callback(Father f, String triggerId, String state, String content) throws Exception {
-        String body = json.writeValueAsString(Map.of("triggerId", triggerId, "workflowInstanceId", "w-d052",
+        String body = json.writeValueAsString(Map.of("triggerId", triggerId, "workflowInstanceId", "w-d053",
                 "userId", "whatsapp:" + f.getPhone(), "channel", "whatsapp", "targetStateKey", state,
                 "responseContent", content));
         MvcResult r = mvc.perform(post("/api/integration/workflow/scheduled-response").header("X-API-Key", CALLBACK_KEY)
@@ -181,25 +165,8 @@ class DeliveryLostWritesTest extends AbstractIntegrationTest {
                 .getResponse().getStatus()).isEqualTo(200);
     }
 
-    private JsonNode held(long heldId, String outcome, String wamid, String key) throws Exception {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("heldId", heldId);
-        body.put("workerKey", "dad_3");
-        body.put("route", "dad-coach");
-        body.put("outcome", outcome);
-        body.put("providerMessageId", wamid);
-        body.put("heldAt", "2026-11-03T08:00:00Z");
-        body.put("closedAt", "2026-11-03T09:59:00Z");
-        MvcResult r = mvc.perform(post(HeldOutcomeController.PATH).contentType(MediaType.APPLICATION_JSON)
-                .header("X-API-Key", CALLBACK_KEY).header("X-Idempotency-Key", key)
-                .content(json.writeValueAsString(body))).andReturn();
-        assertThat(r.getResponse().getStatus()).isEqualTo(200);
-        return json.readTree(r.getResponse().getContentAsString());
-    }
-
-    /** A scheduled message in PLATFORM mode the platform answered QUEUED (no wamid yet). */
+    /** A scheduled message the platform answered QUEUED (no wamid yet). */
     private String queuedScheduled(Father f, String triggerId) throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
         String messageId = UUID.randomUUID().toString();
         fake.onPlatformSend(c -> answer(messageId, "QUEUED", null));
         callback(f, triggerId);
@@ -208,90 +175,14 @@ class DeliveryLostWritesTest extends AbstractIntegrationTest {
         return messageId;
     }
 
-    /** A dashboard link in PLATFORM mode the platform answered QUEUED (no wamid yet). */
+    /** A dashboard link the platform answered QUEUED (no wamid yet). */
     private String queuedLink(Father f) {
-        messaging.setLoginLink(Mode.PLATFORM);
         String messageId = UUID.randomUUID().toString();
         fake.onPlatformSend(c -> answer(messageId, "QUEUED", null));
         assertThat(links.sendTo(f.getPhone())).isEqualTo(LoginLinkService.SendOutcome.SENT);
         assertThat(link(f)).containsEntry("receipt_status", "QUEUED").containsEntry("platform_state", "OWNED")
                 .containsEntry("provider_message_id", null);
         return messageId;
-    }
-
-    /**
-     * Test-only: Meta's FAILED receipt waits (on an advisory lock this test holds) right after its UPDATE of
-     * {@code login_link} - the last statement of its move, so after it found no row - and before it looks whether a row
-     * holds the wamid. A statement trigger fires also when no row matched.
-     */
-    final class Pause implements AutoCloseable {
-        private final Connection holder;
-        private boolean held;
-
-        Pause() throws Exception {
-            jdbc.execute("CREATE OR REPLACE FUNCTION d052_pause() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN "
-                    + "IF current_query() LIKE '%SET receipt_status = ''FAILED''%' THEN "
-                    + "PERFORM pg_advisory_lock(" + PAUSE_KEY + "); PERFORM pg_advisory_unlock(" + PAUSE_KEY + "); END IF; "
-                    + "RETURN NULL; END $$");
-            jdbc.execute("DROP TRIGGER IF EXISTS d052_pause ON login_link");
-            jdbc.execute("CREATE TRIGGER d052_pause AFTER UPDATE ON login_link FOR EACH STATEMENT EXECUTE FUNCTION d052_pause()");
-            holder = dataSource.getConnection();
-            holder.setAutoCommit(true);
-            try (Statement s = holder.createStatement()) {
-                s.execute("SELECT pg_advisory_lock(" + PAUSE_KEY + ")");
-            }
-            held = true;
-        }
-
-        /** Until a receipt is parked. */
-        void awaitParked() throws InterruptedException {
-            for (int i = 0; i < 200; i++) {
-                Integer waiting = jdbc.queryForObject("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' "
-                        + "AND objid = ? AND NOT granted", Integer.class, (int) PAUSE_KEY);
-                if (waiting != null && waiting > 0) {
-                    return;
-                }
-                Thread.sleep(25);
-            }
-            throw new AssertionError("Meta's receipt never reached the pause");
-        }
-
-        void release() throws Exception {
-            if (held) {
-                try (Statement s = holder.createStatement()) {
-                    s.execute("SELECT pg_advisory_unlock(" + PAUSE_KEY + ")");
-                }
-                held = false;
-            }
-        }
-
-        @Override
-        public void close() throws Exception {
-            try {
-                release();
-                holder.close();
-            } finally {
-                jdbc.execute("DROP TRIGGER IF EXISTS d052_pause ON login_link");
-                jdbc.execute("DROP FUNCTION IF EXISTS d052_pause()");
-            }
-        }
-    }
-
-    /** Test-only: Meta's FAILED receipt UPDATE of {@code login_link} raises (a database error) while this is open. */
-    final class Fault implements AutoCloseable {
-        Fault() {
-            jdbc.execute("CREATE OR REPLACE FUNCTION d052_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN "
-                    + "IF current_query() LIKE '%SET receipt_status = ''FAILED''%' THEN "
-                    + "RAISE EXCEPTION 'd052 test fault'; END IF; RETURN NULL; END $$");
-            jdbc.execute("DROP TRIGGER IF EXISTS d052_fault ON login_link");
-            jdbc.execute("CREATE TRIGGER d052_fault BEFORE UPDATE ON login_link FOR EACH STATEMENT EXECUTE FUNCTION d052_fault()");
-        }
-
-        @Override
-        public void close() {
-            jdbc.execute("DROP TRIGGER IF EXISTS d052_fault ON login_link");
-            jdbc.execute("DROP FUNCTION IF EXISTS d052_fault()");
-        }
     }
 
     /** Both run at once: released together by a barrier; both must finish without error. */
@@ -309,279 +200,69 @@ class DeliveryLostWritesTest extends AbstractIntegrationTest {
         fb.get(30, TimeUnit.SECONDS);
     }
 
-    // ------------------------------------------------------------------------------------------------- forced races (FIXED)
-
-    @Test
-    @DisplayName("SCHEDULED: Meta's 'failed' that looked for its row just before the platform's report committed the wamid "
-            + "is applied - not dropped as 'its row exists' (D-052)")
-    void failedReceiptRacingTheScheduledReportIsApplied() throws Exception {
-        messaging.setDeliveryStatusEnabled(true);
-        Father f = father();
-        String messageId = queuedScheduled(f, "d052-race-s");
-        String w = wamid();
-
-        try (Pause pause = new Pause()) {
-            Future<?> meta = threads.submit(() -> {
-                receipt(f, w, "failed");
-                return null;
-            });
-            pause.awaitParked();       // its UPDATE found no row: the wamid is not committed yet
-            assertThat(report("SCHEDULED", "scheduled-response:d052-race-s", messageId, "ACCEPTED", w)
-                    .path("applied").asBoolean()).isTrue();   // commits the wamid; nothing kept yet to apply
-            pause.release();
-            meta.get(30, TimeUnit.SECONDS);
-        }
-
-        assertThat(row("d052-race-s")).as("Meta's failure is the last word, forward only (FAILED after ACCEPTED)")
-                .containsEntry("status", "FAILED").containsEntry("provider_message_id", w);
-        assertThat((String) row("d052-race-s").get("failure_reason")).contains("131047");
-    }
-
-    @Test
-    @DisplayName("LOGIN_LINK: Meta's 'failed' racing the platform's report that links the wamid is applied (D-052)")
-    void failedReceiptRacingTheLinkReportIsApplied() throws Exception {
-        messaging.setDeliveryStatusEnabled(true);
-        Father f = father();
-        String messageId = queuedLink(f);
-        UUID id = (UUID) link(f).get("id");
-        String w = wamid();
-
-        try (Pause pause = new Pause()) {
-            Future<?> meta = threads.submit(() -> {
-                receipt(f, w, "failed");
-                return null;
-            });
-            pause.awaitParked();
-            assertThat(report("LOGIN_LINK", LoginLinkPlatform.key(id), messageId, "ACCEPTED", w).path("applied").asBoolean())
-                    .isTrue();
-            pause.release();
-            meta.get(30, TimeUnit.SECONDS);
-        }
-
-        assertThat(link(f)).containsEntry("provider_message_id", w).containsEntry("delivery_status", "FAILED")
-                .containsEntry("receipt_status", "FAILED");
-    }
-
-    @Test
-    @DisplayName("Held outcome: Meta's 'failed' racing the gateway's SENT report that links the wamid is applied (D-052)")
-    void failedReceiptRacingTheHeldOutcomeIsApplied() throws Exception {
-        outcomes.setEnabled(true);
-        Father f = father();
-        fake.onGate(c -> Reply.json("{\"send\":false,\"heldId\":5201,\"route\":\"dad-coach\",\"activeRoute\":\"big-boss\","
-                + "\"why\":\"ON_ANOTHER_PRODUCT\"}"));
-        callback(f, "d052-race-held");
-        assertThat(row("d052-race-held")).containsEntry("status", "HELD").containsEntry("gateway_hold_id", "held:5201");
-        String w = wamid();
-
-        try (Pause pause = new Pause()) {
-            Future<?> meta = threads.submit(() -> {
-                receipt(f, w, "failed");
-                return null;
-            });
-            pause.awaitParked();
-            assertThat(held(5201, "SENT", w, "held-outcome:5201:SENT:-").path("applied").asBoolean()).isTrue();
-            pause.release();
-            meta.get(30, TimeUnit.SECONDS);
-        }
-
-        assertThat(row("d052-race-held")).containsEntry("status", "FAILED").containsEntry("provider_message_id", w);
-    }
-
-    @Test
-    @DisplayName("DIRECT: a kept 'failed' whose re-apply pass looked just before the direct send committed its row is kept "
-            + "for the next pass, not dropped (GATEWAY_HELD_REPORTS off) (D-052)")
-    void keptReceiptRacingADirectSendIsAppliedByTheNextPass() throws Exception {
-        Father f = father();
-        String w = wamid();
-        receipt(f, w, "failed");                     // no row holds it: kept
-        fake.onMetaSend(c -> Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"" + w + "\"}]}"));
-
-        try (Pause pause = new Pause()) {
-            Future<?> pass = threads.submit(() -> {
-                receipts.retryPending();
-                return null;
-            });
-            pause.awaitParked();
-            callback(f, "d052-race-direct");          // today's send: the row with the wamid, committed
-            assertThat(row("d052-race-direct")).containsEntry("status", "ACCEPTED").containsEntry("provider_message_id", w);
-            pause.release();
-            pass.get(30, TimeUnit.SECONDS);
-        }
-        receipts.retryPending();                       // the next pass (every 15 s)
-
-        assertThat(row("d052-race-direct")).containsEntry("status", "FAILED");
-    }
-
-    // ------------------------------------------------------------------------------------------------- the caller's transaction (FIXED)
-
-    @Test
-    @DisplayName("LOGIN_LINK sync answer: the kept receipt applied after the platform's answer commits on its own - a "
-            + "caller's transaction (a tool's) that rolls back afterwards does not take it along (D-052)")
-    void keptReceiptAppliedByTheSyncAnswerSurvivesTheCallersRollback() throws Exception {
-        messaging.setLoginLink(Mode.PLATFORM);
-        Father f = father();
-        String w = wamid();
-        receipt(f, w, "failed");                     // Meta's failure before the platform's answer: kept
-        fake.onPlatformSend(c -> answer(UUID.randomUUID().toString(), "ACCEPTED", w));
-
-        new TransactionTemplate(transactions).executeWithoutResult(s -> {
-            assertThat(links.sendTo(f.getPhone())).isEqualTo(LoginLinkService.SendOutcome.SENT);
-            s.setRollbackOnly();                      // e.g. the tool's transaction (ToolController) rolls back
-        });
-
-        assertThat(link(f)).containsEntry("provider_message_id", w).containsEntry("delivery_status", "FAILED")
-                .containsEntry("receipt_status", "FAILED");
-    }
-
-    @Test
-    @DisplayName("Held outcome rolled back after it took the kept receipts: they are kept again, and the platform's retry "
-            + "applies them (D-052)")
-    void keptReceiptsComeBackWhenTheHeldOutcomeRollsBack() throws Exception {
-        outcomes.setEnabled(true);
-        Father f = father();
-        fake.onGate(c -> Reply.json("{\"send\":false,\"heldId\":5202,\"route\":\"dad-coach\",\"activeRoute\":\"big-boss\","
-                + "\"why\":\"ON_ANOTHER_PRODUCT\"}"));
-        callback(f, "d052-held-rb");
-        String w = wamid();
-        receipt(f, w, "failed");                     // the gateway sent it; Meta's failure beat the report: kept
-
-        new TransactionTemplate(transactions).executeWithoutResult(s -> {
-            assertThat(outcomes.apply(5202, HeldOutcomes.Outcome.SENT, w, null, null, null, null, null, null).applied())
-                    .isTrue();
-            s.setRollbackOnly();                      // its commit fails: nothing of it happened
-        });
-        assertThat(row("d052-held-rb")).containsEntry("status", "HELD");
-
-        held(5202, "SENT", w, "held-outcome:5202:SENT:-");   // the platform's retry
-
-        assertThat(row("d052-held-rb")).containsEntry("status", "FAILED").containsEntry("provider_message_id", w);
-    }
-
-    @Test
-    @DisplayName("LOGIN_LINK sync answer: the kept receipts' apply failing after the platform's answer committed never "
-            + "fails the send - the receipts are kept again and the next pass applies them (D-052)")
-    void failingKeptReceiptsNeverFailTheSend() throws Exception {
-        messaging.setLoginLink(Mode.PLATFORM);
-        Father f = father();
-        String w = wamid();
-        receipt(f, w, "failed");                     // kept: no row holds it yet
-        fake.onPlatformSend(c -> answer(UUID.randomUUID().toString(), "ACCEPTED", w));
-
-        try (Fault fault = new Fault()) {
-            assertThat(links.sendTo(f.getPhone())).isEqualTo(LoginLinkService.SendOutcome.SENT);
-            assertThat(link(f)).containsEntry("provider_message_id", w).containsEntry("delivery_status", "SENT");
-        }
-        receipts.retryPending();                       // the next pass
-
-        assertThat(link(f)).containsEntry("delivery_status", "FAILED").containsEntry("receipt_status", "FAILED");
-    }
-
-    @Test
-    @DisplayName("Meta's receipt whose apply failed (Meta got its 200 and never resends it) is kept and applied by the "
-            + "next pass (D-052)")
-    void aReceiptThatFailedToApplyIsKept() throws Exception {
-        Father f = father();
-        String w = wamid();
-        fake.onMetaSend(c -> Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"" + w + "\"}]}"));
-        callback(f, "d052-throws");
-        assertThat(row("d052-throws")).containsEntry("status", "ACCEPTED").containsEntry("provider_message_id", w);
-
-        try (Fault fault = new Fault()) {
-            receipt(f, w, "failed");                  // its transaction rolls back; the webhook still answers 200
-            assertThat(row("d052-throws")).containsEntry("status", "ACCEPTED");
-        }
-        receipts.retryPending();
-
-        assertThat(row("d052-throws")).containsEntry("status", "FAILED");
-    }
-
     // ------------------------------------------------------------------------------------------------- concurrency (x10)
 
     @Test
-    @DisplayName("Concurrency x10, SCHEDULED: Meta's 'failed' and the platform's ACCEPTED report for the same wamid at the "
-            + "same moment - always FAILED (FAILED is final and comes before delivery)")
-    void failedReceiptAndScheduledReportTogether() throws Exception {
-        messaging.setDeliveryStatusEnabled(true);
-        Father f = father();
-        for (int i = 0; i < 10; i++) {
-            String trigger = "d052-cc-s-" + i;
-            String messageId = queuedScheduled(f, trigger);
-            String w = wamid();
-            together(() -> {
-                receipt(f, w, "failed");
-                return null;
-            }, () -> report("SCHEDULED", "scheduled-response:" + trigger, messageId, "ACCEPTED", w));
-            assertThat(row(trigger)).as("run " + i).containsEntry("status", "FAILED").containsEntry("provider_message_id", w);
-        }
-    }
-
-    @Test
-    @DisplayName("Concurrency x10, LOGIN_LINK: Meta's 'failed' and the platform's ACCEPTED report for the same wamid at the "
-            + "same moment - always FAILED")
-    void failedReceiptAndLinkReportTogether() throws Exception {
-        messaging.setDeliveryStatusEnabled(true);
-        for (int i = 0; i < 10; i++) {
-            rateLimiter.reset();
-            Father f = father();
-            String messageId = queuedLink(f);
-            UUID id = (UUID) link(f).get("id");
-            String w = wamid();
-            together(() -> {
-                receipt(f, w, "failed");
-                return null;
-            }, () -> report("LOGIN_LINK", LoginLinkPlatform.key(id), messageId, "ACCEPTED", w));
-            assertThat(link(f)).as("run " + i).containsEntry("provider_message_id", w)
-                    .containsEntry("delivery_status", "FAILED").containsEntry("receipt_status", "FAILED");
-        }
-    }
-
-    @Test
-    @DisplayName("Concurrency x10, both ledgers: Meta's 'read' and the platform's DELIVERED report for an accepted wamid at "
-            + "the same moment - always READ (the report's read-modify-write holds the row's lock; never regressed)")
-    void readReceiptAndDeliveredReportTogether() throws Exception {
+    @DisplayName("Concurrency x10, both ledgers: the platform's READ and DELIVERED reports at the same moment - always READ "
+            + "(forward only under the row's lock), and Meta's 'failed' receipt forwarded alongside changes nothing (D-053)")
+    void reportsRacingEachOtherAreForwardOnly() throws Exception {
         messaging.setDeliveryStatusEnabled(true);
         for (int i = 0; i < 10; i++) {
             // a scheduled message
             Father f = father();
-            String trigger = "d052-cc-r-" + i;
-            messaging.setScheduled(Mode.PLATFORM);
+            String trigger = "d053-cc-s-" + i;
             String w = wamid();
             String messageId = UUID.randomUUID().toString();
             fake.onPlatformSend(c -> answer(messageId, "ACCEPTED", w));
             callback(f, trigger);
             assertThat(row(trigger)).containsEntry("status", "ACCEPTED").containsEntry("provider_message_id", w);
-            together(() -> {
-                receipt(f, w, "read");
-                return null;
-            }, () -> report("SCHEDULED", "scheduled-response:" + trigger, messageId, "DELIVERED", w));
+            together(() -> report("SCHEDULED", "scheduled-response:" + trigger, messageId, "READ", w),
+                    () -> report("SCHEDULED", "scheduled-response:" + trigger, messageId, "DELIVERED", w));
+            receipt(f, w, "failed");
             assertThat(row(trigger)).as("scheduled run " + i).containsEntry("status", "READ");
 
             // a dashboard link
             rateLimiter.reset();
             Father g = father();
-            messaging.setLoginLink(Mode.PLATFORM);
             String lw = wamid();
             String linkMessageId = UUID.randomUUID().toString();
             fake.onPlatformSend(c -> answer(linkMessageId, "ACCEPTED", lw));
             assertThat(links.sendTo(g.getPhone())).isEqualTo(LoginLinkService.SendOutcome.SENT);
             UUID id = (UUID) link(g).get("id");
             together(() -> {
-                receipt(g, lw, "read");
+                receipt(g, lw, "failed");
                 return null;
             }, () -> report("LOGIN_LINK", LoginLinkPlatform.key(id), linkMessageId, "DELIVERED", lw));
+            report("LOGIN_LINK", LoginLinkPlatform.key(id), linkMessageId, "READ", lw);
             assertThat(link(g)).as("link run " + i).containsEntry("receipt_status", "READ")
                     .containsEntry("delivery_status", "SENT");
+        }
+    }
+
+    @Test
+    @DisplayName("Concurrency x10, SCHEDULED: the platform's FAILED and ACCEPTED reports at the same moment - always FAILED "
+            + "(FAILED is final and comes before delivery), the wamid kept")
+    void failedAndAcceptedReportsTogether() throws Exception {
+        messaging.setDeliveryStatusEnabled(true);
+        Father f = father();
+        for (int i = 0; i < 10; i++) {
+            String trigger = "d053-cc-f-" + i;
+            String messageId = queuedScheduled(f, trigger);
+            String w = wamid();
+            together(() -> report("SCHEDULED", "scheduled-response:" + trigger, messageId, "FAILED", w),
+                    () -> report("SCHEDULED", "scheduled-response:" + trigger, messageId, "ACCEPTED", w));
+            assertThat(row(trigger)).as("run " + i).containsEntry("status", "FAILED").containsEntry("provider_message_id", w);
         }
     }
 
     // ------------------------------------------------------------------------------------------------- SAFE paths
 
     @Test
-    @DisplayName("Reconcile lookup (GET by key, scheduler lane, no caller transaction): the platform's ACCEPTED links the "
-            + "wamid and Meta's kept 'failed' is applied - both ledgers, committed")
-    void reconcileLookupAppliesTheKeptReceipt() throws Exception {
+    @DisplayName("Reconcile lookup (GET by key, scheduler lane, no caller transaction): the platform's word links the wamid "
+            + "and is committed - both ledgers; a receipt on the webhook before it changed nothing")
+    void reconcileLookupIsCommitted() throws Exception {
         Father f = father();
-        String scheduledMessage = queuedScheduled(f, "d052-rec-s");
+        String scheduledMessage = queuedScheduled(f, "d053-rec-s");
         String sw = wamid();
         receipt(f, sw, "failed");
         rateLimiter.reset();
@@ -600,8 +281,8 @@ class DeliveryLostWritesTest extends AbstractIntegrationTest {
         });
         lane.get(30, TimeUnit.SECONDS);
 
-        assertThat(row("d052-rec-s")).containsEntry("status", "FAILED").containsEntry("provider_message_id", sw);
-        assertThat(link(g)).containsEntry("delivery_status", "FAILED").containsEntry("receipt_status", "FAILED")
+        assertThat(row("d053-rec-s")).containsEntry("status", "ACCEPTED").containsEntry("provider_message_id", sw);
+        assertThat(link(g)).containsEntry("delivery_status", "SENT").containsEntry("receipt_status", null)
                 .containsEntry("provider_message_id", lw);
     }
 
@@ -610,13 +291,12 @@ class DeliveryLostWritesTest extends AbstractIntegrationTest {
             + "known:false, no ledger row touched even when the wamid is a recorded one, the report's key committed DONE")
     void reportsWithoutALedgerWriteNothing() throws Exception {
         messaging.setDeliveryStatusEnabled(true);
-        messaging.setScheduled(Mode.PLATFORM);
         Father f = father();
         String w = wamid();
         String messageId = UUID.randomUUID().toString();
         fake.onPlatformSend(c -> answer(messageId, "ACCEPTED", w));
-        callback(f, "d052-noledger");
-        Map<String, Object> before = row("d052-noledger");
+        callback(f, "d053-noledger");
+        Map<String, Object> before = row("d053-noledger");
 
         for (String kind : List.of("REPLY", "FIXED_LINE", "BUTTON_REPLY", "READY_ANSWER", "BELT_PROMOTION")) {
             String id = UUID.randomUUID().toString();
@@ -626,7 +306,7 @@ class DeliveryLostWritesTest extends AbstractIntegrationTest {
             assertThat(jdbc.queryForObject("SELECT status FROM tool_idempotency WHERE scope = 'PLATFORM_DELIVERY_STATUS' "
                     + "AND idempotency_key = ?", String.class, "delivery:" + id + ":FAILED")).as(kind).isNotEqualTo("IN_PROGRESS");
         }
-        assertThat(row("d052-noledger")).isEqualTo(before);
+        assertThat(row("d053-noledger")).isEqualTo(before);
     }
 
     @Test
@@ -634,7 +314,6 @@ class DeliveryLostWritesTest extends AbstractIntegrationTest {
             + "committed, and a later delivery report never undoes it")
     void sessionTimerRecordIsCommitted() throws Exception {
         messaging.setDeliveryStatusEnabled(true);
-        messaging.setScheduled(Mode.PLATFORM);
         Father f = father();
         Child noa = data.child(f, "נועה", 6);
         clock.set(Instant.parse("2026-11-03T06:00:00Z"));   // 08:00 in Israel
@@ -643,12 +322,12 @@ class DeliveryLostWritesTest extends AbstractIntegrationTest {
         String messageId = UUID.randomUUID().toString();
         fake.onPlatformSend(c -> answer(messageId, "QUEUED", null));
 
-        callback(f, "d052-morning", "SESSION_MORNING_REMINDER", IDENTITY + "בוקר טוב!");
+        callback(f, "d053-morning", "SESSION_MORNING_REMINDER", IDENTITY + "בוקר טוב!");
 
         assertThat(jdbc.queryForObject("SELECT morning_reminded_on FROM quality_time WHERE id = ?", LocalDate.class,
                 qt.getId())).isEqualTo(LocalDate.of(2026, 11, 3));
-        report("SCHEDULED", "scheduled-response:d052-morning", messageId, "ACCEPTED", wamid());
-        assertThat(row("d052-morning")).containsEntry("status", "ACCEPTED");
+        report("SCHEDULED", "scheduled-response:d053-morning", messageId, "ACCEPTED", wamid());
+        assertThat(row("d053-morning")).containsEntry("status", "ACCEPTED");
         assertThat(jdbc.queryForObject("SELECT morning_reminded_on FROM quality_time WHERE id = ?", LocalDate.class,
                 qt.getId())).isEqualTo(LocalDate.of(2026, 11, 3));
     }

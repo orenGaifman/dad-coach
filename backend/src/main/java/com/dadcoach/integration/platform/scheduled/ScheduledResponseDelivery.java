@@ -21,10 +21,10 @@ import java.util.UUID;
 public class ScheduledResponseDelivery {
 
     /**
-     * SENDING (claimed, not sent yet) -> ACCEPTED (Meta's API took it; wamid kept) or HELD (the shared-number gateway
-     * keeps it for later) or FAILED. Meta's receipts then move an ACCEPTED row forward only: SENT -> DELIVERED -> READ,
-     * or FAILED (DeliveryReceipts). DELIVERED means a delivery receipt; rows written before V45 used DELIVERED for
-     * "accepted" and have no wamid.
+     * SENDING (claimed, not sent yet; the platform has it QUEUED, or will be asked again) -> ACCEPTED (Meta's API took
+     * it; wamid kept) or HELD (the platform keeps it while he is on another product) or FAILED. The platform's reports
+     * then move an ACCEPTED row forward only: DELIVERED -> READ, or FAILED (D-053: the platform's reports are the only
+     * source; before, Meta's receipts). Rows written before V45 used DELIVERED for "accepted" and have no wamid.
      *
      * <p>D-042: a HELD row learns from the gateway's report what became of it - ACCEPTED with the wamid (sent), FAILED
      * (refused, or expired unsent), or UNKNOWN: the gateway's send may have reached Meta (5xx, timeout after the
@@ -103,19 +103,6 @@ public class ScheduledResponseDelivery {
         this.targetStateKey = targetStateKey;
         this.status = Status.SENDING;
         this.createdAt = now;
-    }
-
-    /** A successful send: ACCEPTED with Meta's wamid, or HELD with the gateway's id (not delivered yet). */
-    public void markAccepted(Mode mode, com.dadcoach.channel.delivery.DeliveryResult result, Instant now) {
-        if (result.isHeld()) {
-            this.status = Status.HELD;
-            this.gatewayHoldId = result.providerMessageId();
-        } else {
-            this.status = Status.ACCEPTED;
-            this.providerMessageId = result.metaMessageId();
-        }
-        this.deliveryMode = mode;
-        this.completedAt = now;
     }
 
     public void markFailed(String reason, Instant now) {

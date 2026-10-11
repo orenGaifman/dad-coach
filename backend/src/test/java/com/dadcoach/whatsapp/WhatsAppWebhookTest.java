@@ -43,7 +43,7 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
     }
 
     private String sentText(int index) throws Exception {
-        return json.readTree(fake.metaSends().get(index).body()).path("text").path("body").asText();
+        return fake.sentMessages().get(index).path("content").path("text").asText();   // D-053: via the platform
     }
 
     @Test
@@ -78,7 +78,7 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
         assertThat(turn.path("tenantId").asText()).isEqualTo("20082bcd-a7bf-57a8-a382-4bad32144b2f");
         assertThat(turn.path("personRef").isNull()).isTrue();
         assertThat(fake.turns().get(0).header("X-API-Key")).isEqualTo("test-platform-key-0123456789");
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.sentMessages()).hasSize(1);
         assertThat(sentText(0)).isEqualTo("שלום! מה שלומך?");
     }
 
@@ -105,7 +105,7 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
         webhook(Webhooks.text(NEW_NUMBER, "wamid.dup", "היי")).andExpect(status().isOk());
         webhook(Webhooks.text(NEW_NUMBER, "wamid.dup", "היי")).andExpect(status().isOk());
         assertThat(fake.turns()).hasSize(1);
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.sentMessages()).hasSize(1);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tool_idempotency WHERE scope = 'WHATSAPP_INBOUND' "
                 + "AND idempotency_key = 'wamid.dup'", Integer.class)).isEqualTo(1);
     }
@@ -119,7 +119,7 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply(null, "GENERATED")));
         webhook(Webhooks.text(NEW_NUMBER, "wamid.null", "תודה")).andExpect(status().isOk());
         assertThat(fake.turns()).hasSize(3);
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.sentMessages()).isEmpty();
     }
 
     /** Owner, 2026-10-08: the button to his page is the whole answer - no "sent you a button" line under it. */
@@ -134,29 +134,29 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
                 java.sql.Timestamp.from(clock.instant()), java.sql.Timestamp.from(clock.instant().plusSeconds(3600)));
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\n" + sentLine, "GENERATED")));
         webhook(Webhooks.text(father.getPhone(), "wamid.page1", "תן לי דשבורד")).andExpect(status().isOk());
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.sentMessages()).isEmpty();
         // the same line ending with an emoji instead of the period
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply(sentLine.replace(".", " 🙂"), "GENERATED")));
         webhook(Webhooks.text(father.getPhone(), "wamid.page1b", "שלח לי את הדף שלי")).andExpect(status().isOk());
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.sentMessages()).isEmpty();
         // his own words (prod 2026-10-08 12:46 - this one went out under the card)
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\nשלחתי לך כפתור לדף שלך 😊", "GENERATED")));
         webhook(Webhooks.text(father.getPhone(), "wamid.page1c", "הייתי לי דשבורד")).andExpect(status().isOk());
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.sentMessages()).isEmpty();
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("הנה הכפתור לדף שלך בדאד קואץ׳, הוא ממשיך לעבוד תמיד 👇", "GENERATED")));
         webhook(Webhooks.text(father.getPhone(), "wamid.page1d", "דשבורד")).andExpect(status().isOk());
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.sentMessages()).isEmpty();
         // a reply that says more than "sent" still goes, even with the button in the same turn
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply(
                 "❤️ דאד קואץ׳:\\nאפשר לתקן את השם בדף שלך תחת ילדים, שלחתי לך כפתור", "GENERATED")));
         webhook(Webhooks.text(father.getPhone(), "wamid.page1e", "השם של הבן שלי נכתב לא נכון")).andExpect(status().isOk());
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.sentMessages()).hasSize(1);
 
         // no button this turn, but his button from a minute ago is on his screen: no second card, a line about it
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\n" + sentLine, "GENERATED")));
         clock.advance(java.time.Duration.ofMinutes(1));
         webhook(Webhooks.text(father.getPhone(), "wamid.page2", "תן לי דשבורד")).andExpect(status().isOk());
-        assertThat(fake.metaSends()).hasSize(2);
+        assertThat(fake.sentMessages()).hasSize(2);
         assertThat(sentText(1)).isEqualTo("❤️ דאד קואץ׳:\n" + com.dadcoach.api.tools.DashboardTools.ON_SCREEN_REPLY);
     }
 
@@ -167,10 +167,10 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
         data.endpoint(father, true);
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\nשלחתי לך את הכפתור לדף שלך 😊", "GENERATED")));
         webhook(Webhooks.text(father.getPhone(), "wamid.nocall", "הייתי לי דשבורד")).andExpect(status().isOk());
-        assertThat(fake.metaSends()).hasSize(1);
-        JsonNode card = json.readTree(fake.metaSends().get(0).body());
-        assertThat(card.path("type").asText()).isEqualTo("interactive");
-        assertThat(card.path("interactive").path("type").asText()).isEqualTo("cta_url");
+        assertThat(fake.sentMessages()).hasSize(1);
+        JsonNode card = fake.sentMessages().get(0);
+        assertThat(card.path("kind").asText()).isEqualTo("LOGIN_LINK");
+        assertThat(card.path("content").path("type").asText()).isEqualTo("link_button");
         assertThat(jdbc.queryForObject("SELECT delivery_status FROM login_link WHERE father_id = ?", String.class,
                 father.getId())).isEqualTo("SENT");
     }
@@ -179,12 +179,12 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
     void aPlatformFailureGetsOneShortHebrewLineNeverEnglish() throws Exception {
         fake.onTurn(c -> new FakeServers.Reply(500, "{\"error\":\"boom\"}"));
         webhook(Webhooks.text(NEW_NUMBER, "wamid.down", "היי")).andExpect(status().isOk());
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.sentMessages()).hasSize(1);
         assertThat(sentText(0)).isEqualTo("❤️ דאד קואץ׳:\nמשהו השתבש אצלי. נסה שוב עוד רגע.");
 
         fake.onTurn(c -> new FakeServers.Reply(409, "{\"code\":\"person.inactive\"}"));
         webhook(Webhooks.text(NEW_NUMBER, "wamid.refused", "היי")).andExpect(status().isOk());
-        assertThat(fake.metaSends()).hasSize(2);
+        assertThat(fake.sentMessages()).hasSize(2);
         assertThat(sentText(1)).isEqualTo("❤️ דאד קואץ׳:\nמשהו השתבש אצלי. נסה שוב עוד רגע.");
     }
 
@@ -207,17 +207,17 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
     void aReactionIsNeverAnswered() throws Exception {
         webhook(Webhooks.reaction(NEW_NUMBER, "wamid.reaction", "❤️")).andExpect(status().isOk());
         assertThat(fake.turns()).isEmpty();
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.sentMessages()).isEmpty();
     }
 
-    /** D-038: a receipt is acknowledged and never runs a turn; one for a wamid Dad Coach never recorded changes nothing. */
+    /** D-038 / D-053: a receipt is acknowledged (200) and ignored - never a turn, never a send (receipts are the platform's). */
     @Test
     void statusReceiptsAreAcknowledgedAndNeverRunATurn() throws Exception {
         webhook(Webhooks.status("wamid.out.1")).andExpect(status().isOk());
         webhook("{\"object\":\"whatsapp_business_account\",\"entry\":[]}").andExpect(status().isOk());
         webhook("not json").andExpect(status().isOk());
         assertThat(fake.turns()).isEmpty();
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.sentMessages()).isEmpty();
     }
 
     @Test
@@ -225,7 +225,7 @@ class WhatsAppWebhookTest extends AbstractIntegrationTest {
         Father father = data.father("+19995550102", "יוסי", FatherStatus.DELETED);
         webhook(Webhooks.text(father.getPhone(), "wamid.deleted", "היי")).andExpect(status().isOk());
         assertThat(fake.turns()).isEmpty();
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.sentMessages()).isEmpty();
     }
 
     @Test

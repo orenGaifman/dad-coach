@@ -50,13 +50,6 @@ public record ScheduledResponseResult(
                 null, null, null);
     }
 
-    /** D-039: something else went out instead of the turn's text (a ready message, a template, buttons added). */
-    ScheduledResponseResult withDelivered(String content, DeliveryResult sent, Map<String, Object> template,
-                                          List<Map<String, Object>> buttons, String kind) {
-        return new ScheduledResponseResult(status, detail, null, content, providerId(sent), deliveryStatus(sent), null,
-                template, buttons == null || buttons.isEmpty() ? null : buttons, kind);
-    }
-
     private static String providerId(DeliveryResult sent) {
         return sent != null && sent.isSuccessful() ? sent.providerMessageId() : null;
     }

@@ -1,0 +1,1910 @@
+[
+ {
+  "product": "big_boss",
+  "kind": "INVITE",
+  "variant": "account_invite",
+  "position": 0,
+  "template": "big_boss_account_invite",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 0,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "INVITE",
+  "variant": "account_invite_role",
+  "position": 0,
+  "template": "big_boss_account_invite_role",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "LOGIN_LINK",
+  "variant": "login_link",
+  "position": 0,
+  "template": "big_boss_login_link",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 0,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "MANAGER_MORNING",
+  "variant": "manager_morning",
+  "position": 0,
+  "template": "big_boss_manager_morning",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 6,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "MANAGER_WEEKLY",
+  "variant": "manager_morning",
+  "position": 0,
+  "template": "big_boss_manager_morning",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 6,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "QUESTION_ANSWERED",
+  "variant": "block_cleared",
+  "position": 0,
+  "template": "big_boss_block_cleared",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "QUESTION_ANSWERED",
+  "variant": "blocker_answered",
+  "position": 0,
+  "template": "big_boss_blocker_answered",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 1
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "QUESTION_ANSWERED",
+  "variant": "question_answered",
+  "position": 0,
+  "template": "big_boss_question_answered",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "QUESTION_ASKED",
+  "variant": "question_asked",
+  "position": 0,
+  "template": "big_boss_question_asked",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_ASSIGNED",
+  "variant": "task_assigned",
+  "position": 0,
+  "template": "big_boss_task_assigned",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_ASSIGNED",
+  "variant": "task_assigned_late",
+  "position": 0,
+  "template": "big_boss_task_assigned_late",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_ASSIGNED",
+  "variant": "task_assigned_no_due",
+  "position": 0,
+  "template": "big_boss_task_assigned_no_due",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 1
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_BLOCKED",
+  "variant": "task_blocked",
+  "position": 0,
+  "template": "big_boss_task_blocked",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 1
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_BLOCKED",
+  "variant": "task_waiting_on_other",
+  "position": 0,
+  "template": "big_boss_task_waiting_on_other",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_ESCALATION",
+  "variant": "extension_request",
+  "position": 0,
+  "template": "big_boss_extension_request",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_ESCALATION",
+  "variant": "person_escalation",
+  "position": 0,
+  "template": "big_boss_person_escalation",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 5,
+   "quickReplies": 3
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_ESCALATION",
+  "variant": "person_escalation_not_delivered",
+  "position": 0,
+  "template": "big_boss_person_escalation_not_delivered",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_ESCALATION",
+  "variant": "task_escalation",
+  "position": 0,
+  "template": "big_boss_task_escalation",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 3
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_ESCALATION",
+  "variant": "task_escalation_not_delivered",
+  "position": 0,
+  "template": "big_boss_task_escalation_not_delivered",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_ESCALATION",
+  "variant": "team_escalation",
+  "position": 0,
+  "template": "big_boss_team_escalation",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_FOLLOWUP",
+  "variant": "task_followup",
+  "position": 0,
+  "template": "big_boss_task_followup",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_REMINDER",
+  "variant": "task_overdue",
+  "position": 0,
+  "template": "big_boss_task_overdue",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 3
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_REMINDER",
+  "variant": "task_reminder",
+  "position": 0,
+  "template": "big_boss_task_reminder",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 3
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_REMINDER",
+  "variant": "task_reminder_from_manager",
+  "position": 0,
+  "template": "big_boss_task_reminder_from_manager",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 3
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_REMINDER",
+  "variant": "tasks_list",
+  "position": 0,
+  "template": "big_boss_tasks_list",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "block_taken_over",
+  "position": 0,
+  "template": "big_boss_block_taken_over",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 1
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "done_after_escalation",
+  "position": 0,
+  "template": "big_boss_done_after_escalation",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "due_moved",
+  "position": 0,
+  "template": "big_boss_due_moved",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "dues_moved",
+  "position": 0,
+  "template": "big_boss_dues_moved",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "management_granted",
+  "position": 0,
+  "template": "big_boss_management_granted",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "management_revoked",
+  "position": 0,
+  "template": "big_boss_management_revoked",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "manager_changed",
+  "position": 0,
+  "template": "big_boss_manager_changed",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "task_cancelled",
+  "position": 0,
+  "template": "big_boss_task_cancelled",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "task_changed",
+  "position": 0,
+  "template": "big_boss_task_changed",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 5,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "task_closed",
+  "position": 0,
+  "template": "big_boss_task_closed",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "task_moved_away",
+  "position": 0,
+  "template": "big_boss_task_moved_away",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "training_manager",
+  "position": 0,
+  "template": "big_boss_training_manager",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 1
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "wait_check",
+  "position": 0,
+  "template": "big_boss_wait_check",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 3
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TASK_UPDATE",
+  "variant": "wait_escalation",
+  "position": 0,
+  "template": "big_boss_wait_escalation",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 6,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "big_boss",
+  "kind": "TEAMMATE_MORNING",
+  "variant": "teammate_morning",
+  "position": 0,
+  "template": "big_boss_teammate_morning",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 5,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "dad_coach",
+  "kind": "LOGIN_LINK",
+  "variant": "",
+  "position": 0,
+  "template": "dad_coach_update_he",
+  "bodyRefs": [
+   "text"
+  ],
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "dad_coach",
+  "kind": "SCHEDULED",
+  "variant": "",
+  "position": 0,
+  "template": "dad_coach_update_he",
+  "bodyRefs": [
+   "text"
+  ],
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "dad_coach",
+  "kind": "SCHEDULED",
+  "variant": "session_follow_up_he",
+  "position": 0,
+  "template": "dad_coach_session_follow_up_he",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "dad_coach",
+  "kind": "SCHEDULED",
+  "variant": "session_follow_up_he",
+  "position": 1,
+  "template": "dad_coach_update_he",
+  "bodyRefs": [
+   "text"
+  ],
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "dad_coach",
+  "kind": "SCHEDULED",
+  "variant": "session_hour_before_he",
+  "position": 0,
+  "template": "dad_coach_session_hour_before_he",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 1
+  }
+ },
+ {
+  "product": "dad_coach",
+  "kind": "SCHEDULED",
+  "variant": "session_hour_before_he",
+  "position": 1,
+  "template": "dad_coach_update_he",
+  "bodyRefs": [
+   "text"
+  ],
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "dad_coach",
+  "kind": "SCHEDULED",
+  "variant": "session_morning_he",
+  "position": 0,
+  "template": "dad_coach_session_morning_he",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "dad_coach",
+  "kind": "SCHEDULED",
+  "variant": "session_morning_he",
+  "position": 1,
+  "template": "dad_coach_update_he",
+  "bodyRefs": [
+   "text"
+  ],
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "AI_FOLLOWUP",
+  "variant": "ai_followup",
+  "position": 0,
+  "template": "tair_ai_followup",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "AI_FOLLOWUP",
+  "variant": "ai_followup_n",
+  "position": 0,
+  "template": "tair_ai_followup_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_CANCELLED",
+  "variant": "appointment_cancelled",
+  "position": 0,
+  "template": "tair_appointment_cancelled",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_CANCELLED",
+  "variant": "appointment_cancelled_n",
+  "position": 0,
+  "template": "tair_appointment_cancelled_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_CONFIRMATION",
+  "variant": "appointment_confirmation",
+  "position": 0,
+  "template": "tair_appointment_confirmation",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_CONFIRMATION",
+  "variant": "appointment_confirmation_n",
+  "position": 0,
+  "template": "tair_appointment_confirmation_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_REMINDER_24H",
+  "variant": "reminder_confirm_day_before",
+  "position": 0,
+  "template": "tair_reminder_confirm_day_before",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_REMINDER_24H",
+  "variant": "reminder_confirm_day_before",
+  "position": 1,
+  "template": "tair_reminder_day_before",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_REMINDER_24H",
+  "variant": "reminder_confirm_day_before_n",
+  "position": 0,
+  "template": "tair_reminder_confirm_day_before_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_REMINDER_24H",
+  "variant": "reminder_confirm_day_before_n",
+  "position": 1,
+  "template": "tair_reminder_day_before_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_REMINDER_24H",
+  "variant": "reminder_day_before",
+  "position": 0,
+  "template": "tair_reminder_day_before",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_REMINDER_24H",
+  "variant": "reminder_day_before_n",
+  "position": 0,
+  "template": "tair_reminder_day_before_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_REMINDER_3H",
+  "variant": "reminder_confirm_same_day",
+  "position": 0,
+  "template": "tair_reminder_confirm_same_day",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_REMINDER_3H",
+  "variant": "reminder_confirm_same_day",
+  "position": 1,
+  "template": "tair_reminder_same_day",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_REMINDER_3H",
+  "variant": "reminder_confirm_same_day_n",
+  "position": 0,
+  "template": "tair_reminder_confirm_same_day_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_REMINDER_3H",
+  "variant": "reminder_confirm_same_day_n",
+  "position": 1,
+  "template": "tair_reminder_same_day_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_REMINDER_3H",
+  "variant": "reminder_same_day",
+  "position": 0,
+  "template": "tair_reminder_same_day",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_REMINDER_3H",
+  "variant": "reminder_same_day_n",
+  "position": 0,
+  "template": "tair_reminder_same_day_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_RESCHEDULED",
+  "variant": "appointment_moved",
+  "position": 0,
+  "template": "tair_appointment_moved",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPOINTMENT_RESCHEDULED",
+  "variant": "appointment_moved_n",
+  "position": 0,
+  "template": "tair_appointment_moved_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_booked_day",
+  "position": 0,
+  "template": "tair_approval_booked_day",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_booked_day_n",
+  "position": 0,
+  "template": "tair_approval_booked_day_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_booked_hours",
+  "position": 0,
+  "template": "tair_approval_booked_hours",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_booked_hours_n",
+  "position": 0,
+  "template": "tair_approval_booked_hours_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_denied",
+  "position": 0,
+  "template": "tair_approval_denied",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 0,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_denied_n",
+  "position": 0,
+  "template": "tair_approval_denied_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 0,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_expired",
+  "position": 0,
+  "template": "tair_approval_expired",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 0,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_expired_n",
+  "position": 0,
+  "template": "tair_approval_expired_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 0,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_moved_day",
+  "position": 0,
+  "template": "tair_approval_moved_day",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_moved_day_n",
+  "position": 0,
+  "template": "tair_approval_moved_day_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_moved_hours",
+  "position": 0,
+  "template": "tair_approval_moved_hours",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_moved_hours_n",
+  "position": 0,
+  "template": "tair_approval_moved_hours_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_slot_gone",
+  "position": 0,
+  "template": "tair_approval_slot_gone",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "approval_slot_gone_n",
+  "position": 0,
+  "template": "tair_approval_slot_gone_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "clinic_answer",
+  "position": 0,
+  "template": "tair_clinic_answer",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "clinic_answer_n",
+  "position": 0,
+  "template": "tair_clinic_answer_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "clinic_answer_request",
+  "position": 0,
+  "template": "tair_clinic_answer_request",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "APPROVAL_OUTCOME",
+  "variant": "clinic_answer_request_n",
+  "position": 0,
+  "template": "tair_clinic_answer_request_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "HANDOFF_NOTICE",
+  "variant": "handoff_handled",
+  "position": 0,
+  "template": "tair_handoff_handled",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 0,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "HANDOFF_NOTICE",
+  "variant": "handoff_handled_n",
+  "position": 0,
+  "template": "tair_handoff_handled_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 0,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "LEAD_FOLLOWUP_TOUCH",
+  "variant": "lead_followup_1",
+  "position": 0,
+  "template": "tair_lead_followup_1",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "LEAD_FOLLOWUP_TOUCH",
+  "variant": "lead_followup_1_n",
+  "position": 0,
+  "template": "tair_lead_followup_1_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "LEAD_FOLLOWUP_TOUCH",
+  "variant": "lead_followup_2",
+  "position": 0,
+  "template": "tair_lead_followup_2",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "LEAD_FOLLOWUP_TOUCH",
+  "variant": "lead_followup_2_n",
+  "position": 0,
+  "template": "tair_lead_followup_2_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "LEAD_FOLLOWUP_TOUCH",
+  "variant": "lead_followup_3",
+  "position": 0,
+  "template": "tair_lead_followup_3",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "LEAD_FOLLOWUP_TOUCH",
+  "variant": "lead_followup_3_n",
+  "position": 0,
+  "template": "tair_lead_followup_3_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "LOGIN_LINK",
+  "variant": "login_link",
+  "position": 0,
+  "template": "tair_login_link",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_approval_hours_f",
+  "position": 0,
+  "template": "tair_owner_approval_hours_f",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_approval_hours_m",
+  "position": 0,
+  "template": "tair_owner_approval_hours_m",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_approval_hours_n",
+  "position": 0,
+  "template": "tair_owner_approval_hours_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_approval_hours_reminder_f",
+  "position": 0,
+  "template": "tair_owner_approval_hours_reminder_f",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_approval_hours_reminder_m",
+  "position": 0,
+  "template": "tair_owner_approval_hours_reminder_m",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_approval_hours_reminder_n",
+  "position": 0,
+  "template": "tair_owner_approval_hours_reminder_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 2
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_approval_other_f",
+  "position": 0,
+  "template": "tair_owner_approval_other_f",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_approval_other_m",
+  "position": 0,
+  "template": "tair_owner_approval_other_m",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_approval_other_n",
+  "position": 0,
+  "template": "tair_owner_approval_other_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_approval_other_reminder_f",
+  "position": 0,
+  "template": "tair_owner_approval_other_reminder_f",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_approval_other_reminder_m",
+  "position": 0,
+  "template": "tair_owner_approval_other_reminder_m",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_approval_other_reminder_n",
+  "position": 0,
+  "template": "tair_owner_approval_other_reminder_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_question_f",
+  "position": 0,
+  "template": "tair_owner_question_f",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_question_m",
+  "position": 0,
+  "template": "tair_owner_question_m",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_question_n",
+  "position": 0,
+  "template": "tair_owner_question_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_question_reminder_f",
+  "position": 0,
+  "template": "tair_owner_question_reminder_f",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_question_reminder_m",
+  "position": 0,
+  "template": "tair_owner_question_reminder_m",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_APPROVAL_REQUEST",
+  "variant": "owner_question_reminder_n",
+  "position": 0,
+  "template": "tair_owner_question_reminder_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_DAILY_DIGEST",
+  "variant": "owner_daily_digest",
+  "position": 0,
+  "template": "tair_owner_daily_digest",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 5,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_HANDOFF_ALERT",
+  "variant": "owner_callback",
+  "position": 0,
+  "template": "tair_owner_callback",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_HANDOFF_ALERT",
+  "variant": "owner_callback_again",
+  "position": 0,
+  "template": "tair_owner_callback_again",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_HANDOFF_ALERT",
+  "variant": "owner_complaint",
+  "position": 0,
+  "template": "tair_owner_complaint",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_HANDOFF_ALERT",
+  "variant": "owner_complaint_again",
+  "position": 0,
+  "template": "tair_owner_complaint_again",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_HANDOFF_ALERT",
+  "variant": "owner_handoff",
+  "position": 0,
+  "template": "tair_owner_handoff",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_HANDOFF_ALERT",
+  "variant": "owner_handoff_again",
+  "position": 0,
+  "template": "tair_owner_handoff_again",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_MONTHLY_REPORT",
+  "variant": "owner_monthly_report",
+  "position": 0,
+  "template": "tair_owner_monthly_report",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_REFILL_NOTICE",
+  "variant": "owner_refill",
+  "position": 0,
+  "template": "tair_owner_refill",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "OWNER_REFILL_NOTICE",
+  "variant": "owner_refill_none",
+  "position": 0,
+  "template": "tair_owner_refill_none",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "RECALL_TOUCH",
+  "variant": "recall_1",
+  "position": 0,
+  "template": "tair_recall_1",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "RECALL_TOUCH",
+  "variant": "recall_1_n",
+  "position": 0,
+  "template": "tair_recall_1_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "RECALL_TOUCH",
+  "variant": "recall_2",
+  "position": 0,
+  "template": "tair_recall_2",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "RECALL_TOUCH",
+  "variant": "recall_2_n",
+  "position": 0,
+  "template": "tair_recall_2_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "RECALL_TOUCH",
+  "variant": "recall_3",
+  "position": 0,
+  "template": "tair_recall_3",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "RECALL_TOUCH",
+  "variant": "recall_3_n",
+  "position": 0,
+  "template": "tair_recall_3_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "SERIES_TOUCH",
+  "variant": "series_after",
+  "position": 0,
+  "template": "tair_series_after",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 5,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "SERIES_TOUCH",
+  "variant": "series_after_n",
+  "position": 0,
+  "template": "tair_series_after_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 5,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "SERIES_TOUCH",
+  "variant": "series_due",
+  "position": 0,
+  "template": "tair_series_due",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "SERIES_TOUCH",
+  "variant": "series_due_n",
+  "position": 0,
+  "template": "tair_series_due_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "SERIES_TOUCH",
+  "variant": "series_last",
+  "position": 0,
+  "template": "tair_series_last",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "SERIES_TOUCH",
+  "variant": "series_last_n",
+  "position": 0,
+  "template": "tair_series_last_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 4,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "TEAM_SALES_LEAD",
+  "variant": "team_sales_lead",
+  "position": 0,
+  "template": "tair_team_sales_lead",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "TRAINING_INVITE",
+  "variant": "training_owner",
+  "position": 0,
+  "template": "tair_training_owner",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 1,
+   "quickReplies": 1
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "WAITLIST_SLOT_OFFER",
+  "variant": "waitlist_offer",
+  "position": 0,
+  "template": "tair_waitlist_offer",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "WAITLIST_SLOT_OFFER",
+  "variant": "waitlist_offer_n",
+  "position": 0,
+  "template": "tair_waitlist_offer_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 3,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "WELCOME",
+  "variant": "welcome",
+  "position": 0,
+  "template": "tair_welcome",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "WINBACK_TOUCH",
+  "variant": "winback_1",
+  "position": 0,
+  "template": "tair_winback_1",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "WINBACK_TOUCH",
+  "variant": "winback_1_n",
+  "position": 0,
+  "template": "tair_winback_1_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "WINBACK_TOUCH",
+  "variant": "winback_2",
+  "position": 0,
+  "template": "tair_winback_2",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "WINBACK_TOUCH",
+  "variant": "winback_2_n",
+  "position": 0,
+  "template": "tair_winback_2_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "WINBACK_TOUCH",
+  "variant": "winback_3",
+  "position": 0,
+  "template": "tair_winback_3",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ },
+ {
+  "product": "tair",
+  "kind": "WINBACK_TOUCH",
+  "variant": "winback_3_n",
+  "position": 0,
+  "template": "tair_winback_3_n",
+  "bodyRefs": null,
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0
+  }
+ }
+]

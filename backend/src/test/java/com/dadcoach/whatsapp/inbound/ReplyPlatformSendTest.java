@@ -10,7 +10,6 @@ import com.dadcoach.domain.father.Father;
 import com.dadcoach.integration.channel.DeliveryStatusController;
 import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import com.dadcoach.integration.platform.messaging.MessagingSettings;
-import com.dadcoach.integration.platform.messaging.MessagingSettings.Mode;
 import com.dadcoach.integration.platform.messaging.PlatformSendFlow;
 import com.dadcoach.integration.platform.timeline.TimelineReports;
 import com.dadcoach.qualitytime.QualityTimeService;
@@ -37,11 +36,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * D-048 (Unified Workflow Phase 6.3-DC, step DC4): the lines answering a father's WhatsApp message - the coach's reply,
- * Dad Coach's fixed lines, a session button's answer, an answer from data - through the platform's Send API, one switch
- * per kind, against a fake platform + fake Meta (FakeServers). No real WhatsApp. Per kind: DIRECT unchanged and byte for
- * byte equal to SHADOW, SHADOW off the turn's thread, PLATFORM's request and mapping, the latency of the turn's thread,
- * and ambiguity never sending a line twice.
+ * D-048 (Unified Workflow Phase 6.3-DC, step DC4) / D-053 (6.4): the lines answering a father's WhatsApp message - the
+ * coach's reply, Dad Coach's fixed lines (incl. the "something went wrong" line and the deletion answer), a session
+ * button's answer, an answer from data - through the platform's Send API, the only sender, against a fake platform
+ * (FakeServers). No real WhatsApp; the test base proves fake Meta never receives a send. The request and mapping per
+ * kind, the latency of the turn's thread, ambiguity never sending a line twice, and the answer table for lines without a
+ * ledger (nothing created: one re-POST after ≤ 2 s, then nothing sent and the message unanswered).
  */
 class ReplyPlatformSendTest extends AbstractIntegrationTest {
 
@@ -85,14 +85,7 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     // ------------------------------------------------------------------------------------------------- helpers
 
     void settle() throws InterruptedException {
-        for (int i = 0; i < 100 && !flow.shadowIdle(); i++) {
-            Thread.sleep(50);
-        }
         assertThat(reports.awaitIdle(Duration.ofSeconds(10))).isTrue();
-    }
-
-    void all(Mode mode) {
-        KINDS.forEach(k -> messaging.setConversational(k, mode));
     }
 
     void turn(String... replies) {
@@ -170,6 +163,7 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
 
     /** One message per kind, the same wamid every time (the dedup claims are cleared between runs). */
     void everyKind() throws Exception {
+        // D-053: every kind through the platform
         jdbc.execute("TRUNCATE tool_idempotency");
         turn(IDENTITY + "בסדר גמור, השבוע נשאר כמו שהוא 🙂");
         webhook(Webhooks.text(PHONE, "wamid.k.reply", "טוב"));                           // REPLY
@@ -179,72 +173,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
         settle();
     }
 
-    // ------------------------------------------------------------------------------------------------- DIRECT / SHADOW
-
-    @Test
-    @DisplayName("DIRECT (default, every kind): today's sends to Meta, the Send API never asked, D-039 reports as today")
-    void directIsTodaysPath() throws Exception {
-        KINDS.forEach(k -> assertThat(messaging.conversational(k)).isEqualTo(Mode.DIRECT));
-        properties.setDeliveryReports(true);
-        readyQuestionSetUp();
-        fake.reset();
-        everyKind();
-        assertThat(fake.platformSends()).isEmpty();
-        assertThat(fake.metaSends()).hasSize(4);
-        assertThat(fake.turnOutcomes()).hasSize(1);          // the reply AS_IS
-        assertThat(fake.recordedInbound()).hasSize(3);       // the picture, the tap, the question
-        assertThat(fake.recordedOutbound()).hasSize(3);      // their answers
-    }
-
-    @Test
-    @DisplayName("DIRECT and SHADOW send Meta the same bytes and report the same timeline, per kind; SHADOW dry-runs "
-            + "each line once (dryRun, its kind) off the turn's thread")
-    void directAndShadowAreTheSameBytes() throws Exception {
-        properties.setDeliveryReports(true);
-        readyQuestionSetUp();
-        fake.reset();
-        everyKind();
-        List<String> meta = fake.metaSends().stream().map(FakeServers.Call::body).toList();
-        List<String> timeline = fake.timelineCalls().stream().map(c -> c.body().replaceAll("wamid\\.out\\.\\d+", "W"))
-                .sorted().toList();
-
-        fake.reset();
-        all(Mode.SHADOW);
-        fake.onPlatformSend(c -> Reply.json("{\"wouldBe\":\"SEND\",\"channelWindow\":\"SESSION\",\"template\":null}"));
-        everyKind();
-        for (int i = 0; i < 100 && fake.platformSends().size() < 4; i++) {
-            Thread.sleep(50);
-        }
-        settle();
-        assertThat(fake.metaSends().stream().map(FakeServers.Call::body).toList()).isEqualTo(meta);
-        assertThat(fake.timelineCalls().stream().map(c -> c.body().replaceAll("wamid\\.out\\.\\d+", "W")).sorted().toList())
-                .isEqualTo(timeline);
-        assertThat(fake.platformSends()).hasSize(4);
-        List<String> kinds = new ArrayList<>();
-        for (FakeServers.Call c : fake.platformSends()) {
-            JsonNode b = body(c);
-            assertThat(b.path("dryRun").asBoolean()).isTrue();
-            kinds.add(b.path("kind").asText());
-        }
-        assertThat(kinds).containsExactlyInAnyOrderElementsOf(KINDS);
-    }
-
-    @Test
-    @DisplayName("SHADOW never holds the turn's thread: a dry run hanging 3 s does not delay the answer")
-    void shadowIsOffTheTurnThread() throws Exception {
-        messaging.setConversational(MessagingSettings.REPLY, Mode.SHADOW);
-        fake.onPlatformSend(c -> {
-            sleep(3000);
-            return Reply.json("{\"wouldBe\":\"SEND\",\"channelWindow\":\"SESSION\"}");
-        });
-        turn(IDENTITY + "בסדר גמור 🙂");
-        long started = System.nanoTime();
-        webhook(Webhooks.text(PHONE, "wamid.shadow1", "טוב"));
-        long ms = Duration.ofNanos(System.nanoTime() - started).toMillis();
-        assertThat(ms).isLessThan(2500);
-        assertThat(fake.metaSends()).hasSize(1);
-    }
-
     // ------------------------------------------------------------------------------------------------- PLATFORM
 
     @Test
@@ -252,7 +180,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
             + "time as the hint, GATEWAY, ACCEPTED, TURN_AS_IS on the turn); no Meta, no gate, no timeline report")
     void platformReplyAsWritten() throws Exception {
         properties.setDeliveryReports(true);
-        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
         fake.onPlatformSend(c -> platform("ACCEPTED"));
         turn(IDENTITY + "בסדר גמור, השבוע נשאר כמו שהוא 🙂");
         String id = says("טוב");
@@ -300,7 +227,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     @DisplayName("PLATFORM REPLY corrected by Dad Coach's guards: REPLACES_DRAFT <wamid>:delivered with the sent text, "
             + "no ':corrected' record, no report")
     void platformReplyCorrectedReplacesTheDraft() throws Exception {
-        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
         fake.onPlatformSend(c -> platform("ACCEPTED"));
         turn(IDENTITY + "וואו, לא ידעתי על מטר ונעם 😊 רק רגע ונמשיך משם.");
         String id = says("מטר בת 8 נעם בת 5");   // D-039 off: today this path writes the legacy ':corrected' row
@@ -320,8 +246,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
             + "FIXED_LINE (its own switch)")
     void platformRewriteAndNotHebrewLine() throws Exception {
         properties.setDeliveryReports(true);
-        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
-        messaging.setConversational(MessagingSettings.FIXED_LINE, Mode.PLATFORM);
         fake.onPlatformSend(c -> platform("ACCEPTED"));
         turn("Noted — is there something specific I can help you adjust?", IDENTITY + "בסדר גמור 🙂");
         String id = says("לא הכל טוב");
@@ -350,7 +274,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
             + "NEW_ROW <wamid>:reply; no outbound report")
     void platformFixedLineHisMessageFirst() throws Exception {
         properties.setDeliveryReports(true);
-        messaging.setConversational(MessagingSettings.FIXED_LINE, Mode.PLATFORM);
         fake.onPlatformSend(c -> platform("ACCEPTED"));
         webhook(Webhooks.image(PHONE, "wamid.pic9", ""));
         settle();
@@ -371,7 +294,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     @DisplayName("PLATFORM FIXED_LINE to a stranger: not recorded on any timeline, no person, no report")
     void platformFixedLineToAStranger() throws Exception {
         properties.setDeliveryReports(true);
-        messaging.setConversational(MessagingSettings.FIXED_LINE, Mode.PLATFORM);
         fake.onPlatformSend(c -> platform("ACCEPTED"));
         webhook(Webhooks.image("+19995550999", "wamid.stranger9", ""));
         settle();
@@ -387,7 +309,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
             + "report nor (D-039 off) the legacy record")
     void platformButtonReply() throws Exception {
         properties.setDeliveryReports(true);
-        messaging.setConversational(MessagingSettings.BUTTON_REPLY, Mode.PLATFORM);
         fake.onPlatformSend(c -> platform("ACCEPTED"));
         String buttonId = "dc:done:" + UUID.randomUUID();
         webhook(tap("wamid.tap9", buttonId, "היה מעולה"));
@@ -417,7 +338,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
         properties.setDeliveryReports(true);
         readyQuestionSetUp();
         fake.reset();
-        messaging.setConversational(MessagingSettings.READY_ANSWER, Mode.PLATFORM);
         fake.onPlatformSend(c -> platform("ACCEPTED"));
         String id = says("מה יש לי השבוע?");
         assertThat(fake.turns()).isEmpty();
@@ -430,28 +350,79 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Every kind PLATFORM: the deletion answer and the 'something went wrong' line still go directly")
-    void deletionAndPlatformDownStayDirect() throws Exception {
-        all(Mode.PLATFORM);
-        fake.onPlatformSend(c -> platform("ACCEPTED"));
+    @DisplayName("D-053: the 'something went wrong' line goes through the platform (FIXED_LINE, keys of its own); "
+            + "the platform not taking it: one re-POST, then nothing sent")
+    void platformDownLineThroughThePlatform() throws Exception {
         fake.onTurn(c -> new Reply(500, "{\"error\":\"down\"}"));
-        says("טוב");
-        assertThat(fake.platformSends()).isEmpty();
-        assertThat(fake.metaSends()).hasSize(1);
-        assertThat(json.readTree(fake.metaSends().get(0).body()).path("text").path("body").asText())
-                .isEqualTo(InboundMessageHandler.PLATFORM_DOWN_REPLY);
+        String id = says("טוב");
+        assertThat(fake.platformSends()).hasSize(1);
+        JsonNode r = body(fake.platformSends().get(0));
+        assertThat(r.path("kind").asText()).isEqualTo("FIXED_LINE");
+        assertThat(r.path("windowPolicy").asText()).isEqualTo("SESSION_ONLY");
+        assertThat(r.path("content").path("text").asText()).isEqualTo(InboundMessageHandler.PLATFORM_DOWN_REPLY);
+        assertThat(r.path("idempotencyKey").asText()).as("its own keys: the redelivery's reply never replays it")
+                .isEqualTo("reply:" + id + ":down:0");
+        assertThat(r.path("timeline").path("record").asBoolean()).isFalse();
 
+        // the redelivery (the platform was unavailable: unanswered) gets the coach's reply under the reply key
+        fake.onTurn(c -> reply(IDENTITY + "בסדר גמור 🙂"));
+        webhook(Webhooks.text(PHONE, id, "טוב"));
+        settle();
+        assertThat(fake.sendRequests()).extracting(n -> n.path("idempotencyKey").asText())
+                .containsExactly("reply:" + id + ":down:0", "reply:" + id + ":0");
+
+        // the platform cannot take the line either: one re-POST (≤ 2 s), then nothing - WARN messaging.platform_not_created
         fake.reset();
-        fake.onPlatformSend(c -> platform("ACCEPTED"));
+        fake.onTurn(c -> new Reply(500, "{\"error\":\"down\"}"));
+        fake.onPlatformSend(c -> FakeServers.platformDisabled());
+        String id2 = says("טוב");
+        assertThat(fake.platformSends()).hasSize(2);
+        assertThat(fake.platformSends().get(1).body()).isEqualTo(fake.platformSends().get(0).body());
+        assertThat(body(fake.platformSends().get(0)).path("idempotencyKey").asText()).isEqualTo("reply:" + id2 + ":down:0");
+    }
+
+    @Test
+    @DisplayName("D-053 (R7): the deletion answer goes through the platform BEFORE the deletion - FIXED_LINE, to only "
+            + "(no userId / personRef / personName), sensitive, never recorded, wait ACCEPTED")
+    void deletionAnswerBeforeTheDeletion() throws Exception {
+        properties.setDeliveryReports(true);
+        java.util.concurrent.atomic.AtomicReference<String> statusAtSend = new java.util.concurrent.atomic.AtomicReference<>();
+        fake.onPlatformSend(c -> {
+            statusAtSend.set(jdbc.queryForObject("SELECT status FROM father WHERE id = ?", String.class, father.getId()));
+            return fake.accept(c);
+        });
         says("מחק את המידע שלי");
-        assertThat(fake.platformSends()).isEmpty();
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.platformSends()).hasSize(1);
+        assertThat(statusAtSend.get()).as("sent before the deletion was requested").isNotEqualTo("DELETED");
+        assertThat(jdbc.queryForObject("SELECT status FROM father WHERE id = ?", String.class, father.getId()))
+                .isEqualTo("DELETED");
+        JsonNode r = body(fake.platformSends().get(0));
+        assertThat(r.path("kind").asText()).isEqualTo("FIXED_LINE");
+        assertThat(r.path("to").asText()).isEqualTo(PHONE);
+        assertThat(r.has("userId")).isFalse();
+        assertThat(r.has("personRef")).isFalse();
+        assertThat(r.has("personName")).isFalse();
+        assertThat(r.path("sensitive").asBoolean()).isTrue();
+        assertThat(r.path("timeline").path("record").asBoolean()).isFalse();
+        assertThat(r.path("wait").asText()).isEqualTo("ACCEPTED");
+        assertThat(r.path("windowPolicy").asText()).isEqualTo("SESSION_ONLY");
+        assertThat(r.path("content").path("text").asText()).contains("אני מוחק עכשיו את כל המידע שלך");
+        assertThat(fake.timelineCalls()).as("never reported (D-039)").isEmpty();
+
+        // a number with no account gets its answer the same way (nothing to delete)
+        fake.reset();
+        String stranger = "+19995579999";
+        webhook(Webhooks.text(stranger, "wamid.del-stranger", "DELETE MY DATA"));
+        settle();
+        assertThat(fake.platformSends()).hasSize(1);
+        JsonNode s2 = body(fake.platformSends().get(0));
+        assertThat(s2.has("userId")).isFalse();
+        assertThat(s2.path("content").path("text").asText()).contains("למספר הזה אין חשבון");
     }
 
     @Test
     @DisplayName("A long reply is cut to WhatsApp's 4096 exactly as DIRECT does (never refused for its length)")
     void longReplyIsCutAsToday() throws Exception {
-        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
         fake.onPlatformSend(c -> platform("ACCEPTED"));
         turn(IDENTITY + "א".repeat(5000));
         says("ספר לי");
@@ -464,7 +435,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("HELD / QUEUED / UNKNOWN: answered (the platform has it) - a redelivery is dropped, nothing re-posted")
     void heldQueuedUnknownAreAnswered() throws Exception {
-        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
         turn(IDENTITY + "בסדר גמור 🙂");
         for (String status : List.of("HELD", "QUEUED", "UNKNOWN")) {
             fake.reset();
@@ -510,7 +480,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     @DisplayName("FAILED with a final reason (Meta decided: 131026): unanswered - Meta's redelivery posts the same key and "
             + "bytes, the platform replays the FAILED; never resent, never sent directly")
     void failedIsUnansweredAndTheRedeliveryReplays() throws Exception {
-        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
         fake.onPlatformSend(platformWithMemory(new String[] {"FAILED", "META_131026"}));
         turn(IDENTITY + "בסדר גמור 🙂");
         String id = says("טוב");
@@ -526,7 +495,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
             + "again ONCE as <key>~r1 with retryOf (its own timeline row); answered - a further redelivery is dropped")
     void resendableFailedIsResentOnceOnTheRedelivery() throws Exception {
         properties.setDeliveryReports(true);
-        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
         var memory = platformWithMemory(new String[] {"FAILED", "SENDER_UNAVAILABLE"}, new String[] {"ACCEPTED"});
         java.util.concurrent.atomic.AtomicReference<String> failedMessageId = new java.util.concurrent.atomic.AtomicReference<>();
         fake.onPlatformSend(c -> {
@@ -565,7 +533,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("A resend that FAILS is final: later redeliveries replay the key and its ~r1 - never a ~r2")
     void aFailedResendIsFinal() throws Exception {
-        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
         fake.onPlatformSend(platformWithMemory(new String[] {"FAILED", "MESSAGING_DISABLED"}));
         turn(IDENTITY + "בסדר גמור 🙂");
         String id = says("טוב");
@@ -582,29 +549,65 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("503 messaging.disabled on the first POST: today's send once, reported by D-039 as today")
-    void disabledSendsDirectly() throws Exception {
+    @DisplayName("NOT_CREATED (503 messaging.disabled): one re-POST of the same bytes after ≤ 2 s, then nothing sent - "
+            + "unanswered, so Meta's redelivery posts the same key (and gets through once the platform takes it)")
+    void disabledIsRePostedOnceThenUnanswered() throws Exception {
         properties.setDeliveryReports(true);
-        all(Mode.PLATFORM);   // the fake platform's default: 503 messaging.disabled
+        fake.onPlatformSend(c -> FakeServers.platformDisabled());
         turn(IDENTITY + "בסדר גמור 🙂");
         String id = says("טוב");
-        assertThat(fake.platformSends()).hasSize(1);
-        assertThat(fake.metaSends()).hasSize(1);
-        assertThat(fake.turnOutcomes()).hasSize(1);
-        assertThat(body(fake.turnOutcomes().get(0)).path("turnCorrelationId").asText()).isEqualTo(id);
+        assertThat(fake.platformSends()).hasSize(2);
+        assertThat(fake.platformSends().get(1).body()).isEqualTo(fake.platformSends().get(0).body());
+        assertThat(fake.turnOutcomes()).as("nothing reached him: nothing reported").isEmpty();
+        assertThat(fake.recordedOutbound()).isEmpty();
 
+        fake.onPlatformSend(fake::accept);
+        webhook(Webhooks.text(PHONE, id, "טוב"));   // unanswered: the redelivery is processed again
+        settle();
+        assertThat(fake.platformSends()).hasSize(3);
+        assertThat(fake.platformSends().get(2).body()).as("the same key, the same line")
+                .isEqualTo(fake.platformSends().get(0).body());
+        webhook(Webhooks.text(PHONE, id, "טוב"));   // answered now: dropped
+        settle();
+        assertThat(fake.platformSends()).hasSize(3);
+
+        // a picture's fixed line: his message is recorded first, then the POSTs
         fake.reset();
+        fake.onPlatformSend(c -> FakeServers.platformDisabled());
         webhook(Webhooks.image(PHONE, "wamid.pic503", ""));
         settle();
-        assertThat(fake.metaSends()).hasSize(1);
-        assertThat(order()).containsExactly("inbound", "send", "meta", "report");   // his message once, before the POST
-        assertThat(fake.recordedOutbound()).hasSize(1);
+        assertThat(order()).containsExactly("inbound", "send", "send");
+        assertThat(fake.recordedOutbound()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("NOT_CREATED (401 / never written-like): ERROR messaging.platform_auth_failed, one re-POST, unanswered")
+    void authFailureIsNotCreated() throws Exception {
+        ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
+                .getLogger(ReplyPlatformSend.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> logs =
+                new ch.qos.logback.core.read.ListAppender<>();
+        logs.start();
+        logger.addAppender(logs);
+        try {
+            fake.onPlatformSend(c -> new Reply(401, "{\"error\":\"unauthorized\"}"));
+            turn(IDENTITY + "בסדר גמור 🙂");
+            String id = says("טוב");
+            assertThat(fake.platformSends()).hasSize(2);
+            assertThat(logs.list).anyMatch(e -> "messaging.platform_auth_failed".equals(e.getMessage())
+                    && e.getLevel() == ch.qos.logback.classic.Level.ERROR);
+            assertThat(logs.list).anyMatch(e -> "messaging.platform_not_created".equals(e.getMessage())
+                    && e.getLevel() == ch.qos.logback.classic.Level.WARN);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM tool_idempotency WHERE scope = 'WHATSAPP_INBOUND' "
+                    + "AND idempotency_key = ? AND status = 'SUCCEEDED'", Integer.class, id)).as("unanswered").isZero();
+        } finally {
+            logger.detachAppender(logs);
+        }
     }
 
     @Test
     @DisplayName("422 refused: nothing sent at all (never directly), the message unanswered")
     void refusedSendsNothing() throws Exception {
-        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
         fake.onPlatformSend(c -> new Reply(422, "{\"error\":\"messaging.param_invalid\",\"field\":\"content.text\"}"));
         turn(IDENTITY + "בסדר גמור 🙂");
         String id = says("טוב");
@@ -623,7 +626,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     @DisplayName("An edge 502: one immediate identical re-POST, then answered as on its way - never Meta, never a third "
             + "POST, a redelivery dropped")
     void edge502NeverSendsTwice() throws Exception {
-        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
         fake.onPlatformSend(c -> EDGE_502);
         turn(IDENTITY + "בסדר גמור 🙂");
         String id = says("טוב");
@@ -640,7 +642,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     @DisplayName("Latency: a platform that does not answer holds the turn's thread for the reply timeout only (1 s here), "
             + "is never re-POSTed after the timeout and never sent directly")
     void slowPlatformIsBoundedAndNeverDoubled() throws Exception {
-        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
         messaging.setReplyReadTimeoutMs(1000);
         fake.onPlatformSend(c -> {
             sleep(4000);
@@ -660,6 +661,17 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("D-053 (R5): a message id the platform's key shape refuses is replaced by h:<sha256> - the same on the redelivery")
+    void oddInboundIdsAreHashed() throws Exception {
+        turn(IDENTITY + "בסדר גמור 🙂");
+        String odd = "wamid with spaces#" + UUID.randomUUID();
+        webhook(Webhooks.text(PHONE, odd, "טוב"));
+        settle();
+        String key = body(fake.platformSends().get(0)).path("idempotencyKey").asText();
+        assertThat(key).matches("h:[0-9a-f]{32}").isEqualTo(PlatformSendFlow.platformKey("reply:" + odd + ":0"));
+    }
+
+    @Test
     @DisplayName("The reply timeout: 5 s by default, never below 1 s nor above the Send API's own")
     void replyTimeoutBounds() {
         assertThat(messaging.replyReadTimeoutMs()).isEqualTo(5000);
@@ -673,7 +685,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     @DisplayName("A 409 carrying the existing message (an earlier processing of the same message used the key): adopted, "
             + "nothing sent")
     void conflictIsAdopted() throws Exception {
-        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
         fake.onPlatformSend(c -> new Reply(409, "{\"error\":\"messaging.idempotency_conflict\",\"messageId\":\""
                 + UUID.randomUUID() + "\",\"status\":\"ACCEPTED\",\"providerMessageId\":\"wamid.first\",\"replayed\":true}"));
         turn(IDENTITY + "בסדר גמור 🙂");
@@ -689,7 +700,6 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     @DisplayName("A 429: re-POSTed once after its Retry-After (≤ 2 s), same bytes; only 429s (or Retry-After > 2 s) = "
             + "nothing created: unanswered, the redelivery posts the same key; never sent directly")
     void rateLimitedOnce() throws Exception {
-        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
         AtomicInteger n = new AtomicInteger();
         fake.onPlatformSend(c -> n.getAndIncrement() == 0
                 ? new Reply(429, "{\"error\":\"messaging.rate_limited\"}") : platform("ACCEPTED"));
@@ -766,37 +776,20 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("His message is marked recorded only when the synchronous report landed: when it failed (500) and the "
-            + "platform then created nothing (503), the D-039 report still sends his message")
+    @DisplayName("His message is marked recorded only when the synchronous report landed: when it failed (500) its "
+            + "background retry records it; nothing is reported by Dad Coach for a line the platform did not create")
     void hisMessageIsReportedAgainWhenTheSynchronousAttemptFailed() throws Exception {
         properties.setDeliveryReports(true);
-        messaging.setConversational(MessagingSettings.FIXED_LINE, Mode.PLATFORM);   // fake default: 503 disabled
+        fake.onPlatformSend(c -> FakeServers.platformDisabled());
         AtomicInteger inbound = new AtomicInteger();
         fake.onTimelineReports(c -> c.path().endsWith("/inbound") && inbound.getAndIncrement() == 0
                 ? new Reply(500, "{\"error\":\"boom\"}") : Reply.json("{\"recorded\":true}"));
         webhook(Webhooks.image(PHONE, "wamid.pic500", ""));
         settle();
-        assertThat(fake.metaSends()).hasSize(1);
-        // the failed synchronous attempt, its background retry, and the D-039 report (the platform records it once)
-        assertThat(fake.recordedInbound()).hasSize(3);
+        // the failed synchronous attempt and its background retry (the platform records an inbound id once)
+        assertThat(fake.recordedInbound()).hasSize(2);
         assertThat(fake.recordedInbound()).allMatch(c -> c.body().contains("wamid.pic500"));
-        assertThat(fake.recordedOutbound()).hasSize(1);
-    }
-
-    @Test
-    @DisplayName("Per kind: PLATFORM for one kind leaves every other kind on today's path")
-    void switchesAreIndependent() throws Exception {
-        readyQuestionSetUp();
-        for (String kind : KINDS) {
-            fake.reset();
-            all(Mode.DIRECT);
-            messaging.setConversational(kind, Mode.PLATFORM);
-            fake.onPlatformSend(c -> platform("ACCEPTED"));
-            everyKind();
-            assertThat(fake.platformSends()).as(kind).hasSize(1);
-            assertThat(body(fake.platformSends().get(0)).path("kind").asText()).isEqualTo(kind);
-            assertThat(fake.metaSends()).as(kind).hasSize(3);
-        }
+        assertThat(fake.recordedOutbound()).isEmpty();
     }
 
     static void sleep(long ms) {

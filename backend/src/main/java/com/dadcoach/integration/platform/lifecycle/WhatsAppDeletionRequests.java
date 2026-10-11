@@ -49,7 +49,15 @@ public class WhatsAppDeletionRequests {
         return PHRASES.contains(normalized);
     }
 
-    /** Handles a deletion request from this number. @return the reply to send */
+    /**
+     * D-053: the answer to a deletion request from this number - sent BEFORE {@link #handle} requests the deletion (spec
+     * v2 R7), so the platform's message row to his phone is removed by the person deletion that follows.
+     */
+    public String answerFor(String phone) {
+        return fathers.findByPhone(phone).isPresent() ? CONFIRMATION : NO_ACCOUNT;
+    }
+
+    /** Handles a deletion request from this number. @return the reply ({@link #answerFor}, sent before this) */
     @Transactional
     public String handle(String phone) {
         Optional<Father> found = fathers.findByPhone(phone);

@@ -184,8 +184,11 @@ export interface AdminTemplateRow {
   metaRejectedReason: string | null
   metaBodyMatches: boolean
   registeredStatus: string | null
+  /** D-053: the platform can send it now (a mapped message type names it and it is usable) */
   ready: boolean
+  /** D-053: the message types (KIND or KIND/variant) the platform's mapping sends with it, comma separated */
   inUseAs: string | null
+  usedFor?: string[]
 }
 
 export interface AdminTemplates {

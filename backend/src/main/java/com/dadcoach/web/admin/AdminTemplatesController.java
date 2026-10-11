@@ -1,11 +1,8 @@
 package com.dadcoach.web.admin;
 
 import com.dadcoach.auth.DashboardPrincipal;
-import com.dadcoach.channel.template.MetaTemplateDirectory;
-import com.dadcoach.channel.template.TemplateMessage;
-import com.dadcoach.channel.template.TemplateRegistry;
 import com.dadcoach.channel.template.WhatsAppTemplateCatalog;
-import com.dadcoach.integration.platform.scheduled.ScheduledResponseCallbackConfig;
+import com.dadcoach.integration.platform.messaging.PlatformTemplateStatus;
 import com.dadcoach.web.common.Areas;
 import com.dadcoach.web.common.WebException;
 import java.time.Instant;
@@ -19,82 +16,73 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The templates screen (Tair's and Big Boss's pattern, the team only): each template the code sends, exactly as it was
- * submitted to Meta, beside its live state at Meta (status, category, a re-filing, a rejection reason) and whether Dad
- * Coach can send it now. Meta's state is read every 10 minutes and on "sync" ({@link MetaTemplateDirectory}), which also
- * registers a template for sending only once Meta approved it with the catalog's exact body. Nothing here submits,
- * edits or deletes anything at Meta.
+ * The templates screen (Tair's and Big Boss's pattern, the team only): each template in the catalog, exactly as it was
+ * submitted to Meta, beside its live state. Since D-053 (Unified Workflow 6.4) the state comes from the platform, which
+ * sends every message and picks the template ({@link PlatformTemplateStatus}: its copy of the WABA's templates and its
+ * kind→template mapping); Dad Coach no longer reads Meta. "sync" reads the platform again. Nothing here submits, edits
+ * or deletes anything at Meta.
  */
 @RestController
 @RequestMapping("/api/admin/templates")
 public class AdminTemplatesController {
 
     /**
-     * @param metaStatus Meta's status (APPROVED, PENDING, REJECTED, PAUSED, DISABLED), or MISSING when Meta does not
-     *     have it, or UNKNOWN when Meta has not been read yet
-     * @param metaBodyMatches whether Meta's body is the catalog's, word for word
-     * @param ready whether Dad Coach sends it now outside the 24-hour window: registered as approved with this body
-     * @param inUseAs for the general template, the name the server sends ({@code WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME}
-     *     or the default); null for a message's own template
+     * @param metaStatus the status in the platform's copy of the WABA (APPROVED, PENDING, REJECTED, PAUSED, DISABLED),
+     *     MISSING when it is not there, UNKNOWN when the platform could not be read yet
+     * @param metaBodyMatches kept for the screen: since D-053 the platform's mapping (chosen by the admin) decides which
+     *     template a message uses, not a comparison of bodies - true whenever the template is at the WABA
+     * @param registeredStatus the platform registry's status (null when unknown)
+     * @param ready whether the platform can send it now: some mapped (kind, variant) names it and it is usable
+     * @param inUseAs the (kind/variant)s the platform's mapping sends with it, comma separated (null when none)
+     * @param usedFor the same, as a list
      */
     public record Row(String name, String language, String category, String purpose, String body, int maxVariables,
                       List<String> examples, List<String> quickReplies, String sample, boolean general,
                       String metaStatus, String metaCategory, String metaPreviousCategory, String metaRejectedReason,
-                      boolean metaBodyMatches, String registeredStatus, boolean ready, String inUseAs) {}
+                      boolean metaBodyMatches, String registeredStatus, boolean ready, String inUseAs, List<String> usedFor) {}
 
+    /** {@code metaConfigured}: the platform can be asked (it holds the WABA); {@code refreshedAt}: the last good read. */
     public record Listing(String wabaId, boolean metaConfigured, Instant refreshedAt, String lastError, List<Row> templates) {}
 
-    private final TemplateRegistry registry;
-    private final MetaTemplateDirectory meta;
-    private final ScheduledResponseCallbackConfig callback;
-    private final com.dadcoach.config.WhatsAppProperties whatsapp;
+    private final PlatformTemplateStatus status;
 
-    public AdminTemplatesController(TemplateRegistry registry, MetaTemplateDirectory meta,
-                                    ScheduledResponseCallbackConfig callback,
-                                    com.dadcoach.config.WhatsAppProperties whatsapp) {
-        this.registry = registry;
-        this.meta = meta;
-        this.callback = callback;
-        this.whatsapp = whatsapp;
+    public AdminTemplatesController(PlatformTemplateStatus status) {
+        this.status = status;
     }
 
     @GetMapping
     public Listing list(@AuthenticationPrincipal DashboardPrincipal p) {
         Areas.requireStaff(p);
-        return listing();
+        return listing(status.configured() ? status.current() : Optional.empty());
     }
 
-    /** Reads Meta now (it is also read every 10 minutes) and aligns what may be sent. */
+    /** Reads the platform now (it is also re-read when the cached copy is older than 5 minutes). */
     @PostMapping("/sync")
     public Listing sync(@AuthenticationPrincipal DashboardPrincipal p) {
         Areas.requireStaff(p);
-        if (!meta.configured()) {
-            throw new WebException(HttpStatus.CONFLICT, "META_NOT_CONFIGURED", "WHATSAPP_WABA_ID or WHATSAPP_ACCESS_TOKEN is not set");
+        if (!status.configured()) {
+            throw new WebException(HttpStatus.CONFLICT, "PLATFORM_NOT_CONFIGURED",
+                    "WORKFLOW_PLATFORM_ENABLED / WORKFLOW_PLATFORM_BASE_URL is not set");
         }
-        meta.refresh();
-        return listing();
+        return listing(status.refresh());
     }
 
-    private Listing listing() {
-        return new Listing(whatsapp.wabaId(), meta.configured(), meta.refreshedAt().orElse(null),
-                meta.lastError().orElse(null), WhatsAppTemplateCatalog.ALL.stream().map(this::row).toList());
+    private Listing listing(Optional<PlatformTemplateStatus.Snapshot> read) {
+        PlatformTemplateStatus.Snapshot s = read.orElse(null);
+        return new Listing(s == null ? null : s.wabaId(), status.configured(), s == null ? null : s.readAt(),
+                s == null ? null : s.error(), WhatsAppTemplateCatalog.ALL.stream().map(e -> row(e, s)).toList());
     }
 
-    private Row row(WhatsAppTemplateCatalog.Entry entry) {
+    private static Row row(WhatsAppTemplateCatalog.Entry entry, PlatformTemplateStatus.Snapshot s) {
         boolean general = WhatsAppTemplateCatalog.UPDATE_HE.equals(entry.name());
-        Optional<MetaTemplateDirectory.MetaTemplate> atMeta = meta.find(entry.name());
-        String metaStatus = atMeta.map(MetaTemplateDirectory.MetaTemplate::status)
-                .orElse(meta.refreshedAt().isPresent() ? "MISSING" : "UNKNOWN");
-        Optional<TemplateMessage> registered = registry.find(entry.name());
-        boolean ready = registered.map(t -> "APPROVED".equals(t.getStatus()) && entry.body().equals(t.getBody()))
-                .orElse(false) && (!general || entry.name().equals(callback.effectiveTemplateName()));
+        boolean known = s != null && s.readAt() != null;
+        Optional<PlatformTemplateStatus.Template> atWaba = known ? s.template(entry.name()) : Optional.empty();
+        String metaStatus = atWaba.map(PlatformTemplateStatus.Template::status).orElse(known ? "MISSING" : "UNKNOWN");
+        List<String> uses = known ? PlatformTemplateStatus.uses(s.usesOf(entry.name())) : List.of();
         return new Row(entry.name(), entry.language(), entry.category(), entry.purpose(), entry.body(),
                 entry.maxVariables(), entry.examples(), entry.quickReplies(), entry.sample(), general,
-                metaStatus, atMeta.map(MetaTemplateDirectory.MetaTemplate::category).orElse(null),
-                atMeta.map(MetaTemplateDirectory.MetaTemplate::previousCategory).orElse(null),
-                atMeta.map(MetaTemplateDirectory.MetaTemplate::rejectedReason).orElse(null),
-                atMeta.map(t -> entry.body().equals(t.body())).orElse(false),
-                registered.map(TemplateMessage::getStatus).orElse(null), ready,
-                general ? callback.effectiveTemplateName() : null);
+                metaStatus, atWaba.map(PlatformTemplateStatus.Template::category).orElse(null), null, null,
+                atWaba.isPresent(), atWaba.map(PlatformTemplateStatus.Template::status).orElse(null),
+                known && s.usable(entry.name()), uses.isEmpty() ? null : String.join(", ", uses), uses);
     }
 }

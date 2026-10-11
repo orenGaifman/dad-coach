@@ -76,9 +76,10 @@ class TruthfulRepliesTest extends AbstractIntegrationTest {
                 .header("X-Hub-Signature-256", Webhooks.sign(raw, WEBHOOK_SECRET)).content(raw)).andExpect(status().isOk());
     }
 
-    String lastSent() throws Exception {
-        JsonNode sent = json.readTree(fake.metaSends().get(fake.metaSends().size() - 1).body());
-        return sent.path("text").path("body").asText();
+    /** D-053: the text of the last message handed to the platform's Send API. */
+    String lastSent() {
+        List<JsonNode> sent = fake.sentMessages();
+        return sent.get(sent.size() - 1).path("content").path("text").asText();
     }
 
     @Test
@@ -87,7 +88,10 @@ class TruthfulRepliesTest extends AbstractIntegrationTest {
         turn(null, IDENTITY + "מעולה, קובע את זה - יום שישי 09:00-10:30 עם איתמר 💪\nאעדכן אותך בבוקר ושעה לפני כדי שתהיה מוכן.");
         says("כן");
         assertThat(lastSent()).isEqualTo(IDENTITY + "רק מוודא: *יום שישי ב-09:00*, שעה וחצי עם איתמר.\nלקבוע?");
-        assertThat(fake.recordedOutbound()).singleElement().satisfies(c -> assertThat(c.body()).contains("רק מוודא"));
+        // his conversation gets what he read: the platform records the sent text in place of the draft (D-048/D-053)
+        JsonNode timeline = fake.sentMessages().get(fake.sentMessages().size() - 1).path("timeline");
+        assertThat(timeline.path("mode").asText()).isEqualTo("REPLACES_DRAFT");
+        assertThat(timeline.path("content").asText()).contains("רק מוודא");
     }
 
     @Test
@@ -109,9 +113,11 @@ class TruthfulRepliesTest extends AbstractIntegrationTest {
     void aButtonItSaysItSentIsSent() throws Exception {
         turn(null, IDENTITY + "אפשר לתקן את הגיל בדף שלך. שלחתי לך את הכפתור 🙂");
         says("תעדכן שאיתמר בן 10");
-        List<FakeServers.Call> sends = fake.metaSends();
+        List<JsonNode> sends = fake.sentMessages();
         assertThat(sends).hasSize(2);
-        assertThat(sends.get(0).body()).contains("cta_url").contains("כניסה לדף שלי");
+        assertThat(sends.get(0).path("kind").asText()).isEqualTo("LOGIN_LINK");
+        assertThat(sends.get(0).path("content").path("type").asText()).isEqualTo("link_button");
+        assertThat(sends.get(0).toString()).contains("כניסה לדף שלי");
         assertThat(lastSent()).isEqualTo(IDENTITY + "אפשר לתקן את הגיל בדף שלך. שלחתי לך את הכפתור 🙂");
     }
 
@@ -175,7 +181,10 @@ class TruthfulRepliesTest extends AbstractIntegrationTest {
         assertThat(fake.turns()).isEmpty();
         assertThat(lastSent()).isEqualTo(IDENTITY + "השבוע: שעה וחצי מתוך 3 שעות.\n• *יום שישי 6.11 ב-09:00* עם איתמר"
                 + "\n\nרוצה שנמצא עוד זמן השבוע?");
-        assertThat(json.readTree(fake.recordedOutbound().get(0).body()).path("content").asText()).isEqualTo(lastSent());
+        // his conversation gets the answer: the platform records it (D-048/D-053, a row of its own)
+        JsonNode recorded = fake.sentMessages().get(fake.sentMessages().size() - 1).path("timeline");
+        assertThat(recorded.path("mode").asText()).isEqualTo("NEW_ROW");
+        assertThat(recorded.path("content").asText()).isEqualTo(lastSent().substring(IDENTITY.length()));
 
         // D-037: booked outside any turn, nothing armed on the platform - the answer never invents the policy's times
         says("מתי התזכורת?");

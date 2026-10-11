@@ -16,7 +16,7 @@ const META_STATUS: Record<string, { label: string; tone: string }> = {
   PAUSED: { label: 'מושהית ב-Meta', tone: ui.chipDanger },
   DISABLED: { label: 'מושבתת ב-Meta', tone: ui.chipDanger },
   MISSING: { label: 'לא הוגשה ל-Meta', tone: ui.chipDanger },
-  UNKNOWN: { label: 'עוד לא נבדק מול Meta', tone: '' },
+  UNKNOWN: { label: 'עוד לא נקרא מהפלטפורמה', tone: '' },
 }
 
 const CATEGORY: Record<string, string> = { UTILITY: 'שירות (Utility)', MARKETING: 'שיווק (Marketing)', AUTHENTICATION: 'אימות' }
@@ -44,12 +44,11 @@ function CopyButton({ text }: { text: string }) {
   return <button type="button" className={`${ui.btn} ${ui.ghost} ${ui.sm}`} onClick={copy}>העתקה</button>
 }
 
-/** One line on what stands between this template and a message going out. */
+/** One line on what stands between this template and a message going out (the platform sends and picks the template). */
 function readiness(t: AdminTemplateRow): string {
-  if (t.ready) return 'דאד קואץ׳ שולח בה עכשיו הודעות מחוץ ל-24 השעות.'
-  if (t.metaStatus === 'APPROVED' && !t.metaBodyMatches) return 'הנוסח המאושר ב-Meta שונה מהקוד, ולכן היא לא בשימוש. צריך לעדכן את הנוסח ב-Meta או בקוד.'
-  if (t.metaStatus === 'APPROVED' && t.general && t.inUseAs !== t.name) return `השרת שולח תבנית כללית בשם אחר (${t.inUseAs}).`
-  if (t.metaStatus === 'APPROVED') return 'מאושרת - תירשם לשימוש בסנכרון הבא (עד 10 דקות).'
+  if (t.ready) return 'הפלטפורמה שולחת בה עכשיו הודעות של דאד קואץ׳ מחוץ ל-24 השעות.'
+  if (t.metaStatus === 'APPROVED' && !t.inUseAs) return 'מאושרת, אבל אף סוג הודעה לא ממופה אליה בפלטפורמה.'
+  if (t.metaStatus === 'APPROVED') return 'מאושרת - הפלטפורמה תשתמש בה כשתסונכרן מול Meta.'
   if (t.metaStatus === 'PENDING') return t.general
     ? 'הוגשה וממתינה. עד האישור, הודעות מחוץ ל-24 השעות לא נשלחות.'
     : 'הוגשה וממתינה. עד האישור, ההודעה הזו יוצאת בתבנית הכללית (אם היא מאושרת).'
@@ -119,7 +118,7 @@ export function TemplatesPage() {
   async function syncNow() {
     try {
       await sync.mutateAsync()
-      toast('המצב עודכן מ-Meta')
+      toast('המצב עודכן מהפלטפורמה')
     } catch (e) {
       toast(errorLine(e), 'error')
     }
@@ -129,7 +128,7 @@ export function TemplatesPage() {
   const ready = data?.templates.filter((t) => t.ready).length ?? 0
   return (
     <Page title="תבניות וואטסאפ"
-          subtitle="המצב החי ב-Meta של כל תבנית, ומה מהן דאד קואץ׳ כבר שולח. תבנית נכנסת לשימוש רק אחרי ש-Meta מאשרת אותה בנוסח שבקוד, בלי שום פעולה ידנית."
+          subtitle="המצב של כל תבנית כפי שהפלטפורמה רואה אותו ב-Meta, ומה מהן כבר בשימוש. הפלטפורמה שולחת את ההודעות ובוחרת את התבנית לפי המיפוי שלה."
           actions={<button type="button" className={`${ui.btn} ${ui.secondary}`} disabled={sync.isPending || !data?.metaConfigured} onClick={syncNow}>
             {sync.isPending ? 'מסנכרן…' : 'סנכרון עכשיו'}
           </button>}>
@@ -140,12 +139,12 @@ export function TemplatesPage() {
             <section className={ui.card} aria-label="מצב הסנכרון">
               <dl className={styles.kv}>
                 <dt>חשבון WhatsApp Business</dt><dd className="ltr">{data.wabaId || '—'}</dd>
-                <dt>עודכן לאחרונה מ-Meta</dt><dd>{data.refreshedAt ? dateTime(data.refreshedAt) : 'עוד לא'}</dd>
+                <dt>עודכן לאחרונה מהפלטפורמה</dt><dd>{data.refreshedAt ? dateTime(data.refreshedAt) : 'עוד לא'}</dd>
                 <dt>בשימוש בשליחה</dt><dd className="num">{ready} מתוך {data.templates.length}</dd>
               </dl>
-              {!data.metaConfigured && <p className={styles.bad} role="note">אין חיבור ל-Meta בשרת (<bdi dir="ltr">WHATSAPP_WABA_ID / WHATSAPP_ACCESS_TOKEN</bdi>).</p>}
-              {data.lastError && <p className={styles.bad} role="note">הקריאה האחרונה מ-Meta נכשלה: <bdi dir="ltr">{data.lastError}</bdi></p>}
-              <p className={ui.hint}>המצב נקרא מ-Meta כל 10 דקות. הגשה, עריכה ומחיקה של תבניות נעשות ב-Meta, לא כאן.</p>
+              {!data.metaConfigured && <p className={styles.bad} role="note">אין חיבור לפלטפורמה בשרת (<bdi dir="ltr">WORKFLOW_PLATFORM_ENABLED / WORKFLOW_PLATFORM_BASE_URL</bdi>).</p>}
+              {data.lastError && <p className={styles.bad} role="note">הקריאה האחרונה מהפלטפורמה נכשלה: <bdi dir="ltr">{data.lastError}</bdi></p>}
+              <p className={ui.hint}>המצב נקרא מהפלטפורמה (עד 5 דקות). הגשה, עריכה ומחיקה של תבניות נעשות ב-Meta, והמיפוי בין סוגי ההודעות לתבניות בפלטפורמה.</p>
             </section>
             {data.templates.map((t) => <TemplateCard key={t.name} t={t} />)}
           </div>

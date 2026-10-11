@@ -1,8 +1,5 @@
 package com.dadcoach.auth;
 
-import com.dadcoach.integration.platform.timeline.TimelineReports;
-import com.dadcoach.integration.platform.timeline.TimelineText;
-
 import com.dadcoach.channel.delivery.DeliveryResult;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -46,20 +43,17 @@ public class LoginLinkService {
 
     private final LoginLinkRepository links;
     private final SignInPolicy policy;
-    private final LoginLinkDelivery delivery;
+    private final LoginLinkPlatform platform;
     private final LoginLinkRateLimiter rateLimiter;
     private final Clock clock;
     private final String webBaseUrl;
-    private TimelineReports timeline;
-    private com.dadcoach.domain.father.FatherRepository fathers;
-    private LoginLinkPlatform platform;
 
-    public LoginLinkService(LoginLinkRepository links, SignInPolicy policy, LoginLinkDelivery delivery,
+    public LoginLinkService(LoginLinkRepository links, SignInPolicy policy, LoginLinkPlatform platform,
                             LoginLinkRateLimiter rateLimiter, Clock clock,
                             @Value("${dad-coach.web.base-url:http://localhost:3000}") String webBaseUrl) {
         this.links = links;
         this.policy = policy;
-        this.delivery = delivery;
+        this.platform = platform;
         this.rateLimiter = rateLimiter;
         this.clock = clock;
         this.webBaseUrl = webBaseUrl.endsWith("/") ? webBaseUrl.substring(0, webBaseUrl.length() - 1) : webBaseUrl;
@@ -143,66 +137,15 @@ public class LoginLinkService {
         return links.findByTokenHash(hash).map(l -> new SignInSubject(l.getFatherId(), l.getStaffUserId()));
     }
 
+    /**
+     * D-045 / D-053: the platform's Send API sends it (and records a father's timeline row) - the only sender; same link,
+     * one row.
+     */
     private DeliveryResult issueAndSend(SignInSubject subject, String phone, String next, String turnCorrelationId) {
         String raw = TokenHashing.newRawToken();
-        if (platform != null && platform.sends(subject)) {
-            // D-045 PLATFORM: the platform's Send API sends it (and records the timeline row); same link, same row
-            Instant now = clock.instant();
-            return platform.issueAndSend(new LoginLink(subject, TokenHashing.sha256Hex(raw), now, now.plus(LINK_TTL)),
-                    subject, phone, url(raw, next), turnCorrelationId);
-        }
-        LoginLink link = save(subject, raw);
-        LoginLinkDelivery.Sent sent = delivery.deliver(subject, phone, url(raw, next));
-        DeliveryResult result = sent.result();
-        link.recordDelivery(result);
-        links.save(link);
-        report(subject, link, sent, turnCorrelationId);
-        if (platform != null) {
-            platform.shadow(subject, phone, link.getId(), url(raw, next), sent, turnCorrelationId); // D-045 SHADOW only
-        }
-        return result;
-    }
-
-    /**
-     * D-039: a father's card goes into his platform conversation as what he saw - the card's text and its button
-     * title, never the link (a staff user has no conversation). Only with the delivery-reports switch on.
-     */
-    private void report(SignInSubject subject, LoginLink link, LoginLinkDelivery.Sent sent, String turnCorrelationId) {
-        reportCard(timeline, fathers, subject, link.getId(), sent, turnCorrelationId);
-    }
-
-    /** {@link #report}, also for a link the platform provably did not create and Dad Coach then sent itself (D-045). */
-    static void reportCard(TimelineReports timeline, com.dadcoach.domain.father.FatherRepository fathers,
-                           SignInSubject subject, java.util.UUID linkId, LoginLinkDelivery.Sent sent,
-                           String turnCorrelationId) {
-        if (timeline == null || fathers == null || subject.fatherId() == null || !sent.result().isSuccessful()
-                || !timeline.enabled()) {
-            return;
-        }
-        try {
-            fathers.findById(subject.fatherId()).ifPresent(father -> {
-                boolean template = sent.template() != null;
-                TimelineReports.Part part = TimelineReports.Part.sent("dashboard-link:" + linkId,
-                        LoginLinkDelivery.reportedText(template), sent.result(), TimelineReports.KIND_DASHBOARD_LINK);
-                part = template ? part.withTemplate(TimelineText.template(sent.template(), null))
-                        : part.withButtons(TimelineText.linkButton(LoginLinkDelivery.fatherLabel()));
-                timeline.outbound(TimelineReports.Person.of(father), part.forTurn(turnCorrelationId));
-            });
-        } catch (RuntimeException e) {
-            log.warn("timeline.report_failed kind=DASHBOARD_LINK error={}", e.getClass().getSimpleName());
-        }
-    }
-
-    /** D-045: the platform's Send API for a father's link ({@code MESSAGING_MODE_LOGIN_LINK}); absent = direct only. */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    public void setPlatform(LoginLinkPlatform platform) {
-        this.platform = platform;
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    public void setTimeline(TimelineReports timeline, com.dadcoach.domain.father.FatherRepository fathers) {
-        this.timeline = timeline;
-        this.fathers = fathers;
+        Instant now = clock.instant();
+        return platform.issueAndSend(new LoginLink(subject, TokenHashing.sha256Hex(raw), now, now.plus(LINK_TTL)),
+                subject, phone, url(raw, next), turnCorrelationId);
     }
 
     private LoginLink save(SignInSubject subject, String raw) {

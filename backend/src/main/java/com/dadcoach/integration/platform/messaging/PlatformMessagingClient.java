@@ -30,6 +30,8 @@ public class PlatformMessagingClient {
 
     public static final String SEND_PATH = "/api/v1/worker/messages/send";
     public static final String MESSAGES_PATH = "/api/v1/worker/messages";
+    public static final String KINDS_PATH = "/api/v1/worker/messaging/kinds";
+    public static final String TEMPLATES_PATH = "/api/v1/worker/whatsapp/templates";
     /** The platform's kill switch: nothing was created (spec v2.5: only with this body code). */
     public static final String DISABLED = "messaging.disabled";
     public static final String IDEMPOTENCY_CONFLICT = "messaging.idempotency_conflict";
@@ -109,6 +111,24 @@ public class PlatformMessagingClient {
         return call(web.get().uri(b -> b.path(MESSAGES_PATH).queryParam("workerKey", "{w}")
                 .queryParam("idempotencyKey", "{k}").build(platform.getWorkerKey(), idempotencyKey)),
                 settings.lookupReadTimeoutMs());   // D-047: a lookup has no platform wait; it must not hold the job
+    }
+
+    /** D-053: {@code GET /api/v1/worker/messaging/kinds?workerKey} - the platform's kind→template mapping and its state. */
+    public Answer kinds() {
+        return workerGet(KINDS_PATH);
+    }
+
+    /** D-053: {@code GET /api/v1/worker/whatsapp/templates?workerKey} - the platform's copy of the WABA's templates. */
+    public Answer templates() {
+        return workerGet(TEMPLATES_PATH);
+    }
+
+    private Answer workerGet(String path) {
+        if (!isConfigured()) {
+            return new Answer(Kind.NEVER_WRITTEN, 0, null, "NOT_CONFIGURED", null);
+        }
+        return call(web.get().uri(b -> b.path(path).queryParam("workerKey", "{w}").build(platform.getWorkerKey())),
+                settings.lookupReadTimeoutMs());
     }
 
     private Answer call(WebClient.RequestHeadersSpec<?> request, int timeoutMs) {

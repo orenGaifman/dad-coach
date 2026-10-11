@@ -7,14 +7,13 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.dadcoach.AbstractIntegrationTest;
-import com.dadcoach.channel.delivery.ProactiveSender;
+import com.dadcoach.channel.template.TemplateText;
 import com.dadcoach.channel.template.WhatsAppTemplateCatalog;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.integration.channel.DeliveryStatusController;
 import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import com.dadcoach.integration.platform.messaging.MessagingSettings;
-import com.dadcoach.integration.platform.messaging.MessagingSettings.Mode;
 import com.dadcoach.integration.platform.messaging.PlatformSendFlow;
 import com.dadcoach.integration.platform.timeline.TimelineReports;
 import com.dadcoach.qualitytime.QualityTime;
@@ -44,9 +43,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 /**
- * D-046 (Unified Workflow Phase 6.3-DC, DC2): the platform's scheduled-response callbacks sent through the platform's
- * Send API, against the real rows, the real callback endpoint and a fake platform + fake Meta (FakeServers). No real
- * WhatsApp. Every test also counts what could have reached him: Meta sends made by Dad Coach itself, and POSTs.
+ * D-046 (Unified Workflow Phase 6.3-DC, DC2) / D-053 (6.4): the platform's scheduled-response callbacks sent through the
+ * platform's Send API - the only sender - against the real rows, the real callback endpoint and a fake platform
+ * (FakeServers). No real WhatsApp; the test base proves fake Meta never receives a send. Every test also counts the
+ * POSTs that could have reached him.
  */
 class ScheduledPlatformSendTest extends AbstractIntegrationTest {
 
@@ -63,7 +63,6 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
     @Autowired ScheduledPlatformSend platform;
     @Autowired PlatformSendFlow flow;
     @Autowired QualityTimeRepository sessions;
-    @Autowired com.dadcoach.whatsapp.DeliveryReceipts receipts;
 
     Father father;
     Child itamar;
@@ -82,10 +81,8 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @AfterEach
-    void tearDown() throws InterruptedException {
-        for (int i = 0; i < 100 && !flow.shadowIdle(); i++) {
-            Thread.sleep(50);
-        }
+    void tearDown() {
+        platform.setRequestFaultForTests(null);
         assertThat(timelineReports.awaitIdle(Duration.ofSeconds(10))).isTrue();
         platformLog.detachAppender(logs);
     }
@@ -161,15 +158,6 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
                 .map(p -> String.valueOf(p.value)).findFirst().orElse(null);
     }
 
-    void awaitShadow() throws InterruptedException {
-        for (int i = 0; i < 100 && !(flow.shadowIdle() && !fake.platformSends().isEmpty()); i++) {
-            Thread.sleep(50);
-        }
-        for (int i = 0; i < 100 && !flow.shadowIdle(); i++) {
-            Thread.sleep(50);
-        }
-    }
-
     MvcResult report(String key, String messageId, String kind, String status, String wamid) throws Exception {
         Map<String, Object> b = new LinkedHashMap<>();
         b.put("messageId", messageId);
@@ -186,161 +174,12 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
                 .content(json.writeValueAsString(b))).andReturn();
     }
 
-    // ------------------------------------------------------------------------------------------------- DIRECT
-
-    @Test
-    @DisplayName("DIRECT (default): today's path - Meta sends, the Send API is never asked, no platform column, D-039 answer")
-    void directIsTodaysPath() throws Exception {
-        platformProperties.setDeliveryReports(true);
-        assertThat(messaging.scheduled()).isEqualTo(Mode.DIRECT);
-
-        JsonNode a = answer(callback("t-direct", "ACTIVE_COACHING", IDENTITY + "בוקר טוב! איך הולך השבוע?"));
-
-        assertThat(a.path("status").asText()).isEqualTo("DELIVERED");
-        assertThat(a.path("outcome").asText()).isEqualTo("AS_IS");
-        assertThat(fake.metaSends()).hasSize(1);
-        assertThat(fake.platformSends()).isEmpty();
-        assertThat(fake.platformLookups()).isEmpty();
-        assertThat(row("t-direct")).containsEntry("status", "ACCEPTED").containsEntry("platform_message_id", null)
-                .containsEntry("platform_state", null).containsEntry("platform_request", null)
-                .containsEntry("platform_posts", 0).containsEntry("platform_next_at", null);
-        assertThat(platform.reconcileDue()).isZero();
-    }
-
-    @Test
-    @DisplayName("DIRECT and SHADOW: Meta gets the same bytes and the callback the same answer, byte for byte ({status, detail})")
-    void directAndShadowAreByteIdentical() throws Exception {
-        endedSession();
-        MvcResult direct = callback("t-d", "SESSION_FOLLOW_UP", IDENTITY + "היי! איך היה?");
-        String directMeta = fake.metaSends().get(0).body();
-        assertThat(answerText(direct)).isEqualTo("{\"status\":\"DELIVERED\",\"detail\":\"Delivered\"}");
-        assertThat(json.readTree(directMeta).path("interactive").path("action").path("buttons")).hasSize(2);
-
-        fake.reset();
-        messaging.setScheduled(Mode.SHADOW);
-        fake.onPlatformSend(c -> Reply.json("{\"wouldBe\":\"SEND\",\"channelWindow\":\"SESSION\",\"template\":null}"));
-        MvcResult shadow = callback("t-s", "SESSION_FOLLOW_UP", IDENTITY + "היי! איך היה?");
-        awaitShadow();
-        assertThat(fake.metaSends()).hasSize(1);
-        assertThat(fake.metaSends().get(0).body()).isEqualTo(directMeta);
-        assertThat(answerText(shadow)).isEqualTo(answerText(direct));
-        for (String column : List.of("status", "failure_reason", "gateway_hold_id", "delivery_mode", "platform_message_id",
-                "platform_state", "platform_status", "platform_request", "platform_posts", "platform_next_at")) {
-            assertThat(row("t-s").get(column)).as(column).isEqualTo(row("t-d").get(column));
-        }
-    }
-
-    // ------------------------------------------------------------------------------------------------- SHADOW
-
-    @Test
-    @DisplayName("SHADOW: the dry run (same request, dryRun) runs off the callback's thread; a different window is a logged mismatch")
-    void shadowIsOffThreadAndLogsMismatches() throws Exception {
-        messaging.setScheduled(Mode.SHADOW);
-        CountDownLatch release = new CountDownLatch(1);
-        AtomicReference<String> asked = new AtomicReference<>();
-        fake.onPlatformSend(c -> {
-            try {
-                release.await(10, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            asked.set("asked");
-            return Reply.json("{\"wouldBe\":\"SEND\",\"channelWindow\":\"TEMPLATE\",\"template\":{\"name\":\"" + TEMPLATE + "\"}}");
-        });
-        long started = System.nanoTime();
-        JsonNode a = answer(callback("t-shadow", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!"));
-        assertThat((System.nanoTime() - started) / 1_000_000).as("the callback never waits for the dry run").isLessThan(5_000);
-        assertThat(asked.get()).isNull();
-        release.countDown();
-        awaitShadow();
-
-        assertThat(a.path("status").asText()).isEqualTo("DELIVERED");
-        assertThat(fake.metaSends()).hasSize(1);
-        assertThat(fake.platformSends()).hasSize(1);
-        JsonNode dry = body(fake.platformSends().get(0));
-        assertThat(dry.path("dryRun").asBoolean()).isTrue();
-        assertThat(dry.path("idempotencyKey").asText()).isEqualTo("scheduled-response:t-shadow");
-        assertThat(dry.path("kind").asText()).isEqualTo("SCHEDULED");
-        assertThat(row("t-shadow")).containsEntry("platform_state", null).containsEntry("status", "ACCEPTED");
-        ILoggingEvent mismatch = event("messaging.shadow.mismatch");
-        assertThat(kv(mismatch, "field")).isEqualTo("window");
-        assertThat(kv(mismatch, "product")).isEqualTo("SESSION");
-        assertThat(kv(mismatch, "kind")).isEqualTo("SCHEDULED");
-    }
-
-    @Test
-    @DisplayName("SHADOW (review M2): a platform refusal (422 / 400) while Dad Coach's send went out is a mismatch; "
-            + "when Dad Coach's send failed too it is a match")
-    void shadowRefusalIsAMismatch() throws Exception {
-        messaging.setScheduled(Mode.SHADOW);
-        fake.onPlatformSend(c -> new Reply(422, "{\"error\":\"messaging.template_unusable\",\"template\":\"x\",\"reason\":\"NOT_FOUND\"}"));
-        callback("t-sr", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!");
-        awaitShadow();
-        ILoggingEvent refused = event("messaging.shadow.mismatch");
-        assertThat(kv(refused, "field")).isEqualTo("refused");
-        assertThat(kv(refused, "code")).isEqualTo("PLATFORM_TEMPLATE_UNUSABLE_NOT_FOUND");
-        assertThat(kv(refused, "kind")).isEqualTo("SCHEDULED");
-        assertThat(logged("messaging.shadow.match")).isFalse();
-
-        logs.list.clear();
-        fake.reset();
-        fake.onPlatformSend(c -> new Reply(400, "{\"error\":\"messaging.invalid_request\",\"field\":\"content.text\"}"));
-        fake.onMetaSend(c -> new Reply(400, "{\"error\":{\"code\":131026,\"message\":\"Message undeliverable\"}}"));
-        callback("t-sr2", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!");
-        awaitShadow();
-        assertThat(logged("messaging.shadow.mismatch")).as("both refuse it").isFalse();
-        assertThat(logged("messaging.shadow.match")).isTrue();
-    }
-
-    @Test
-    @DisplayName("SHADOW lanes per kind (review N3): a SCHEDULED burst that fills its lane drops (counted, logged) only "
-            + "SCHEDULED comparisons; a LOGIN_LINK comparison still runs")
-    void shadowLanesArePerKind() throws Exception {
-        org.slf4j.Logger testLog = LoggerFactory.getLogger("shadow-lanes-test");
-        ListAppender<ILoggingEvent> lanes = new ListAppender<>();
-        lanes.start();
-        ((Logger) testLog).addAppender(lanes);
-        CountDownLatch release = new CountDownLatch(1);
-        fake.onPlatformSend(c -> Reply.json("{\"wouldBe\":\"SEND\",\"channelWindow\":\"SESSION\",\"template\":null}"));
-        PlatformSendFlow.ShadowFacts sent = new PlatformSendFlow.ShadowFacts(true, false, null, null);
-        long droppedBefore = flow.shadowDropped("SCHEDULED");
-        try {
-            flow.shadow("SCHEDULED", testLog, "id", "blocker", () -> {
-                try {
-                    release.await(10, TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-                return "{}";
-            }, sent);
-            for (int i = 0; i < 105; i++) {
-                flow.shadow("SCHEDULED", testLog, "id", "burst-" + i, () -> "{}", sent);
-            }
-            assertThat(flow.shadowDropped("SCHEDULED") - droppedBefore).as("the burst beyond the queue is dropped")
-                    .isGreaterThanOrEqualTo(5);
-            flow.shadow("LOGIN_LINK", testLog, "id", "link", () -> "{\"kind\":\"LOGIN_LINK\"}", sent);
-            for (int i = 0; i < 100 && lanes.list.stream().noneMatch(e -> "messaging.shadow.match".equals(e.getMessage())
-                    && "LOGIN_LINK".equals(kv(e, "kind"))); i++) {
-                Thread.sleep(50);
-            }
-            assertThat(lanes.list).as("the link's comparison ran while the SCHEDULED lane was stuck")
-                    .anyMatch(e -> "messaging.shadow.match".equals(e.getMessage()) && "LOGIN_LINK".equals(kv(e, "kind")));
-        } finally {
-            release.countDown();
-            for (int i = 0; i < 200 && !flow.shadowIdle(); i++) {
-                Thread.sleep(50);
-            }
-            ((Logger) testLog).detachAppender(lanes);
-        }
-    }
-
     // ------------------------------------------------------------------------------------------------- PLATFORM
 
     @Test
-    @DisplayName("PLATFORM ACCEPTED: bytes committed before the POST; the session template + buttons, the general fallback, "
-            + "window hint, notAfter, REPLACES_DRAFT; Dad Coach sends and reports nothing; the answer is {platformMessageId}")
+    @DisplayName("ACCEPTED: bytes committed before the POST; the session's message type + values + payloads and the one line "
+            + "for the general template (never a Meta name), window hint, notAfter, REPLACES_DRAFT; the answer is {platformMessageId}")
     void platformAcceptedFollowUp() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
         platformProperties.setDeliveryReports(true);
         QualityTime session = endedSession();
         String messageId = UUID.randomUUID().toString();
@@ -383,22 +222,17 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
         assertThat(content.path("buttons")).hasSize(2);
         assertThat(content.path("buttons").get(0).path("id").asText()).isEqualTo("dc:done:" + session.getId());
         assertThat(content.path("buttons").get(0).path("title").asText()).isEqualTo("היה מעולה");
-        JsonNode own = q.path("template");
-        assertThat(own.path("name").asText()).isEqualTo(WhatsAppTemplateCatalog.SESSION_FOLLOW_UP_HE);
-        assertThat(own.path("language").asText()).isEqualTo("he");
-        assertThat(own.path("bodyParams").get(0).asText()).isEqualTo("איתמר");
-        assertThat(own.path("buttons")).hasSize(2);
-        assertThat(own.path("buttons").get(0).path("subType").asText()).isEqualTo("quick_reply");
-        assertThat(own.path("buttons").get(0).path("index").asInt()).isZero();
-        assertThat(own.path("buttons").get(0).path("payload").asText()).isEqualTo("dc:done:" + session.getId());
-        assertThat(own.path("buttons").get(1).path("payload").asText()).isEqualTo("dc:missed:" + session.getId());
-        assertThat(own.path("expectedBody").asText())
-                .isEqualTo(WhatsAppTemplateCatalog.require(WhatsAppTemplateCatalog.SESSION_FOLLOW_UP_HE).body());
-        assertThat(q.path("fallbackTemplates")).hasSize(1);
-        JsonNode general = q.path("fallbackTemplates").get(0);
-        assertThat(general.path("name").asText()).isEqualTo(TEMPLATE);
-        assertThat(general.path("bodyParams").get(0).asText()).isEqualTo(ProactiveSender.asTemplateParameter(text));
-        assertThat(general.has("buttons")).isFalse();
+        assertThat(q.has("template")).as("D-053: never a Meta template name").isFalse();
+        assertThat(q.has("fallbackTemplates")).isFalse();
+        assertThat(q.toString()).doesNotContain("expectedBody").doesNotContain(WhatsAppTemplateCatalog.SESSION_FOLLOW_UP_HE);
+        JsonNode own = q.path("templateData");
+        assertThat(own.path("variant").asText()).isEqualTo("session_follow_up_he");
+        assertThat(own.path("values")).hasSize(1);
+        assertThat(own.path("values").get(0).asText()).isEqualTo("איתמר");
+        assertThat(own.path("payloads")).hasSize(2);
+        assertThat(own.path("payloads").get(0).asText()).isEqualTo("dc:done:" + session.getId());
+        assertThat(own.path("payloads").get(1).asText()).isEqualTo("dc:missed:" + session.getId());
+        assertThat(own.path("named").path("text").asText()).isEqualTo(TemplateText.asTemplateParameter(text));
         assertThat(q.path("windowPolicy").asText()).isEqualTo("AUTO");
         assertThat(q.path("outsideWindowWithoutTemplate").asText()).isEqualTo("FAIL");
         assertThat(q.path("windowHint").path("lastInboundAt").asText()).as("session_closes_at - 24 h")
@@ -413,22 +247,22 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
         assertThat(t.path("correlationId").asText()).isEqualTo("callback:scheduled-transition:t-follow");
         assertThat(t.path("content").asText()).isEqualTo(text.substring(IDENTITY.length()));
         assertThat(q.path("wait").asText()).isEqualTo("ACCEPTED");
-        assertThat(q.path("dryRun").asBoolean()).isFalse();
+        assertThat(q.has("dryRun")).as("D-053: no SHADOW, no dry run").isFalse();
     }
 
     @Test
-    @DisplayName("PLATFORM templates and notAfter per message: daily check (general only, end of his day), hour-before "
-            + "(its template, the session's start), morning (the day's last session's start)")
+    @DisplayName("Message types and notAfter per message: daily check (the default type, end of his day), hour-before "
+            + "(its type, the session's start), morning (the day's last session's start)")
     void platformTemplatesAndNotAfterPerMessage() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
         fake.onPlatformSend(c -> answer(202, UUID.randomUUID().toString(), "QUEUED", null, null, null, null));
 
         callback("t-daily", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!\nאיך הולך השבוע?");
         JsonNode daily = body(fake.platformSends().get(0));
         assertThat(daily.path("content").path("type").asText()).isEqualTo("text");
-        assertThat(daily.path("template").path("name").asText()).isEqualTo(TEMPLATE);
-        assertThat(daily.path("template").path("bodyParams").get(0).asText()).isEqualTo("בוקר טוב! איך הולך השבוע?");
-        assertThat(daily.has("fallbackTemplates")).isFalse();
+        assertThat(daily.path("templateData").path("variant").asText()).isEmpty();
+        assertThat(daily.path("templateData").path("named").path("text").asText()).isEqualTo("בוקר טוב! איך הולך השבוע?");
+        assertThat(daily.path("templateData").has("values")).isFalse();
+        assertThat(daily.has("template")).isFalse();
         assertThat(daily.path("notAfter").asText()).as("midnight in Israel").isEqualTo("2026-11-03T22:00:00Z");
         assertThat(row("t-daily")).as("QUEUED leaves it SENDING (spec 7.4) and keeps a lookup")
                 .containsEntry("status", "SENDING").containsEntry("platform_status", "QUEUED")
@@ -439,9 +273,10 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
         QualityTime next = sessions.saveAndFlush(new QualityTime(father, itamar, soon, soon.plus(Duration.ofMinutes(60))));
         callback("t-1h", "SESSION_REMINDER_1H", IDENTITY + "עוד שעה הזמן שלך ושל איתמר");
         JsonNode hour = body(fake.platformSends().get(1));
-        assertThat(hour.path("template").path("name").asText()).isEqualTo(WhatsAppTemplateCatalog.SESSION_HOUR_BEFORE_HE);
-        assertThat(hour.path("template").path("buttons").get(0).path("payload").asText()).isEqualTo("dc:ideas:" + next.getId());
-        assertThat(hour.path("fallbackTemplates").get(0).path("name").asText()).isEqualTo(TEMPLATE);
+        assertThat(hour.path("templateData").path("variant").asText()).isEqualTo("session_hour_before_he");
+        assertThat(hour.path("templateData").path("payloads").get(0).asText()).isEqualTo("dc:ideas:" + next.getId());
+        assertThat(hour.path("templateData").path("named").path("text").asText()).startsWith("עוד שעה הזמן שלך ושל איתמר")
+                .doesNotContain("\n");
         assertThat(Instant.parse(hour.path("notAfter").asText())).isEqualTo(soon);
 
         Instant at15 = Instant.parse("2026-11-03T13:00:00Z");
@@ -450,7 +285,7 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
         sessions.saveAndFlush(new QualityTime(father, itamar, at17, at17.plus(Duration.ofMinutes(45))));
         callback("t-morning", "SESSION_MORNING_REMINDER", IDENTITY + "בוקר טוב");
         JsonNode morning = body(fake.platformSends().get(2));
-        assertThat(morning.path("template").path("name").asText()).isEqualTo(WhatsAppTemplateCatalog.SESSION_MORNING_HE);
+        assertThat(morning.path("templateData").path("variant").asText()).isEqualTo("session_morning_he");
         assertThat(Instant.parse(morning.path("notAfter").asText())).as("the day's last session's start").isEqualTo(at17);
         assertThat(fake.metaSends()).isEmpty();
     }
@@ -466,7 +301,6 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("PLATFORM HELD / QUEUED (then looked up) / FAILED / UNKNOWN map onto the row (spec §7.4)")
     void platformAnswersMapOntoTheRow() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
         fake.onPlatformSend(c -> answer(200, UUID.randomUUID().toString(), "HELD", null, "ON_ANOTHER_PRODUCT", 42L, null));
         JsonNode held = answer(callback("t-held", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!"));
         assertThat(held.has("platformMessageId")).isTrue();
@@ -500,28 +334,25 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("PLATFORM, the request cannot be built (review N1): nothing posted, sent today's way with today's answer")
-    void requestFailureSendsDirect() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
+    @DisplayName("The request cannot be built (a bug): nothing posted, FAILED REQUEST_BUILD_FAILED + ERROR, answered FAILED")
+    void requestFailureFails() throws Exception {
+        platformProperties.setDeliveryReports(true);
         platform.setRequestFaultForTests(new IllegalStateException("broken"));
-        try {
-            JsonNode a = answer(callback("t-nobody", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!"));
-            assertThat(a.path("status").asText()).isEqualTo("DELIVERED");
-            assertThat(fake.platformSends()).isEmpty();
-            assertThat(fake.metaSends()).hasSize(1);
-            assertThat(row("t-nobody")).containsEntry("status", "ACCEPTED").containsEntry("platform_state", null)
-                    .containsEntry("platform_request", null);
-            assertThat(logged("messaging.scheduled.request_failed")).isTrue();
-        } finally {
-            platform.setRequestFaultForTests(null);
-        }
+        JsonNode a = answer(callback("t-nobody", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!"));
+        assertThat(a.path("status").asText()).isEqualTo("FAILED");
+        assertThat(a.path("outcome").asText()).isEqualTo("FAILED");
+        assertThat(a.path("reason").asText()).isEqualTo("REQUEST_BUILD_FAILED");
+        assertThat(fake.platformSends()).isEmpty();
+        assertThat(row("t-nobody")).containsEntry("status", "FAILED").containsEntry("failure_reason", "REQUEST_BUILD_FAILED")
+                .containsEntry("platform_state", null).containsEntry("platform_request", null);
+        assertThat(event("messaging.scheduled.request_failed").getLevel().toString()).isEqualTo("ERROR");
+        assertThat(platform.reconcileDue()).isZero();
     }
 
     @Test
     @DisplayName("PLATFORM (review N2): the platform's callback retry while the first /send is still in flight answers "
             + "SENDING and sends nothing")
     void retryWhileTheFirstSendIsInFlight() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
         String messageId = UUID.randomUUID().toString();
         CountDownLatch inFlight = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
@@ -558,28 +389,68 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("PLATFORM 503 messaging.disabled (nothing created): sent once today's way - gate, Meta, today's D-039 answer")
-    void disabledFallsBackDirect() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
-        platformProperties.setDeliveryReports(true);   // the fake platform is inert by default, as production is today
+    @DisplayName("NOT_CREATED: 503 messaging.disabled - the row stays SENDING with its bytes, answered {} (on its way), "
+            + "ERROR logged; the job re-POSTs the same bytes until accepted")
+    void disabledIsPendingAndRePosted() throws Exception {
+        platformProperties.setDeliveryReports(true);
+        fake.onPlatformSend(c -> FakeServers.platformDisabled());
 
-        JsonNode a = answer(callback("t-off", "ACTIVE_COACHING", IDENTITY + "בוקר טוב! איך הולך השבוע?"));
+        MvcResult r = callback("t-off", "ACTIVE_COACHING", IDENTITY + "בוקר טוב! איך הולך השבוע?");
 
+        assertThat(answerText(r)).as("on its way: the platform will record it").isEqualTo("{}");
         assertThat(fake.platformSends()).hasSize(1);
-        assertThat(fake.metaSends()).hasSize(1);
-        assertThat(fake.calls("/api/v1/worker/whatsapp/outbound-gate")).as("the direct path keeps the gate").hasSize(1);
-        assertThat(a.path("status").asText()).isEqualTo("DELIVERED");
-        assertThat(a.path("outcome").asText()).as("Dad Coach sent it, so it reports it, as today").isEqualTo("AS_IS");
-        assertThat(row("t-off")).containsEntry("status", "ACCEPTED").containsEntry("platform_state", "DIRECT")
+        assertThat(row("t-off")).containsEntry("status", "SENDING").containsEntry("platform_state", "NOT_CREATED")
+                .containsEntry("platform_message_id", null);
+        assertThat((String) row("t-off").get("platform_request")).isEqualTo(fake.platformSends().get(0).body());
+        assertThat(event("messaging.platform_disabled").getLevel().toString()).isEqualTo("ERROR");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM scheduled_response_delivery WHERE status = 'FAILED'", Integer.class))
+                .as("NOT_CREATED is pending, never failed or stuck").isZero();
+
+        clock.advance(Duration.ofMinutes(1));
+        assertThat(platform.reconcileDue()).isEqualTo(1);
+        assertThat(fake.platformSends()).hasSize(2);
+        assertThat(row("t-off")).containsEntry("platform_state", "NOT_CREATED");
+
+        String messageId = UUID.randomUUID().toString();
+        fake.onPlatformSend(c -> accepted(messageId));
+        clock.advance(Duration.ofMinutes(2));
+        assertThat(platform.reconcileDue()).isEqualTo(1);
+        assertThat(fake.platformSends()).hasSize(3);
+        assertThat(fake.platformSends().get(2).body()).isEqualTo(fake.platformSends().get(0).body());
+        assertThat(row("t-off")).containsEntry("status", "ACCEPTED").containsEntry("platform_state", "OWNED")
+                .containsEntry("platform_message_id", messageId).containsEntry("provider_message_id", WAMID)
                 .containsEntry("platform_request", null).containsEntry("platform_next_at", null);
+        assertThat(timelineReports.awaitIdle(Duration.ofSeconds(5))).isTrue();
+        assertThat(fake.timelineCalls()).as("the platform records it; Dad Coach reports nothing").isEmpty();
+    }
+
+    @Test
+    @DisplayName("NOT_CREATED: 401 (ERROR messaging.platform_auth_failed) and never written are pending too; past notAfter "
+            + "FAILED PLATFORM_NOT_CREATED, never posted again")
+    void notCreatedUntilNotAfter() throws Exception {
+        Instant start = clock.instant().plus(Duration.ofMinutes(20));
+        sessions.saveAndFlush(new QualityTime(father, itamar, start, start.plus(Duration.ofMinutes(60))));
+        fake.onPlatformSend(c -> new Reply(401, "{\"error\":\"unauthorized\"}"));
+        callback("t-auth", "SESSION_REMINDER_1H", IDENTITY + "עוד שעה הזמן שלך ושל איתמר");
+        assertThat(row("t-auth")).containsEntry("status", "SENDING").containsEntry("platform_state", "NOT_CREATED");
+        assertThat(event("messaging.platform_auth_failed").getLevel().toString()).isEqualTo("ERROR");
+
+        clock.advance(Duration.ofMinutes(1));
+        platform.reconcileDue();
+        assertThat(fake.platformSends()).hasSize(2);
+        clock.advance(Duration.ofMinutes(25));                    // the session started: the reminder is no longer true
+        platform.reconcileDue();
+        assertThat(fake.platformSends()).as("never posted after notAfter").hasSize(2);
+        assertThat(row("t-auth")).containsEntry("status", "FAILED").containsEntry("failure_reason", "PLATFORM_NOT_CREATED")
+                .containsEntry("platform_state", "GAVE_UP").containsEntry("platform_request", null)
+                .containsEntry("platform_next_at", null);
+        clock.advance(Duration.ofMinutes(30));
         assertThat(platform.reconcileDue()).isZero();
-        assertThat(fake.metaSends()).hasSize(1);
     }
 
     @Test
     @DisplayName("PLATFORM 422 (request wrong): FAILED PLATFORM_<error>_<reason>, never sent directly, answered FAILED as today")
     void refusalFailsWithoutDirect() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
         platformProperties.setDeliveryReports(true);
         fake.onPlatformSend(c -> new Reply(422, "{\"error\":\"messaging.template_unusable\",\"template\":\"x\",\"reason\":\"NOT_FOUND\"}"));
 
@@ -599,7 +470,6 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
     @DisplayName("PLATFORM edge 502: identical re-POSTs, never direct, answer {}; a replayed trigger POSTs nothing; "
             + "the job re-POSTs, then the lookup adopts it")
     void ambiguousIsRepostedAndReconciled() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
         String messageId = UUID.randomUUID().toString();
         fake.onPlatformSend(c -> EDGE_502);
 
@@ -631,42 +501,39 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("PLATFORM never created (lookup 404) and still true: sent directly exactly once, reported as the turn's replacement")
-    void notCreatedIsSentLateOnce() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
+    @DisplayName("Ambiguous, then never created (lookup 404) and still true: the stored bytes are POSTed again - one message, "
+            + "the platform records it")
+    void notFoundIsRePostedOnce() throws Exception {
         platformProperties.setDeliveryReports(true);
         QualityTime session = endedSession();
         fake.onPlatformSend(c -> new Reply(504, "<html>Gateway Timeout</html>", "text/html", null));
         callback("t-late", "SESSION_FOLLOW_UP", IDENTITY + "היי! איך היה?");
         clock.advance(Duration.ofMinutes(1));
         platform.reconcileDue();
+        assertThat(fake.platformSends()).hasSize(3);
+        String messageId = UUID.randomUUID().toString();
+        fake.onPlatformSend(c -> accepted(messageId));
         clock.advance(Duration.ofMinutes(4));
         assertThat(platform.reconcileDue()).isEqualTo(1);           // 404 messaging.message_not_found: never created
 
-        assertThat(fake.platformSends()).hasSize(3);
-        assertThat(fake.metaSends()).hasSize(1);
-        JsonNode sent = json.readTree(fake.metaSends().get(0).body());
-        assertThat(sent.path("interactive").path("action").path("buttons").get(0).path("reply").path("id").asText())
-                .isEqualTo("dc:done:" + session.getId());
-        assertThat(row("t-late")).containsEntry("status", "ACCEPTED").containsEntry("platform_state", "DIRECT")
+        assertThat(fake.platformSends()).hasSize(4);
+        JsonNode sent = body(fake.platformSends().get(3));
+        assertThat(fake.platformSends().get(3).body()).isEqualTo(fake.platformSends().get(0).body());
+        assertThat(sent.path("content").path("buttons").get(0).path("id").asText()).isEqualTo("dc:done:" + session.getId());
+        assertThat(sent.path("timeline").path("correlationId").asText()).isEqualTo("callback:scheduled-transition:t-late");
+        assertThat(row("t-late")).containsEntry("status", "ACCEPTED").containsEntry("platform_state", "OWNED")
                 .containsEntry("platform_request", null);
         assertThat(timelineReports.awaitIdle(Duration.ofSeconds(5))).isTrue();
-        assertThat(fake.recordedOutbound()).hasSize(1);
-        JsonNode rec = body(fake.recordedOutbound().get(0));
-        assertThat(rec.path("correlationId").asText()).isEqualTo("callback:scheduled-transition:t-late");
-        assertThat(rec.path("turnCorrelationId").asText()).isEqualTo("scheduled-transition:t-late");
-        assertThat(rec.path("replacesDraft").asBoolean()).isTrue();
-        assertThat(rec.path("kind").asText()).isEqualTo("SCHEDULED");
+        assertThat(fake.recordedOutbound()).as("the platform records it, not Dad Coach").isEmpty();
 
         clock.advance(Duration.ofMinutes(10));
         platform.reconcileDue();
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.platformSends()).hasSize(4);
     }
 
     @Test
-    @DisplayName("PLATFORM never created but past notAfter (the session already started): FAILED, never sent late")
+    @DisplayName("Never created but past notAfter (the session already started): FAILED PLATFORM_NOT_CREATED, never posted again")
     void notCreatedTooLateIsNeverSent() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
         Instant start = clock.instant().plus(Duration.ofMinutes(20));
         sessions.saveAndFlush(new QualityTime(father, itamar, start, start.plus(Duration.ofMinutes(60))));
         fake.onPlatformSend(c -> EDGE_502);
@@ -677,16 +544,15 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
         platform.reconcileDue();
 
         assertThat(fake.platformLookups()).hasSize(1);
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.platformSends()).hasSize(3);
         assertThat(row("t-old")).containsEntry("status", "FAILED")
-                .containsEntry("failure_reason", "PLATFORM_NOT_CREATED_TOO_LATE").containsEntry("platform_state", "GAVE_UP")
+                .containsEntry("failure_reason", "PLATFORM_NOT_CREATED").containsEntry("platform_state", "GAVE_UP")
                 .containsEntry("platform_request", null).containsEntry("platform_next_at", null);
     }
 
     @Test
     @DisplayName("PLATFORM lookup never answering: UNKNOWN after an hour, never sent")
     void unansweredLookupGivesUpUnknown() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
         fake.onPlatformSend(c -> EDGE_502);
         fake.onPlatformLookup(c -> new Reply(503, "<html>down</html>", "text/html", null));
         callback("t-gone", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!");
@@ -703,7 +569,6 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
     @DisplayName("D-047: a hanging platform never holds the job - lookups time out (5 s, here 300 ms), a pass stops at its "
             + "budget (15 s, here 1 s) and the rows left are taken by the next passes; nothing is sent")
     void aHangingPlatformNeverHoldsTheJob() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
         fake.onPlatformSend(c -> EDGE_502);
         int rows = 8;
         for (int i = 0; i < rows; i++) {
@@ -754,9 +619,22 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("D-053 (R5): a trigger id the platform's key shape refuses travels as h:<sha256>; a report by that key finds the row")
+    void oddKeysAreHashed() throws Exception {
+        messaging.setDeliveryStatusEnabled(true);
+        String messageId = UUID.randomUUID().toString();
+        fake.onPlatformSend(c -> answer(202, messageId, "QUEUED", null, null, null, null));
+        callback("t odd#1", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!");
+        String key = body(fake.platformSends().get(0)).path("idempotencyKey").asText();
+        assertThat(key).matches("h:[0-9a-f]{32}").isEqualTo(PlatformSendFlow.platformKey("scheduled-response:t odd#1"));
+        JsonNode r = json.readTree(report(key, UUID.randomUUID().toString(), "SCHEDULED", "DELIVERED", WAMID)
+                .getResponse().getContentAsString());
+        assertThat(r.path("known").asBoolean()).isTrue();
+    }
+
+    @Test
     @DisplayName("PLATFORM 409 after an ambiguous attempt: adopted, never FAILED; 409 on the first attempt: PLATFORM_KEY_CONFLICT")
     void conflicts() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
         String messageId = UUID.randomUUID().toString();
         List<Reply> replies = new ArrayList<>(List.of(EDGE_502, new Reply(409, "{\"error\":\"messaging.idempotency_conflict\","
                 + "\"messageId\":\"" + messageId + "\",\"status\":\"ACCEPTED\",\"providerMessageId\":\"" + WAMID
@@ -774,9 +652,8 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Delivery reports (kind SCHEDULED, by key or by messageId) move the row forward only; a DIRECT row is never moved")
+    @DisplayName("Delivery reports (kind SCHEDULED, by key or by messageId) move the row forward only; a legacy DIRECT row is never moved")
     void deliveryReports() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
         messaging.setDeliveryStatusEnabled(true);
         String messageId = UUID.randomUUID().toString();
         fake.onPlatformSend(c -> answer(202, messageId, "QUEUED", null, null, null, null));
@@ -796,29 +673,21 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
         assertThat(read.path("known").asBoolean()).as("no kind: matched by the platform's message id").isTrue();
         assertThat(row("t-rep")).containsEntry("status", "READ");
 
-        messaging.setScheduled(Mode.DIRECT);
+        fake.onPlatformSend(fake::accept);
         callback("t-dir", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!");
+        jdbc.update("UPDATE scheduled_response_delivery SET platform_state = 'DIRECT', platform_message_id = NULL "
+                + "WHERE trigger_id = 't-dir'");   // a row Dad Coach sent itself before D-053
         report("scheduled-response:t-dir", UUID.randomUUID().toString(), "SCHEDULED", "FAILED", null);
         assertThat(row("t-dir")).as("a row Dad Coach sent itself").containsEntry("status", "ACCEPTED");
+
+        // D-053: Meta's own receipts on the webhook are the platform's - one still forwarded changes nothing here
+        String receipt = com.dadcoach.support.Webhooks.envelope("{\"messaging_product\":\"whatsapp\",\"statuses\":[{\"id\":\""
+                + WAMID + "\",\"status\":\"failed\",\"timestamp\":\"1793700100\",\"recipient_id\":\"19995550950\"}]}");
+        byte[] raw = receipt.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(mvc.perform(post("/webhook/whatsapp").contentType(MediaType.APPLICATION_JSON)
+                .header("X-Hub-Signature-256", com.dadcoach.support.Webhooks.sign(raw, WEBHOOK_SECRET)).content(raw))
+                .andReturn().getResponse().getStatus()).isEqualTo(200);
+        assertThat(row("t-rep")).containsEntry("status", "READ");
     }
 
-    @Test
-    @DisplayName("Report tx: Meta's failed receipt that beat the report (kind SCHEDULED) is applied once the report links its "
-            + "wamid - committed after the report's own transaction")
-    void keptReceiptAppliedAfterTheReportCommits() throws Exception {
-        messaging.setScheduled(Mode.PLATFORM);
-        messaging.setDeliveryStatusEnabled(true);
-        String messageId = UUID.randomUUID().toString();
-        String wamid = "wamid.reporttx." + UUID.randomUUID();
-        fake.onPlatformSend(c -> answer(202, messageId, "QUEUED", null, null, null, null));
-        callback("t-rtx", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!");
-
-        receipts.apply(new com.dadcoach.channel.dto.StatusUpdateDto(wamid, "failed", "972500000000", Instant.now(), 131026,
-                "undeliverable"));   // no row holds the wamid yet: kept
-        assertThat(report("scheduled-response:t-rtx", messageId, "SCHEDULED", "ACCEPTED", wamid).getResponse().getStatus())
-                .isEqualTo(200);
-
-        assertThat(row("t-rtx")).as("the report's move and the kept receipt, both committed")
-                .containsEntry("provider_message_id", wamid).containsEntry("status", "FAILED");
-    }
 }
