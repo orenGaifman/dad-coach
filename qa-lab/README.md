@@ -41,3 +41,7 @@ keep it short), then `qa.voice(phone, "note.ogg")`; fake_meta.py serves the file
 A Hebrew sample: `say -v Carmit -o n.aiff "..." && ffmpeg -i n.aiff -c:a libopus -b:a 16k -ar 16000 -ac 1 note.ogg`.
 
 Findings: `findings.md`.
+
+**Scheduled jobs (D-055):** the session-timer reconcile and the person deletions have no `@Scheduled` tick - the lab
+platform must run with `PRODUCT_JOBS_ENABLED=true`; without it only the platform-jobs watchdog runs them (once per 3x their
+interval, ERROR then WARN).

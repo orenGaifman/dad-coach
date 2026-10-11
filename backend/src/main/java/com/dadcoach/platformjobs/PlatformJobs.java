@@ -33,7 +33,8 @@ import org.springframework.stereotype.Component;
  * their own {@code @Scheduled} tick (PRODUCT, today) or by the platform's product-job scheduler (PLATFORM: the platform
  * calls {@code POST /api/integration/jobs/{jobKey}} once per slot). {@code DC_PLATFORM_JOBS} lists the jobs the platform
  * owns (empty = all PRODUCT); a PLATFORM job's tick does nothing, a PRODUCT job's platform call answers PRODUCT_OWNED - a
- * job never runs on both sides.
+ * job never runs on both sides. A {@code platformOnly} job (D-055: session timers, person deletions) has no tick and is
+ * always the platform's.
  *
  * <p>Every run, whichever side starts it, holds the job's Postgres advisory lock (and, for a job that sends WhatsApp, the
  * messaging lane's - D-063's "one sending job at a time", now across instances too) on a connection of its own for the

@@ -107,7 +107,7 @@ class SessionTimersOwnerTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("off (the default): the dashboard cancel calls nothing, the scheduled reconcile does nothing")
+    @DisplayName("off (the default): the dashboard cancel calls nothing, the platform run answers DISABLED")
     void offIsToday() throws Exception {
         Father f = father();
         Child noa = data.child(f, "נועה", 6);

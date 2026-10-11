@@ -48,7 +48,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
         "workflow.platform.api-key=test-platform-key-0123456789",
         "workflow.platform.read-timeout-ms=5000",
         // background scans never start on their own; tests drive them
-        "dadcoach.platform-person-deletion.initial-delay=PT24H",
         "dadcoach.platform-person-deletion.send-after-commit=false",
         "dadcoach.scheduler.weekly-goal-completion-cron=-",
         "dad-coach.messaging.reconcile-initial-delay=PT24H",

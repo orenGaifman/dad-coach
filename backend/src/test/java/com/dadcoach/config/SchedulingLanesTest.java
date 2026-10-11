@@ -58,8 +58,8 @@ class SchedulingLanesTest {
             "KeepWarmJob.keepWarm", SchedulingLanes.HOUSEKEEPING,
             "LoginLinkPlatform.scheduledReconcile", SchedulingLanes.MESSAGING,
             "ScheduledPlatformSend.scheduledReconcile", SchedulingLanes.MESSAGING,
-            // 5.4 v3: the platform-jobs watchdog and daily purge (one method)
             // D-055: the person deletions and the session-timer reconcile have no tick - the platform runs them
+            // 5.4 v3: the platform-jobs watchdog and daily purge (one method)
             "PlatformJobs.maintenance", SchedulingLanes.HOUSEKEEPING);
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()

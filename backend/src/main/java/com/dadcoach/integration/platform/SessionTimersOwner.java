@@ -1,6 +1,5 @@
 package com.dadcoach.integration.platform;
 
-import com.dadcoach.config.SchedulingLanes;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.qualitytime.QualityTime;
@@ -35,7 +34,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * </ul>
  *
  * <p>Never called from inside a turn's tool call (the turn holds the conversation's lock): the dashboard and the button
- * are not turns, and the reconcile runs on its own thread.</p>
+ * are not turns, and the reconcile runs on the platform's job call (D-055) or the watchdog - never inside a turn.</p>
  */
 @Component
 public class SessionTimersOwner {

@@ -20,9 +20,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * Unified Workflow 5.4 v3: at start (off the main thread) Dad Coach registers its jobs with the platform -
- * {@code PUT /api/v1/worker/jobs}, the full list, each enabled only when the platform owns it ({@code DC_PLATFORM_JOBS}).
- * Idempotent; a failure is retried a few times and then logged (the jobs keep running on their PRODUCT ticks, and a
- * PLATFORM job the platform never calls is run by the watchdog).
+ * {@code PUT /api/v1/worker/jobs}, the full list, each enabled when the platform owns it ({@code DC_PLATFORM_JOBS}, or
+ * {@code asPlatformOnly} - D-055). Idempotent; a failure is retried a few times and then logged (a job the platform never
+ * calls is run by the watchdog - a degraded mode, not a scheduler).
  */
 @Component
 public class PlatformJobsSync {
