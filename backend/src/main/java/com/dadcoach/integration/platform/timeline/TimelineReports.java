@@ -63,7 +63,6 @@ public class TimelineReports {
     public static final String KIND_READY_ANSWER = "READY_ANSWER";
     public static final String KIND_DASHBOARD_LINK = "DASHBOARD_LINK";
     public static final String KIND_DASHBOARD_NOTE = "DASHBOARD_NOTE";
-    public static final String KIND_BELT_PROMOTION = "BELT_PROMOTION";
     public static final String KIND_SCHEDULED = "SCHEDULED";
 
     /** Who the report is about: the WhatsApp number always; the father when Dad Coach knows him. */

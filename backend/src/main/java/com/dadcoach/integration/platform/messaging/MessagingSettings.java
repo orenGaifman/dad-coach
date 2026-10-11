@@ -11,12 +11,12 @@ import org.springframework.stereotype.Component;
  * D-045 (Unified Workflow Phase 6.3-DC): who sends each kind of message - Dad Coach itself, or the platform's Send API
  * ({@code POST /api/v1/worker/messages/send}, platform spec PHASE6_2_SEND_API_SPEC §15.2). One switch per kind:
  * {@code LOGIN_LINK} (a father's dashboard link, D-045), {@code SCHEDULED} (the platform's scheduled-response callbacks:
- * session timers, daily check, weekly plan - D-046) and {@code BELT_PROMOTION} (the belt text and its optional image,
- * D-046), and D-048's conversational lines - {@code REPLY} (the coach's turn reply), {@code FIXED_LINE} (Dad Coach's
+ * session timers, daily check, weekly plan - D-046; the belt promotion's switch went with the notifier, D-051), and D-048's
+ * conversational lines - {@code REPLY} (the coach's turn reply), {@code FIXED_LINE} (Dad Coach's
  * fixed lines: a picture or a voice note not understood, the not-Hebrew line, the line instead of the card),
  * {@code BUTTON_REPLY} (a session button's fixed answer) and {@code READY_ANSWER} (D-036's answers from data).
  * <ul>
- *   <li>{@code MESSAGING_MODE_LOGIN_LINK} / {@code MESSAGING_MODE_SCHEDULED} / {@code MESSAGING_MODE_BELT_PROMOTION} /
+ *   <li>{@code MESSAGING_MODE_LOGIN_LINK} / {@code MESSAGING_MODE_SCHEDULED} /
  *       {@code MESSAGING_MODE_REPLY} / {@code MESSAGING_MODE_FIXED_LINE} / {@code MESSAGING_MODE_BUTTON_REPLY} /
  *       {@code MESSAGING_MODE_READY_ANSWER} = {@code DIRECT} (default; anything not recognised too): today's path, nothing else is called; {@code SHADOW}:
  *       today's path, then (off the send thread) the platform's dry run of the same request, differences logged - never
@@ -46,7 +46,6 @@ public class MessagingSettings {
 
     public static final String LOGIN_LINK = "LOGIN_LINK";
     public static final String SCHEDULED = "SCHEDULED";
-    public static final String BELT_PROMOTION = "BELT_PROMOTION";
     /** D-048: the conversational lines, one switch each ({@code MESSAGING_MODE_<KIND>}). */
     public static final String REPLY = "REPLY";
     public static final String FIXED_LINE = "FIXED_LINE";
@@ -56,7 +55,6 @@ public class MessagingSettings {
 
     private volatile Mode loginLink;
     private volatile Mode scheduled;
-    private volatile Mode beltPromotion;
     private volatile Mode reply = Mode.DIRECT;
     private volatile Mode fixedLine = Mode.DIRECT;
     private volatile Mode buttonReply = Mode.DIRECT;
@@ -72,20 +70,18 @@ public class MessagingSettings {
     /** D-045's switches only (the other kinds DIRECT). */
     public MessagingSettings(String loginLink, boolean deliveryStatusEnabled, Duration reconcileAfter, int connectTimeoutMs,
                              int readTimeoutMs) {
-        this(loginLink, "DIRECT", "DIRECT", deliveryStatusEnabled, reconcileAfter, connectTimeoutMs, readTimeoutMs);
+        this(loginLink, "DIRECT", deliveryStatusEnabled, reconcileAfter, connectTimeoutMs, readTimeoutMs);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     public MessagingSettings(@Value("${dad-coach.messaging.modes.login-link:DIRECT}") String loginLink,
                              @Value("${dad-coach.messaging.modes.scheduled:DIRECT}") String scheduled,
-                             @Value("${dad-coach.messaging.modes.belt-promotion:DIRECT}") String beltPromotion,
                              @Value("${dad-coach.messaging.delivery-status-enabled:false}") boolean deliveryStatusEnabled,
                              @Value("${dad-coach.messaging.reconcile-after:PT5M}") Duration reconcileAfter,
                              @Value("${dad-coach.messaging.connect-timeout-ms:2000}") int connectTimeoutMs,
                              @Value("${dad-coach.messaging.send-read-timeout-ms:12000}") int readTimeoutMs) {
         this.loginLink = parse(LOGIN_LINK, loginLink);
         this.scheduled = parse(SCHEDULED, scheduled);
-        this.beltPromotion = parse(BELT_PROMOTION, beltPromotion);
         this.deliveryStatusEnabled = deliveryStatusEnabled;
         this.reconcileAfter = atLeastMinimum(reconcileAfter);
         this.connectTimeoutMs = connectTimeoutMs;
@@ -112,10 +108,6 @@ public class MessagingSettings {
 
     public Mode scheduled() {
         return scheduled;
-    }
-
-    public Mode beltPromotion() {
-        return beltPromotion;
     }
 
     /** D-048: the switch of one conversational kind ({@link #REPLY}, {@link #FIXED_LINE}, ...); any other name DIRECT. */
@@ -212,10 +204,6 @@ public class MessagingSettings {
 
     public void setScheduled(Mode mode) {
         this.scheduled = mode;
-    }
-
-    public void setBeltPromotion(Mode mode) {
-        this.beltPromotion = mode;
     }
 
     public void setDeliveryStatusEnabled(boolean enabled) {

@@ -100,9 +100,9 @@ dad-coach:
   messaging:
     modes:
       login-link: ${MESSAGING_MODE_LOGIN_LINK:DIRECT}
-      # D-046: the platform's scheduled-response callbacks (timers, daily check, weekly plan) and the belt promotion
+      # D-046: the platform's scheduled-response callbacks (timers, daily check, weekly plan). (D-051: the belt
+      # promotion's switch is gone with its notifier - the weekly job promotes no one since D-030.)
       scheduled: ${MESSAGING_MODE_SCHEDULED:DIRECT}
-      belt-promotion: ${MESSAGING_MODE_BELT_PROMOTION:DIRECT}
       # D-048: the lines answering a father's message - the coach's reply, Dad Coach's fixed lines, a session button's
       # answer, an answer from data. The "something went wrong" line and the deletion answer always go directly.
       reply: ${MESSAGING_MODE_REPLY:DIRECT}
@@ -129,7 +129,7 @@ app:
 
 dadcoach:
   scheduler:
-    # Weekly goals completed and belts announced: Sunday 06:00 UTC (09:00 Israel).
+    # Weekly goals completed (status, streaks; belts come from sessions since D-030): Sunday 06:00 UTC (09:00 Israel).
     weekly-goal-completion-cron: "0 0 6 * * SUN"
 
 # The key the platform sends on /api/tools/** and /api/context/** (the platform's DAD_COACH_API_KEY).
@@ -162,13 +162,3 @@ workflow:
       # Approved WhatsApp template (body "{{1}}" = the message) used outside the 24h window; blank = not sent.
       template-name: ${WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME:}
 
-belt:
-  images:
-    base-url: ${BELT_IMAGES_BASE_URL:${dad-coach.web.base-url}/belts}
-    white: white-belt.webp
-    yellow: yellow-belt.webp
-    orange: orange-belt.webp
-    green: green-belt.webp
-    blue: blue-belt.webp
-    brown: brown-belt.webp
-    black: black-belt.webp
