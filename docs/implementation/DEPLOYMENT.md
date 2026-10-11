@@ -31,7 +31,7 @@ Names only — never values. Secrets live on Render (and the owner-local `~/.con
 | WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME | recommended | approved template `{{1}}` for messages outside 24 h |
 | PLATFORM_DELIVERY_REPORTS | no (default false) | D-039: report what was delivered to the platform's conversation timeline; turn on only after the platform's Phase 3 (V123) is live |
 | GATEWAY_HELD_REPORTS | no (default false) | D-042: apply the platform gateway's held-message outcome reports (`POST /api/integration/channel/held-outcome`, callback key); off = 404, nothing changes. The platform side is `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_HELDREPORTURL` (route 1 = dad-coach) |
-| APP_SCHEDULING_LANES | no (default false) | D-043: `true` = the WhatsApp-sending job (weekly belt promotions) keeps the single scheduler thread `scheduling-1`, the housekeeping jobs (receipt retry, template refresh, idempotency purge, platform deletions, keep-warm) run on their own pool of 3 (`scheduling-housekeeping-N`); `false` = one thread runs every job, as before |
+| APP_SCHEDULING_LANES | no (default false) | D-043: `true` = the WhatsApp-sending job (weekly belt promotions) keeps the single scheduler thread `scheduling-1`, the housekeeping jobs (receipt retry, template refresh, idempotency purge, platform deletions, keep-warm) run on their own pool of 3 (`scheduling-housekeeping-N`); anything but `true` (any case) = one thread runs every job, as before |
 | WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, WHATSAPP_WEBHOOK_SECRET, WHATSAPP_VERIFY_TOKEN | yes | Meta |
 | WHATSAPP_WABA_ID, WHATSAPP_API_VERSION, WHATSAPP_API_BASE_URL | no | templates / Graph version / base |
 | JWT_SECRET | yes, ≥32 | HMAC for calendar connect links + OAuth state (historical name) |

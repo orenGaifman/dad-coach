@@ -17,6 +17,9 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.LazyInitializationBeanFactoryPostProcessor;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -104,6 +107,61 @@ class SchedulingLanesTest {
             assertThat(context.getBean(SchedulingLanes.MESSAGING)).isSameAs(context.getBean("taskScheduler"));
             assertThat(housekeeping).isNotSameAs(context.getBean("taskScheduler"));
         });
+    }
+
+    /** Big Boss's rule (D-195): only "true", in any case, turns the lanes on; anything else is today. */
+    @ParameterizedTest
+    @ValueSource(strings = {"yes", "on", "1", "", " ", "enabled", "false", "FALSE", "no"})
+    void anyValueButTrueIsTodaysSingleScheduler(String value) {
+        runner.withPropertyValues("app.scheduling.lanes=" + value).withUserConfiguration(BusyMeta.class).run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBeanNamesForType(TaskScheduler.class)).containsExactly("taskScheduler");
+            for (Map.Entry<String, String> job : productJobs().entrySet()) {
+                assertThat(threadOf(context, job.getValue())).as(job.getKey()).isEqualTo(TODAY);
+            }
+            Jobs jobs = context.getBean(Jobs.class);
+            assertThat(eventually(() -> jobs.housekeepingRuns.get() > 0 && jobs.beltRuns.get() > 0)).isTrue();
+            jobs.threads.values().forEach(threads -> assertThat(threads).containsExactly(TODAY));
+        });
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"true", "TRUE", "True"})
+    void trueInAnyCaseTurnsTheLanesOn(String value) {
+        runner.withPropertyValues("app.scheduling.lanes=" + value).run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(threadOf(context, SchedulingLanes.HOUSEKEEPING)).startsWith(SchedulingLanes.HOUSEKEEPING_PREFIX);
+            assertThat(threadOf(context, SchedulingLanes.MESSAGING)).isEqualTo(TODAY);
+        });
+    }
+
+    /**
+     * Production starts with {@code -Dspring.main.lazy-initialization=true} (Dockerfile): every bean lazy except the
+     * ones with {@code @Scheduled} methods (Boot's exclude filter). The schedulers are then created on first use by the
+     * scheduling router - the jobs still run, on the same threads, switch off and on.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"false", "true"})
+    void prodLazyInitializationStillRunsEveryJobOnItsLane(String lanes) {
+        runner.withPropertyValues("app.scheduling.lanes=" + lanes)
+                .withInitializer(context -> context.addBeanFactoryPostProcessor(new LazyInitializationBeanFactoryPostProcessor()))
+                .withUserConfiguration(BusyMeta.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBeanFactory().getBeanDefinition("taskScheduler").isLazyInit()).isTrue();
+                    Jobs jobs = context.getBean(Jobs.class);
+                    assertThat(eventually(() -> jobs.beltRuns.get() >= 5 && jobs.unmovedRuns.get() >= 5
+                            && jobs.housekeepingRuns.get() >= 5)).isTrue();
+                    assertThat(jobs.maxActive.get()).isEqualTo(1);
+                    assertThat(jobs.threads.get("belt")).containsExactly(TODAY);
+                    assertThat(jobs.threads.get("unmoved")).containsExactly(TODAY);
+                    if (Boolean.parseBoolean(lanes)) {
+                        assertThat(jobs.threads.get("housekeeping"))
+                                .allMatch(t -> t.startsWith(SchedulingLanes.HOUSEKEEPING_PREFIX));
+                    } else {
+                        assertThat(jobs.threads.get("housekeeping")).containsExactly(TODAY);
+                    }
+                });
     }
 
     @Test

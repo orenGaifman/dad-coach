@@ -99,7 +99,7 @@ app:
   scheduling:
     # D-043 (Unified Workflow 6.0b): true = the jobs that send WhatsApp keep the single scheduler thread and the
     # housekeeping jobs (receipt retry, template refresh, purges, deletions, keep-warm) get their own small pool;
-    # false = one thread runs every job, exactly as before.
+    # anything else (false, unset, a typo) = one thread runs every job, exactly as before.
     lanes: ${APP_SCHEDULING_LANES:false}
 
 dadcoach:

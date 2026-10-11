@@ -604,7 +604,9 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   receipt retry (15 s), the template refresh, the idempotency purge, the platform deletions and the keep-warm ping;
   a slow template read from Meta (15 s per page) held up the belt run the same way. Spec: platform
   `docs/architecture/PHASE6_SHARED_MESSAGING_SPEC.md` §6.
-- **Switch** `APP_SCHEDULING_LANES` (`app.scheduling.lanes`, default **false**), `config/SchedulingLanes`:
+- **Switch** `APP_SCHEDULING_LANES` (`app.scheduling.lanes`, default **false**), `config/SchedulingLanes`. On only for
+  `true` in any case; anything else (`yes`, `on`, `1`, empty, a typo) is off - Big Boss's D-195 rule, so a mistyped
+  value falls back to today instead of leaving no scheduler bean (the application would not start):
   - **off** - exactly as before: one `ThreadPoolTaskScheduler` built by Boot's own builder (pool 1, `scheduling-N`,
     `spring.task.scheduling.*`), under the names `taskScheduler`, `messagingScheduler` and `housekeepingScheduler`.
     Declaring it makes Boot drop its own `taskScheduler` and (Boot 3.4: it backs off on any `Executor` bean) its
@@ -651,19 +653,34 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
     after one row's change; the same interleaving already exists for `wa-turn` replies, platform callbacks and the
     admin's on-demand refresh. `refresh` is `synchronized`; the snapshot is a `volatile` reference swap.
   - **`KeepWarmJob`:** no data.
+  - **Database connections:** production's Hikari pool is **5** (`application-prod.yml:9`, `maximum-pool-size: 5`,
+    Supabase), shared with Tomcat, the `wa-turn` pool (8), `platform-person-deletion` and `TimelineReports`. Before,
+    the scheduler used at most 1 connection at a time; switch on, at most 4 (1 messaging + 3 housekeeping), and only
+    if all jobs coincide. None holds a connection across a network wait: the belt job is not transactional (each
+    send's reads/writes are short; `completeWeeklyGoals` is one short transaction before the sends),
+    `retryPending`, `MetaTemplateDirectory.refresh` and `PlatformPersonDeletions.sendDue` are not transactional (HTTP
+    outside any transaction; `FatherDataPurger.purge` and the registry updates are short transactions),
+    `purgeExpired` is one DELETE, `KeepWarmJob` uses none. A busy pool makes a caller wait (Hikari's 30 s
+    connection timeout), it does not fail at once. If the pool shows waits, turn the switch off.
   - **Doubtful, kept on the messaging lane:** none of today's housekeeping jobs - none sends and none shares a row
     with the belt job. Everything not listed above (any future job) stays on the messaging lane by default.
 - **Not changed:** what is sent, when, and in which order among sending jobs; the belt job's thread name
   (`scheduling-1` in both modes); `PlatformPersonDeletions`' own thread, `TimelineReports` lanes, `wa-turn`.
   Further (6.2): move Meta waits off the messaging lane entirely.
-- **Tests:** `SchedulingLanesTest` (7, no DB: every `@Scheduled` method of the product is in the lane table above, so
+- **Tests:** `SchedulingLanesTest` (21, no DB: any value but `true` (`yes`, `on`, `1`, empty, blank, `enabled`,
+  `false`, `FALSE`, `no`) starts with today's single scheduler and runs every job on `scheduling-1`; `true` / `TRUE` /
+  `True` turn it on; production's lazy initialization (Boot's `LazyInitializationBeanFactoryPostProcessor`, as
+  `-Dspring.main.lazy-initialization=true` in the Dockerfile) off and on - the schedulers are lazy, the jobs still run
+  on their lanes and never overlap; every `@Scheduled` method of the product is in the lane table above, so
   a new job fails until it gets a lane; the thread each real job is routed to - Spring's `TaskSchedulerRouter` with
   the job's own qualifier - off: all `scheduling-1`, on: belt `scheduling-1`, housekeeping `scheduling-housekeeping-N`;
   off = Boot's scheduler and executor (names, aliases, pool sizes, prefixes, lazy executor); on: a housekeeping job
   keeps running while a belt send waits on a slow fake Meta (latch) and the other messaging-lane job waits; off: it
   waits too (today); on: two messaging-lane jobs never run at once (max concurrent = 1)), `SchedulingLanesAppTest`
   (real context, switch off: every registered job on `scheduling-1`), `SchedulingLanesOnAppTest` (real context, switch
-  on, closed after the class: every registered job on the pool, the default on `scheduling-1`).
+  on, closed after the class: every registered job on the pool, the default on `scheduling-1`),
+  `SchedulingLanesLazyAppTest` (real context with `spring.main.lazy-initialization=true` as in production, switch
+  unset: the scheduler bean is lazy and every registered job runs on `scheduling-1`). Full backend suite 449/449.
 - **Rollout:** deploy (switch off = no change) → `APP_SCHEDULING_LANES=true` → restart; the JSON logs' `thread_name`
   of `whatsapp.receipt` / `meta.templates.refreshed` read `scheduling-housekeeping-N`, `weekly_goal.completion`
   `scheduling-1`. **Rollback:** `APP_SCHEDULING_LANES=false` and restart; nothing in the data (DEPLOYMENT.md, Runbooks).

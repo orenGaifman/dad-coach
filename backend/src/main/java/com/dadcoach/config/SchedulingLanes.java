@@ -1,9 +1,11 @@
 package com.dadcoach.config;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.NoneNestedConditions;
 import org.springframework.boot.task.ThreadPoolTaskExecutorBuilder;
 import org.springframework.boot.task.ThreadPoolTaskSchedulerBuilder;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -16,7 +18,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
  * (shared-number gate 3 s + Meta 10 s per send, image + text: about 26 s per father) held up the receipt retry, the
  * template refresh, the idempotency purge, the platform deletions and the keep-warm ping.
  *
- * <p>Switch {@code app.scheduling.lanes} ({@code APP_SCHEDULING_LANES}, default {@code false}):
+ * <p>Switch {@code app.scheduling.lanes} ({@code APP_SCHEDULING_LANES}, default {@code false}; on only for
+ * {@code true} in any case - anything else, e.g. {@code yes}, {@code 1} or empty, is off, Big Boss's D-195 rule):
  * <ul>
  *   <li><b>off</b> - exactly as before: one scheduler, built by Boot's own builder (pool size 1, threads
  *       {@code scheduling-N}, the {@code spring.task.scheduling.*} settings), under all three names below.</li>
@@ -56,9 +59,9 @@ public class SchedulingLanes {
         return builder.build();
     }
 
-    /** Switch off: today's single scheduler thread runs every job, whatever lane it names. */
+    /** Switch off (anything but "true"): today's single scheduler thread runs every job, whatever lane it names. */
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnProperty(name = PROPERTY, havingValue = "false", matchIfMissing = true)
+    @Conditional(LanesOff.class)
     static class OneLane {
 
         @Bean(name = {DEFAULT, MESSAGING, HOUSEKEEPING})
@@ -80,6 +83,21 @@ public class SchedulingLanes {
         @Bean(name = HOUSEKEEPING)
         ThreadPoolTaskScheduler housekeepingScheduler(ThreadPoolTaskSchedulerBuilder builder) {
             return builder.poolSize(HOUSEKEEPING_THREADS).threadNamePrefix(HOUSEKEEPING_PREFIX).build();
+        }
+    }
+
+    /**
+     * "Not true": a mistyped value ({@code yes}, {@code on}, {@code 1}, empty) falls back to today's single scheduler
+     * rather than to no scheduler bean at all (which would stop the application from starting).
+     */
+    static class LanesOff extends NoneNestedConditions {
+
+        LanesOff() {
+            super(ConfigurationPhase.PARSE_CONFIGURATION);
+        }
+
+        @ConditionalOnProperty(name = PROPERTY, havingValue = "true")
+        static class LanesOn {
         }
     }
 }
