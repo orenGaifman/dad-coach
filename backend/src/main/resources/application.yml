@@ -106,6 +106,12 @@ dad-coach:
     not-created-repost-wait: ${MESSAGING_NOT_CREATED_REPOST_WAIT:PT2S}
 
 app:
+  # Unified Workflow 5.4 v3: the jobs the platform's product-job scheduler runs (comma list: weekly_goals, session_timers,
+  # person_deletions, qa_probe). A listed job's own @Scheduled tick does nothing; the platform calls
+  # POST /api/integration/jobs/{key} once per slot. Empty = every job ticks here, as before. Rollback = drop it from the list.
+  platform-jobs:
+    platform-owned: ${DC_PLATFORM_JOBS:}
+    sync: ${DC_PLATFORM_JOBS_SYNC:true}
   scheduling:
     # D-043 (Unified Workflow 6.0b): true = the jobs that send WhatsApp keep the single scheduler thread and the
     # housekeeping jobs (purges, deletions, keep-warm) get their own small pool;

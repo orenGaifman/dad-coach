@@ -41,6 +41,22 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Component
 public class SessionTimersOwner {
 
+    /** Unified Workflow 5.4 v3: this job's key on the platform's product-job scheduler. */
+    public static final String PLATFORM_JOB = "session_timers";
+
+    private com.dadcoach.platformjobs.PlatformJobs platformJobs;
+
+    /** Optional: hand-built instances in tests tick as before. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPlatformJobs(com.dadcoach.platformjobs.PlatformJobs platformJobs) {
+        this.platformJobs = platformJobs;
+    }
+
+    /** The body the platform runs for a slot (exceptions reach the platform, which retries). */
+    public Object platformRun() throws Exception {
+        return enabled() ? reconcile() : "DISABLED";
+    }
+
     private static final Logger log = LoggerFactory.getLogger(SessionTimersOwner.class);
 
     /** How far ahead the reconcile looks; a session further out is armed by its booking turn and by a later pass. */
@@ -92,6 +108,16 @@ public class SessionTimersOwner {
             initialDelayString = "${app.session-timers.reconcile-initial-delay:PT3M}",
             scheduler = SchedulingLanes.HOUSEKEEPING)
     public void scheduledReconcile() {
+        // Unified Workflow 5.4 v3: the tick goes through PlatformJobs (its locks; nothing when the platform owns the job)
+        if (platformJobs != null) {
+            platformJobs.tick(PLATFORM_JOB);
+            return;
+        }
+        scheduledReconcileHere();
+    }
+
+    /** The tick's own work, as before 5.4 v3 (PlatformJobs runs it under the job's locks). */
+    public void scheduledReconcileHere() {
         if (!enabled()) {
             return;
         }

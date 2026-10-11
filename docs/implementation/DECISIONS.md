@@ -1234,3 +1234,18 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   `kind-template-seed.json`) with matching values / payloads / `named.text`, and `LoginLinkSeedContractTest` for the
   real father and staff link requests; the deletion answer failing (503, 401: exactly one identical re-POST) never stops
   the deletion; `PendingSweepTest` (incl. at most hourly).
+
+## D-053 — Dad Coach's scheduled jobs on the platform's product-job scheduler (Unified Workflow Phase 5.4 v3, 2026-10-11)
+
+- **Why:** owner, 2026-10-11: the platform owns all scheduling (clock, run-once, retries); products keep business logic.
+  Spec `ai-workflow-platform/docs/architecture/PHASE5_4_SPEC.md` §v3/v3.8.
+- `DC_PLATFORM_JOBS` lists the jobs the platform owns (empty = all tick here, as before): `weekly_goals` (hourly on the
+  platform - a scan of finished weeks, idempotent), `session_timers` (D-050's reconcile), `person_deletions`, `qa_probe`
+  (no business effect, for controlled checks). A listed job's `@Scheduled` tick does nothing; the platform calls
+  `POST /api/integration/jobs/{key}` (the callback key) once per slot; an unlisted job answers PRODUCT_OWNED.
+- Every run holds the job's Postgres advisory lock (and the messaging lane's for a job that sends): never overlapping, never
+  on two instances. The slot ledger `platform_job_run` (V50) answers a repeated slot with its first result. Startup
+  registration (`PUT /api/v1/worker/jobs`, enabled only when listed); a watchdog runs a listed job here once (ERROR) when
+  the platform has not called it for 3× its interval.
+- Not moved: the Send API reconciles (rewritten by the 6.4 cleanup first), template refresh and receipt retry (removed by
+  it), keep-warm and the idempotency purge (per instance / in-process).

@@ -39,6 +39,22 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 @Service
 public class PlatformPersonDeletions {
 
+    /** Unified Workflow 5.4 v3: this job's key on the platform's product-job scheduler. */
+    public static final String PLATFORM_JOB = "person_deletions";
+
+    private com.dadcoach.platformjobs.PlatformJobs platformJobs;
+
+    /** Optional: hand-built instances in tests tick as before. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPlatformJobs(com.dadcoach.platformjobs.PlatformJobs platformJobs) {
+        this.platformJobs = platformJobs;
+    }
+
+    /** The body the platform runs for a slot (exceptions reach the platform, which retries). */
+    public Object platformRun() throws Exception {
+        return sendDue();
+    }
+
     private static final Logger log = LoggerFactory.getLogger(PlatformPersonDeletions.class);
     static final int OVERDUE_ATTEMPTS = 6;
     private static final Duration MAX_BACKOFF = Duration.ofHours(6);
@@ -133,6 +149,16 @@ public class PlatformPersonDeletions {
             fixedDelayString = "${dadcoach.platform-person-deletion.interval:PT5M}",
             scheduler = SchedulingLanes.HOUSEKEEPING)
     public void sendPeriodically() {
+        // Unified Workflow 5.4 v3: the tick goes through PlatformJobs (its locks; nothing when the platform owns the job)
+        if (platformJobs != null) {
+            platformJobs.tick(PLATFORM_JOB);
+            return;
+        }
+        sendPeriodicallyHere();
+    }
+
+    /** The tick's own work, as before 5.4 v3 (PlatformJobs runs it under the job's locks). */
+    public void sendPeriodicallyHere() {
         sendDue();
     }
 
