@@ -1235,7 +1235,7 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   real father and staff link requests; the deletion answer failing (503, 401: exactly one identical re-POST) never stops
   the deletion; `PendingSweepTest` (incl. at most hourly).
 
-## D-053 — Dad Coach's scheduled jobs on the platform's product-job scheduler (Unified Workflow Phase 5.4 v3, 2026-10-11)
+## D-054 — Dad Coach's scheduled jobs on the platform's product-job scheduler (Unified Workflow Phase 5.4 v3, 2026-10-11)
 
 - **Why:** owner, 2026-10-11: the platform owns all scheduling (clock, run-once, retries); products keep business logic.
   Spec `ai-workflow-platform/docs/architecture/PHASE5_4_SPEC.md` §v3/v3.8.
