@@ -57,12 +57,24 @@ public class SessionTimers {
      * others are armed now (the platform's dedupe moves one armed at another time). One read for all of them.
      */
     public List<Confirmation> ensure(Father father, List<QualityTime> sessions) {
+        return ensure(father, sessions, false);
+    }
+
+    /**
+     * D-050: as {@link #ensure(Father, List)}; {@code reconcile} (the 10-minute pass) also covers a session up to its
+     * follow-up time (end + 30 min), arms nothing when the platform's timers could not be read, and logs only what it
+     * armed. The after-turn ensure is unchanged (sessions that have not ended; arms what the read did not show).
+     */
+    public List<Confirmation> ensure(Father father, List<QualityTime> sessions, boolean reconcile) {
         Instant now = clock.instant();
         String userId = PersonRefs.whatsappId(father.getPhone());
         Map<UUID, Map<String, String>> plans = new LinkedHashMap<>();
         for (QualityTime qt : sessions) {
+            // D-050: the reconcile covers a session up to its follow-up time (end + 30 min); the after-turn ensure as before
+            Instant until = qt == null || qt.getScheduledEnd() == null ? null
+                    : reconcile ? qt.getScheduledEnd().plus(SessionTimerPlanner.FOLLOW_UP_DELAY) : qt.getScheduledEnd();
             if (qt == null || qt.getStatus() != QualityTimeStatus.SCHEDULED || qt.getScheduledStart() == null
-                    || !qt.getScheduledEnd().isAfter(now)) {
+                    || until == null || !until.isAfter(now)) {
                 continue;
             }
             plans.put(qt.getId(), SessionTimerPlanner.plan(qt.getScheduledStart(), qt.getScheduledEnd(),
@@ -72,6 +84,10 @@ public class SessionTimers {
             return plans.keySet().stream().map(id -> new Confirmation(id, Set.of(), Set.of())).toList();
         }
         Optional<List<WorkflowPlatformClient.PendingTimer>> read = safeRead(userId);
+        if (reconcile && read.isEmpty()) {
+            // the reconcile never arms blind (each arm may wait 8 s); the next pass tries again
+            return plans.keySet().stream().map(id -> new Confirmation(id, plans.get(id).keySet(), Set.of())).toList();
+        }
         Map<String, Map<String, Instant>> pending = read.map(SessionTimers::bySession).orElse(Map.of());
         List<Confirmation> out = new java.util.ArrayList<>();
         for (Map.Entry<UUID, Map<String, String>> plan : plans.entrySet()) {
@@ -98,6 +114,10 @@ public class SessionTimers {
                 }
             }
             Confirmation c = new Confirmation(plan.getKey(), plan.getValue().keySet(), confirmed);
+            if (reconcile && armedNow == 0 && "READ".equals(outcome)) {
+                out.add(new Confirmation(plan.getKey(), plan.getValue().keySet(), confirmed));
+                continue;                       // the reconcile logs only what it changed
+            }
             log.atInfo().setMessage("session.timers.confirmed").addKeyValue("fatherId", father.getId())
                     .addKeyValue("sessionId", plan.getKey()).addKeyValue("planned", c.planned())
                     .addKeyValue("confirmed", confirmed).addKeyValue("armedNow", armedNow)

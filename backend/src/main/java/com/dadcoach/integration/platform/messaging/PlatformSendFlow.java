@@ -842,6 +842,9 @@ public class PlatformSendFlow {
                 r.put("personName", f.getDisplayName());
             }
         });
+        // D-050 (Unified Workflow 5.4 R-4): the father's timezone seeds a conversation the platform creates (or fills in one
+        // that has none), as the inbound turn's metadata does - so his 09:00 daily check runs in it, not at 09:00 UTC
+        r.put("timezone", com.dadcoach.integration.platform.FatherTimezones.of(father.orElse(null)).getId());
         return r;
     }
 

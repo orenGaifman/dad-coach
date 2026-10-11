@@ -270,6 +270,9 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
         assertThat(r.path("userId").asText()).isEqualTo("whatsapp:" + PHONE);
         assertThat(r.path("to").asText()).isEqualTo(PHONE);
         assertThat(r.path("personRef").asText()).isNotBlank();
+        // D-050 (5.4 R-4): the father's timezone seeds a conversation the platform creates
+        assertThat(r.path("timezone").asText()).isNotBlank();
+        assertThat(java.time.ZoneId.of(r.path("timezone").asText())).isNotNull();
         assertThat(r.path("content").path("type").asText()).isEqualTo("text");
         assertThat(r.path("content").path("text").asText()).isEqualTo(IDENTITY + "בסדר גמור, השבוע נשאר כמו שהוא 🙂");
         assertThat(r.has("template")).isFalse();

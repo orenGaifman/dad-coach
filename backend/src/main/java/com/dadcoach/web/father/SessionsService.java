@@ -53,6 +53,14 @@ public class SessionsService {
         this.clock = clock;
     }
 
+    /** D-050: optional, so hand-built services in tests need not. */
+    private com.dadcoach.integration.platform.SessionTimersOwner timersOwner;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setTimersOwner(com.dadcoach.integration.platform.SessionTimersOwner timersOwner) {
+        this.timersOwner = timersOwner;
+    }
+
     @Transactional(readOnly = true)
     public SessionsView list(Father father) {
         Instant now = clock.instant();
@@ -102,7 +110,16 @@ public class SessionsService {
         if (trimmed != null && trimmed.length() > NOTE_MAX) {
             throw WebException.badRequest("NOTE_TOO_LONG", "note too long");
         }
-        return qualityTimeService.completeQualityTime(qt.getId(), trimmed);
+        var result = qualityTimeService.completeQualityTime(qt.getId(), trimmed);
+        closed(father, qt.getId());
+        return result;
+    }
+
+    /** D-050: a session closed on the dashboard has its timers cancelled too (after commit; switch off = nothing). */
+    private void closed(Father father, UUID sessionId) {
+        if (timersOwner != null) {
+            timersOwner.closedOutsideATurn(father, sessionId);
+        }
     }
 
     /** Cancel an upcoming one, or say a past open one did not happen. */
@@ -114,6 +131,7 @@ public class SessionsService {
             throw WebException.conflict("SESSION_NOT_CANCELLABLE", "only an open session can be cancelled");
         }
         qualityTimeService.cancelQualityTime(qt.getId());
+        closed(father, qt.getId());
     }
 
     private QualityTime owned(Father father, UUID sessionId) {
