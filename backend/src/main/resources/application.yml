@@ -151,6 +151,10 @@ workflow:
     # D-049 (Phase 5.3 slice D): the hour-before reminder's guard may skip its AI turn when no session is there. Off = it
     # always proceeds (the turn as before). The morning / follow-up tool-only turns are switched by the workflow YAML.
     session-timers-guard: ${DC_SESSION_TIMERS_GUARD:false}
+    # D-050 (Unified Workflow 5.4): Dad Coach owns its session timers - a session closed from the dashboard or the "done"
+    # button cancels its timers too (not only a WhatsApp turn), and every 10 minutes the timers of upcoming sessions are
+    # read back and the missing ones armed. Off = only the WhatsApp turn arms and cancels, as before.
+    session-timers-product-owned: ${DC_SESSION_TIMERS_PRODUCT_OWNED:false}
     # Receiver for the platform's scheduled-response callback (/api/integration/workflow/scheduled-response).
     scheduled-response:
       enabled: ${WORKFLOW_PLATFORM_CALLBACK_ENABLED:false}

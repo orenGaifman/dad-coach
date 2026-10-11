@@ -33,6 +33,8 @@ public class WorkflowPlatformProperties {
      * the guard always proceeds: the turn runs exactly as before, with one read-only tool call recorded on it.
      */
     private volatile boolean sessionTimersGuard = false;
+    /** D-050 (Unified Workflow 5.4): Dad Coach owns its session timers - cancelled from every path, reconciled. */
+    private volatile boolean sessionTimersProductOwned = false;
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -54,4 +56,6 @@ public class WorkflowPlatformProperties {
     public void setDeliveryReports(boolean deliveryReports) { this.deliveryReports = deliveryReports; }
     public boolean isSessionTimersGuard() { return sessionTimersGuard; }
     public void setSessionTimersGuard(boolean sessionTimersGuard) { this.sessionTimersGuard = sessionTimersGuard; }
+    public boolean isSessionTimersProductOwned() { return sessionTimersProductOwned; }
+    public void setSessionTimersProductOwned(boolean sessionTimersProductOwned) { this.sessionTimersProductOwned = sessionTimersProductOwned; }
 }

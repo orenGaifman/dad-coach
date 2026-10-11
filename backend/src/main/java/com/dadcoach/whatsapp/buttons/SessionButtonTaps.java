@@ -67,6 +67,13 @@ public class SessionButtonTaps {
     private final ChildRepository children;
     private final WeeklyPlanContextBuilder weeklyPlan;
     private final Clock clock;
+    /** D-050: optional, so hand-built taps in tests need not. */
+    private com.dadcoach.integration.platform.SessionTimersOwner timersOwner;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setTimersOwner(com.dadcoach.integration.platform.SessionTimersOwner timersOwner) {
+        this.timersOwner = timersOwner;
+    }
 
     public SessionButtonTaps(QualityTimeRepository sessions, QualityTimeService qualityTime, ChildRepository children,
                              WeeklyPlanContextBuilder weeklyPlan, Clock clock) {
@@ -106,6 +113,10 @@ public class SessionButtonTaps {
                 }
                 // B-1: a belt earned by this tap is told here, once (the weekly job no longer promotes - D-030)
                 var completed = qualityTime.completeQualityTime(session.getId(), null);
+                // D-050: the session is closed - its pending timers go too (after commit; switch off = nothing)
+                if (timersOwner != null) {
+                    timersOwner.closedOutsideATurn(father, session.getId());
+                }
                 yield new Tap(doneReply(father, childName(session),
                         completed.beltEarned() == null ? null : completed.beltEarned().getDisplayName("he")), null);
             }

@@ -61,8 +61,10 @@ public class SessionTimers {
         String userId = PersonRefs.whatsappId(father.getPhone());
         Map<UUID, Map<String, String>> plans = new LinkedHashMap<>();
         for (QualityTime qt : sessions) {
+            // D-050: up to its follow-up time (end + 30 min), so a missing follow-up is still armed after the end
             if (qt == null || qt.getStatus() != QualityTimeStatus.SCHEDULED || qt.getScheduledStart() == null
-                    || !qt.getScheduledEnd().isAfter(now)) {
+                    || qt.getScheduledEnd() == null
+                    || !qt.getScheduledEnd().plus(com.dadcoach.weeklyplan.SessionTimerPlanner.FOLLOW_UP_DELAY).isAfter(now)) {
                 continue;
             }
             plans.put(qt.getId(), SessionTimerPlanner.plan(qt.getScheduledStart(), qt.getScheduledEnd(),
