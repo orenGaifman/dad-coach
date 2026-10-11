@@ -60,4 +60,7 @@ public interface QualityTimeRepository extends JpaRepository<QualityTime, UUID> 
            "AND qt.status = 'SCHEDULED' " +
            "AND qt.googleCalendarEventId IS NOT NULL")
     List<QualityTime> findScheduledWithCalendarEventByFatherId(@Param("fatherId") Long fatherId);
+
+    /** D-050: the sessions of a status starting in [from, to) - the session timer reconcile's window. */
+    List<QualityTime> findByStatusAndScheduledStartBetween(QualityTimeStatus status, java.time.Instant from, java.time.Instant to);
 }

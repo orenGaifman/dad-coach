@@ -34,7 +34,7 @@ public final class SessionTimerPlanner {
     static final LocalTime MORNING_REMINDER_TIME = LocalTime.of(8, 0);
     static final LocalTime MORNING_REMINDER_MIN_SESSION_START = LocalTime.of(10, 0);
     static final Duration REMINDER_LEAD = Duration.ofHours(1);
-    static final Duration FOLLOW_UP_DELAY = Duration.ofMinutes(30);
+    public static final Duration FOLLOW_UP_DELAY = Duration.ofMinutes(30);
 
     private SessionTimerPlanner() {
     }

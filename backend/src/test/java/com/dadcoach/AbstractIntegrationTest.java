@@ -118,7 +118,6 @@ public abstract class AbstractIntegrationTest {
         heldOutcomes.setEnabled(false); // D-042: GATEWAY_HELD_REPORTS is off unless a test turns it on
         messaging.setLoginLink(com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-045
         messaging.setScheduled(com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-046
-        messaging.setBeltPromotion(com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-046
         for (String kind : java.util.List.of("REPLY", "FIXED_LINE", "BUTTON_REPLY", "READY_ANSWER")) {
             messaging.setConversational(kind, com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-048
         }

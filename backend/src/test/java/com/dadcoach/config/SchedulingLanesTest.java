@@ -60,7 +60,9 @@ class SchedulingLanesTest {
             "PlatformPersonDeletions.sendPeriodically", SchedulingLanes.HOUSEKEEPING,
             "KeepWarmJob.keepWarm", SchedulingLanes.HOUSEKEEPING,
             "LoginLinkPlatform.scheduledReconcile", SchedulingLanes.MESSAGING,
-            "ScheduledPlatformSend.scheduledReconcile", SchedulingLanes.MESSAGING);
+            "ScheduledPlatformSend.scheduledReconcile", SchedulingLanes.MESSAGING,
+            // D-050: reads and arms platform timers, sends no message
+            "SessionTimersOwner.scheduledReconcile", SchedulingLanes.HOUSEKEEPING);
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(TaskSchedulingAutoConfiguration.class,
