@@ -46,7 +46,8 @@ import org.springframework.stereotype.Component;
  * short ({@code MESSAGING_REPLY_READ_TIMEOUT_MS}, 5 s), never a re-POST after a timeout, one immediate re-POST of an
  * ambiguous answer, a 429 re-POSTed once after ≤ 2 s; a 409 carrying the existing message is adopted. Provably nothing
  * created (503 {@code messaging.disabled}, 401/403, never written): one re-POST after ≤ 2 s, then nothing is sent (WARN
- * {@code messaging.platform_not_created}) and the message stays unanswered (Meta's redelivery runs it again). Refused
+ * {@code messaging.platform_not_created}) and the message stays unanswered - the webhook already answered Meta 200,
+ * so nothing resends it; only if the same message arrives again is it processed again under the same keys. Refused
  * (400/422), or only 429s - nothing sent, unanswered. FAILED - unanswered; on Meta's redelivery the platform replays it,
  * and when its reason is resendable ({@link #RESENDABLE}) the line is sent again ONCE as {@code <key>~r1} with
  * {@code retryOf}; any other FAILED is final. ACCEPTED / HELD / QUEUED / UNKNOWN or an ambiguous answer - it reached him
@@ -200,7 +201,8 @@ public class ReplyPlatformSend {
 
     private Sent settled(Timeline row, Settled s) {
         return switch (s.verdict()) {
-            // nothing was created (D-053: no other sender): unanswered - a redelivery posts the same key again
+            // nothing was created (D-053: no other sender): unanswered - the same message, if it ever arrives again, posts
+            // the same key
             case NOT_CREATED -> new Sent(DeliveryResult.failed(s.reason()), false, "NOT_CREATED");
             case REFUSED -> new Sent(DeliveryResult.failed(s.reason()), false, "REFUSED");
             // nothing was created (every answer a 429): unanswered - a redelivery posts the same key again

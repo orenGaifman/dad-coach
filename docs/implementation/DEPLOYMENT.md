@@ -35,7 +35,7 @@ Names only — never values. Secrets live on Render (and the owner-local `~/.con
 | APP_SCHEDULING_LANES | no (default false) | D-043: `true` = the WhatsApp-sending job (weekly belt promotions) keeps the single scheduler thread `scheduling-1`, the housekeeping jobs (receipt retry, template refresh, idempotency purge, platform deletions, keep-warm) run on their own pool of 3 (`scheduling-housekeeping-N`); anything but `true` (any case) = one thread runs every job, as before |
 | ~~MESSAGING_MODE_LOGIN_LINK, MESSAGING_MODE_SCHEDULED, MESSAGING_MODE_REPLY, MESSAGING_MODE_FIXED_LINE, MESSAGING_MODE_BUTTON_REPLY, MESSAGING_MODE_READY_ANSWER~~ | — | D-053: unused - the platform's Send API is the only sender (no DIRECT / SHADOW) |
 | MESSAGING_DELIVERY_STATUS_ENABLED | no (default true since D-053) | apply the platform's delivery reports (`POST /api/integration/channel/delivery-status`, callback key) - the only source of a message's fate since D-053; off = 404, nothing changes (the platform retries 24 h). Platform side: `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_DELIVERYREPORTURL` |
-| MESSAGING_NOT_CREATED_REPOST_WAIT | no (PT2S, at most 2 s) | D-053: a line without a ledger the platform provably did not create (503 disabled, 401/403, never written) is POSTed once more after this, then not sent (the message stays unanswered; Meta's redelivery retries) |
+| MESSAGING_NOT_CREATED_REPOST_WAIT | no (PT2S, at most 2 s) | D-053: a line without a ledger the platform provably did not create (503 disabled, 401/403, never written) is POSTed once more after this, then not sent - the message stays unanswered (the webhook already answered Meta 200, so Meta does not resend it) |
 | MESSAGING_RECONCILE_AFTER, MESSAGING_SEND_READ_TIMEOUT_MS | no (PT5M, 12000) | D-045: when an ambiguous send is looked up by key; the Send API read timeout (platform wait 8 s + 4 s) |
 | MESSAGING_LOOKUP_READ_TIMEOUT_MS, MESSAGING_RECONCILE_PASS_BUDGET | no (5000, PT15S) | D-047: the reconcile job's lookup-by-key timeout, and how long one reconcile pass may take rows (the rest next minute) - a hanging platform holds the shared scheduler thread at most ~budget + one call |
 | ~~MESSAGING_MODE_BELT_PROMOTION~~ | — | D-051: unused (the belt promotion notifier is retired; the switch is gone) |
@@ -84,24 +84,29 @@ Keep: everything in the table above (GOOGLE_* stay).
 
 ## Runbooks
 - **D-053 (Unified Workflow 6.4: the platform owns delivery) - deploy, in this order (spec PHASE6_4_CLEANUP_SPEC §9.1):**
-  1. The platform's P64 release is live (V139/V140, `templateData`, `/messaging/kinds`); `/messaging/kinds?workerKey=dad_3`
+  1. The platform's P64 release is live (V141/V142, `templateData`, `/messaging/kinds`); `/messaging/kinds?workerKey=dad_3`
      lists `LOGIN_LINK ""`, `SCHEDULED ""` and the three session variants, each with a usable candidate.
   2. Platform `MESSAGING_ALLOWED_PRODUCTS` carries the whole key `dad_coach` (not a per-kind list), `MESSAGING_ENABLED=true`.
-  3. Read-only check (R11): no open raw-payload held row for route 1 (`whatsapp_held_outbound` with
+  3. Pre-deploy check: `WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME` on Render is unset or exactly `dad_coach_update_he` -
+     the platform's seed maps every default message type to `dad_coach_update_he`; another value means the general
+     template in use today differs from the mapping (fix the mapping first, via the platform's admin API).
+  4. Read-only check (R11): no open raw-payload held row for route 1 (`whatsapp_held_outbound` with
      `outbound_message_id IS NULL AND outcome IS NULL`); if there is one, wait (the old endpoint is gone after this deploy).
-  4. Deploy Dad Coach. Watch: `messaging.pending_swept` once at startup (counts); no `messaging.platform_disabled`,
+  5. Deploy Dad Coach. Watch: `messaging.pending_swept` at startup and then hourly (counts); no `messaging.platform_disabled`,
      `messaging.platform_auth_failed`, `messaging.*.request_failed` (ERROR); every reply `whatsapp.delivery.result` with a
      `platformStatus`; the templates screen shows the platform's state.
-  5. Then platform `WORKFLOW_CHANNELS_WHATSAPP_FORWARDSTATUSES=false` and unset `..._ROUTES_1_HELDREPORTURL` (after all
+  6. Then platform `WORKFLOW_CHANNELS_WHATSAPP_FORWARDSTATUSES=false` and unset `..._ROUTES_1_HELDREPORTURL` (after all
      three products), then remove the unused env above.
 - **Roll back D-053:** set back BEFORE the revert deploy `MESSAGING_MODE_LOGIN_LINK|SCHEDULED|REPLY|FIXED_LINE|
-  BUTTON_REPLY|READY_ANSWER=PLATFORM`, `GATEWAY_HELD_REPORTS=true`, `MESSAGING_DELIVERY_STATUS_ENABLED=true`; platform
+  BUTTON_REPLY|READY_ANSWER=PLATFORM`, `GATEWAY_HELD_REPORTS=true`, `MESSAGING_DELIVERY_STATUS_ENABLED=true`,
+  `DAD_COACH_WHATSAPP_RECEIPTS_ENABLED`, `WHATSAPP_WABA_ID` and `WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME` (their values
+  of today, written down before they were removed); platform
   `WORKFLOW_CHANNELS_WHATSAPP_FORWARDSTATUSES=true` + `ROUTES_1_HELDREPORTURL`; then `git revert -m 1 <merge>` and deploy.
   No migration to undo. Check first that no row is `platform_state = 'NOT_CREATED'` (the old code would leave it pending
   without re-POSTing). Products first, platform last.
 - **Kill switch since D-053:** platform `MESSAGING_ENABLED=false` / `dad_coach` out of the allow-list = links and scheduled
   messages wait and are re-POSTed while still true (then FAILED `PLATFORM_NOT_CREATED`); replies are not sent and the
-  message stays unanswered (Meta redelivers). Dad Coach never sends to Meta itself.
+  message stays unanswered (the webhook answered Meta 200 before processing: nothing resends it). Dad Coach never sends to Meta itself.
 - *The D-045 / D-046 / D-048 rollout and rollback runbooks below are history (their switches are gone with D-053).*
 - **Delete a father (operator):** `DELETE /api/v1/admin/fathers/{uuid}` with `X-API-Key: $DADCOACH_ADMIN_API_KEY`
   → purged now; the platform deletion follows from the outbox (logs `Platform person deletion …`).

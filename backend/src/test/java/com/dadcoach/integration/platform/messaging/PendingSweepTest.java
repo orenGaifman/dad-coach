@@ -83,4 +83,17 @@ class PendingSweepTest extends AbstractIntegrationTest {
         assertThat(sweep.sweep()).as("idempotent").containsExactly(0, 0);
         assertThat(fake.platformSends()).as("a swept row is never sent").isEmpty();
     }
+
+    @Test
+    @DisplayName("the reconcile job sweeps at most hourly (and the startup sweep counts as the last run)")
+    void sweepsAtMostHourly() {
+        Father f = data.activeFather("+19995551002");
+        sweep.sweep();                                              // as at startup
+        UUID first = scheduled(f, "h1", "SENDING", null, clock.instant().minus(Duration.ofHours(2)), null, null);
+        sweep.sweepIfDue();
+        assertThat(scheduledRow(first)).as("swept less than an hour ago: not yet").containsEntry("status", "SENDING");
+        clock.advance(Duration.ofMinutes(61));
+        sweep.sweepIfDue();
+        assertThat(scheduledRow(first)).containsEntry("status", "UNKNOWN");
+    }
 }

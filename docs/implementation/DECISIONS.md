@@ -1170,11 +1170,11 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   SCHEDULED with its own session template: `{variant: session_morning_he | session_hour_before_he | session_follow_up_he,
   values, payloads, named: {text}}` (the session's values and `dc:` payloads, `named.text` = the message as one line for
   the general template); any other scheduled message `{variant: "", named: {text}}`; LOGIN_LINK (father and staff)
-  `{variant: "", named: {text: <the link line>}}`. The platform's seed (V140, `dad_coach`) maps the session variants to
+  `{variant: "", named: {text: <the link line>}}`. The platform's seed (V142, `dad_coach`) maps the session variants to
   their template then `dad_coach_update_he`, and `""` to `dad_coach_update_he`. Replies stay SESSION_ONLY, no
   `templateData`. `windowPolicy`, `notAfter`, `timeline`, `windowHint`, `holdPolicy`, `timezone` (D-050) unchanged.
 - **Every line through `/send`:** the "something went wrong" line is a FIXED_LINE (SESSION_ONLY) with keys of its own
-  (`reply:<wamid>:down:<n>`, so the redelivery's real reply never replays it); the deletion answer is a FIXED_LINE sent
+  (`reply:<wamid>:down:<n>`, so a later real reply to the same message never replays it); the deletion answer is a FIXED_LINE sent
   BEFORE the deletion is requested, naming nobody (`to` only - no `userId`/`personRef`/`personName`), `sensitive: true`,
   `timeline.record: false`, `wait: ACCEPTED` (spec v2 R7; the person deletion that follows removes the platform's row);
   the staff link is a LOGIN_LINK like a father's but not recorded on any timeline. **Behaviour change (an improvement,
@@ -1187,7 +1187,8 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   re-POSTs the same bytes (1 min, doubling, at most every 10 min) while its relevance rule holds - scheduled `notAfter`,
   a link unrevoked, unexpired and at most 1 h old - then FAILED `PLATFORM_NOT_CREATED`; a line without a ledger: one
   re-POST after ≤ 2 s (`MESSAGING_NOT_CREATED_REPOST_WAIT`), then WARN `messaging.platform_not_created` and nothing sent -
-  the message stays unanswered, so Meta's redelivery posts the same key. 400/422 and a first-attempt 409 REFUSED; a 409
+  the message stays unanswered. Meta does not send it again (the webhook answered 200 before processing); only if the
+  same message does arrive again is it processed again, under the same keys. 400/422 and a first-attempt 409 REFUSED; a 409
   after an ambiguous attempt ADOPT; ambiguous re-POSTed then reconciled by key; reconcile lookup 404 = re-POST the stored
   bytes (the platform holds nothing under that key), still only while relevant. A request that cannot be built is a bug:
   FAILED `REQUEST_BUILD_FAILED` + ERROR. A key the platform's shape refuses travels as `h:` + 32 hex of its SHA-256
@@ -1195,12 +1196,13 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 - **Receipts and reports:** the webhook still accepts a payload with `statuses` (200) and ignores them; the platform's
   delivery reports (`/api/integration/channel/delivery-status`, forward-only `applyStatus`) and the reconcile lookup are
   the only source of a message's fate. `MESSAGING_DELIVERY_STATUS_ENABLED` now defaults to true.
-- **Startup sweep (R12):** once at startup, ledger rows still pending (scheduled SENDING/HELD, links QUEUED/HELD or
+- **Sweep (R12):** at startup and then at most hourly (from the scheduled messages' reconcile job), ledger rows still pending (scheduled SENDING/HELD, links QUEUED/HELD or
   ISSUED with a platform state) with no platform message id, not driven by the reconcile job and older than 1 h, become
   UNKNOWN (`SWEPT_NO_PLATFORM_MESSAGE`; never failed, never re-sent), counts logged `messaging.pending_swept`.
 - **Templates screen:** reads the platform (`GET /api/v1/worker/whatsapp/templates` and `/messaging/kinds`,
-  `PlatformTemplateStatus`, cached 5 min, a failed read keeps the last good answer); "sync" reads it again. Same JSON
-  shape (+ `usedFor`); `ready` = a mapped candidate is usable now. The integrations card's "template outside 24 h" =
+  `PlatformTemplateStatus`, cached 5 min, a failed read keeps the last good answer and is not retried for 60 s); "sync"
+  reads it again. Same JSON shape (+ `usedFor`; `metaBodyMatches` is null - the mapping, not a body comparison,
+  decides); `ready` = a mapped candidate is usable now. The integrations card's "template outside 24 h" =
   the platform could send SCHEDULED's default type as a template now.
 - **What still touches Meta (receiving, spec §4.4):** the voice-note media download (`WhatsAppMediaDownloader`, D-029),
   the webhook's verify token and signature secret. So `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_API_BASE_URL`/`_VERSION`,
@@ -1213,7 +1215,8 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   `MESSAGING_NOT_CREATED_REPOST_WAIT` (optional, default PT2S).
 - **Rollback:** `git revert` of the merge + a new deploy, with the env of today set back BEFORE the deploy (spec §6 / R16):
   `MESSAGING_MODE_LOGIN_LINK|SCHEDULED|REPLY|FIXED_LINE|BUTTON_REPLY|READY_ANSWER=PLATFORM`, `GATEWAY_HELD_REPORTS=true`,
-  `MESSAGING_DELIVERY_STATUS_ENABLED=true`; on the platform `WORKFLOW_CHANNELS_WHATSAPP_FORWARDSTATUSES=true` and
+  `MESSAGING_DELIVERY_STATUS_ENABLED=true`, and `DAD_COACH_WHATSAPP_RECEIPTS_ENABLED`, `WHATSAPP_WABA_ID`,
+  `WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME` with today's values (the reverted code reads them again); on the platform `WORKFLOW_CHANNELS_WHATSAPP_FORWARDSTATUSES=true` and
   `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_HELDREPORTURL` restored. Without the mode env a reverted Dad Coach sends DIRECT
   (it keeps its token), a working state. Products first, platform last; never the platform alone (an old platform
   refuses `templateData` requests, R9). Rows a revert finds in `platform_state = NOT_CREATED` are read by the old code as
@@ -1228,4 +1231,6 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   replays by key); the answer table row by row (`PlatformMessagingUnitTest`, `LoginLinkPlatformSendTest`,
   `ScheduledPlatformSendTest`, `ReplyPlatformSendTest`); statuses on the webhook ignored; reports drive both ledgers;
   `KindTemplateSeedContractTest` - every (kind, variant) Dad Coach emits exists in the platform seed (copied as
-  `kind-template-seed.json`) with matching values / payloads / `named.text`; `PendingSweepTest`.
+  `kind-template-seed.json`) with matching values / payloads / `named.text`, and `LoginLinkSeedContractTest` for the
+  real father and staff link requests; the deletion answer failing (503, 401: exactly one identical re-POST) never stops
+  the deletion; `PendingSweepTest` (incl. at most hourly).

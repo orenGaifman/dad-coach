@@ -18,13 +18,15 @@ import org.springframework.stereotype.Component;
  * read-only copy of the WABA's templates ({@code GET /api/v1/worker/whatsapp/templates}) and the kind→template mapping
  * with each candidate's usability ({@code GET /api/v1/worker/messaging/kinds}). Dad Coach no longer reads Meta for
  * this; the admin's templates screen and the integrations card show it. Cached for {@link #CACHE_FOR}; a failed read
- * keeps the last good answer (none yet = unknown).
+ * keeps the last good answer (none yet = unknown) and is not retried for {@link #FAILURE_CACHE_FOR} (a platform outage
+ * never costs two blocking GETs on every admin page); "sync" always reads again.
  */
 @Component
 public class PlatformTemplateStatus {
 
     private static final Logger log = LoggerFactory.getLogger(PlatformTemplateStatus.class);
     static final Duration CACHE_FOR = Duration.ofMinutes(5);
+    static final Duration FAILURE_CACHE_FOR = Duration.ofSeconds(60);
 
     /** One template at the WABA as the platform's registry holds it. */
     public record Template(String name, String language, String status, String category) {}
@@ -59,6 +61,7 @@ public class PlatformTemplateStatus {
     private final PlatformMessagingClient client;
     private final Clock clock;
     private volatile Snapshot last;
+    private volatile Instant failedAt;
 
     public PlatformTemplateStatus(PlatformMessagingClient client, Clock clock) {
         this.client = client;
@@ -72,7 +75,12 @@ public class PlatformTemplateStatus {
     /** The cached read (refreshed when older than {@link #CACHE_FOR}); empty while nothing could be read yet. */
     public Optional<Snapshot> current() {
         Snapshot s = last;
-        if (s == null || s.readAt() == null || s.readAt().plus(CACHE_FOR).isBefore(clock.instant())) {
+        Instant now = clock.instant();
+        Instant failed = failedAt;
+        if (s != null && failed != null && failed.plus(FAILURE_CACHE_FOR).isAfter(now)) {
+            return Optional.of(s);                     // a recent failure: not asked again yet
+        }
+        if (s == null || s.readAt() == null || s.readAt().plus(CACHE_FOR).isBefore(now)) {
             return refresh();
         }
         return Optional.of(s);
@@ -85,11 +93,13 @@ public class PlatformTemplateStatus {
         if (t.status() != 200 || k.status() != 200 || t.body() == null || k.body() == null) {
             String error = (t.status() != 200 ? t : k).summary();
             log.atWarn().setMessage("messaging.templates.read_failed").addKeyValue("answer", error).log();
+            failedAt = clock.instant();
             Snapshot previous = last;
             last = previous == null ? new Snapshot(null, null, List.of(), List.of(), error)
                     : new Snapshot(previous.readAt(), previous.wabaId(), previous.templates(), previous.candidates(), error);
             return Optional.of(last);
         }
+        failedAt = null;
         last = new Snapshot(clock.instant(), text(t.body(), "wabaId"), templates(t.body()), candidates(k.body()), null);
         return Optional.of(last);
     }
@@ -97,6 +107,7 @@ public class PlatformTemplateStatus {
     /** Tests: forget the cached read. */
     public void forget() {
         last = null;
+        failedAt = null;
     }
 
     private static List<Template> templates(JsonNode body) {

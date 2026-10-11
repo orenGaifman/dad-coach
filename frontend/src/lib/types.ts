@@ -182,7 +182,8 @@ export interface AdminTemplateRow {
   /** set when Meta re-filed it, e.g. UTILITY → MARKETING */
   metaPreviousCategory: string | null
   metaRejectedReason: string | null
-  metaBodyMatches: boolean
+  /** null since D-053 (the platform's mapping decides, no body comparison) */
+  metaBodyMatches: boolean | null
   registeredStatus: string | null
   /** D-053: the platform can send it now (a mapped message type names it and it is usable) */
   ready: boolean

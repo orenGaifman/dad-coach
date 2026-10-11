@@ -111,6 +111,21 @@ class AdminTemplatesTest extends AbstractWebIntegrationTest {
     }
 
     @Test
+    @DisplayName("a failed read is not retried for 60 s: an outage never costs two blocking GETs on every admin page")
+    void aFailureIsCachedBriefly() throws Exception {
+        Browser staff = signIn(newStaff("צוות"));
+        FakeServers.INSTANCE.onPlatformTemplates(c -> new FakeServers.Reply(503, "{}"));
+        mvc.perform(staff.on(get("/api/admin/templates"))).andExpect(jsonPath("$.lastError").value("HTTP_503"));
+        mvc.perform(staff.on(get("/api/admin/templates"))).andExpect(jsonPath("$.lastError").value("HTTP_503"));
+        assertThat(FakeServers.INSTANCE.calls("/api/v1/worker/whatsapp/templates")).as("asked once").hasSize(1);
+        FakeServers.INSTANCE.onPlatformTemplates(null);
+        clock.advance(java.time.Duration.ofSeconds(61));
+        mvc.perform(staff.on(get("/api/admin/templates"))).andExpect(jsonPath("$.templates[0].metaStatus").value("APPROVED"))
+                .andExpect(jsonPath("$.templates[0].metaBodyMatches").value(org.hamcrest.Matchers.nullValue()));
+        assertThat(FakeServers.INSTANCE.calls("/api/v1/worker/whatsapp/templates")).hasSize(2);
+    }
+
+    @Test
     @DisplayName("the old manual 'mark approved' is gone: nothing here makes a template sendable")
     void noManualApproval() throws Exception {
         mvc.perform(signIn(newStaff("צוות")).on(post("/api/admin/templates/dad_coach_update_he/approve")))

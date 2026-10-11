@@ -12,7 +12,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * D-053 (Unified Workflow 6.4, spec v2 R12): once at startup, the ledger rows still pending with no platform message
+ * D-053 (Unified Workflow 6.4, spec v2 R12): at startup and then at most hourly (from the scheduled messages' reconcile
+ * job, {@link #sweepIfDue}), the ledger rows still pending with no platform message
  * after {@link #OLDER_THAN} are marked UNKNOWN - rows a direct send (before D-053) or the shared-number gateway's hold
  * left open, whose end nothing reports any more (Meta's receipts and the gateway's held reports went with D-053). A row
  * the reconcile job still drives ({@code platform_next_at} set: ambiguous, not created yet, a lease) is left to it.
@@ -25,8 +26,11 @@ public class PendingSweep {
     static final Duration OLDER_THAN = Duration.ofHours(1);
     static final String REASON = "SWEPT_NO_PLATFORM_MESSAGE";
 
+    static final Duration EVERY = Duration.ofHours(1);
+
     private final JdbcTemplate jdbc;
     private final Clock clock;
+    private volatile Instant lastRun;
 
     public PendingSweep(JdbcTemplate jdbc, Clock clock) {
         this.jdbc = jdbc;
@@ -42,9 +46,23 @@ public class PendingSweep {
         }
     }
 
+    /** From the reconcile job: a sweep when the last one is at least {@link #EVERY} ago (never more than hourly). */
+    public void sweepIfDue() {
+        Instant last = lastRun;
+        if (last != null && last.plus(EVERY).isAfter(clock.instant())) {
+            return;
+        }
+        try {
+            sweep();
+        } catch (RuntimeException e) {
+            log.atWarn().setMessage("messaging.pending_sweep_failed").addKeyValue("error", e.getClass().getSimpleName()).log();
+        }
+    }
+
     /** One sweep; returns the rows marked UNKNOWN (scheduled messages, links). */
     public int[] sweep() {
         Instant now = clock.instant();
+        lastRun = now;
         Timestamp at = Timestamp.from(now);
         Timestamp before = Timestamp.from(now.minus(OLDER_THAN));
         int scheduled = jdbc.update("UPDATE scheduled_response_delivery SET status = 'UNKNOWN', failure_reason = ?, "

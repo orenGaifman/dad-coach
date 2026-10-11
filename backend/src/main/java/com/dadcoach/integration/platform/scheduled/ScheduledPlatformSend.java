@@ -111,6 +111,13 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
         this.clock = clock;
     }
 
+    private com.dadcoach.integration.platform.messaging.PendingSweep pendingSweep;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPendingSweep(com.dadcoach.integration.platform.messaging.PendingSweep pendingSweep) {
+        this.pendingSweep = pendingSweep;
+    }
+
     /** Tests only: the next requests fail to build (review N1). */
     private volatile RuntimeException requestFault;
 
@@ -428,6 +435,9 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
             initialDelayString = "${dad-coach.messaging.reconcile-initial-delay:PT1M}",
             scheduler = com.dadcoach.config.SchedulingLanes.MESSAGING)
     public void scheduledReconcile() {
+        if (pendingSweep != null) {
+            pendingSweep.sweepIfDue();   // D-053 (R12): abandoned pending rows to UNKNOWN, at most hourly
+        }
         try {
             reconcileDue();
         } catch (RuntimeException e) {

@@ -27,10 +27,18 @@ import org.junit.jupiter.api.Test;
  * {@code named.text} wherever a row reads {@code ["text"]} (the general {@code dad_coach_update_he}). The kinds without
  * {@code templateData} are session-only lines (free-form in the window, never a template).
  */
-class KindTemplateSeedContractTest {
+public class KindTemplateSeedContractTest {
 
     static final String PRODUCT = "dad_coach";
     static List<JsonNode> seed;
+
+    /** The dad_coach seed rows (read once). */
+    public static synchronized List<JsonNode> seed() throws Exception {
+        if (seed == null) {
+            readSeed();
+        }
+        return seed;
+    }
 
     @BeforeAll
     static void readSeed() throws Exception {
@@ -45,8 +53,8 @@ class KindTemplateSeedContractTest {
         }
     }
 
-    static List<JsonNode> rows(String kind, String variant) {
-        return seed.stream().filter(r -> kind.equals(r.path("kind").asText()) && variant.equals(r.path("variant").asText()))
+    public static List<JsonNode> rows(String kind, String variant) throws Exception {
+        return seed().stream().filter(r -> kind.equals(r.path("kind").asText()) && variant.equals(r.path("variant").asText()))
                 .sorted((a, b) -> Integer.compare(a.path("position").asInt(), b.path("position").asInt())).toList();
     }
 
@@ -73,7 +81,7 @@ class KindTemplateSeedContractTest {
     @Test
     @DisplayName("every SCHEDULED message type Dad Coach emits is seeded, values and payloads fit the session template, "
             + "the general template's {{1}} is there")
-    void scheduledVariantsAreSeeded() {
+    void scheduledVariantsAreSeeded() throws Exception {
         Map<String, Map<String, Object>> emits = scheduledEmits();
         assertThat(emits.keySet()).containsExactlyInAnyOrder("", "session_morning_he", "session_hour_before_he",
                 "session_follow_up_he");
@@ -85,12 +93,11 @@ class KindTemplateSeedContractTest {
     }
 
     @Test
-    @DisplayName("LOGIN_LINK emits the kind's default message type with named.text - seeded as dad_coach_update_he")
-    void loginLinkIsSeeded() {
+    @DisplayName("LOGIN_LINK's default message type is seeded as dad_coach_update_he (the real requests: LoginLinkSeedContractTest)")
+    void loginLinkIsSeeded() throws Exception {
         List<JsonNode> rows = rows(MessagingSettings.LOGIN_LINK, "");
         assertThat(rows).isNotEmpty();
         assertThat(rows.get(0).path("template").asText()).isEqualTo(WhatsAppTemplateCatalog.UPDATE_HE);
-        check(Map.of("variant", "", "named", Map.of("text", "הקישור לדף שלך, אישי ולא להעביר הלאה: https://x.test")), rows);
     }
 
     @Test
@@ -109,7 +116,7 @@ class KindTemplateSeedContractTest {
 
     /** At least the first usable row's references resolve against what Dad Coach sends; every row's refs do. */
     @SuppressWarnings("unchecked")
-    static void check(Map<String, Object> data, List<JsonNode> rows) {
+    public static void check(Map<String, Object> data, List<JsonNode> rows) {
         List<String> values = (List<String>) data.getOrDefault("values", List.of());
         List<String> payloads = (List<String>) data.getOrDefault("payloads", List.of());
         Map<String, String> named = (Map<String, String>) data.getOrDefault("named", Map.of());

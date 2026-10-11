@@ -7,7 +7,7 @@ import java.util.Optional;
  * Dad Coach's WhatsApp template catalog, in code (the Big Boss D-167 pattern): the copy the owner submits to Meta,
  * shown on the admin's templates screen. Since D-053 (Unified Workflow 6.4) it no longer drives sending: Dad Coach
  * names the message type ({@code templateData.variant} = the template name minus {@code dad_coach_}) and its values,
- * and the platform's kind→template mapping picks the approved Meta template (seeded from this catalog, platform V140).
+ * and the platform's kind→template mapping picks the approved Meta template (seeded from this catalog, platform V142).
  *
  * <p>The three session timers have their own templates (the values come from the session, not from the AI's text);
  * every other proactive message - the daily check's items, the sign-in link - and any of these whose own template is

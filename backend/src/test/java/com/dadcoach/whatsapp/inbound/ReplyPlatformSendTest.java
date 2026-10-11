@@ -382,6 +382,31 @@ class ReplyPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("D-053 (R7): the platform cannot take the deletion answer (503 disabled, then 401) - exactly one identical "
+            + "re-POST, nothing else sent, and the deletion happens all the same")
+    void aDeletionWhoseAnswerFailsStillDeletes() throws Exception {
+        fake.onPlatformSend(c -> FakeServers.platformDisabled());
+        says("מחק את המידע שלי");
+        assertThat(fake.platformSends()).as("one attempt + one re-POST").hasSize(2);
+        assertThat(fake.platformSends().get(1).body()).isEqualTo(fake.platformSends().get(0).body());
+        assertThat(body(fake.platformSends().get(0)).has("userId")).isFalse();
+        assertThat(jdbc.queryForObject("SELECT status FROM father WHERE id = ?", String.class, father.getId()))
+                .isEqualTo("DELETED");
+
+        // another father, the platform refusing the key (401): the same
+        fake.reset();
+        Father other = data.father(String.format("+1999558%04d", NUMBERS.incrementAndGet()), "דן",
+                com.dadcoach.father.FatherStatus.ACTIVE);
+        fake.onPlatformSend(c -> new Reply(401, "{\"error\":\"unauthorized\"}"));
+        webhook(Webhooks.text(other.getPhone(), "wamid.del-401", "DELETE MY DATA"));
+        settle();
+        assertThat(fake.platformSends()).hasSize(2);
+        assertThat(fake.platformSends().get(1).body()).isEqualTo(fake.platformSends().get(0).body());
+        assertThat(jdbc.queryForObject("SELECT status FROM father WHERE id = ?", String.class, other.getId()))
+                .isEqualTo("DELETED");
+    }
+
+    @Test
     @DisplayName("D-053 (R7): the deletion answer goes through the platform BEFORE the deletion - FIXED_LINE, to only "
             + "(no userId / personRef / personName), sensitive, never recorded, wait ACCEPTED")
     void deletionAnswerBeforeTheDeletion() throws Exception {

@@ -771,8 +771,8 @@ public class InboundMessageHandler {
     /**
      * D-048 / D-053: one conversational line of {@code kind} ({@link MessagingSettings#REPLY}, {@code FIXED_LINE},
      * {@code BUTTON_REPLY}, {@code READY_ANSWER}) through the platform's Send API ({@link ReplyPlatformSend}) - the only
-     * sender. A send that failed (refused, nothing created) leaves the message unanswered (DC-B3: Meta's redelivery runs
-     * it again). {@code row}: how the platform records it on the timeline. {@code his}: his message as the timeline shows
+     * sender. A send that failed (refused, nothing created) leaves the message unanswered (DC-B3: its claim is released,
+     * so the same message arriving again runs it again - Meta does not resend it: the webhook answered 200). {@code row}: how the platform records it on the timeline. {@code his}: his message as the timeline shows
      * it, for a line with no turn - reported BEFORE the platform sends the answer (it records the answer itself).
      */
     private DeliveryResult send(Attempt attempt, InboundMessageDto in, Optional<Father> father, String kind, String text,

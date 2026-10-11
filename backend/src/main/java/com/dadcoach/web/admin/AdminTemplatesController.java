@@ -29,8 +29,8 @@ public class AdminTemplatesController {
     /**
      * @param metaStatus the status in the platform's copy of the WABA (APPROVED, PENDING, REJECTED, PAUSED, DISABLED),
      *     MISSING when it is not there, UNKNOWN when the platform could not be read yet
-     * @param metaBodyMatches kept for the screen: since D-053 the platform's mapping (chosen by the admin) decides which
-     *     template a message uses, not a comparison of bodies - true whenever the template is at the WABA
+     * @param metaBodyMatches always null since D-053: the platform's copy of the WABA carries no bodies and its mapping
+     *     (chosen by the admin), not a comparison of bodies, decides which template a message uses
      * @param registeredStatus the platform registry's status (null when unknown)
      * @param ready whether the platform can send it now: some mapped (kind, variant) names it and it is usable
      * @param inUseAs the (kind/variant)s the platform's mapping sends with it, comma separated (null when none)
@@ -39,7 +39,7 @@ public class AdminTemplatesController {
     public record Row(String name, String language, String category, String purpose, String body, int maxVariables,
                       List<String> examples, List<String> quickReplies, String sample, boolean general,
                       String metaStatus, String metaCategory, String metaPreviousCategory, String metaRejectedReason,
-                      boolean metaBodyMatches, String registeredStatus, boolean ready, String inUseAs, List<String> usedFor) {}
+                      Boolean metaBodyMatches, String registeredStatus, boolean ready, String inUseAs, List<String> usedFor) {}
 
     /** {@code metaConfigured}: the platform can be asked (it holds the WABA); {@code refreshedAt}: the last good read. */
     public record Listing(String wabaId, boolean metaConfigured, Instant refreshedAt, String lastError, List<Row> templates) {}
@@ -82,7 +82,7 @@ public class AdminTemplatesController {
         return new Row(entry.name(), entry.language(), entry.category(), entry.purpose(), entry.body(),
                 entry.maxVariables(), entry.examples(), entry.quickReplies(), entry.sample(), general,
                 metaStatus, atWaba.map(PlatformTemplateStatus.Template::category).orElse(null), null, null,
-                atWaba.isPresent(), atWaba.map(PlatformTemplateStatus.Template::status).orElse(null),
+                null, atWaba.map(PlatformTemplateStatus.Template::status).orElse(null),
                 known && s.usable(entry.name()), uses.isEmpty() ? null : String.join(", ", uses), uses);
     }
 }
