@@ -30,7 +30,14 @@ class SchedulingLanesOnAppTest extends AbstractIntegrationTest {
         assertThat(context.getBean("applicationTaskExecutor")).isInstanceOf(ThreadPoolTaskExecutor.class);
         Map<String, String> threads = SchedulingLanesAppTest.threadsOfRegisteredJobs(context);
         assertThat(threads.keySet()).isEqualTo(SchedulingLanesAppTest.REGISTERED.keySet());
-        threads.forEach((job, thread) -> assertThat(thread).as(job).startsWith(SchedulingLanes.HOUSEKEEPING_PREFIX));
+        threads.forEach((job, thread) -> {
+            if (SchedulingLanes.MESSAGING.equals(SchedulingLanesAppTest.REGISTERED.get(job))) {
+                // D-045: the login-link reconcile job may send, so it keeps the serial messaging lane
+                assertThat(thread).as(job).isEqualTo(SchedulingLanesTest.TODAY);
+            } else {
+                assertThat(thread).as(job).startsWith(SchedulingLanes.HOUSEKEEPING_PREFIX);
+            }
+        });
         assertThat(SchedulingLanesTest.threadOf(context.getBeanFactory(), SchedulingLanes.MESSAGING))
                 .isEqualTo(SchedulingLanesTest.TODAY);
     }

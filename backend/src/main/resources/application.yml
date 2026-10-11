@@ -94,6 +94,17 @@ dad-coach:
     # About 25 minutes of a WhatsApp voice note; a longer one is answered "too long" without being downloaded.
     max-bytes: ${VOICE_NOTES_MAX_BYTES:3145728}
     timeout-ms: ${VOICE_NOTES_TIMEOUT_MS:60000}
+  # D-045 (Unified Workflow 6.3-DC): who sends each kind - Dad Coach itself (DIRECT, default: today's path), SHADOW
+  # (today's path + the platform's dry run, differences logged, never a second message) or PLATFORM (the platform's
+  # POST /api/v1/worker/messages/send). Anything else = DIRECT. Only a father's dashboard link so far.
+  messaging:
+    modes:
+      login-link: ${MESSAGING_MODE_LOGIN_LINK:DIRECT}
+    # The platform's delivery reports (POST /api/integration/channel/delivery-status, callback key); off = 404.
+    delivery-status-enabled: ${MESSAGING_DELIVERY_STATUS_ENABLED:false}
+    # After an ambiguous answer: ask the platform by key this long after the first POST (then every as long, for 1 h).
+    reconcile-after: ${MESSAGING_RECONCILE_AFTER:PT5M}
+    send-read-timeout-ms: ${MESSAGING_SEND_READ_TIMEOUT_MS:12000}
 
 app:
   scheduling:

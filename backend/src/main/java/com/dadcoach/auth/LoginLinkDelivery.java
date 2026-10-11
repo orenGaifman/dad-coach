@@ -69,6 +69,11 @@ public class LoginLinkDelivery {
         return FATHER_LABEL;
     }
 
+    /** D-045: the template that carries the link outside the window (the platform's request names the same one). */
+    String templateName() {
+        return templateName;
+    }
+
     public DeliveryResult send(SignInSubject subject, String phone, String url) {
         return deliver(subject, phone, url).result();
     }

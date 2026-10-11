@@ -52,6 +52,7 @@ public class LoginLinkService {
     private final String webBaseUrl;
     private TimelineReports timeline;
     private com.dadcoach.domain.father.FatherRepository fathers;
+    private LoginLinkPlatform platform;
 
     public LoginLinkService(LoginLinkRepository links, SignInPolicy policy, LoginLinkDelivery delivery,
                             LoginLinkRateLimiter rateLimiter, Clock clock,
@@ -144,12 +145,21 @@ public class LoginLinkService {
 
     private DeliveryResult issueAndSend(SignInSubject subject, String phone, String next, String turnCorrelationId) {
         String raw = TokenHashing.newRawToken();
+        if (platform != null && platform.sends(subject)) {
+            // D-045 PLATFORM: the platform's Send API sends it (and records the timeline row); same link, same row
+            Instant now = clock.instant();
+            return platform.issueAndSend(new LoginLink(subject, TokenHashing.sha256Hex(raw), now, now.plus(LINK_TTL)),
+                    subject, phone, url(raw, next), turnCorrelationId);
+        }
         LoginLink link = save(subject, raw);
         LoginLinkDelivery.Sent sent = delivery.deliver(subject, phone, url(raw, next));
         DeliveryResult result = sent.result();
         link.recordDelivery(result);
         links.save(link);
         report(subject, link, sent, turnCorrelationId);
+        if (platform != null) {
+            platform.shadow(subject, phone, link.getId(), url(raw, next), sent, turnCorrelationId); // D-045 SHADOW only
+        }
         return result;
     }
 
@@ -158,6 +168,13 @@ public class LoginLinkService {
      * title, never the link (a staff user has no conversation). Only with the delivery-reports switch on.
      */
     private void report(SignInSubject subject, LoginLink link, LoginLinkDelivery.Sent sent, String turnCorrelationId) {
+        reportCard(timeline, fathers, subject, link.getId(), sent, turnCorrelationId);
+    }
+
+    /** {@link #report}, also for a link the platform provably did not create and Dad Coach then sent itself (D-045). */
+    static void reportCard(TimelineReports timeline, com.dadcoach.domain.father.FatherRepository fathers,
+                           SignInSubject subject, java.util.UUID linkId, LoginLinkDelivery.Sent sent,
+                           String turnCorrelationId) {
         if (timeline == null || fathers == null || subject.fatherId() == null || !sent.result().isSuccessful()
                 || !timeline.enabled()) {
             return;
@@ -165,7 +182,7 @@ public class LoginLinkService {
         try {
             fathers.findById(subject.fatherId()).ifPresent(father -> {
                 boolean template = sent.template() != null;
-                TimelineReports.Part part = TimelineReports.Part.sent("dashboard-link:" + link.getId(),
+                TimelineReports.Part part = TimelineReports.Part.sent("dashboard-link:" + linkId,
                         LoginLinkDelivery.reportedText(template), sent.result(), TimelineReports.KIND_DASHBOARD_LINK);
                 part = template ? part.withTemplate(TimelineText.template(sent.template(), null))
                         : part.withButtons(TimelineText.linkButton(LoginLinkDelivery.fatherLabel()));
@@ -174,6 +191,12 @@ public class LoginLinkService {
         } catch (RuntimeException e) {
             log.warn("timeline.report_failed kind=DASHBOARD_LINK error={}", e.getClass().getSimpleName());
         }
+    }
+
+    /** D-045: the platform's Send API for a father's link ({@code MESSAGING_MODE_LOGIN_LINK}); absent = direct only. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setPlatform(LoginLinkPlatform platform) {
+        this.platform = platform;
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)

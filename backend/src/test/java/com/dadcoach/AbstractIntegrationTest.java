@@ -48,6 +48,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
         "dadcoach.platform-person-deletion.initial-delay=PT24H",
         "dadcoach.platform-person-deletion.send-after-commit=false",
         "dadcoach.scheduler.weekly-goal-completion-cron=-",
+        "dad-coach.messaging.reconcile-initial-delay=PT24H",
         "spring.datasource.hikari.maximum-pool-size=5",
         // the dashboard (com.dadcoach.auth / web / ops)
         "dadcoach.dashboard.ops-api-key=" + AbstractIntegrationTest.OPS_KEY,
@@ -98,6 +99,7 @@ public abstract class AbstractIntegrationTest {
     @Autowired private com.dadcoach.whatsapp.DeliveryReceipts receipts;
     @Autowired private com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties;
     @Autowired private com.dadcoach.integration.channel.HeldOutcomes heldOutcomes;
+    @Autowired private com.dadcoach.integration.platform.messaging.MessagingSettings messaging;
 
     @BeforeEach
     void cleanSlate() {
@@ -112,6 +114,10 @@ public abstract class AbstractIntegrationTest {
         receipts.forgetPending(); // D-038: early "failed" receipts are kept in memory; wamids repeat across tests
         platformProperties.setDeliveryReports(false); // D-039: the switch is off unless a test turns it on
         heldOutcomes.setEnabled(false); // D-042: GATEWAY_HELD_REPORTS is off unless a test turns it on
+        messaging.setLoginLink(com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-045
+        messaging.setDeliveryStatusEnabled(false);
+        messaging.setReconcileAfter(java.time.Duration.ofMinutes(5));
+        messaging.setReadTimeoutMs(12000);
     }
 
     @TestConfiguration

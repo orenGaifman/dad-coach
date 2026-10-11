@@ -58,7 +58,8 @@ class SchedulingLanesTest {
             "MetaTemplateDirectory.scheduled", SchedulingLanes.HOUSEKEEPING,
             "IdempotencyService.purgeExpired", SchedulingLanes.HOUSEKEEPING,
             "PlatformPersonDeletions.sendPeriodically", SchedulingLanes.HOUSEKEEPING,
-            "KeepWarmJob.keepWarm", SchedulingLanes.HOUSEKEEPING);
+            "KeepWarmJob.keepWarm", SchedulingLanes.HOUSEKEEPING,
+            "LoginLinkPlatform.scheduledReconcile", SchedulingLanes.MESSAGING);
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(TaskSchedulingAutoConfiguration.class,

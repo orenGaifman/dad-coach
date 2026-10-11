@@ -32,6 +32,9 @@ Names only — never values. Secrets live on Render (and the owner-local `~/.con
 | PLATFORM_DELIVERY_REPORTS | no (default false) | D-039: report what was delivered to the platform's conversation timeline; turn on only after the platform's Phase 3 (V123) is live |
 | GATEWAY_HELD_REPORTS | no (default false) | D-042: apply the platform gateway's held-message outcome reports (`POST /api/integration/channel/held-outcome`, callback key); off = 404, nothing changes. The platform side is `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_HELDREPORTURL` (route 1 = dad-coach) |
 | APP_SCHEDULING_LANES | no (default false) | D-043: `true` = the WhatsApp-sending job (weekly belt promotions) keeps the single scheduler thread `scheduling-1`, the housekeeping jobs (receipt retry, template refresh, idempotency purge, platform deletions, keep-warm) run on their own pool of 3 (`scheduling-housekeeping-N`); anything but `true` (any case) = one thread runs every job, as before |
+| MESSAGING_MODE_LOGIN_LINK | no (default DIRECT) | D-045: who sends a father's dashboard link - `DIRECT` (today), `SHADOW` (today + the platform's dry run, differences logged), `PLATFORM` (`POST /api/v1/worker/messages/send`); anything else = DIRECT. Staff links always direct |
+| MESSAGING_DELIVERY_STATUS_ENABLED | no (default false) | D-045: apply the platform's delivery reports (`POST /api/integration/channel/delivery-status`, callback key); off = 404, nothing changes. Platform side: `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_DELIVERYREPORTURL` |
+| MESSAGING_RECONCILE_AFTER, MESSAGING_SEND_READ_TIMEOUT_MS | no (PT5M, 12000) | D-045: when an ambiguous send is looked up by key; the Send API read timeout (platform wait 8 s + 4 s) |
 | WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, WHATSAPP_WEBHOOK_SECRET, WHATSAPP_VERIFY_TOKEN | yes | Meta |
 | WHATSAPP_WABA_ID, WHATSAPP_API_VERSION, WHATSAPP_API_BASE_URL | no | templates / Graph version / base |
 | JWT_SECRET | yes, ≥32 | HMAC for calendar connect links + OAuth state (historical name) |
@@ -83,6 +86,43 @@ Keep: everything in the table above (GOOGLE_* stay).
 - **Roll back D-043 (scheduler lanes):** `APP_SCHEDULING_LANES=false` (or unset) and restart - one scheduler thread
   runs every job again. Nothing in the data. Check after turning it on: the log lines of `whatsapp.receipt` /
   `meta.templates.refreshed` show thread `scheduling-housekeeping-N`, `weekly_goal.completion` thread `scheduling-1`.
+- **Platform Send API for the login link (D-045, Unified Workflow 6.3-DC step DC1) - rollout, in this order:**
+  1. **Deploy Dad Coach** with nothing set (`MESSAGING_MODE_LOGIN_LINK` unset = DIRECT, `MESSAGING_DELIVERY_STATUS_ENABLED`
+     unset = false). V47 is additive (seven nullable/defaulted `login_link` columns, two partial indexes). Check: logs
+     `now at version v47`, `/actuator/health` 200; one dashboard link (owner asks the coach for his page) logs
+     `auth.login_link.sent … delivered=true` and **no** `messaging.*` line. Behaviour is byte-identical to before.
+  2. **Dad Coach** `MESSAGING_DELIVERY_STATUS_ENABLED=true` (restart). Nothing reports yet; a probe without a key gets 401.
+  3. **Platform** (one env change, one restart; nothing else of the platform changes):
+     - first, read-only: `GET /api/v1/worker/whatsapp/templates?workerKey=dad_3&name=dad_coach_update_he` (Dad Coach's
+       integration key) → `APPROVED` (or `sync` off / no snapshot = Meta judges, as today). Spec §17 rule 2.
+     - `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_DELIVERYREPORTURL=https://dad-coach.onrender.com/api/integration/channel/delivery-status`
+       (route 1 = `dad-coach`; its claim key is Dad Coach's callback key, header `X-API-Key` - no `REPORTAPIKEY` needed)
+     - `MESSAGING_ALLOWED_PRODUCTS=dad_coach:LOGIN_LINK` (only this kind; any other Dad Coach kind still gets 503)
+     - `MESSAGING_ENABLED=true`
+     - leave `MESSAGING_AMBIGUOUS_RETRY_MAX` unset (NONE = Dad Coach's parity: a 5xx from Meta is UNKNOWN, never retried)
+     - check: admin Settings → Messaging card shows enabled, the allow-list, no rows. Dad Coach is still DIRECT, so no
+       `/send` arrives yet.
+  4. **Dad Coach** `MESSAGING_MODE_LOGIN_LINK=SHADOW` (restart) **for at least 24 h**, with a few real links (the owner
+     asking the coach for his page counts). Watch Dad Coach: `messaging.shadow.match` / `messaging.shadow.mismatch`
+     (`field` hold / outcome / window / template, `product` vs `platform`) / `messaging.shadow.unavailable`; platform:
+     `messaging.dry_run`. Gate to go on (spec §17 rule 4): mismatches < 1 % and **every** mismatch explained
+     (expected: `window` around the 5-minute margin, N2; `hold` when the gate's state moved between the send and the
+     dry run). Still exactly one message per link (`auth.login_link.sent`, one Meta send).
+  5. **Dad Coach** `MESSAGING_MODE_LOGIN_LINK=PLATFORM` (restart). Watch 24 h (spec §17): Dad Coach
+     `messaging.login_link.platform` (status ACCEPTED / HELD), `messaging.delivery_status … applied=true`, **zero**
+     `messaging.login_link.ambiguous` / `refused` / `platform_after_direct` / `messaging.platform_auth_failed` /
+     `direct_fallback` (a `direct_fallback` with `why=HTTP_503 messaging.disabled` means the platform switch is off);
+     platform `messaging.send.requested`, `messaging.report.sent`; admin timeline: exactly one row
+     `dashboard-link:<id>` per link, with the card's text and no link; the link row
+     `SELECT delivery_status, receipt_status, platform_state, platform_status, platform_request IS NULL FROM login_link
+     ORDER BY created_at DESC LIMIT 5` → SENT / NULL·DELIVERED·READ / OWNED / … / true.
+- **Roll back D-045:** Dad Coach `MESSAGING_MODE_LOGIN_LINK=DIRECT` (restart) - new links go directly at once; keep
+  `MESSAGING_DELIVERY_STATUS_ENABLED=true` for 48 h after the last PLATFORM send (messages the platform still owns are
+  reported). Without a Dad Coach change: platform `MESSAGING_ENABLED=false` or `MESSAGING_ALLOWED_PRODUCTS` without
+  `dad_coach:LOGIN_LINK` → every new link gets `503 messaging.disabled` and Dad Coach sends it itself (an ambiguous
+  link still being reconciled is answered by key first and is never sent twice). A **code revert** below D-045 keeps
+  V47 (harmless); run once `UPDATE login_link SET receipt_status = NULL WHERE receipt_status = 'QUEUED';` (the old
+  receipt code does not know QUEUED) and `UPDATE login_link SET platform_request = NULL;` (no link left in the clear).
 - **Tests:** `cd backend && ./mvnw test` (Docker needed).
 
 

@@ -684,3 +684,112 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 - **Rollout:** deploy (switch off = no change) → `APP_SCHEDULING_LANES=true` → restart; the JSON logs' `thread_name`
   of `whatsapp.receipt` / `meta.templates.refreshed` read `scheduling-housekeeping-N`, `weekly_goal.completion`
   `scheduling-1`. **Rollback:** `APP_SCHEDULING_LANES=false` and restart; nothing in the data (DEPLOYMENT.md, Runbooks).
+
+## D-045 — A father's dashboard link can be sent by the platform's Send API, behind a switch (Unified Workflow Phase 6.3-DC, step DC1, 2026-10-11)
+
+- **Why:** Phase 6.2b put a Send API on the platform (`POST /api/v1/worker/messages/send`: one send engine for the
+  shared number - window, templates, the gate, receipts, the timeline row - spec
+  `ai-workflow-platform/docs/architecture/PHASE6_2_SEND_API_SPEC.md`, "Spec v2" v2.1-v2.16; live but inert:
+  `MESSAGING_ENABLED=false`, empty allow-list). Spec §17.1: Dad Coach moves first, kind by kind - login link, then
+  scheduled callbacks, then belt promotion, then replies. This is the first kind. The staff login link and the
+  platform-down line stay direct (a platform send would add a window check to the staff link, spec N3).
+- **Switch** `MESSAGING_MODE_LOGIN_LINK` (`dad-coach.messaging.modes.login-link`, `MessagingSettings`):
+  - `DIRECT` (default; also anything but the three names): today's path, unchanged - no call to the Send API, no new
+    column written (`LoginLinkPlatform.shadow` returns at once). Tested: same Meta bytes as SHADOW (phone and token
+    aside), platform columns NULL, the D-039 report as before.
+  - `SHADOW`: today's path, then on a thread of its own (`messaging-shadow`, queue 100, dropped when full) the
+    platform's dry run of the same request (`dryRun: true`; no row, no Meta call on the platform). Logs
+    `messaging.shadow.match` or `messaging.shadow.mismatch {kind, linkId, field: hold|outcome|window|template, product,
+    platform}`, `messaging.shadow.unavailable` when the platform cannot answer. Never a second message, never a row change.
+  - `PLATFORM`: a **father's** link through `/send` (a staff user's stays direct).
+- **The request** (`LoginLinkPlatform.request`): `workerKey dad_3`, `workflowKey`, `userId whatsapp:+…`, `to`, the tenant,
+  `personRef`/`personName`; `idempotencyKey login-link:<loginLinkId>` (the row is new per send), `kind LOGIN_LINK`,
+  `messageClass UTILITY`; `content` = the same `link_button` card as the direct path (text, footer "הקישור אישי…",
+  button "כניסה לדף שלי"); `fallbackText` = the text with the link on its own line (the direct path's
+  `withLinkAsText` when Meta refuses the button); `template` = the general template (`WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME`,
+  default `dad_coach_update_he`) with the one-line `{{1}}` carrying the link, as today outside the window;
+  `windowPolicy AUTO`, `outsideWindowWithoutTemplate FAIL`; `windowHint.lastInboundAt = session_closes_at − 24 h`
+  (v2.13); `holdPolicy GATEWAY` (Dad Coach does **not** call the gate itself - the platform gates); timeline
+  `NEW_ROW`, `correlationId dashboard-link:<id>` (as D-039), the turn's id, and `content` = the card's text **without
+  the link** (otherwise the platform would record the template's rendered body, link and token included); `wait ACCEPTED`.
+- **Durable bytes (v2.6):** the link row and the exact request bytes (`login_link.platform_request`, V47) are committed
+  in their own transaction **before** the first POST; every re-POST and the reconcile send exactly those bytes. They
+  carry the sign-in link, so they are set to NULL as soon as they are no longer needed (the platform answered, Dad Coach
+  sent it itself, refused, gave up). Only the token's hash stays, as before D-045.
+- **The answer** (`LoginLinkPlatform.verdict`/`settle`, spec §16 + v2.5/v2.6):
+
+  | Answer | Row | Sent directly? |
+  |---|---|---|
+  | 200/202 with a status | §7.4 below; `platform_message_id`; state OWNED; bytes cleared | no |
+  | 503 with body `messaging.disabled` (the platform answers an existing key before its kill switch, v2.1) | state DIRECT, today's send, today's D-039 report | **yes** |
+  | 401/403 (refused before any handler), first attempt | same, + ERROR `messaging.platform_auth_failed` | **yes** |
+  | connection refused / DNS / TLS (never written), or no platform configured, first attempt | same | **yes** |
+  | 400/422 | FAILED `PLATFORM_<error>[_<reason>]` (e.g. `PLATFORM_TEMPLATE_UNUSABLE_NOT_FOUND`), ERROR log, state REFUSED | no - the request is wrong |
+  | 409 `idempotency_conflict` on the first attempt | FAILED `PLATFORM_KEY_CONFLICT`, ERROR | no |
+  | 409 `idempotency_conflict` after an ambiguous attempt | **adopted** (the body carries the message's state), WARN `messaging.platform_conflict_adopted` | no |
+  | timeout, 5xx, an edge's 502/503/504 without the body code, connection lost after write, 404, 429, an unreadable 2xx | state AMBIGUOUS, row SENT / `receipt_status` QUEUED ("on its way") | **never** |
+
+  - Ambiguous: one immediate re-POST of the same bytes on the turn's thread - not after a timeout (the thread already
+    waited 12 s) and not after a 429. Then the job (`LoginLinkPlatform.reconcileDue`, every minute, messaging lane:
+    it may send) re-POSTs once more (3 POSTs in all = "re-POST up to 2 times"), and `MESSAGING_RECONCILE_AFTER`
+    (5 min) after the first POST asks `GET /api/v1/worker/messages?workerKey&idempotencyKey`: **200** = adopt;
+    **404 with `messaging.message_not_found`** = nothing was created (the platform commits before any answer) → sent
+    directly, if the link is still unrevoked and unexpired (else FAILED `PLATFORM_NOT_CREATED_LINK_ENDED`); anything
+    else = ask again every 5 min; after 1 h = GAVE_UP, `receipt_status` UNKNOWN, `PLATFORM_RECONCILE_GAVE_UP`, never sent.
+    A re-POST that is refused, never written or 401/403 after an ambiguous attempt stays ambiguous (the first one may
+    have been created). Claims: `platform_next_at` moved by one conditional UPDATE (lease 2 min) before a row is worked.
+  - A POST in flight belongs to the sending thread for 2 minutes (`platform_next_at` = lease); a thread that died
+    leaves the row POSTING, and the job then treats it as ambiguous.
+- **Mapping (spec §7.4), forward only, under the row's lock (`SELECT … FOR UPDATE`, own transaction), read off the row
+  as it stands (Meta's receipts may be ahead):** ISSUED 0 < QUEUED 1 < HELD / UNKNOWN 2 < accepted 3 < SENT 4 <
+  DELIVERED 5 < READ 6; FAILED only before DELIVERED and final; UNKNOWN only from ISSUED / QUEUED / HELD.
+  - QUEUED → `delivery_status` SENT, `receipt_status` **QUEUED** (new value). **Deviation from §7.4** (`ISSUED`):
+    ISSUED is not "sent", so `InboundMessageHandler`'s check (a card sent during this turn) and the 10-minute "on his
+    screen" check would both send a second card while the platform is still sending the first.
+  - HELD → SENT / HELD, `gateway_hold_id` `held:<heldId>` (the platform excludes linked held rows from held-outcome
+    reports, v2.13, so D-042 never sees them). ACCEPTED → SENT, receipt NULL (= accepted), wamid. DELIVERED / READ →
+    SENT + that receipt. FAILED → FAILED, `delivery_error` / `receipt_status` FAILED, `PLATFORM_<reason>`.
+    UNKNOWN → SENT / UNKNOWN (as D-042: never counted failed, never re-sent).
+  - The coach's tool and `InboundMessageHandler` read the outcome as today: SENT for QUEUED / HELD / ACCEPTED /
+    UNKNOWN / ambiguous (it is on its way or may have arrived), FAILED only for a FAILED answer or a refusal.
+  - A wamid newly linked applies Meta receipts kept for it (`DeliveryReceipts.applyPending`).
+  - A link the platform keeps QUEUED / HELD with no report is looked up by key (QUEUED after 5 min, HELD hourly, for
+    26 h).
+- **Delivery reports:** `POST /api/integration/channel/delivery-status` (`DeliveryStatusController`; the
+  `/api/integration/channel/**` chain opens with the callback key - the platform route's claim key, used as its report
+  key by default). Body per spec §3.5, header `X-Idempotency-Key: delivery:<messageId>:<status>` (scope
+  `PLATFORM_DELIVERY_STATUS` in `tool_idempotency`; same key again = 200 `duplicate`, in progress = 409). Matched by
+  `idempotencyKey` (`login-link:<id>`), else by `platform_message_id`; another kind or no row = 200 `known:false`.
+  Switch `MESSAGING_DELIVERY_STATUS_ENABLED` (default false): off = **404** (the platform retries for 24 h). A report
+  for a row Dad Coach sent itself (state DIRECT) is never applied and logs ERROR
+  `messaging.login_link.platform_after_direct` (a second message is possible: should never happen). A report for any
+  other non-platform row: WARN, not applied.
+- **V47** (additive): `login_link.platform_message_id`, `platform_request`, `platform_state`, `platform_status`,
+  `platform_posts` (default 0), `platform_first_post_at`, `platform_next_at` + two partial indexes.
+- **Threads and connections:** the PLATFORM path runs where the link is asked for (Tomcat, `wa-turn`); the POST waits
+  up to the platform's 8 s + 4 s (`MESSAGING_SEND_READ_TIMEOUT_MS`, 12000; connect 2 s). Its row writes are short
+  `REQUIRES_NEW` transactions, so a link send briefly holds 2 pooled connections (the caller's transaction + one),
+  never across the HTTP call beyond what the caller's transaction already did before D-045. `LoginLinkPlatform` is
+  `@Lazy(false)` (production starts lazily: the reconcile job must run after a restart). D-043 lane table: the job is
+  on the messaging lane; it writes only `login_link` rows in POSTING / AMBIGUOUS / OWNED (conditional, row-locked,
+  forward-only UPDATEs, the same rule `DeliveryReceipts` follows on the housekeeping lane).
+- **Tests:** `LoginLinkPlatformSendTest` (21, integration, fake platform + fake Meta, no real WhatsApp): DIRECT
+  unchanged (no Send API call, columns NULL, timeline report); DIRECT and SHADOW send Meta identical bytes; SHADOW's
+  dry run off the send thread (the send returns while the dry run is blocked), one message, row unchanged; mismatch
+  logs (hold, window); PLATFORM ACCEPTED (bytes committed before the POST - read by another connection during it -,
+  request fields, wamid, no Meta call, no gate call, no D-039 report, the link signs in); HELD / QUEUED (no second card)
+  / FAILED / UNKNOWN mapping; 503 disabled → direct once, with the gate and the D-039 report; 403 → direct + ERROR;
+  422 / first-attempt 409 → FAILED, no re-POST, no Meta; edge 502 → identical re-POSTs, never direct, reconcile 500 then
+  200 → adopted; 504 then lookup 404 → direct exactly once; lookup never answering → UNKNOWN after 1 h, never sent;
+  timeout → no re-POST on the thread, the job's re-POST gets the replay (DELIVERED) and adopts it; 409 after an
+  ambiguous attempt → adopted; never-written only first; staff stays direct; HELD with no report looked up after 1 h;
+  reports forward only with a Meta receipt in between (READ, then a stale DELIVERED and a FAILED change nothing); a
+  report before the sync answer; FAILED report → next request sends a new card; endpoint contract (off 404 then
+  applied, duplicate, by messageId, unknown, 400s, 401s); report for a DIRECT row ignored. `PlatformMessagingUnitTest`
+  (2: switch values; refused / DNS / TLS never written, timeout / reset ambiguous). `SchedulingLanesTest` /
+  `SchedulingLanesOnAppTest` follow the new job (messaging lane).
+- **Rollout** (DEPLOYMENT.md, "Platform Send API for the login link (D-045)"): deploy (DIRECT) → platform enabled for
+  `dad_coach:LOGIN_LINK` + route 1 `DELIVERYREPORTURL` + Dad Coach `MESSAGING_DELIVERY_STATUS_ENABLED=true` → SHADOW
+  for a day → PLATFORM. **Rollback:** `MESSAGING_MODE_LOGIN_LINK=DIRECT` (keep the delivery-status switch on 48 h after
+  the last PLATFORM send), or platform-side `MESSAGING_ENABLED=false` / allow-list without it (every new link then gets
+  503 disabled and goes directly, no Dad Coach change).

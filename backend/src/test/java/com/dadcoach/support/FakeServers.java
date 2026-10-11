@@ -73,6 +73,11 @@ public final class FakeServers {
     private final AtomicReference<Function<Call, Reply>> scheduledTransitions = new AtomicReference<>();
     /** null: the D-039 timeline reports (/messages/inbound, /messages/turn-outcome) are accepted. */
     private final AtomicReference<Function<Call, Reply>> timelineReports = new AtomicReference<>();
+    /** D-045: the platform's Send API ({@code POST /api/v1/worker/messages/send}); default = inert (503 disabled). */
+    private final AtomicReference<Function<Call, Reply>> platformSend = new AtomicReference<>();
+    /** D-045: {@code GET /api/v1/worker/messages?workerKey&idempotencyKey}; default = 404 not found. */
+    private final AtomicReference<Function<Call, Reply>> platformLookup = new AtomicReference<>();
+    private final List<Map<String, String>> lookupQueries = new CopyOnWriteArrayList<>();
     private final List<Timer> timers = new CopyOnWriteArrayList<>();
     private final AtomicInteger triggerIds = new AtomicInteger();
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -99,6 +104,10 @@ public final class FakeServers {
         timers.clear();
         scheduledTransitions.set(null);
         timelineReports.set(null);
+        lookupQueries.clear();
+        platformSend.set(c -> new Reply(503, "{\"error\":\"messaging.disabled\",\"reason\":\"DISABLED\","
+                + "\"message\":\"the platform does not send this message - send it yourself (nothing was created)\"}"));
+        platformLookup.set(c -> new Reply(404, "{\"error\":\"messaging.message_not_found\",\"message\":\"no such message\"}"));
         meta.set(c -> Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"wamid.out." + sent.incrementAndGet() + "\"}]}"));
         turn.set(c -> Reply.json(turnReply("שלום! מה שלומך?", "GENERATED")));
         tenancy.set(c -> c.method().equals("DELETE")
@@ -125,6 +134,25 @@ public final class FakeServers {
 
     public List<Call> googleEventCreates() {
         return calls.stream().filter(c -> c.method().equals("POST") && c.path().startsWith("/google/calendar/")).toList();
+    }
+
+    /** D-045: how the platform's Send API answers ({@code POST /api/v1/worker/messages/send}). */
+    public void onPlatformSend(Function<Call, Reply> answer) {
+        platformSend.set(answer);
+    }
+
+    /** D-045: how the platform answers a lookup by key ({@code GET /api/v1/worker/messages?...}). */
+    public void onPlatformLookup(Function<Call, Reply> answer) {
+        platformLookup.set(answer);
+    }
+
+    public List<Call> platformSends() {
+        return calls.stream().filter(c -> c.path().equals("/api/v1/worker/messages/send")).toList();
+    }
+
+    /** The query of every lookup by key, in order. */
+    public List<Map<String, String>> platformLookups() {
+        return List.copyOf(lookupQueries);
     }
 
     /** The shared number's gate ({@code POST /api/v1/worker/whatsapp/outbound-gate}; default: send). */
@@ -338,6 +366,11 @@ public final class FakeServers {
             reply = turn.get().apply(call);
         } else if (path.equals("/api/v1/worker/whatsapp/outbound-gate")) {
             reply = gate.get().apply(call);
+        } else if (path.equals("/api/v1/worker/messages/send")) {
+            reply = platformSend.get().apply(call);
+        } else if (path.equals("/api/v1/worker/messages") && call.method().equals("GET")) {
+            lookupQueries.add(query(ex));
+            reply = platformLookup.get().apply(call);
         } else if (path.equals("/api/v1/worker/scheduled-transitions")) {
             Function<Call, Reply> override = scheduledTransitions.get();
             reply = override != null ? override.apply(call) : platformTimers(call, query(ex));
