@@ -72,7 +72,10 @@ public class PlatformMessagingClient {
         this.platform = platform;
         this.settings = settings;
         this.json = json;
-        HttpClient http = HttpClient.create().option(ChannelOption.CONNECT_TIMEOUT_MILLIS, settings.connectTimeoutMs());
+        // disableRetry: Reactor Netty would otherwise re-send a request once on a connection closed before the answer -
+        // a hidden second POST; every re-POST here is the caller's decision (review L3)
+        HttpClient http = HttpClient.create().disableRetry(true)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, settings.connectTimeoutMs());
         this.web = WebClient.builder()
                 .baseUrl(platform.getBaseUrl())
                 .defaultHeader("X-API-Key", platform.getApiKey())

@@ -227,7 +227,10 @@ public class LoginLinkPlatform {
             return Snapshot.of(a.body()).isPresent() ? Verdict.OWNED : Verdict.AMBIGUOUS;
         }
         if (s == 503 && PlatformMessagingClient.DISABLED.equals(a.errorCode())) {
-            return Verdict.DIRECT;                    // an existing key is answered before the kill switch (v2.1)
+            // nothing created by THIS request (an existing key is answered before the kill switch, v2.1) - but after an
+            // ambiguous attempt that one may still be in flight on another platform instance (a restart flipping the
+            // switch): only the lookup by key, minutes later, may say "never created" (review M1)
+            return earlierMayExist ? Verdict.AMBIGUOUS : Verdict.DIRECT;
         }
         if (s == 401 || s == 403) {
             return earlierMayExist ? Verdict.AMBIGUOUS : Verdict.DIRECT;   // refused before any handler
@@ -384,7 +387,13 @@ public class LoginLinkPlatform {
                 return false;
             }
             boolean move = forward(row, snap.status());
-            String status = move ? snap.status() : (String) row.get("platform_status");
+            // not moved: an adopted ambiguous link (no platform status yet) still takes the platform's word as its
+            // status, so a QUEUED / HELD one keeps its follow-up lookup (review L1); a stale one never replaces a newer
+            String status = move ? snap.status()
+                    : row.get("platform_status") != null ? (String) row.get("platform_status") : snap.status();
+            if (!move && row.get("platform_status") == null) {
+                jdbc.update("UPDATE login_link SET platform_status = ? WHERE id = ?", status, linkId);
+            }
             Instant next = "QUEUED".equals(status) ? now.plus(settings.reconcileAfter())
                     : "HELD".equals(status) ? now.plus(HELD_POLL) : null;
             // the platform has it: the bytes are no longer needed (they carry the link)
@@ -505,11 +514,11 @@ public class LoginLinkPlatform {
 
     /** One pass; returns how many rows it looked at. */
     public int reconcileDue() {
-        Instant now = clock.instant();
         List<UUID> due = jdbc.queryForList("SELECT id FROM login_link WHERE platform_next_at IS NOT NULL AND platform_next_at <= ? "
-                + "ORDER BY platform_next_at LIMIT " + BATCH, UUID.class, Timestamp.from(now));
+                + "ORDER BY platform_next_at LIMIT " + BATCH, UUID.class, Timestamp.from(clock.instant()));
         int seen = 0;
         for (UUID id : due) {
+            Instant now = clock.instant();      // per row: a slow row before it must not shorten this one's lease
             // claim: another instance (or the next pass) leaves it alone for the lease
             Integer claimed = tx.execute(s -> jdbc.update("UPDATE login_link SET platform_next_at = ? WHERE id = ? "
                     + "AND platform_next_at <= ?", Timestamp.from(now.plus(LEASE)), id, Timestamp.from(now)));

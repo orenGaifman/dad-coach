@@ -120,9 +120,14 @@ Keep: everything in the table above (GOOGLE_* stay).
   `MESSAGING_DELIVERY_STATUS_ENABLED=true` for 48 h after the last PLATFORM send (messages the platform still owns are
   reported). Without a Dad Coach change: platform `MESSAGING_ENABLED=false` or `MESSAGING_ALLOWED_PRODUCTS` without
   `dad_coach:LOGIN_LINK` → every new link gets `503 messaging.disabled` and Dad Coach sends it itself (an ambiguous
-  link still being reconciled is answered by key first and is never sent twice). A **code revert** below D-045 keeps
-  V47 (harmless); run once `UPDATE login_link SET receipt_status = NULL WHERE receipt_status = 'QUEUED';` (the old
-  receipt code does not know QUEUED) and `UPDATE login_link SET platform_request = NULL;` (no link left in the clear).
+  link still being reconciled is never sent twice: after an ambiguous attempt only the lookup by key, minutes later,
+  lets Dad Coach send it itself). A **code revert** below D-045: first set `MESSAGING_MODE_LOGIN_LINK=DIRECT` and wait
+  until `SELECT count(*) FROM login_link WHERE platform_state IN ('POSTING','AMBIGUOUS')` is 0 (at most 1 h after the
+  last PLATFORM send: the reconcile job adopts, sends directly on "not found", or gives up as UNKNOWN) - reverted code
+  would leave those links unresolved. Then revert; V47 stays (harmless); run once
+  `UPDATE login_link SET receipt_status = NULL WHERE receipt_status = 'QUEUED';` (the old receipt code does not know
+  QUEUED) and `UPDATE login_link SET platform_request = NULL;` (no link left in the clear). While D-045 is deployed the
+  reconcile job costs one indexed `SELECT` a minute even in DIRECT (`platform_next_at`, partial index - empty in DIRECT).
 - **Tests:** `cd backend && ./mvnw test` (Docker needed).
 
 

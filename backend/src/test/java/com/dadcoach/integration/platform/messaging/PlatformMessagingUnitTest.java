@@ -29,6 +29,16 @@ class PlatformMessagingUnitTest {
                 .isEqualTo(Mode.DIRECT);
     }
 
+    @Test
+    void theReconcileWaitIsNeverBelowFiveMinutes() {
+        var settings = new MessagingSettings("PLATFORM", false, java.time.Duration.ofSeconds(30), 2000, 12000);
+        assertThat(settings.reconcileAfter()).isEqualTo(java.time.Duration.ofMinutes(5));
+        settings.setReconcileAfter(java.time.Duration.ofMinutes(1));
+        assertThat(settings.reconcileAfter()).isEqualTo(java.time.Duration.ofMinutes(5));
+        settings.setReconcileAfter(java.time.Duration.ofMinutes(10));
+        assertThat(settings.reconcileAfter()).isEqualTo(java.time.Duration.ofMinutes(10));
+    }
+
     private static WebClientRequestException request(Throwable cause) {
         return new WebClientRequestException(cause, HttpMethod.POST, java.net.URI.create("https://p.test/x"), new HttpHeaders());
     }

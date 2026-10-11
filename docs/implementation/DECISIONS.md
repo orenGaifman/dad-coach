@@ -721,10 +721,11 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   | Answer | Row | Sent directly? |
   |---|---|---|
   | 200/202 with a status | §7.4 below; `platform_message_id`; state OWNED; bytes cleared | no |
-  | 503 with body `messaging.disabled` (the platform answers an existing key before its kill switch, v2.1) | state DIRECT, today's send, today's D-039 report | **yes** |
+  | 503 with body `messaging.disabled` on the **first** attempt (the platform answers an existing key before its kill switch, v2.1) | state DIRECT, today's send, today's D-039 report | **yes** |
+  | 503 `messaging.disabled` **after an ambiguous attempt** (review M1: that attempt may still be in flight on another platform instance while a restart flips the switch) | stays AMBIGUOUS; only the lookup by key decides | not until the lookup says 404 |
   | 401/403 (refused before any handler), first attempt | same, + ERROR `messaging.platform_auth_failed` | **yes** |
   | connection refused / DNS / TLS (never written), or no platform configured, first attempt | same | **yes** |
-  | 400/422 | FAILED `PLATFORM_<error>[_<reason>]` (e.g. `PLATFORM_TEMPLATE_UNUSABLE_NOT_FOUND`), ERROR log, state REFUSED | no - the request is wrong |
+  | 400/422, on **any** attempt | FAILED `PLATFORM_<error>[_<reason>]` (e.g. `PLATFORM_TEMPLATE_UNUSABLE_NOT_FOUND`), ERROR log, state REFUSED | no - the request is wrong |
   | 409 `idempotency_conflict` on the first attempt | FAILED `PLATFORM_KEY_CONFLICT`, ERROR | no |
   | 409 `idempotency_conflict` after an ambiguous attempt | **adopted** (the body carries the message's state), WARN `messaging.platform_conflict_adopted` | no |
   | timeout, 5xx, an edge's 502/503/504 without the body code, connection lost after write, 404, 429, an unreadable 2xx | state AMBIGUOUS, row SENT / `receipt_status` QUEUED ("on its way") | **never** |
@@ -736,8 +737,15 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
     **404 with `messaging.message_not_found`** = nothing was created (the platform commits before any answer) → sent
     directly, if the link is still unrevoked and unexpired (else FAILED `PLATFORM_NOT_CREATED_LINK_ENDED`); anything
     else = ask again every 5 min; after 1 h = GAVE_UP, `receipt_status` UNKNOWN, `PLATFORM_RECONCILE_GAVE_UP`, never sent.
-    A re-POST that is refused, never written or 401/403 after an ambiguous attempt stays ambiguous (the first one may
-    have been created). Claims: `platform_next_at` moved by one conditional UPDATE (lease 2 min) before a row is worked.
+    A re-POST that is never written, 401/403 or 503 `messaging.disabled` after an ambiguous attempt stays ambiguous
+    (the first one may have been created). A 400/422 is FAILED on any attempt: the platform answers an existing key
+    (200 replay / 409) **before** its kill switch, rate limit and template checks (v2.1), so a 422 on a re-POST means
+    no message exists for the key, and the bytes are the same, so the request is wrong whichever attempt it is (a 400
+    is the shape check: identical bytes cannot pass it once and fail it later). Claims: `platform_next_at` moved by
+    one conditional UPDATE (lease 2 min, from the time each row is taken, not the pass's start) before a row is
+    worked. `MESSAGING_RECONCILE_AFTER` is never below 5 min (clamped, WARN `messaging.reconcile_after_clamped`): "not
+    found" proves nothing only when no request can still be in flight. The Send API client has Reactor Netty's
+    automatic retry off (`disableRetry`): no hidden second POST. The job's idle cost is one indexed `SELECT` a minute.
   - A POST in flight belongs to the sending thread for 2 minutes (`platform_next_at` = lease); a thread that died
     leaves the row POSTING, and the job then treats it as ambiguous.
 - **Mapping (spec §7.4), forward only, under the row's lock (`SELECT … FOR UPDATE`, own transaction), read off the row
@@ -754,7 +762,8 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
     UNKNOWN / ambiguous (it is on its way or may have arrived), FAILED only for a FAILED answer or a refusal.
   - A wamid newly linked applies Meta receipts kept for it (`DeliveryReceipts.applyPending`).
   - A link the platform keeps QUEUED / HELD with no report is looked up by key (QUEUED after 5 min, HELD hourly, for
-    26 h).
+    26 h) - also when the platform's QUEUED / HELD did not move the row (an ambiguous link already reading SENT /
+    QUEUED): its status is still recorded and the lookup still scheduled (review L1).
 - **Delivery reports:** `POST /api/integration/channel/delivery-status` (`DeliveryStatusController`; the
   `/api/integration/channel/**` chain opens with the callback key - the platform route's claim key, used as its report
   key by default). Body per spec §3.5, header `X-Idempotency-Key: delivery:<messageId>:<status>` (scope
@@ -773,7 +782,11 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   `@Lazy(false)` (production starts lazily: the reconcile job must run after a restart). D-043 lane table: the job is
   on the messaging lane; it writes only `login_link` rows in POSTING / AMBIGUOUS / OWNED (conditional, row-locked,
   forward-only UPDATEs, the same rule `DeliveryReceipts` follows on the housekeeping lane).
-- **Tests:** `LoginLinkPlatformSendTest` (21, integration, fake platform + fake Meta, no real WhatsApp): DIRECT
+- **Review (independent, `a0523ff`: APPROVE WITH NITS) - fixed in the follow-up commit:** M1 (503 disabled after an
+  ambiguous attempt is ambiguous), L1 (QUEUED / HELD without a move keeps the lookup), L2 (this wording), L3
+  (`disableRetry`, 5-min floor, claim per row), L4 (DEPLOYMENT.md rollback waits for open rows). Every test checks
+  that no log line of the application carries the link (`token=`, `auth/consume`).
+- **Tests:** `LoginLinkPlatformSendTest` (24 after the review, integration, fake platform + fake Meta, no real WhatsApp): DIRECT
   unchanged (no Send API call, columns NULL, timeline report); DIRECT and SHADOW send Meta identical bytes; SHADOW's
   dry run off the send thread (the send returns while the dry run is blocked), one message, row unchanged; mismatch
   logs (hold, window); PLATFORM ACCEPTED (bytes committed before the POST - read by another connection during it -,

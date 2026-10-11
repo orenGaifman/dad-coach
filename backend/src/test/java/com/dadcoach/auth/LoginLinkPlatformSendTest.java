@@ -57,6 +57,9 @@ class LoginLinkPlatformSendTest extends AbstractIntegrationTest {
 
     private ListAppender<ILoggingEvent> logs;
     private Logger platformLog;
+    /** Every log line of the whole application during the test (review: the sign-in link never reaches a log). */
+    private ListAppender<ILoggingEvent> allLogs;
+    private Logger rootLog;
 
     @BeforeEach
     void setUp() {
@@ -65,11 +68,28 @@ class LoginLinkPlatformSendTest extends AbstractIntegrationTest {
         logs = new ListAppender<>();
         logs.start();
         platformLog.addAppender(logs);
+        rootLog = (Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+        allLogs = new ListAppender<>();
+        allLogs.start();
+        rootLog.addAppender(allLogs);
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws InterruptedException {
+        for (int i = 0; i < 100 && !platform.shadowIdle(); i++) {
+            Thread.sleep(50);
+        }
         platformLog.detachAppender(logs);
+        rootLog.detachAppender(allLogs);
+        List<ILoggingEvent> lines;
+        synchronized (allLogs) {
+            lines = List.copyOf(allLogs.list);
+        }
+        for (ILoggingEvent e : lines) {
+            String line = e.getFormattedMessage() + " " + (e.getKeyValuePairs() == null ? "" : e.getKeyValuePairs())
+                    + " " + (e.getThrowableProxy() == null ? "" : e.getThrowableProxy().getMessage());
+            assertThat(line).as("no sign-in link in any log line").doesNotContain("token=").doesNotContain("auth/consume");
+        }
     }
 
     // ------------------------------------------------------------------------------------------------- helpers
@@ -602,6 +622,11 @@ class LoginLinkPlatformSendTest extends AbstractIntegrationTest {
                 "ConnectException", null);
         assertThat(LoginLinkPlatform.verdict(never, false)).isEqualTo(LoginLinkPlatform.Verdict.DIRECT);
         assertThat(LoginLinkPlatform.verdict(never, true)).isEqualTo(LoginLinkPlatform.Verdict.AMBIGUOUS);
+        var disabled = new com.dadcoach.integration.platform.messaging.PlatformMessagingClient.Answer(
+                com.dadcoach.integration.platform.messaging.PlatformMessagingClient.Kind.ANSWERED, 503,
+                json.createObjectNode().put("error", "messaging.disabled"), null, null);
+        assertThat(LoginLinkPlatform.verdict(disabled, false)).isEqualTo(LoginLinkPlatform.Verdict.DIRECT);
+        assertThat(LoginLinkPlatform.verdict(disabled, true)).as("review M1").isEqualTo(LoginLinkPlatform.Verdict.AMBIGUOUS);
         assertThat(platform.sends(new SignInSubject(null, UUID.randomUUID()))).as("staff links stay direct").isFalse();
     }
 
@@ -620,6 +645,81 @@ class LoginLinkPlatformSendTest extends AbstractIntegrationTest {
         assertThat(platform.reconcileDue()).isEqualTo(1);
         assertThat(link(f)).containsEntry("receipt_status", null).containsEntry("provider_message_id", WAMID)
                 .containsEntry("platform_status", "ACCEPTED").containsEntry("platform_next_at", null);
+    }
+
+    @Test
+    @DisplayName("Review M1: an ambiguous POST, then 503 messaging.disabled on the re-POST - never direct until the lookup says not found")
+    void disabledAfterAmbiguousWaitsForTheLookup() {
+        messaging.setLoginLink(Mode.PLATFORM);
+        Father f = father("+19995550827");
+        List<Reply> replies = new ArrayList<>(List.of(EDGE_502));
+        Reply disabled = new Reply(503, "{\"error\":\"messaging.disabled\",\"reason\":\"DISABLED\"}");
+        fake.onPlatformSend(c -> replies.isEmpty() ? disabled : replies.remove(0));
+
+        assertThat(links.sendTo(f.getPhone())).isEqualTo(LoginLinkService.SendOutcome.SENT);
+        assertThat(fake.platformSends()).hasSize(2);
+        assertThat(fake.metaSends()).as("the first POST may still be in flight on another instance").isEmpty();
+        assertThat(link(f)).containsEntry("platform_state", "AMBIGUOUS");
+
+        clock.advance(Duration.ofMinutes(1));
+        platform.reconcileDue();
+        assertThat(fake.platformSends()).hasSize(3);
+        assertThat(fake.metaSends()).isEmpty();
+        assertThat(link(f)).containsEntry("platform_state", "AMBIGUOUS");
+
+        clock.advance(Duration.ofMinutes(4));
+        assertThat(platform.reconcileDue()).isEqualTo(1);       // the lookup: 404 not found = never created
+        assertThat(fake.platformLookups()).hasSize(1);
+        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(link(f)).containsEntry("platform_state", "DIRECT").containsEntry("delivery_status", "SENT");
+        clock.advance(Duration.ofMinutes(10));
+        platform.reconcileDue();
+        assertThat(fake.metaSends()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Review L1: an ambiguous link adopted as QUEUED keeps its follow-up lookup until the platform says more")
+    void adoptedQueuedKeepsItsLookup() {
+        messaging.setLoginLink(Mode.PLATFORM);
+        Father f = father("+19995550828");
+        String messageId = UUID.randomUUID().toString();
+        List<Reply> replies = new ArrayList<>(List.of(EDGE_502, answer(202, messageId, "QUEUED", null, null, null)));
+        fake.onPlatformSend(c -> replies.remove(0));
+        links.sendTo(f.getPhone());
+        assertThat(link(f)).containsEntry("platform_state", "OWNED").containsEntry("platform_status", "QUEUED")
+                .containsEntry("receipt_status", "QUEUED").containsEntry("platform_message_id", messageId);
+        assertThat(link(f).get("platform_next_at")).as("looked up if no report comes").isNotNull();
+
+        clock.advance(Duration.ofMinutes(5));
+        fake.onPlatformLookup(c -> answer(200, messageId, "QUEUED", null, null, null));
+        assertThat(platform.reconcileDue()).isEqualTo(1);
+        assertThat(link(f).get("platform_next_at")).as("still queued: looked up again").isNotNull();
+
+        clock.advance(Duration.ofMinutes(5));
+        fake.onPlatformLookup(c -> accepted(messageId));
+        assertThat(platform.reconcileDue()).isEqualTo(1);
+        assertThat(link(f)).containsEntry("platform_status", "ACCEPTED").containsEntry("provider_message_id", WAMID)
+                .containsEntry("platform_next_at", null);
+        assertThat(fake.metaSends()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Review L1: the lookup of an ambiguous link answering QUEUED adopts it and keeps looking")
+    void reconcileAnsweringQueuedKeepsLooking() {
+        messaging.setLoginLink(Mode.PLATFORM);
+        Father f = father("+19995550829");
+        String messageId = UUID.randomUUID().toString();
+        fake.onPlatformSend(c -> EDGE_502);
+        links.sendTo(f.getPhone());
+        clock.advance(Duration.ofMinutes(1));
+        platform.reconcileDue();
+        clock.advance(Duration.ofMinutes(5));
+        fake.onPlatformLookup(c -> answer(200, messageId, "QUEUED", null, null, null));
+        assertThat(platform.reconcileDue()).isEqualTo(1);
+        assertThat(link(f)).containsEntry("platform_state", "OWNED").containsEntry("platform_status", "QUEUED")
+                .containsEntry("platform_request", null);
+        assertThat(link(f).get("platform_next_at")).isNotNull();
+        assertThat(fake.metaSends()).isEmpty();
     }
 
     // ------------------------------------------------------------------------------------------------- reports

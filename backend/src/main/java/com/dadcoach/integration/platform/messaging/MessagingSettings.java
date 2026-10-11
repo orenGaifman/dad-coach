@@ -33,6 +33,7 @@ public class MessagingSettings {
     public enum Mode { DIRECT, SHADOW, PLATFORM }
 
     public static final String LOGIN_LINK = "LOGIN_LINK";
+    public static final Duration MIN_RECONCILE_AFTER = Duration.ofMinutes(5);
 
     private volatile Mode loginLink;
     private volatile boolean deliveryStatusEnabled;
@@ -47,7 +48,7 @@ public class MessagingSettings {
                              @Value("${dad-coach.messaging.send-read-timeout-ms:12000}") int readTimeoutMs) {
         this.loginLink = parse(LOGIN_LINK, loginLink);
         this.deliveryStatusEnabled = deliveryStatusEnabled;
-        this.reconcileAfter = reconcileAfter;
+        this.reconcileAfter = atLeastMinimum(reconcileAfter);
         this.connectTimeoutMs = connectTimeoutMs;
         this.readTimeoutMs = readTimeoutMs;
     }
@@ -96,7 +97,20 @@ public class MessagingSettings {
     }
 
     public void setReconcileAfter(Duration reconcileAfter) {
-        this.reconcileAfter = reconcileAfter;
+        this.reconcileAfter = atLeastMinimum(reconcileAfter);
+    }
+
+    /**
+     * Never below 5 minutes (review L3): "not found" proves nothing was created only when no request can still be in
+     * flight on the platform (its wait is at most 12 s, its request timeout 30 s) - spec v2.5.
+     */
+    static Duration atLeastMinimum(Duration reconcileAfter) {
+        if (reconcileAfter == null || reconcileAfter.compareTo(MIN_RECONCILE_AFTER) < 0) {
+            log.atWarn().setMessage("messaging.reconcile_after_clamped").addKeyValue("value", reconcileAfter)
+                    .addKeyValue("using", MIN_RECONCILE_AFTER).log();
+            return MIN_RECONCILE_AFTER;
+        }
+        return reconcileAfter;
     }
 
     public void setReadTimeoutMs(int readTimeoutMs) {
