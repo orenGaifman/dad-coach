@@ -170,7 +170,8 @@ public class LoginLinkPlatform implements PlatformSendFlow.Ledger {
                 error == null ? null : PlatformSendFlow.cut(error, 200), r.isHeld() ? r.providerMessageId() : null,
                 r.isHeld() ? LoginLink.HELD : null, r.metaMessageId(), linkId));
         if (r.metaMessageId() != null && receiptsEnabled) {
-            receipts.applyPending(r.metaMessageId());
+            // committed on its own, as the row above (D-052): this runs inside the caller's transaction (LoginLinkService)
+            tx.executeWithoutResult(s -> receipts.applyPending(r.metaMessageId()));
         }
         LoginLinkService.reportCard(timeline.getIfAvailable(), fathers, subject, linkId, sent, turnCorrelationId);
         log.atInfo().setMessage("messaging.login_link.sent_directly").addKeyValue("linkId", linkId)

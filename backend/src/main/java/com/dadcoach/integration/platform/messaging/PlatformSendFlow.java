@@ -425,7 +425,9 @@ public class PlatformSendFlow {
                     .addKeyValue("messageId", snap.messageId()).addKeyValue("status", snap.status())
                     .addKeyValue("reason", snap.reason()).addKeyValue("source", source).log();
             if (snap.providerMessageId() != null && receiptsEnabled) {
-                receipts.applyPending(snap.providerMessageId());   // Meta's receipts that beat the platform's word
+                // Meta's receipts that beat the platform's word - committed on their own (D-052): never in a caller's
+                // transaction (the sync answer runs inside LoginLinkService's, a tool's), whose rollback would lose them
+                tx.executeWithoutResult(s -> receipts.applyPending(snap.providerMessageId()));
             }
         }
         return Boolean.TRUE.equals(moved);

@@ -20,6 +20,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Meta's status receipts for the messages Dad Coach records (D-038, DC-B2): a scheduled coach message
@@ -77,17 +79,34 @@ public class DeliveryReceipts {
         this.heldReports = heldReports;
     }
 
-    /** Applies one receipt; returns how many recorded messages it moved (0: unknown wamid, stale or ignored). */
+    /**
+     * Applies one receipt; returns how many recorded messages it moved (0: unknown wamid, stale or ignored).
+     *
+     * <p>D-052: the row holding the wamid may be committed by another thread (the send's answer, a platform report, a
+     * held outcome) between this receipt's UPDATE - which then found nothing - and its look for the row, and that thread's
+     * {@link #applyPending} found nothing kept yet. So: a row there now gets the move again (decisive now, forward only);
+     * no row yet - the receipt is kept FIRST and the row looked for once more, so a commit on either side of that look is
+     * covered (before it: replayed here; after it: the committer's {@code applyPending} finds it kept).</p>
+     */
     @Transactional
     public int apply(StatusUpdateDto receipt) {
         int moved = move(receipt);
         // D-042: with GATEWAY_HELD_REPORTS on, a receipt of any status is kept; off, only "failed" (as before D-042)
         boolean keepable = heldReports.isEnabled() ? statusOfReceipt(receipt) != null
                 : "failed".equalsIgnoreCase(receipt.status());
-        if (moved == 0 && keepable && receipt.providerMessageId() != null
-                && !receipt.providerMessageId().startsWith(SharedNumberGate.HELD_PREFIX)
-                && !recorded(receipt.providerMessageId())) {
-            remember(receipt);
+        String wamid = receipt.providerMessageId();
+        if (moved == 0 && keepable && wamid != null && !wamid.startsWith(SharedNumberGate.HELD_PREFIX)) {
+            if (recorded(wamid)) {
+                moved = move(receipt);
+            } else {
+                remember(receipt);
+                if (recorded(wamid)) {
+                    moved = takeAndReplay(wamid);      // the receipts kept for it, this one included
+                    if (moved == 0) {
+                        moved = move(receipt);         // not kept (memory full) or stale: forward only either way
+                    }
+                }
+            }
         }
         return moved;
     }
@@ -119,15 +138,48 @@ public class DeliveryReceipts {
 
     /**
      * D-042: applies at once the receipts kept for a wamid that now has its row (a held message the gateway sent: its
-     * receipts can beat the report). Returns how many moves they made.
+     * receipts can beat the report). Returns how many moves they made. Joins the caller's transaction - the caller whose
+     * own write links the wamid in that same transaction ({@code HeldOutcomes}) needs it; a caller whose write is already
+     * committed runs it in a transaction of its own (D-052). D-052: should that transaction not commit, the receipts are
+     * kept again (the platform's retry or the next 15-second pass applies them) - taken out of memory, they would
+     * otherwise be lost with it.
      */
     @Transactional
     public int applyPending(String wamid) {
+        return takeAndReplay(wamid);
+    }
+
+    private int takeAndReplay(String wamid) {
         Pending kept = wamid == null ? null : pending.remove(wamid);
         if (kept == null) {
             return 0;
         }
+        keepAgainUnlessCommitted(wamid, kept);
         return replay(kept);
+    }
+
+    /** D-052: the kept receipts go back to memory when the transaction that applied them does not commit. */
+    private void keepAgainUnlessCommitted(String wamid, Pending kept) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;   // no transaction: each move commits on its own
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_COMMITTED) {
+                    return;
+                }
+                // memory only (no write joins the finished transaction); a newer receipt kept meanwhile wins per status
+                pending.merge(wamid, kept, (now, old) -> {
+                    Map<DeliveryStatus, StatusUpdateDto> receipts = new java.util.EnumMap<>(DeliveryStatus.class);
+                    receipts.putAll(old.receipts());
+                    receipts.putAll(now.receipts());
+                    return new Pending(receipts, now.until().isAfter(old.until()) ? now.until() : old.until());
+                });
+                log.atWarn().setMessage("whatsapp.receipt.kept_again").addKeyValue("status", status == STATUS_ROLLED_BACK
+                        ? "ROLLED_BACK" : "UNKNOWN").log();
+            }
+        });
     }
 
     /**
@@ -144,8 +196,10 @@ public class DeliveryReceipts {
             }
             try {
                 if (!heldReports.isEnabled()) {
-                    // as before D-042: re-apply, drop once it moved or its row exists
-                    if (replay(e.getValue()) > 0 || recorded(e.getKey())) {
+                    // as before D-042: re-apply, drop once it moved or its row exists. D-052: the row is looked for
+                    // BEFORE the re-apply - a row committed while it ran was not seen by it, so it stays for the next pass
+                    boolean rowThere = recorded(e.getKey());
+                    if (replay(e.getValue()) > 0 || rowThere) {
                         pending.remove(e.getKey(), e.getValue());
                     }
                 } else if (recorded(e.getKey()) && pending.remove(e.getKey(), e.getValue())) {
