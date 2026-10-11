@@ -320,6 +320,22 @@ class LoginLinkPlatformSendTest extends AbstractIntegrationTest {
         assertThat(fake.metaSends()).hasSize(1);
     }
 
+    @Test
+    @DisplayName("SHADOW (review M2): the platform would refuse the request (422) while Dad Coach's send went out - a mismatch, not a match")
+    void shadowRefusalIsAMismatch() throws Exception {
+        messaging.setLoginLink(Mode.SHADOW);
+        Father f = father("+19995550840");
+        fake.onPlatformSend(c -> new Reply(422, "{\"error\":\"messaging.template_unusable\",\"template\":\"x\",\"reason\":\"NOT_FOUND\"}"));
+        links.sendTo(f.getPhone());
+        awaitShadow();
+        ILoggingEvent refused = event("messaging.shadow.mismatch");
+        assertThat(kv(refused, "field")).isEqualTo("refused");
+        assertThat(kv(refused, "code")).isEqualTo("PLATFORM_TEMPLATE_UNUSABLE_NOT_FOUND");
+        assertThat(kv(refused, "product")).isEqualTo("SEND");
+        assertThat(logged("messaging.shadow.match")).isFalse();
+        assertThat(fake.metaSends()).hasSize(1);
+    }
+
     // ------------------------------------------------------------------------------------------------- PLATFORM
 
     @Test

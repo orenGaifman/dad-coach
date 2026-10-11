@@ -130,6 +130,13 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
         this.receiptsEnabled = receiptsEnabled;
     }
 
+    /** Tests only: the next requests fail to build (review N1). */
+    private volatile RuntimeException requestFault;
+
+    void setRequestFaultForTests(RuntimeException fault) {
+        this.requestFault = fault;
+    }
+
     public boolean sends() {
         return settings.scheduled() == Mode.PLATFORM;
     }
@@ -148,8 +155,20 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
                                                             ScheduledResponseRequest request, String content,
                                                             List<OutboundMessageDto.ReplyButton> offered,
                                                             Supplier<ScheduledResponseResult> direct) {
-        String body = request(father, delivery.getIdempotencyKey(), request.triggerId(), request.targetStateKey(), content,
-                offered, ownTemplate(father, request.targetStateKey()), false);
+        String body;
+        try {
+            RuntimeException fault = requestFault;
+            if (fault != null) {
+                throw fault;
+            }
+            body = request(father, delivery.getIdempotencyKey(), request.triggerId(), request.targetStateKey(), content,
+                    offered, ownTemplate(father, request.targetStateKey()), false);
+        } catch (RuntimeException e) {
+            // nothing was posted (review N1): the platform cannot have it - today's send, today's answer
+            log.atError().setMessage("messaging.scheduled.request_failed").addKeyValue("deliveryId", delivery.getId())
+                    .addKeyValue("error", e.getClass().getSimpleName()).log();
+            return ScheduledResponseDeliveryService.CallbackAnswer.of(direct.get());
+        }
         Settled<ScheduledResponseResult> s = flow.send(this, delivery.getId(), body, () -> { }, direct);
         if (s.verdict() == PlatformSendFlow.Verdict.DIRECT && s.direct() != null) {
             ScheduledResponseResult today = s.direct();
@@ -182,10 +201,11 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
             return;
         }
         try {
-            String body = request(father, delivery.getIdempotencyKey(), request.triggerId(), request.targetStateKey(),
-                    content, offered, ownTemplate(father, request.targetStateKey()), true);
             DeliveryResult r = outcome.result();
-            flow.shadow(MessagingSettings.SCHEDULED, log, "deliveryId", delivery.getId(), body,
+            // the request (a template lookup, the window hint) is built on the shadow lane, not the callback's (review N3)
+            flow.shadow(MessagingSettings.SCHEDULED, log, "deliveryId", delivery.getId(),
+                    () -> request(father, delivery.getIdempotencyKey(), request.triggerId(), request.targetStateKey(),
+                            content, offered, ownTemplate(father, request.targetStateKey()), true),
                     new PlatformSendFlow.ShadowFacts(r.isSuccessful(), r.isHeld(), r.failureReason(),
                             outcome.mode() == ProactiveSender.Mode.TEMPLATE ? outcome.template() : null));
         } catch (RuntimeException e) {

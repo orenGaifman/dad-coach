@@ -90,13 +90,13 @@ public class BeltPromotionPlatform {
                 // not tried by Dad Coach (window closed) = FAIL; the platform's SESSION_ONLY says the same then
                 boolean sent = Boolean.TRUE.equals(imageSent);
                 flow.shadow(MessagingSettings.BELT_PROMOTION, log, "key", base + ":image",
-                        imageRequest(father, base + ":image", imageUrl, caption, true),
+                        () -> imageRequest(father, base + ":image", imageUrl, caption, true),
                         new PlatformSendFlow.ShadowFacts(sent, false, imageSent == null ? "WINDOW_CLOSED" : sent ? null
                                 : "IMAGE_REFUSED", null));
             }
             var r = outcome.result();
             flow.shadow(MessagingSettings.BELT_PROMOTION, log, "key", base + ":text",
-                    textRequest(father, belt, base + ":text", text, true),
+                    () -> textRequest(father, belt, base + ":text", text, true),
                     new PlatformSendFlow.ShadowFacts(r.isSuccessful(), r.isHeld(), r.failureReason(),
                             outcome.mode() == ProactiveSender.Mode.TEMPLATE ? outcome.template() : null));
         } catch (RuntimeException e) {

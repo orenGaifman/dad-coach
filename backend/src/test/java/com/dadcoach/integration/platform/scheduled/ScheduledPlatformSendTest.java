@@ -267,6 +267,72 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
         assertThat(kv(mismatch, "kind")).isEqualTo("SCHEDULED");
     }
 
+    @Test
+    @DisplayName("SHADOW (review M2): a platform refusal (422 / 400) while Dad Coach's send went out is a mismatch; "
+            + "when Dad Coach's send failed too it is a match")
+    void shadowRefusalIsAMismatch() throws Exception {
+        messaging.setScheduled(Mode.SHADOW);
+        fake.onPlatformSend(c -> new Reply(422, "{\"error\":\"messaging.template_unusable\",\"template\":\"x\",\"reason\":\"NOT_FOUND\"}"));
+        callback("t-sr", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!");
+        awaitShadow();
+        ILoggingEvent refused = event("messaging.shadow.mismatch");
+        assertThat(kv(refused, "field")).isEqualTo("refused");
+        assertThat(kv(refused, "code")).isEqualTo("PLATFORM_TEMPLATE_UNUSABLE_NOT_FOUND");
+        assertThat(kv(refused, "kind")).isEqualTo("SCHEDULED");
+        assertThat(logged("messaging.shadow.match")).isFalse();
+
+        logs.list.clear();
+        fake.reset();
+        fake.onPlatformSend(c -> new Reply(400, "{\"error\":\"messaging.invalid_request\",\"field\":\"content.text\"}"));
+        fake.onMetaSend(c -> new Reply(400, "{\"error\":{\"code\":131026,\"message\":\"Message undeliverable\"}}"));
+        callback("t-sr2", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!");
+        awaitShadow();
+        assertThat(logged("messaging.shadow.mismatch")).as("both refuse it").isFalse();
+        assertThat(logged("messaging.shadow.match")).isTrue();
+    }
+
+    @Test
+    @DisplayName("SHADOW lanes per kind (review N3): a SCHEDULED burst that fills its lane drops (counted, logged) only "
+            + "SCHEDULED comparisons; a LOGIN_LINK comparison still runs")
+    void shadowLanesArePerKind() throws Exception {
+        org.slf4j.Logger testLog = LoggerFactory.getLogger("shadow-lanes-test");
+        ListAppender<ILoggingEvent> lanes = new ListAppender<>();
+        lanes.start();
+        ((Logger) testLog).addAppender(lanes);
+        CountDownLatch release = new CountDownLatch(1);
+        fake.onPlatformSend(c -> Reply.json("{\"wouldBe\":\"SEND\",\"channelWindow\":\"SESSION\",\"template\":null}"));
+        PlatformSendFlow.ShadowFacts sent = new PlatformSendFlow.ShadowFacts(true, false, null, null);
+        long droppedBefore = flow.shadowDropped("SCHEDULED");
+        try {
+            flow.shadow("SCHEDULED", testLog, "id", "blocker", () -> {
+                try {
+                    release.await(10, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return "{}";
+            }, sent);
+            for (int i = 0; i < 105; i++) {
+                flow.shadow("SCHEDULED", testLog, "id", "burst-" + i, () -> "{}", sent);
+            }
+            assertThat(flow.shadowDropped("SCHEDULED") - droppedBefore).as("the burst beyond the queue is dropped")
+                    .isGreaterThanOrEqualTo(5);
+            flow.shadow("LOGIN_LINK", testLog, "id", "link", () -> "{\"kind\":\"LOGIN_LINK\"}", sent);
+            for (int i = 0; i < 100 && lanes.list.stream().noneMatch(e -> "messaging.shadow.match".equals(e.getMessage())
+                    && "LOGIN_LINK".equals(kv(e, "kind"))); i++) {
+                Thread.sleep(50);
+            }
+            assertThat(lanes.list).as("the link's comparison ran while the SCHEDULED lane was stuck")
+                    .anyMatch(e -> "messaging.shadow.match".equals(e.getMessage()) && "LOGIN_LINK".equals(kv(e, "kind")));
+        } finally {
+            release.countDown();
+            for (int i = 0; i < 200 && !flow.shadowIdle(); i++) {
+                Thread.sleep(50);
+            }
+            ((Logger) testLog).detachAppender(lanes);
+        }
+    }
+
     // ------------------------------------------------------------------------------------------------- PLATFORM
 
     @Test
@@ -430,6 +496,64 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
         assertThat(row("t-unknown")).containsEntry("status", "UNKNOWN")
                 .containsEntry("failure_reason", "PLATFORM_SEND_UNKNOWN_TIMEOUT");
         assertThat(fake.metaSends()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("PLATFORM, the request cannot be built (review N1): nothing posted, sent today's way with today's answer")
+    void requestFailureSendsDirect() throws Exception {
+        messaging.setScheduled(Mode.PLATFORM);
+        platform.setRequestFaultForTests(new IllegalStateException("broken"));
+        try {
+            JsonNode a = answer(callback("t-nobody", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!"));
+            assertThat(a.path("status").asText()).isEqualTo("DELIVERED");
+            assertThat(fake.platformSends()).isEmpty();
+            assertThat(fake.metaSends()).hasSize(1);
+            assertThat(row("t-nobody")).containsEntry("status", "ACCEPTED").containsEntry("platform_state", null)
+                    .containsEntry("platform_request", null);
+            assertThat(logged("messaging.scheduled.request_failed")).isTrue();
+        } finally {
+            platform.setRequestFaultForTests(null);
+        }
+    }
+
+    @Test
+    @DisplayName("PLATFORM (review N2): the platform's callback retry while the first /send is still in flight answers "
+            + "SENDING and sends nothing")
+    void retryWhileTheFirstSendIsInFlight() throws Exception {
+        messaging.setScheduled(Mode.PLATFORM);
+        String messageId = UUID.randomUUID().toString();
+        CountDownLatch inFlight = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        fake.onPlatformSend(c -> {
+            inFlight.countDown();
+            try {
+                release.await(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return accepted(messageId);
+        });
+        java.util.concurrent.ExecutorService first = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            java.util.concurrent.Future<MvcResult> firstCallback = first.submit(
+                    () -> callback("t-race", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!"));
+            assertThat(inFlight.await(10, TimeUnit.SECONDS)).isTrue();
+
+            JsonNode retry = answer(callback("t-race", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!"));
+            assertThat(retry.path("status").asText()).isEqualTo("SENDING");
+            assertThat(retry.path("detail").asText()).isEqualTo("Delivery already in progress");
+            assertThat(fake.platformSends()).hasSize(1);
+
+            release.countDown();
+            assertThat(answerText(firstCallback.get(15, TimeUnit.SECONDS)))
+                    .isEqualTo("{\"platformMessageId\":\"" + messageId + "\"}");
+        } finally {
+            release.countDown();
+            first.shutdownNow();
+        }
+        assertThat(fake.platformSends()).as("never a second request").hasSize(1);
+        assertThat(fake.metaSends()).isEmpty();
+        assertThat(row("t-race")).containsEntry("status", "ACCEPTED").containsEntry("platform_posts", 1);
     }
 
     @Test

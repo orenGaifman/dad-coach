@@ -142,14 +142,17 @@ Keep: everything in the table above (GOOGLE_* stay).
      `MESSAGING_ALLOWED_PRODUCTS=dad_coach:LOGIN_LINK,dad_coach:SCHEDULED` (restart).
   3. **Dad Coach** `MESSAGING_MODE_SCHEDULED=SHADOW` ≥ 24 h (a day of mornings, timers and daily checks). Watch
      `messaging.shadow.match` / `mismatch` with `kind=SCHEDULED`; gate as D-045 step 4.
-  4. **Dad Coach** `MESSAGING_MODE_SCHEDULED=PLATFORM`. Watch 24 h: `messaging.scheduled.platform` (ACCEPTED / HELD /
+  4. **Platform first (review M1):** `SCHEDULED_RESPONSE_CALLBACK_READ_TIMEOUT_MS=30000` (restart) **before** the switch
+     below. With PLATFORM the callback waits on `/send` (up to 12 s, plus one immediate re-POST); at the default 8 s the
+     platform would time out and retry the callback (it replays the row - no second send - but the turn is marked
+     `CALLBACK_TIMEOUT` until the retry). The setting is shared by every callback route (Big Boss, Tair): a longer wait
+     only for answers that are slow anyway. Then **Dad Coach** `MESSAGING_MODE_SCHEDULED=PLATFORM`. Watch 24 h: `messaging.scheduled.platform` (ACCEPTED / HELD /
      QUEUED), `messaging.delivery_status … applied=true`, **zero** `messaging.scheduled.ambiguous` / `refused` /
      `platform_after_direct` / `direct_fallback`; the callback answers `{"platformMessageId":…}`; admin timeline: the
      scheduled turn's draft replaced by exactly one row `callback:scheduled-transition:<triggerId>` (the platform's);
      `SELECT status, platform_state, platform_status, platform_request IS NULL FROM scheduled_response_delivery ORDER BY
-     created_at DESC LIMIT 5` → ACCEPTED·DELIVERED·READ / OWNED / … / true. Note: the platform's callback read timeout
-     is 8 s and `/send` may take up to 12 s - a slow platform makes it retry the callback, which replays the row
-     (`Already delivered` / `Delivery already in progress`), never a second send.
+     created_at DESC LIMIT 5` → ACCEPTED·DELIVERED·READ / OWNED / … / true. Any `proactive.callback` timeout on the
+     platform means the read timeout above was not raised.
   5. **Belt promotion** (no job promotes anyone since D-030 - the switch only matters if that changes): platform
      `MESSAGING_ALLOWED_PRODUCTS=…,dad_coach:BELT_PROMOTION`, and if the platform's image-host list
      (6.2b `workflow.messaging.send.image-hosts`, not in its application.yml: env `WORKFLOW_MESSAGING_SEND_IMAGEHOSTS_0=…`)

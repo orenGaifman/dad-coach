@@ -384,10 +384,10 @@ public class LoginLinkPlatform implements PlatformSendFlow.Ledger {
             return;
         }
         try {
-            Optional<Father> father = fathers.findById(subject.fatherId());
-            String body = request(linkId, father, phone, url, turnCorrelationId, true);
             DeliveryResult r = sent.result();
-            flow.shadow(MessagingSettings.LOGIN_LINK, log, "linkId", linkId, body,
+            // the request is built on the shadow lane, never on the sending thread (review N3)
+            flow.shadow(MessagingSettings.LOGIN_LINK, log, "linkId", linkId,
+                    () -> request(linkId, fathers.findById(subject.fatherId()), phone, url, turnCorrelationId, true),
                     new PlatformSendFlow.ShadowFacts(r.isSuccessful(), r.isHeld(), r.failureReason(), sent.template()));
         } catch (RuntimeException e) {
             log.atWarn().setMessage("messaging.shadow.failed").addKeyValue("kind", MessagingSettings.LOGIN_LINK)

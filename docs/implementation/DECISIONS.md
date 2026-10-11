@@ -868,8 +868,10 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
     and - the callback was answered long ago - reported to the timeline as the turn's replacement
     (`/messages/outbound` `callback:scheduled-transition:<triggerId>`, `replacesDraft`) when D-039 is on.
   - **Thread / timeouts:** the callback runs on Tomcat; the POST waits up to 12 s (+ one re-POST). The platform's callback
-    read timeout is 8 s: a slow platform makes it retry the callback, which replays the row - never a second send.
-    `wait ACCEPTED` kept (the row gets its wamid at once; reports are not required for the common case).
+    read timeout (8 s default) is raised to 30 s before SCHEDULED=PLATFORM (review M1, DEPLOYMENT.md step 4); if not, a
+    slow platform makes it retry the callback, which replays the row (`SENDING` while the first `/send` is in flight) -
+    never a second send. `wait ACCEPTED` kept (the row gets its wamid at once; reports are not required for the common
+    case). A request that cannot be built (nothing posted) is sent today's way (review N1).
 - **BELT_PROMOTION (DC3)** - `BeltPromotionPlatform`, no ledger (the job promotes no one since D-030): the image (when
   configured) `belt-promotion:<fatherId>:<BELT>:image`, `content.image {link, caption}`, `windowPolicy SESSION_ONLY` (as
   today only inside his window; outside = the platform's FAILED `WINDOW_CLOSED`, nothing sent), timeline not recorded
@@ -879,12 +881,23 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   attempt → that part today's way (the image only if Dad Coach's window is open); refused or ambiguous → logged, never
   sent directly (no ledger to reconcile; spec v2.6). A refused image (e.g. its host not on the platform's 6.2b
   image-host list) never stops the text (D-040). Fixed keys per father and belt: a re-run replays on the platform.
+- **SHADOW (all kinds, incl. the live LOGIN_LINK; review fixes):** a dry run the platform refuses (400 / 409 / 422) while
+  Dad Coach's own send went out is now `messaging.shadow.mismatch field=refused code=PLATFORM_<error>[_<reason>]` (it was
+  logged as a match unless a template was involved: in PLATFORM mode that message would FAIL, never go directly); both
+  refusing is a match (M2). One shadow lane per kind (`messaging-shadow-<kind>`, queue 100 each): a burst of one kind
+  never drops another's comparisons; a drop logs `messaging.shadow.dropped {kind, dropped}` (running count). The dry-run
+  request is built on that lane, not on the sending / callback thread (N3).
 - **Delivery reports:** `DeliveryStatusController` routes by `kind`: `LOGIN_LINK` → link, `SCHEDULED` → scheduled row (by
   key `scheduled-response:…`, else by `platform_message_id`), no kind → link then scheduled; `BELT_PROMOTION` and others
   → `known:false`. A report for a row Dad Coach sent itself is never applied (as D-045).
 - **V48** (additive): the D-045 platform columns on `scheduled_response_delivery` + two partial indexes.
 - **Not changed:** the staff login link and the platform-down line (direct forever); replies (DC4, next); quiet hours (none
   in Dad Coach).
+- **Review (independent, `6e41078`: APPROVE WITH NITS) - fixed in the follow-up commit:** M1 (callback read timeout,
+  documented), M2 (refusal = mismatch), N1 (request failure → today's send), N2 (test: retry while in flight), N3 (lanes
+  per kind, request built off-thread). Added tests: `ScheduledPlatformSendTest` +4 (refusal mismatch / both refuse =
+  match, lanes per kind with drops counted, request failure → direct, retry while the first `/send` is in flight →
+  SENDING, one POST), `LoginLinkPlatformSendTest` +1 (refusal mismatch; the 24 earlier tests unchanged).
 - **Tests:** `ScheduledPlatformSendTest` (15, integration, fake platform + fake Meta, no real WhatsApp): DIRECT today's
   path and columns NULL; DIRECT = SHADOW byte for byte (Meta body, callback body, row); SHADOW off the callback thread +
   window mismatch logged; PLATFORM ACCEPTED (bytes committed before the POST, every request field incl. own template +

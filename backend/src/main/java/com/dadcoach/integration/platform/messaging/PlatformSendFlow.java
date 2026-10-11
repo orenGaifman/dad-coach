@@ -181,12 +181,9 @@ public class PlatformSendFlow {
     private final ObjectMapper json;
     private final Clock clock;
     private final boolean receiptsEnabled;
-    private final ThreadPoolExecutor shadowLane = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-            new ArrayBlockingQueue<>(100), r -> {
-                Thread t = new Thread(r, "messaging-shadow");
-                t.setDaemon(true);
-                return t;
-            }, new ThreadPoolExecutor.DiscardPolicy());
+    /** One SHADOW lane per kind (review N3): a burst of one kind never drops another kind's comparisons. */
+    private final Map<String, ThreadPoolExecutor> shadowLanes = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, java.util.concurrent.atomic.AtomicLong> shadowDropped = new java.util.concurrent.ConcurrentHashMap<>();
 
     public PlatformSendFlow(MessagingSettings settings, PlatformMessagingClient client, WorkflowPlatformProperties platform,
                             CommunicationEndpointRepository endpoints, DeliveryReceipts receipts, JdbcTemplate jdbc,
@@ -639,19 +636,55 @@ public class PlatformSendFlow {
 
     // ------------------------------------------------------------------------------------------------- SHADOW
 
-    /** SHADOW: the platform's dry run of {@code body} ({@code dryRun: true}), compared off the caller's thread. */
-    public void shadow(String kind, Logger log, String idKey, Object id, String body, ShadowFacts dc) {
-        shadowLane.execute(() -> compare(kind, log, idKey, id, body, dc));
+    /**
+     * SHADOW: the platform's dry run of the request {@code body} builds ({@code dryRun: true}), built and compared on the
+     * kind's own lane ({@code messaging-shadow-<kind>}, queue {@value #SHADOW_QUEUE}), never on the caller's thread. A
+     * full lane drops the comparison and logs {@code messaging.shadow.dropped} with the kind's running count.
+     */
+    public void shadow(String kind, Logger log, String idKey, Object id, Supplier<String> body, ShadowFacts dc) {
+        lane(kind).execute(() -> {
+            String request;
+            try {
+                request = body.get();
+            } catch (RuntimeException e) {
+                log.atWarn().setMessage("messaging.shadow.failed").addKeyValue("kind", kind)
+                        .addKeyValue("error", e.getClass().getSimpleName()).log();
+                return;
+            }
+            compare(kind, log, idKey, id, request, dc);
+        });
+    }
+
+    static final int SHADOW_QUEUE = 100;
+
+    private ThreadPoolExecutor lane(String kind) {
+        return shadowLanes.computeIfAbsent(kind, k -> new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(SHADOW_QUEUE), r -> {
+                    Thread t = new Thread(r, "messaging-shadow-" + k.toLowerCase(Locale.ROOT));
+                    t.setDaemon(true);
+                    return t;
+                }, (r, executor) -> {
+                    long dropped = shadowDropped.computeIfAbsent(k, x -> new java.util.concurrent.atomic.AtomicLong())
+                            .incrementAndGet();
+                    org.slf4j.LoggerFactory.getLogger(PlatformSendFlow.class).atWarn()
+                            .setMessage("messaging.shadow.dropped").addKeyValue("kind", k).addKeyValue("dropped", dropped).log();
+                }));
+    }
+
+    /** Comparisons dropped so far because the kind's lane was full. */
+    public long shadowDropped(String kind) {
+        java.util.concurrent.atomic.AtomicLong n = shadowDropped.get(kind);
+        return n == null ? 0 : n.get();
     }
 
     @jakarta.annotation.PreDestroy
     void stopShadowLane() {
-        shadowLane.shutdownNow();
+        shadowLanes.values().forEach(ThreadPoolExecutor::shutdownNow);
     }
 
-    /** Tests: whether the shadow lane has nothing left to do. */
+    /** Tests: whether every shadow lane has nothing left to do. */
     public boolean shadowIdle() {
-        return shadowLane.getActiveCount() == 0 && shadowLane.getQueue().isEmpty();
+        return shadowLanes.values().stream().allMatch(l -> l.getActiveCount() == 0 && l.getQueue().isEmpty());
     }
 
     private void compare(String kind, Logger log, String idKey, Object id, String body, ShadowFacts dc) {
@@ -659,13 +692,18 @@ public class PlatformSendFlow {
             Answer a = client.send(body);
             String dcWindow = dc.template() != null ? "TEMPLATE" : "SESSION";
             String dcOutcome = !dc.successful() ? "FAIL" : dc.held() ? "HOLD" : "SEND";
-            if (a.status() == 422) {
-                String reason = a.text("reason");
-                if (dc.template() != null && dc.successful()) {
-                    mismatch(kind, log, idKey, id, "template", dc.template(), "UNUSABLE_" + reason);
+            if (a.status() == 400 || a.status() == 409 || a.status() == 422) {
+                // the platform would refuse the request outright (review M2): a mismatch whenever Dad Coach's own send
+                // went out - in PLATFORM mode this message would have FAILED, never been sent directly
+                String code = refusal(a);
+                if (dc.successful()) {
+                    log.atWarn().setMessage("messaging.shadow.mismatch").addKeyValue("kind", kind)
+                            .addKeyValue(idKey, id).addKeyValue("field", "refused").addKeyValue("code", code)
+                            .addKeyValue("product", dcOutcome + (dc.template() == null ? "" : "/" + dc.template()))
+                            .addKeyValue("platform", "HTTP_" + a.status()).addKeyValue("fieldRefused", a.text("field")).log();
                 } else {
                     log.atInfo().setMessage("messaging.shadow.match").addKeyValue("kind", kind)
-                            .addKeyValue(idKey, id).addKeyValue("platform", "422_" + reason).log();
+                            .addKeyValue(idKey, id).addKeyValue("platform", code).log();
                 }
                 return;
             }
