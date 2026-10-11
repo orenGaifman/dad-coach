@@ -182,10 +182,14 @@ export interface AdminTemplateRow {
   /** set when Meta re-filed it, e.g. UTILITY → MARKETING */
   metaPreviousCategory: string | null
   metaRejectedReason: string | null
-  metaBodyMatches: boolean
+  /** null since D-053 (the platform's mapping decides, no body comparison) */
+  metaBodyMatches: boolean | null
   registeredStatus: string | null
+  /** D-053: the platform can send it now (a mapped message type names it and it is usable) */
   ready: boolean
+  /** D-053: the message types (KIND or KIND/variant) the platform's mapping sends with it, comma separated */
   inUseAs: string | null
+  usedFor?: string[]
 }
 
 export interface AdminTemplates {

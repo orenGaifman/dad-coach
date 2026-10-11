@@ -77,12 +77,6 @@ dad-coach:
     inbound:
       retry-unanswered: ${DAD_COACH_WHATSAPP_INBOUND_RETRY_UNANSWERED:true}
       claim-lease: ${DAD_COACH_WHATSAPP_INBOUND_CLAIM_LEASE:PT10M}
-    # D-038 (DC-B2): Meta's status receipts update the scheduled message / dashboard link they belong to; false = ignored.
-    receipts:
-      enabled: ${DAD_COACH_WHATSAPP_RECEIPTS_ENABLED:true}
-    # D-042 (Phase 6.1): the platform's shared-number gateway reports what became of a message it held
-    # (POST /api/integration/channel/held-outcome). Off = the endpoint answers 404 and changes nothing.
-    gateway-held-reports: ${GATEWAY_HELD_REPORTS:false}
   # D-029 (Big Boss D-176): a WhatsApp voice note is transcribed by ElevenLabs and read like a typed message. Turned
   # on and off in the admin's integrations screen (on unless the admin turned it off); without a key it stays off.
   voice-notes:
@@ -94,23 +88,12 @@ dad-coach:
     # About 25 minutes of a WhatsApp voice note; a longer one is answered "too long" without being downloaded.
     max-bytes: ${VOICE_NOTES_MAX_BYTES:3145728}
     timeout-ms: ${VOICE_NOTES_TIMEOUT_MS:60000}
-  # D-045 (Unified Workflow 6.3-DC): who sends each kind - Dad Coach itself (DIRECT, default: today's path), SHADOW
-  # (today's path + the platform's dry run, differences logged, never a second message) or PLATFORM (the platform's
-  # POST /api/v1/worker/messages/send). Anything else = DIRECT.
+  # D-045/D-053 (Unified Workflow 6.3-DC / 6.4): the platform's Send API (POST /api/v1/worker/messages/send) sends every
+  # message Dad Coach writes - the per-kind MESSAGING_MODE_* switches and Dad Coach's own Meta sends are gone (D-053).
   messaging:
-    modes:
-      login-link: ${MESSAGING_MODE_LOGIN_LINK:DIRECT}
-      # D-046: the platform's scheduled-response callbacks (timers, daily check, weekly plan). (D-051: the belt
-      # promotion's switch is gone with its notifier - the weekly job promotes no one since D-030.)
-      scheduled: ${MESSAGING_MODE_SCHEDULED:DIRECT}
-      # D-048: the lines answering a father's message - the coach's reply, Dad Coach's fixed lines, a session button's
-      # answer, an answer from data. The "something went wrong" line and the deletion answer always go directly.
-      reply: ${MESSAGING_MODE_REPLY:DIRECT}
-      fixed-line: ${MESSAGING_MODE_FIXED_LINE:DIRECT}
-      button-reply: ${MESSAGING_MODE_BUTTON_REPLY:DIRECT}
-      ready-answer: ${MESSAGING_MODE_READY_ANSWER:DIRECT}
-    # The platform's delivery reports (POST /api/integration/channel/delivery-status, callback key); off = 404.
-    delivery-status-enabled: ${MESSAGING_DELIVERY_STATUS_ENABLED:false}
+    # The platform's delivery reports (POST /api/integration/channel/delivery-status, callback key) - since D-053 the
+    # only source of a message's fate; off = 404 (the platform retries for 24 h).
+    delivery-status-enabled: ${MESSAGING_DELIVERY_STATUS_ENABLED:true}
     # After an ambiguous answer: ask the platform by key this long after the first POST (then every as long, for 1 h).
     reconcile-after: ${MESSAGING_RECONCILE_AFTER:PT5M}
     send-read-timeout-ms: ${MESSAGING_SEND_READ_TIMEOUT_MS:12000}
@@ -119,11 +102,13 @@ dad-coach:
     # D-047: the reconcile job's lookup by key, and how long one reconcile pass may take rows (the rest: next minute)
     lookup-read-timeout-ms: ${MESSAGING_LOOKUP_READ_TIMEOUT_MS:5000}
     reconcile-pass-budget: ${MESSAGING_RECONCILE_PASS_BUDGET:PT15S}
+    # D-053: a line without a ledger the platform provably did not create is POSTed once more after this (at most 2 s)
+    not-created-repost-wait: ${MESSAGING_NOT_CREATED_REPOST_WAIT:PT2S}
 
 app:
   scheduling:
     # D-043 (Unified Workflow 6.0b): true = the jobs that send WhatsApp keep the single scheduler thread and the
-    # housekeeping jobs (receipt retry, template refresh, purges, deletions, keep-warm) get their own small pool;
+    # housekeeping jobs (purges, deletions, keep-warm) get their own small pool;
     # anything else (false, unset, a typo) = one thread runs every job, exactly as before.
     lanes: ${APP_SCHEDULING_LANES:false}
 
@@ -159,6 +144,4 @@ workflow:
     scheduled-response:
       enabled: ${WORKFLOW_PLATFORM_CALLBACK_ENABLED:false}
       api-key: ${WORKFLOW_PLATFORM_CALLBACK_API_KEY:}
-      # Approved WhatsApp template (body "{{1}}" = the message) used outside the 24h window; blank = not sent.
-      template-name: ${WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME:}
 

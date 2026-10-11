@@ -1,18 +1,14 @@
 package com.dadcoach.integration.platform.scheduled;
 
 import com.dadcoach.channel.delivery.DeliveryResult;
-import com.dadcoach.channel.delivery.ProactiveSender;
 import com.dadcoach.channel.dto.OutboundMessageDto;
 import com.dadcoach.channel.template.TemplateCall;
-import com.dadcoach.channel.template.TemplateRegistry;
-import com.dadcoach.channel.template.WhatsAppTemplateCatalog;
+import com.dadcoach.channel.template.TemplateText;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.father.FatherStatus;
-import com.dadcoach.integration.platform.SharedNumberGate;
 import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import com.dadcoach.integration.platform.messaging.MessagingSettings;
-import com.dadcoach.integration.platform.messaging.MessagingSettings.Mode;
 import com.dadcoach.integration.platform.messaging.PlatformSendFlow;
 import com.dadcoach.integration.platform.messaging.PlatformSendFlow.Settled;
 import com.dadcoach.integration.platform.messaging.PlatformSendFlow.Snapshot;
@@ -23,7 +19,7 @@ import com.dadcoach.qualitytime.QualityTime;
 import com.dadcoach.qualitytime.QualityTimeRepository;
 import com.dadcoach.qualitytime.QualityTimeStatus;
 import com.dadcoach.weeklygoal.WeeklyGoalService;
-import com.dadcoach.whatsapp.DeliveryReceipts;
+import com.dadcoach.whatsapp.ButtonIds;
 import com.dadcoach.whatsapp.WhatsAppMessageFormatter;
 import com.dadcoach.whatsapp.buttons.SessionButtonOffers;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -39,41 +35,41 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 /**
- * D-046 (Unified Workflow Phase 6.3-DC, step DC2): a scheduled coach message - whatever reaches Dad Coach through the
- * platform's scheduled-response callback (session morning / hour-before / follow-up timers, the daily check, the weekly
- * plan) - sent by the platform's Send API instead of Dad Coach calling Meta itself. Switch {@code MESSAGING_MODE_SCHEDULED}
- * ({@link MessagingSettings}); the mechanics are D-045's ({@link PlatformSendFlow}); this class is the
- * {@code scheduled_response_delivery} ledger and the request. Platform spec {@code PHASE6_2_SEND_API_SPEC.md} §17.1 DC2.
+ * D-046 (Unified Workflow Phase 6.3-DC, step DC2; D-053 6.4): a scheduled coach message - whatever reaches Dad Coach
+ * through the platform's scheduled-response callback (session morning / hour-before / follow-up timers, the daily check,
+ * the weekly plan) - sent by the platform's Send API, the only sender since D-053. The mechanics are
+ * {@link PlatformSendFlow}'s; this class is the {@code scheduled_response_delivery} ledger and the request. Platform spec
+ * {@code PHASE6_2_SEND_API_SPEC.md} §17.1 DC2, {@code PHASE6_4_CLEANUP_SPEC.md} §2.
  *
  * <p><b>The request</b> ({@link #request}): key {@code scheduled-response:<triggerId>} (the row's own UNIQUE key - a
- * replayed trigger never reaches here), kind {@code SCHEDULED}; {@code content} = what DIRECT would send free-form (the
- * text with the session buttons when it fits an interactive body, else the text); {@code template} = the message's own
- * template ({@link ScheduledMessageTemplates}: {@code dad_coach_session_*} with its quick-reply payloads) and
- * {@code fallbackTemplates} = the general one ({@code {{1}}} = {@link ProactiveSender#asTemplateParameter}); without an
- * own template the general one is {@code template}. {@code expectedBody} = the catalog body (DC's BODY_DIFFERS check).
- * {@code windowHint = session_closes_at - 24 h}; {@code notAfter} ({@link #notAfter}); hold by the gateway; timeline
- * {@code REPLACES_DRAFT} on {@code scheduled-transition:<triggerId>} with correlation
- * {@code callback:scheduled-transition:<triggerId>} - exactly the row D-039's callback answer creates today.</p>
+ * replayed trigger never reaches here; {@link PlatformSendFlow#platformKey} if the platform's shape refuses it), kind
+ * {@code SCHEDULED}; {@code content} = the free-form message (the text with the session buttons when it fits an
+ * interactive body, else the text); {@code templateData} - never a Meta template name: a session timer with its own
+ * template ({@link ScheduledMessageTemplates}) names it as {@code variant} ({@code session_morning_he} /
+ * {@code session_hour_before_he} / {@code session_follow_up_he}) with its values and quick-reply payloads, and every
+ * message carries {@code named.text} = the one-line text ({@link TemplateText#asTemplateParameter}) for the general
+ * template; without its own template the variant is "" (the kind's default). The platform's mapping picks the approved
+ * template outside the window. {@code windowHint = session_closes_at - 24 h}; {@code notAfter} ({@link #notAfter});
+ * hold by the gateway; timeline {@code REPLACES_DRAFT} on {@code scheduled-transition:<triggerId>} with correlation
+ * {@code callback:scheduled-transition:<triggerId>}.</p>
  *
  * <p><b>The callback answer</b> ({@link ScheduledResponseDeliveryService.CallbackAnswer}): when the platform has (or may
- * have) the message it records the timeline itself, so the answer is {@code {}} plus {@code platformMessageId} when known
- * - no {@code outcome} / {@code deliveredContent}, no second record. When the platform provably created nothing, Dad Coach
- * sends it today's way and answers as today (D-039 report included); a refused request (400/422/409) answers FAILED with
- * the reason as a failed send does today.</p>
+ * have, or will be asked again) the message it records the timeline itself, so the answer is {@code {}} plus
+ * {@code platformMessageId} when known. A refused request (400/422/409) or one Dad Coach could not build answers FAILED
+ * with the reason.</p>
  *
- * <p><b>Mapping</b> (spec §7.4, forward only): QUEUED and an ambiguous answer leave the row SENDING; HELD = HELD +
- * {@code held:<n>}; ACCEPTED = ACCEPTED + wamid (+ delivery mode by the platform's channel window); DELIVERED / READ as
- * themselves; FAILED = FAILED {@code PLATFORM_<reason>}; UNKNOWN = UNKNOWN (D-042: never failed, never re-sent).</p>
+ * <p><b>Mapping</b> (spec §7.4, forward only): QUEUED, NOT_CREATED and an ambiguous answer leave the row SENDING
+ * (pending); HELD = HELD + {@code held:<n>}; ACCEPTED = ACCEPTED + wamid (+ delivery mode by the platform's channel
+ * window); DELIVERED / READ as themselves; FAILED = FAILED {@code PLATFORM_<reason>}; UNKNOWN = UNKNOWN (D-042: never
+ * failed, never re-sent). Nothing created and no longer true ({@code notAfter} passed): FAILED
+ * {@code PLATFORM_NOT_CREATED}.</p>
  */
 @Service
 @org.springframework.context.annotation.Lazy(false) // production starts lazily: the reconcile job must run after a restart
@@ -88,46 +84,38 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
     static final Duration MIN_NOT_AFTER = Duration.ofMinutes(15);
     static final Duration FOLLOW_UP_VALID = Duration.ofHours(12);
 
-    private final MessagingSettings settings;
     private final PlatformSendFlow flow;
     private final ScheduledResponseDeliveryRepository repository;
     private final ScheduledMessageTemplates templates;
-    private final ScheduledResponseCallbackConfig config;
-    private final ProactiveSender sender;
     private final FatherRepository fathers;
     private final QualityTimeRepository sessions;
     private final SessionButtonOffers offers;
     private final WeeklyGoalService goals;
-    private final ObjectProvider<TimelineReports> timeline;
     private final WorkflowPlatformProperties platform;
-    private final DeliveryReceipts receipts;
     private final JdbcTemplate jdbc;
     private final Clock clock;
-    private final boolean receiptsEnabled;
 
-    public ScheduledPlatformSend(MessagingSettings settings, PlatformSendFlow flow,
-                                 ScheduledResponseDeliveryRepository repository, ScheduledMessageTemplates templates,
-                                 ScheduledResponseCallbackConfig config, ProactiveSender sender, FatherRepository fathers,
+    public ScheduledPlatformSend(PlatformSendFlow flow, ScheduledResponseDeliveryRepository repository,
+                                 ScheduledMessageTemplates templates, FatherRepository fathers,
                                  QualityTimeRepository sessions, SessionButtonOffers offers, WeeklyGoalService goals,
-                                 ObjectProvider<TimelineReports> timeline, WorkflowPlatformProperties platform,
-                                 DeliveryReceipts receipts, JdbcTemplate jdbc, Clock clock,
-                                 @Value("${dad-coach.whatsapp.receipts.enabled:true}") boolean receiptsEnabled) {
-        this.settings = settings;
+                                 WorkflowPlatformProperties platform, JdbcTemplate jdbc, Clock clock) {
         this.flow = flow;
         this.repository = repository;
         this.templates = templates;
-        this.config = config;
-        this.sender = sender;
         this.fathers = fathers;
         this.sessions = sessions;
         this.offers = offers;
         this.goals = goals;
-        this.timeline = timeline;
         this.platform = platform;
-        this.receipts = receipts;
         this.jdbc = jdbc;
         this.clock = clock;
-        this.receiptsEnabled = receiptsEnabled;
+    }
+
+    private com.dadcoach.integration.platform.messaging.PendingSweep pendingSweep;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPendingSweep(com.dadcoach.integration.platform.messaging.PendingSweep pendingSweep) {
+        this.pendingSweep = pendingSweep;
     }
 
     /** Tests only: the next requests fail to build (review N1). */
@@ -137,24 +125,12 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
         this.requestFault = fault;
     }
 
-    public boolean sends() {
-        return settings.scheduled() == Mode.PLATFORM;
-    }
+    // ------------------------------------------------------------------------------------------------- send
 
-    public boolean shadows() {
-        return settings.scheduled() == Mode.SHADOW;
-    }
-
-    // ------------------------------------------------------------------------------------------------- PLATFORM
-
-    /**
-     * The row is claimed (SENDING) and the text decided; the platform sends it. {@code direct}: today's send and answer,
-     * used only when the platform provably created nothing.
-     */
+    /** The row is claimed (SENDING) and the text decided; the platform sends it. */
     ScheduledResponseDeliveryService.CallbackAnswer deliver(Father father, ScheduledResponseDelivery delivery,
                                                             ScheduledResponseRequest request, String content,
-                                                            List<OutboundMessageDto.ReplyButton> offered,
-                                                            Supplier<ScheduledResponseResult> direct) {
+                                                            List<OutboundMessageDto.ReplyButton> offered) {
         String body;
         try {
             RuntimeException fault = requestFault;
@@ -162,27 +138,30 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
                 throw fault;
             }
             body = request(father, delivery.getIdempotencyKey(), request.triggerId(), request.targetStateKey(), content,
-                    offered, ownTemplate(father, request.targetStateKey()), false);
+                    offered, ownTemplate(father, request.targetStateKey()));
         } catch (RuntimeException e) {
-            // nothing was posted (review N1): the platform cannot have it - today's send, today's answer
+            // a Dad Coach bug (D-053): nothing was posted - FAILED, never sent another way
             log.atError().setMessage("messaging.scheduled.request_failed").addKeyValue("deliveryId", delivery.getId())
-                    .addKeyValue("error", e.getClass().getSimpleName()).log();
-            return ScheduledResponseDeliveryService.CallbackAnswer.of(direct.get());
+                    .addKeyValue("error", e.getClass().getSimpleName()).setCause(e).log();
+            jdbc.update("UPDATE scheduled_response_delivery SET status = 'FAILED', failure_reason = ?, completed_at = ? "
+                    + "WHERE id = ? AND status = 'SENDING'", PlatformSendFlow.REQUEST_BUILD_FAILED,
+                    java.sql.Timestamp.from(clock.instant()), delivery.getId());
+            ScheduledResponseResult failed = ScheduledResponseResult.of(repository.findById(delivery.getId()).orElse(delivery),
+                    false);
+            ScheduledResponseResult answer = platform.isDeliveryReports()
+                    ? failed.withOutcome(TimelineReports.FAILED, PlatformSendFlow.REQUEST_BUILD_FAILED, null) : failed;
+            return new ScheduledResponseDeliveryService.CallbackAnswer(answer, answer, false);
         }
-        Settled<ScheduledResponseResult> s = flow.send(this, delivery.getId(), body, () -> { }, direct);
-        if (s.verdict() == PlatformSendFlow.Verdict.DIRECT && s.direct() != null) {
-            ScheduledResponseResult today = s.direct();
-            return new ScheduledResponseDeliveryService.CallbackAnswer(today, today, "DELIVERED".equals(today.status()));
-        }
+        Settled s = flow.send(this, delivery.getId(), body, () -> { });
         ScheduledResponseDelivery row = repository.findById(delivery.getId()).orElse(delivery);
         ScheduledResponseResult internal = ScheduledResponseResult.of(row, false);
         if (s.verdict() == PlatformSendFlow.Verdict.REFUSED) {
-            // nothing was created: the platform records nothing, so the answer says it failed, as a failed send does today
+            // nothing was created: the platform records nothing, so the answer says it failed, as a failed send does
             ScheduledResponseResult failed = platform.isDeliveryReports()
                     ? internal.withOutcome(TimelineReports.FAILED, s.reason(), null) : internal;
             return new ScheduledResponseDeliveryService.CallbackAnswer(failed, failed, false);
         }
-        // the platform has it (or may have it, and is asked): it records the timeline row itself - no report here
+        // the platform has it (or may have it, or is asked again): it records the timeline row itself - no report here
         Map<String, Object> answer = new LinkedHashMap<>();
         String messageId = s.snapshot() != null ? s.snapshot().messageId()
                 : jdbc.queryForObject("SELECT platform_message_id FROM scheduled_response_delivery WHERE id = ?", String.class,
@@ -192,26 +171,6 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
         }
         boolean onItsWay = s.snapshot() == null || !"FAILED".equals(s.snapshot().status());
         return new ScheduledResponseDeliveryService.CallbackAnswer(internal, answer, onItsWay);
-    }
-
-    /** SHADOW: after today's send, the platform's dry run of the same request, off this thread. */
-    void shadow(Father father, ScheduledResponseDelivery delivery, ScheduledResponseRequest request, String content,
-                List<OutboundMessageDto.ReplyButton> offered, ProactiveSender.Outcome outcome) {
-        if (!shadows()) {
-            return;
-        }
-        try {
-            DeliveryResult r = outcome.result();
-            // the request (a template lookup, the window hint) is built on the shadow lane, not the callback's (review N3)
-            flow.shadow(MessagingSettings.SCHEDULED, log, "deliveryId", delivery.getId(),
-                    () -> request(father, delivery.getIdempotencyKey(), request.triggerId(), request.targetStateKey(),
-                            content, offered, ownTemplate(father, request.targetStateKey()), true),
-                    new PlatformSendFlow.ShadowFacts(r.isSuccessful(), r.isHeld(), r.failureReason(),
-                            outcome.mode() == ProactiveSender.Mode.TEMPLATE ? outcome.template() : null));
-        } catch (RuntimeException e) {
-            log.atWarn().setMessage("messaging.shadow.failed").addKeyValue("kind", MessagingSettings.SCHEDULED)
-                    .addKeyValue("error", e.getClass().getSimpleName()).log();
-        }
     }
 
     private Optional<TemplateCall> ownTemplate(Father father, String targetStateKey) {
@@ -227,10 +186,10 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
 
     /** The {@code /send} body (class comment). */
     String request(Father father, String key, String triggerId, String targetStateKey, String content,
-                   List<OutboundMessageDto.ReplyButton> offered, Optional<TemplateCall> own, boolean dryRun) {
+                   List<OutboundMessageDto.ReplyButton> offered, Optional<TemplateCall> own) {
         Optional<Father> who = Optional.of(father);
         Map<String, Object> r = flow.newRequest(who, father.getPhone());
-        r.put("idempotencyKey", key);
+        r.put("idempotencyKey", PlatformSendFlow.platformKey(key));
         r.put("kind", MessagingSettings.SCHEDULED);
         r.put("messageClass", "UTILITY");
         Map<String, Object> body = new LinkedHashMap<>();
@@ -241,24 +200,14 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
             List<Map<String, Object>> buttons = new ArrayList<>();
             for (OutboundMessageDto.ReplyButton b : offered) {
                 Map<String, Object> button = new LinkedHashMap<>();
-                button.put("id", b.id());
+                button.put("id", ButtonIds.require(b.id(), "Button"));   // the shared-number routing contract
                 button.put("title", b.title());
                 buttons.add(button);
             }
             body.put("buttons", buttons);
         }
         r.put("content", body);
-        Map<String, Object> general = template(config.effectiveTemplateName(),
-                TemplateRegistry.languageForTemplateName(config.effectiveTemplateName()),
-                List.of(ProactiveSender.asTemplateParameter(content)), List.of());
-        if (own.isPresent()) {
-            TemplateCall t = own.get();
-            r.put("template", template(t.name(), t.entry().language(),
-                    t.values().stream().map(ProactiveSender::oneLine).toList(), t.buttonPayloads()));
-            r.put("fallbackTemplates", List.of(general));
-        } else {
-            r.put("template", general);
-        }
+        r.put("templateData", templateData(content, own));
         r.put("windowPolicy", "AUTO");
         r.put("outsideWindowWithoutTemplate", "FAIL");
         flow.lastInbound(who).ifPresent(at -> r.put("windowHint", Map.of("lastInboundAt", at.toString())));
@@ -272,28 +221,22 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
         timelineRow.put("content", TimelineText.withoutIdentity(content));
         r.put("timeline", timelineRow);
         r.put("wait", "ACCEPTED");
-        r.put("dryRun", dryRun);
         return flow.json(r);
     }
 
-    private static Map<String, Object> template(String name, String language, List<String> params, List<String> payloads) {
-        Map<String, Object> t = new LinkedHashMap<>();
-        t.put("name", name);
-        t.put("language", language);
-        t.put("bodyParams", params);
-        if (!payloads.isEmpty()) {
-            List<Map<String, Object>> buttons = new ArrayList<>();
-            for (int i = 0; i < payloads.size(); i++) {
-                Map<String, Object> b = new LinkedHashMap<>();
-                b.put("index", i);
-                b.put("subType", "quick_reply");
-                b.put("payload", payloads.get(i));
-                buttons.add(b);
-            }
-            t.put("buttons", buttons);
+    /**
+     * D-053: the message type and its values for the platform's kind→template mapping (spec 6.4 §2.1, seed rows
+     * {@code dad_coach}/SCHEDULED): the session template's variant, values and payloads when the message has one, and
+     * always {@code named.text} for the general {@code dad_coach_update_he} ({{1}} = the message as one line).
+     */
+    static Map<String, Object> templateData(String content, Optional<TemplateCall> own) {
+        Map<String, String> named = Map.of("text", TemplateText.asTemplateParameter(content));
+        if (own.isEmpty()) {
+            return PlatformSendFlow.templateData("", null, named, null);
         }
-        WhatsAppTemplateCatalog.named(name).ifPresent(e -> t.put("expectedBody", e.body()));
-        return t;
+        TemplateCall t = own.get();
+        return PlatformSendFlow.templateData(t.variant(), t.values().stream().map(TemplateText::oneLine).toList(), named,
+                t.buttonPayloads().stream().map(p -> ButtonIds.require(p, "Template quick-reply")).toList());
     }
 
     /**
@@ -355,7 +298,8 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
 
     @Override
     public String idempotencyKey(UUID id) {
-        return jdbc.queryForObject("SELECT idempotency_key FROM scheduled_response_delivery WHERE id = ?", String.class, id);
+        return PlatformSendFlow.platformKey(jdbc.queryForObject("SELECT idempotency_key FROM scheduled_response_delivery "
+                + "WHERE id = ?", String.class, id));
     }
 
     @Override
@@ -365,6 +309,15 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
                     UUID.class, idempotencyKey).stream().findFirst();
             if (byKey.isPresent()) {
                 return byKey;
+            }
+        }
+        if (idempotencyKey != null && idempotencyKey.startsWith("h:")) {
+            // D-053 (R5): a key the platform's shape refused travels as h:<sha256-32hex> of the row's own key
+            Optional<UUID> byHash = jdbc.queryForList("SELECT id FROM scheduled_response_delivery WHERE 'h:' || "
+                    + "left(encode(sha256(convert_to(idempotency_key, 'UTF8')), 'hex'), 32) = ?", UUID.class, idempotencyKey)
+                    .stream().findFirst();
+            if (byHash.isPresent()) {
+                return byHash;
             }
         }
         if (messageId != null) {
@@ -404,7 +357,7 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
             case "QUEUED" -> { } // stays SENDING (spec 7.4); the flow keeps its lookup
             case "HELD" -> jdbc.update("UPDATE scheduled_response_delivery SET status = 'HELD', gateway_hold_id = ?, "
                     + "completed_at = COALESCE(completed_at, ?) WHERE id = ?",
-                    snap.heldId() == null ? null : SharedNumberGate.HELD_PREFIX + snap.heldId(), at, id);
+                    snap.heldId() == null ? null : DeliveryResult.HELD_PREFIX + snap.heldId(), at, id);
             case "ACCEPTED" -> jdbc.update("UPDATE scheduled_response_delivery SET status = 'ACCEPTED', failure_reason = NULL, "
                     + "provider_message_id = COALESCE(?, provider_message_id), delivery_mode = COALESCE(?, delivery_mode), "
                     + "completed_at = COALESCE(completed_at, ?) WHERE id = ?", wamid, mode, at, id);
@@ -423,7 +376,7 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
         }
     }
 
-    /** Stays SENDING: the platform may have it (spec 7.4: as QUEUED). */
+    /** Stays SENDING: the platform may have it, or will be asked again (spec 7.4: as QUEUED; D-053 NOT_CREATED). */
     @Override
     public String ambiguousSet() {
         return "";
@@ -441,8 +394,8 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
     }
 
     @Override
-    public Update ended(Timestamp at) {
-        return new Update("status = 'FAILED', failure_reason = 'PLATFORM_NOT_CREATED_TOO_LATE', completed_at = ?", at);
+    public Update ended(String reason, Timestamp at) {
+        return new Update("status = 'FAILED', failure_reason = ?, completed_at = ?", reason, at);
     }
 
     @Override
@@ -456,7 +409,7 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
         return request == null || !request.path("content").path("text").isTextual() ? "NO_REQUEST" : null;
     }
 
-    /** Never created, minutes later: sent directly only while it still says something true ({@code notAfter}). */
+    /** Nothing created (yet): POSTed again only while it still says something true ({@code notAfter}). */
     @Override
     public boolean stillSendable(UUID id, String body, Instant now) {
         JsonNode request = flow.read(body);
@@ -470,67 +423,6 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
         }
     }
 
-    /**
-     * The reconcile job learned that the platform never created it and it is still true: Dad Coach sends exactly what
-     * the request carried, today's way ({@link ProactiveSender}: free-form in the window with its buttons, else its own
-     * template, else the general one), and - the callback was answered long ago - reports it to the timeline as the
-     * turn's replacement (D-039's {@code callback:scheduled-transition:<triggerId>} row).
-     */
-    @Override
-    public void sendLate(UUID id, String body) {
-        Map<String, Object> row = jdbc.queryForMap("SELECT father_id, trigger_id FROM scheduled_response_delivery WHERE id = ?", id);
-        Father father = fathers.findById(((Number) row.get("father_id")).longValue()).orElseThrow();
-        String triggerId = (String) row.get("trigger_id");
-        JsonNode request = flow.read(body);
-        String text = request.path("content").path("text").asText();
-        List<OutboundMessageDto.ReplyButton> buttons = new ArrayList<>();
-        request.path("content").path("buttons").forEach(b -> buttons.add(
-                new OutboundMessageDto.ReplyButton(b.path("id").asText(), b.path("title").asText())));
-        TemplateCall own = null;
-        if (request.has("fallbackTemplates")) {
-            JsonNode t = request.path("template");
-            List<String> values = new ArrayList<>();
-            t.path("bodyParams").forEach(v -> values.add(v.asText()));
-            List<String> payloads = new ArrayList<>();
-            t.path("buttons").forEach(b -> payloads.add(b.path("payload").asText()));
-            try {
-                own = new TemplateCall(t.path("name").asText(), values, payloads);
-            } catch (RuntimeException e) {
-                own = null;   // the catalog changed meanwhile: the general template, as ProactiveSender does
-            }
-        }
-        TemplateCall ownTemplate = own;
-        ProactiveSender.Outcome outcome = sender.send(father, text, buttons, () -> ownTemplate);
-        DeliveryResult r = outcome.result();
-        Timestamp at = Timestamp.from(clock.instant());
-        String mode = outcome.mode() == ProactiveSender.Mode.TEMPLATE ? "TEMPLATE" : "FREE_FORM";
-        if (r.isSuccessful()) {
-            jdbc.update("UPDATE scheduled_response_delivery SET status = ?, gateway_hold_id = ?, provider_message_id = ?, "
-                    + "delivery_mode = ?, completed_at = ? WHERE id = ? AND status = 'SENDING'", r.isHeld() ? "HELD" : "ACCEPTED",
-                    r.isHeld() ? r.providerMessageId() : null, r.metaMessageId(), mode, at, id);
-            if (r.metaMessageId() != null && receiptsEnabled) {
-                receipts.applyPending(r.metaMessageId());
-            }
-        } else {
-            jdbc.update("UPDATE scheduled_response_delivery SET status = 'FAILED', failure_reason = ?, completed_at = ? "
-                    + "WHERE id = ? AND status = 'SENDING'", r.failureReason(), at, id);
-        }
-        TimelineReports reports = timeline.getIfAvailable();
-        if (reports != null && reports.enabled() && r.isSuccessful()) {
-            String sent = outcome.sentText() != null ? outcome.sentText() : text;
-            TimelineReports.Part part = TimelineReports.Part.replacing(CALLBACK_PREFIX + TURN_PREFIX + triggerId,
-                    TURN_PREFIX + triggerId, TimelineText.withoutIdentity(sent), r, TimelineReports.KIND_SCHEDULED, null);
-            if (outcome.mode() == ProactiveSender.Mode.TEMPLATE) {
-                part = part.withTemplate(TimelineText.template(outcome.template(), outcome.templateParams()));
-            } else if (!outcome.buttons().isEmpty()) {
-                part = part.withButtons(TimelineText.buttons(outcome.buttons()));
-            }
-            reports.outbound(TimelineReports.Person.of(father), part);
-        }
-        log.atInfo().setMessage("messaging.scheduled.sent_directly").addKeyValue("deliveryId", id)
-                .addKeyValue("delivered", r.isSuccessful()).addKeyValue("held", r.isHeld()).log();
-    }
-
     /** A delivery report for a scheduled message (spec §3.5). */
     public PlatformSendFlow.Applied applyReport(String idempotencyKey, String messageId, JsonNode body) {
         return flow.applyReport(this, idempotencyKey, messageId, body);
@@ -538,11 +430,14 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
 
     // ------------------------------------------------------------------------------------------------- reconcile
 
-    /** As D-045's job, for the scheduled messages. Runs on the messaging lane: it may send. */
+    /** As D-045's job, for the scheduled messages. Runs on the messaging lane: it re-POSTs. */
     @Scheduled(fixedDelayString = "${dad-coach.messaging.reconcile-interval:PT1M}",
             initialDelayString = "${dad-coach.messaging.reconcile-initial-delay:PT1M}",
             scheduler = com.dadcoach.config.SchedulingLanes.MESSAGING)
     public void scheduledReconcile() {
+        if (pendingSweep != null) {
+            pendingSweep.sweepIfDue();   // D-053 (R12): abandoned pending rows to UNKNOWN, at most hourly
+        }
         try {
             reconcileDue();
         } catch (RuntimeException e) {

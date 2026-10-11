@@ -17,13 +17,6 @@ public class ScheduledResponseCallbackConfig {
 
     private boolean enabled = false;
     private String apiKey;
-    /**
-     * Approved WhatsApp template used when the father's 24h window is closed; its single body
-     * parameter {{1}} carries the generated message. Name suffix _he/_en selects the language.
-     * Blank = never send outside the window (the delivery is recorded as FAILED instead).
-     */
-    private String templateName;
-
     public boolean isEnabled() {
         return enabled;
     }
@@ -38,23 +31,5 @@ public class ScheduledResponseCallbackConfig {
 
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
-    }
-
-    /**
-     * The general template messages outside the window go out in: the configured name, else the catalog's
-     * {@code dad_coach_update_he}. Sending still needs it registered as approved, which only Meta's approval does
-     * ({@link com.dadcoach.channel.template.MetaTemplateDirectory}).
-     */
-    public String effectiveTemplateName() {
-        return templateName == null || templateName.isBlank()
-                ? com.dadcoach.channel.template.WhatsAppTemplateCatalog.UPDATE_HE : templateName.strip();
-    }
-
-    public String getTemplateName() {
-        return templateName;
-    }
-
-    public void setTemplateName(String templateName) {
-        this.templateName = templateName;
     }
 }

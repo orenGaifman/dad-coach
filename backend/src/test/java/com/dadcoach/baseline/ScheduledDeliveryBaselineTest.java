@@ -4,12 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import com.dadcoach.AbstractIntegrationTest;
-import com.dadcoach.channel.delivery.DeliveryStatus;
-import com.dadcoach.channel.delivery.ProactiveSender;
+import com.dadcoach.channel.template.TemplateText;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.support.FakeServers;
 import com.dadcoach.support.Webhooks;
-import com.dadcoach.whatsapp.WhatsAppAdapter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
@@ -22,9 +20,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 /**
- * Delivery regression baseline (Task 1.2): the platform's scheduled-response callback through ProactiveSender /
- * DeliveryService / WhatsAppAdapter to a controlled fake Meta (FakeServers), and what Dad Coach keeps about that
- * delivery afterwards - the wamid Meta answered with and Meta's later status receipts for it.
+ * Delivery regression baseline (Task 1.2): the platform's scheduled-response callback, and what Dad Coach keeps about
+ * that delivery afterwards - the wamid and what became of the message. D-053: the platform's Send API sends it (a fake
+ * platform here) and its delivery reports move the row; Meta's receipts on Dad Coach's webhook change nothing.
  *
  * <p>PASS tests pin the behaviour that was already correct. KNOWN-BUG tests stated the correct behaviour while the bug
  * was open (they were {@code @Disabled}); D-038 (Phase 2, docs/architecture/PHASE2_DADCOACH_SPEC.md) fixed them and
@@ -38,7 +36,25 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
-    @Autowired WhatsAppAdapter whatsapp;
+    @Autowired com.dadcoach.integration.platform.messaging.MessagingSettings messaging;
+
+    private static final String MESSAGE_ID = "6f1f0d3e-0000-4000-8000-000000000705";
+
+    /** The platform's delivery report for the trigger's message (D-053: the only source of its fate). */
+    private void report(String triggerId, String status, String reason) throws Exception {
+        messaging.setDeliveryStatusEnabled(true);
+        Map<String, Object> b = new java.util.LinkedHashMap<>();
+        b.put("messageId", MESSAGE_ID);
+        b.put("idempotencyKey", "scheduled-response:" + triggerId);
+        b.put("kind", "SCHEDULED");
+        b.put("status", status);
+        b.put("providerMessageId", WAMID);
+        b.put("reason", reason);
+        int code = mvc.perform(post("/api/integration/channel/delivery-status").contentType(MediaType.APPLICATION_JSON)
+                .header("X-API-Key", CALLBACK_KEY).header("X-Idempotency-Key", "delivery:" + MESSAGE_ID + ":" + status)
+                .content(json.writeValueAsString(b))).andReturn().getResponse().getStatus();
+        assertThat(code).isEqualTo(200);
+    }
 
     private MvcResult callback(Father f, String triggerId, String content) throws Exception {
         String body = json.writeValueAsString(Map.of("triggerId", triggerId, "workflowInstanceId", "w-baseline",
@@ -68,21 +84,22 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
                 String.class, f.getId(), triggerId);
     }
 
-    /** A scheduled message sent free-form inside the window, Meta answering with {@link #WAMID}. */
+    /** A scheduled message the platform sent free-form inside the window, Meta's wamid {@link #WAMID}. */
     private Father deliveredFreeForm(String phone, String triggerId) throws Exception {
         Father f = data.activeFather(phone);
         data.endpoint(f, true);
-        fake.onMetaSend(c -> FakeServers.Reply.json(Receipts.accepted(WAMID)));
+        fake.onPlatformSend(c -> FakeServers.Reply.json("{\"messageId\":\"" + MESSAGE_ID + "\",\"status\":\"ACCEPTED\","
+                + "\"providerMessageId\":\"" + WAMID + "\",\"channelWindow\":\"SESSION\"}"));
         MvcResult r = callback(f, triggerId, "❤️ דאד קואץ׳:\nעוד שעה זמן איכות עם נועה 💪");
-        assertThat(json.readTree(r.getResponse().getContentAsString()).path("status").asText()).isEqualTo("DELIVERED");
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(json.readTree(r.getResponse().getContentAsString()).path("platformMessageId").asText()).isEqualTo(MESSAGE_ID);
+        assertThat(fake.platformSends()).hasSize(1);
         return f;
     }
 
     // ---- PASS: the successful delivery path ------------------------------------------------------------------------
 
     @Test
-    @DisplayName("PASS: inside the 24h window the message goes out free-form once; the platform hears DELIVERED, the row is ACCEPTED / FREE_FORM")
+    @DisplayName("PASS: inside the 24h window the message goes out free-form once (the platform sends it); the row is ACCEPTED / FREE_FORM")
     void insideTheWindowFreeFormAndTheRowIsAccepted() throws Exception {
         Father f = data.activeFather("+19995550701");
         data.endpoint(f, true);
@@ -90,65 +107,61 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
         MvcResult r = callback(f, "bl-in-1", "❤️ דאד קואץ׳:\nעוד שעה זמן איכות עם נועה 💪");
 
         assertThat(r.getResponse().getStatus()).isEqualTo(200);
-        assertThat(json.readTree(r.getResponse().getContentAsString()).path("status").asText()).isEqualTo("DELIVERED");
-        assertThat(fake.metaSends()).hasSize(1);
-        JsonNode sent = json.readTree(fake.metaSends().get(0).body());
-        assertThat(sent.path("to").asText()).isEqualTo("19995550701");
-        assertThat(sent.path("type").asText()).isIn("text", "interactive");
-        assertThat(sent.toString()).contains("עוד שעה זמן איכות עם נועה");
+        assertThat(json.readTree(r.getResponse().getContentAsString()).has("platformMessageId")).isTrue();
+        assertThat(fake.sentMessages()).hasSize(1);
+        JsonNode sent = fake.sendRequests().get(0);
+        assertThat(sent.path("to").asText()).isEqualTo("+19995550701");
+        assertThat(sent.path("content").path("type").asText()).isIn("text", "buttons");
+        assertThat(sent.path("content").path("text").asText()).contains("עוד שעה זמן איכות עם נועה");
         Map<String, Object> row = row(f, "bl-in-1");
-        // D-038 (DC-B2): Meta's API accepting the send is ACCEPTED; DELIVERED only comes from Meta's delivery receipt
+        // D-038 (DC-B2): accepted is ACCEPTED; DELIVERED only comes from the platform's delivery report (D-053)
         assertThat(row.get("status")).isEqualTo("ACCEPTED");
         assertThat(row.get("delivery_mode")).isEqualTo("FREE_FORM");
         assertThat(row.get("failure_reason")).isNull();
     }
 
     @Test
-    @DisplayName("PASS: outside the window the approved general template goes out with the message as {{1}}; row ACCEPTED / TEMPLATE")
+    @DisplayName("PASS: outside the window the platform's template carries the message as one line ({{1}}); row ACCEPTED / TEMPLATE")
     void outsideTheWindowTheApprovedTemplateCarriesIt() throws Exception {
         Father f = data.activeFather("+19995550702");
         data.endpoint(f, false);
         String content = "❤️ דאד קואץ׳:\nבוקר טוב!\nהיום ב-18:00 עם נועה";
+        fake.onPlatformSend(c -> FakeServers.Reply.json("{\"messageId\":\"" + MESSAGE_ID + "\",\"status\":\"ACCEPTED\","
+                + "\"providerMessageId\":\"" + WAMID + "\",\"channelWindow\":\"TEMPLATE\"}"));
 
         MvcResult r = callback(f, "bl-out-1", content);
 
-        assertThat(json.readTree(r.getResponse().getContentAsString()).path("status").asText()).isEqualTo("DELIVERED");
-        // exactly one send reached Meta: the template (the refused free-form attempt never left Dad Coach)
-        assertThat(fake.metaSends()).hasSize(1);
-        JsonNode sent = json.readTree(fake.metaSends().get(0).body());
-        assertThat(sent.path("type").asText()).isEqualTo("template");
-        assertThat(sent.path("to").asText()).isEqualTo("19995550702");
-        assertThat(sent.path("template").path("name").asText()).isEqualTo(TEMPLATE);
-        assertThat(sent.path("template").path("language").path("code").asText()).isEqualTo("he");
-        JsonNode body = sent.path("template").path("components").get(0);
-        assertThat(body.path("type").asText()).isEqualTo("body");
-        assertThat(body.path("parameters")).hasSize(1);
-        assertThat(body.path("parameters").get(0).path("text").asText())
-                .isEqualTo(ProactiveSender.asTemplateParameter(content))
+        assertThat(json.readTree(r.getResponse().getContentAsString()).path("platformMessageId").asText()).isEqualTo(MESSAGE_ID);
+        assertThat(fake.sentMessages()).hasSize(1);
+        JsonNode sent = fake.sendRequests().get(0);
+        assertThat(sent.path("to").asText()).isEqualTo("+19995550702");
+        assertThat(sent.path("windowPolicy").asText()).isEqualTo("AUTO");
+        assertThat(sent.has("template")).as("D-053: the platform's mapping names the template").isFalse();
+        assertThat(sent.path("templateData").path("variant").asText()).isEmpty();
+        assertThat(sent.path("templateData").path("named").path("text").asText())
+                .isEqualTo(TemplateText.asTemplateParameter(content))
                 .isEqualTo("בוקר טוב! היום ב-18:00 עם נועה");
         Map<String, Object> row = row(f, "bl-out-1");
-        assertThat(row.get("status")).isEqualTo("ACCEPTED"); // D-038: accepted by Meta's API, no delivery receipt yet
+        assertThat(row.get("status")).isEqualTo("ACCEPTED");
         assertThat(row.get("delivery_mode")).isEqualTo("TEMPLATE");
     }
 
     @Test
-    @DisplayName("PASS: Meta refusing the send leaves the row FAILED with Meta's reason, and a replay never re-sends")
+    @DisplayName("PASS: Meta refusing the send (the platform answers FAILED) leaves the row FAILED with Meta's reason, and a replay never re-sends")
     void metaRefusingTheSendIsRecordedAsFailed() throws Exception {
         Father f = data.activeFather("+19995550703");
         data.endpoint(f, true);
-        fake.onMetaSend(c -> new FakeServers.Reply(400,
-                "{\"error\":{\"message\":\"(#131026) Message undeliverable\",\"code\":131026}}"));
+        fake.onPlatformSend(c -> FakeServers.platformAnswer(200, MESSAGE_ID, "FAILED", "META_131026", null));
 
-        MvcResult r = callback(f, "bl-refused-1", "❤️ דאד קואץ׳:\nעוד שעה זמן איכות עם נועה 💪");
-        fake.reset(); // Meta is fine again: the replay must still not send
+        callback(f, "bl-refused-1", "❤️ דאד קואץ׳:\nעוד שעה זמן איכות עם נועה 💪");
+        fake.reset(); // the platform is fine again: the replay must still not send
         MvcResult again = callback(f, "bl-refused-1", "❤️ דאד קואץ׳:\nעוד שעה זמן איכות עם נועה 💪");
 
-        assertThat(json.readTree(r.getResponse().getContentAsString()).path("status").asText()).isEqualTo("FAILED");
         Map<String, Object> row = row(f, "bl-refused-1");
         assertThat(row.get("status")).isEqualTo("FAILED");
         assertThat((String) row.get("failure_reason")).contains("131026");
         assertThat(json.readTree(again.getResponse().getContentAsString()).path("status").asText()).isEqualTo("FAILED");
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.platformSends()).isEmpty();
     }
 
     @Test
@@ -161,9 +174,9 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
         webhook(Receipts.of("wamid.someone-else", "read", f.getPhone()));
 
         assertThat(rowText(f, "bl-unknown-1")).isEqualTo(before);
-        assertThat(row(f, "bl-unknown-1").get("status")).isEqualTo("ACCEPTED"); // D-038: as Meta's API left it
+        assertThat(row(f, "bl-unknown-1").get("status")).isEqualTo("ACCEPTED");
         assertThat(fake.turns()).isEmpty();
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.platformSends()).hasSize(1);
     }
 
     // ---- KNOWN-BUG DC-B1: the wamid is not kept ---------------------------------------------------------------------
@@ -190,18 +203,19 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
     // ---- KNOWN-BUG DC-B2: status receipts are dropped ---------------------------------------------------------------
 
     /**
-     * DC-B2. Meta reports a message it accepted but could not deliver with a "failed" status receipt (131047: more
-     * than 24 hours since the father last wrote). WhatsAppMessageParser parses it into a StatusUpdateDto, and
-     * WhatsAppWebhookController.receive (WhatsAppWebhookController.java:92-94) only logs "whatsapp.receipts.ignored".
-     * The delivery stays DELIVERED forever although the father never got the message.
-     * Correct: the delivery is marked FAILED, with Meta's error code as the reason.
+     * DC-B2. Meta reports a message it accepted but could not deliver (131047: more than 24 hours since the father
+     * last wrote). Before D-038 the receipt was only logged and the delivery stayed DELIVERED forever. D-053: the
+     * platform receives Meta's receipts and reports FAILED with Meta's code; the receipt on Dad Coach's webhook changes
+     * nothing. Correct: the delivery is marked FAILED, with Meta's error code as the reason.
      */
     @Test
-    @DisplayName("KNOWN-BUG DC-B2: a 'failed' receipt from Meta marks the scheduled delivery FAILED")
+    @DisplayName("KNOWN-BUG DC-B2: the platform's FAILED report (Meta's 131047) marks the scheduled delivery FAILED")
     void aFailedReceiptMarksTheDeliveryFailed() throws Exception {
         Father f = deliveredFreeForm("+19995550706", "bl-failed-1");
 
         webhook(Receipts.failed(WAMID, f.getPhone(), 131047, "Re-engagement message"));
+        assertThat(row(f, "bl-failed-1").get("status")).as("D-053: Meta's receipts are the platform's").isEqualTo("ACCEPTED");
+        report("bl-failed-1", "FAILED", "META_131047");
 
         Map<String, Object> row = row(f, "bl-failed-1");
         assertThat(row.get("status"))
@@ -211,47 +225,24 @@ class ScheduledDeliveryBaselineTest extends AbstractIntegrationTest {
     }
 
     /**
-     * DC-B2 (status lookup). ChannelAdapter.getDeliveryStatus promises "the current delivery status" of a sent
-     * message; WhatsAppAdapter.getDeliveryStatus (WhatsAppAdapter.java:165-171) always answers PENDING, and the
-     * receipts that would feed it are dropped (WhatsAppWebhookController.java:92-94).
-     * Correct: after a "failed" receipt the wamid's status is FAILED.
+     * DC-B2 (delivered / read): the delivery follows what became of the message - DELIVERED, then READ - and the
+     * delivery row records it (it changes). D-053: from the platform's reports.
      */
     @Test
-    @DisplayName("KNOWN-BUG DC-B2: after a 'failed' receipt the adapter reports the message FAILED")
-    void theAdapterReportsFailedAfterAFailedReceipt() throws Exception {
-        Father f = deliveredFreeForm("+19995550707", "bl-failed-2");
-
-        webhook(Receipts.failed(WAMID, f.getPhone(), 131047, "Re-engagement message"));
-
-        assertThat(whatsapp.getDeliveryStatus(WAMID))
-                .as("DC-B2: getDeliveryStatus(%s) after Meta's 'failed' receipt", WAMID)
-                .isEqualTo(DeliveryStatus.FAILED);
-    }
-
-    /**
-     * DC-B2 (delivered / read). The same dropped receipts (WhatsAppWebhookController.java:92-94): "delivered" and
-     * "read" never reach the delivery, and WhatsAppAdapter.getDeliveryStatus (WhatsAppAdapter.java:165-171) is
-     * hard-coded PENDING. Correct: the delivery follows Meta - DELIVERED after "delivered", READ after "read" - and
-     * the delivery row records it (it changes).
-     */
-    @Test
-    @DisplayName("KNOWN-BUG DC-B2: 'delivered' then 'read' receipts update the delivery's status")
+    @DisplayName("KNOWN-BUG DC-B2: 'delivered' then 'read' (the platform's reports) update the delivery's status")
     void deliveredAndReadReceiptsUpdateTheDelivery() throws Exception {
         Father f = deliveredFreeForm("+19995550708", "bl-read-1");
         String sentRow = rowText(f, "bl-read-1");
 
-        webhook(Receipts.of(WAMID, "delivered", f.getPhone()));
-        assertThat(whatsapp.getDeliveryStatus(WAMID))
-                .as("DC-B2: getDeliveryStatus(%s) after Meta's 'delivered' receipt", WAMID)
-                .isEqualTo(DeliveryStatus.DELIVERED);
+        report("bl-read-1", "DELIVERED", null);
+        assertThat(row(f, "bl-read-1").get("status")).isEqualTo("DELIVERED");
         String deliveredRow = rowText(f, "bl-read-1");
 
-        webhook(Receipts.of(WAMID, "read", f.getPhone()));
-        assertThat(whatsapp.getDeliveryStatus(WAMID))
-                .as("DC-B2: getDeliveryStatus(%s) after Meta's 'read' receipt", WAMID)
-                .isEqualTo(DeliveryStatus.READ);
+        report("bl-read-1", "READ", null);
+        assertThat(row(f, "bl-read-1").get("status")).isEqualTo("READ");
         assertThat(rowText(f, "bl-read-1"))
-                .as("DC-B2: the delivery row records the 'read' receipt")
+                .as("DC-B2: the delivery row records the 'read' report")
                 .isNotEqualTo(deliveredRow).isNotEqualTo(sentRow);
     }
+
 }

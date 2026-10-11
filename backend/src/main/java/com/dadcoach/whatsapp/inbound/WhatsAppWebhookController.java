@@ -1,10 +1,8 @@
 package com.dadcoach.whatsapp.inbound;
 
 import com.dadcoach.channel.dto.InboundMessageDto;
-import com.dadcoach.channel.dto.StatusUpdateDto;
 import com.dadcoach.config.WhatsAppProperties;
 import com.dadcoach.idempotency.IdempotencyService;
-import com.dadcoach.whatsapp.DeliveryReceipts;
 import com.dadcoach.whatsapp.WhatsAppMessageParser;
 import com.dadcoach.whatsapp.WhatsAppSignatureVerifier;
 import com.dadcoach.whatsapp.dto.WhatsAppWebhookPayload;
@@ -36,8 +34,10 @@ import org.springframework.web.bind.annotation.RestController;
  * than the lease (its worker died) is taken over. {@code dad-coach.whatsapp.inbound.retry-unanswered=false} restores the
  * old marking on arrival.
  *
- * <p>D-038 (DC-B2): status receipts (sent / delivered / read / failed) update the scheduled message or dashboard link
- * they belong to ({@link DeliveryReceipts}); {@code dad-coach.whatsapp.receipts.enabled=false} ignores them again.
+ * <p>D-053 (Unified Workflow 6.4): Meta's status receipts (sent / delivered / read / failed) are the platform's - it
+ * sends every message and reports each one's fate ({@code /api/integration/channel/delivery-status}). A payload that
+ * still carries {@code statuses} (the platform forwarding them during the rollout) is answered 200 and its statuses are
+ * ignored.</p>
  */
 @RestController
 public class WhatsAppWebhookController {
@@ -53,20 +53,15 @@ public class WhatsAppWebhookController {
     private final InboundMessageHandler handler;
     private final ObjectMapper json;
     private final Clock clock;
-    private final DeliveryReceipts receipts;
-    private final boolean receiptsEnabled;
     private final boolean retryUnanswered;
     private final Duration claimLease;
 
     public WhatsAppWebhookController(WhatsAppProperties properties, WhatsAppSignatureVerifier signatures,
                                      WhatsAppMessageParser parser, IdempotencyService idempotency,
                                      InboundTurnExecutor executor, InboundMessageHandler handler, ObjectMapper json,
-                                     Clock clock, DeliveryReceipts receipts,
-                                     @Value("${dad-coach.whatsapp.receipts.enabled:true}") boolean receiptsEnabled,
+                                     Clock clock,
                                      @Value("${dad-coach.whatsapp.inbound.retry-unanswered:true}") boolean retryUnanswered,
                                      @Value("${dad-coach.whatsapp.inbound.claim-lease:PT10M}") Duration claimLease) {
-        this.receipts = receipts;
-        this.receiptsEnabled = receiptsEnabled;
         this.retryUnanswered = retryUnanswered;
         this.claimLease = claimLease;
         this.properties = properties;
@@ -125,18 +120,9 @@ public class WhatsAppWebhookController {
             // claimed here, in arrival order; the turn still runs one at a time per sender
             executor.submit(in.fatherChannelIdentity(), () -> answer(in, receivedAt));
         }
-        for (StatusUpdateDto receipt : parsed.statusUpdates()) {
-            if (!receiptsEnabled) {
-                log.atDebug().setMessage("whatsapp.receipts.ignored").addKeyValue("count", parsed.statusUpdates().size()).log();
-                break;
-            }
-            try {
-                receipts.apply(receipt);
-            } catch (RuntimeException e) {
-                // Meta always gets its 200 (and never sends it again): D-052 - kept, the next pass re-applies it
-                log.atWarn().setMessage("whatsapp.receipt.failed").addKeyValue("error", e.getClass().getSimpleName()).log();
-                receipts.keepAfterFailure(receipt);
-            }
+        if (!parsed.statusUpdates().isEmpty()) {
+            // D-053: the platform's (it reports each message's fate); ignored here, the payload still answered 200
+            log.atDebug().setMessage("whatsapp.receipts.ignored").addKeyValue("count", parsed.statusUpdates().size()).log();
         }
         return ResponseEntity.ok().build();
     }

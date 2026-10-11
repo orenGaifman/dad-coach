@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,16 +24,16 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Outside the 24-hour window a session timer's message goes out in its own approved template, its values taken from
- * the session and its buttons carrying the session's payloads; a tap on such a button is handled like any session tap.
- * Until its own template is approved, the general template carries the message as before.
+ * A session timer's message names its own message type for outside the 24-hour window ({@code templateData}, D-053): the
+ * values taken from the session and the quick-reply payloads carrying the session's ids; a tap on such a button is
+ * handled like any session tap. The platform's kind→template mapping (the seed: the session template, then the general
+ * {@code dad_coach_update_he} with {@code named.text}) picks the approved Meta template - Dad Coach never names one.
  */
 class OwnTemplatesTest extends AbstractIntegrationTest {
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired QualityTimeRepository sessions;
-    @Autowired com.dadcoach.channel.template.MetaTemplateDirectory metaTemplates;
 
     private Father father;
     private Child noa;
@@ -48,12 +49,6 @@ class OwnTemplatesTest extends AbstractIntegrationTest {
         return sessions.saveAndFlush(new QualityTime(father, child, start, start.plus(Duration.ofMinutes(minutes))));
     }
 
-    private void approve(String name) {
-        WhatsAppTemplateCatalog.Entry e = WhatsAppTemplateCatalog.require(name);
-        jdbc.update("INSERT INTO template_messages (template_name, language, category, body, status, max_variables) "
-                + "VALUES (?, 'he', 'UTILITY', ?, 'APPROVED', ?)", e.name(), e.body(), e.maxVariables());
-    }
-
     private void callback(String triggerId, String state, String content) throws Exception {
         String body = "{\"triggerId\":\"" + triggerId + "\",\"workflowInstanceId\":\"w1\",\"userId\":\"whatsapp:" + father.getPhone()
                 + "\",\"channel\":\"whatsapp\",\"targetStateKey\":\"" + state + "\",\"responseContent\":\"" + content + "\"}";
@@ -62,50 +57,48 @@ class OwnTemplatesTest extends AbstractIntegrationTest {
                 .content(body)).andExpect(status().isOk());
     }
 
-    private JsonNode lastSend() throws Exception {
-        return json.readTree(fake.metaSends().get(fake.metaSends().size() - 1).body());
+    private JsonNode lastSend() {
+        List<JsonNode> sends = fake.sendRequests("SCHEDULED");
+        assertThat(sends).isNotEmpty();
+        JsonNode sent = sends.get(sends.size() - 1);
+        assertThat(sent.has("template")).as("D-053: never a Meta template name").isFalse();
+        assertThat(sent.has("fallbackTemplates")).isFalse();
+        return sent;
     }
 
-    private static JsonNode component(JsonNode sent, int index) {
-        return sent.path("template").path("components").get(index);
+    private static List<String> texts(JsonNode array) {
+        List<String> out = new java.util.ArrayList<>();
+        array.forEach(v -> out.add(v.asText()));
+        return out;
     }
 
     @Test
-    @DisplayName("the 1-hour reminder: its own template, the child as {{1}}, the ideas button carrying the session")
+    @DisplayName("the 1-hour reminder: its own message type, the child as {{1}}, the ideas payload carrying the session")
     void hourBefore() throws Exception {
         setUpFather("+19995550700");
-        approve(WhatsAppTemplateCatalog.SESSION_HOUR_BEFORE_HE);
         QualityTime next = session(noa, Duration.ofMinutes(60), 45);
 
         callback("o-1", "SESSION_REMINDER_1H", "❤️ דאד קואץ׳:\\nעוד שעה הזמן שלך ושל נועה 🙂\\nיש כבר רעיון מה תעשו?");
 
-        JsonNode sent = lastSend();
-        assertThat(sent.path("type").asText()).isEqualTo("template");
-        assertThat(sent.path("template").path("name").asText()).isEqualTo("dad_coach_session_hour_before_he");
-        assertThat(sent.path("template").path("language").path("code").asText()).isEqualTo("he");
-        assertThat(component(sent, 0).path("type").asText()).isEqualTo("body");
-        assertThat(component(sent, 0).path("parameters").get(0).path("text").asText()).isEqualTo("נועה");
-        assertThat(component(sent, 1).path("type").asText()).isEqualTo("button");
-        assertThat(component(sent, 1).path("sub_type").asText()).isEqualTo("quick_reply");
-        assertThat(component(sent, 1).path("index").asText()).isEqualTo("0");
-        assertThat(component(sent, 1).path("parameters").get(0).path("payload").asText()).isEqualTo("dc:ideas:" + next.getId());
+        JsonNode data = lastSend().path("templateData");
+        assertThat(data.path("variant").asText()).isEqualTo("session_hour_before_he");
+        assertThat(texts(data.path("values"))).containsExactly("נועה");
+        assertThat(texts(data.path("payloads"))).containsExactly("dc:ideas:" + next.getId());
+        assertThat(data.path("named").path("text").asText()).isEqualTo("עוד שעה הזמן שלך ושל נועה 🙂 יש כבר רעיון מה תעשו?");
     }
 
     @Test
-    @DisplayName("the follow-up: its own template with both buttons; a tap on 'היה מעולה' completes the session")
+    @DisplayName("the follow-up: its own message type with both payloads; a tap on 'היה מעולה' completes the session")
     void followUpAndTap() throws Exception {
         setUpFather("+19995550701");
-        approve(WhatsAppTemplateCatalog.SESSION_FOLLOW_UP_HE);
         QualityTime ended = session(noa, Duration.ofMinutes(-90), 60);
 
         callback("o-2", "SESSION_FOLLOW_UP", "❤️ דאד קואץ׳:\\nנו, איך היה לכם עם נועה?");
 
-        JsonNode sent = lastSend();
-        assertThat(sent.path("template").path("name").asText()).isEqualTo("dad_coach_session_follow_up_he");
-        assertThat(component(sent, 0).path("parameters").get(0).path("text").asText()).isEqualTo("נועה");
-        assertThat(component(sent, 1).path("parameters").get(0).path("payload").asText()).isEqualTo("dc:done:" + ended.getId());
-        assertThat(component(sent, 2).path("index").asText()).isEqualTo("1");
-        assertThat(component(sent, 2).path("parameters").get(0).path("payload").asText()).isEqualTo("dc:missed:" + ended.getId());
+        JsonNode data = lastSend().path("templateData");
+        assertThat(data.path("variant").asText()).isEqualTo("session_follow_up_he");
+        assertThat(texts(data.path("values"))).containsExactly("נועה");
+        assertThat(texts(data.path("payloads"))).containsExactly("dc:done:" + ended.getId(), "dc:missed:" + ended.getId());
 
         String tap = Webhooks.envelope("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"from\":\"" + father.getPhone().substring(1)
                 + "\",\"id\":\"wamid.tpl-tap\",\"timestamp\":\"1793700000\",\"type\":\"button\",\"button\":{\"payload\":\"dc:done:"
@@ -122,53 +115,33 @@ class OwnTemplatesTest extends AbstractIntegrationTest {
     void morning() throws Exception {
         setUpFather("+19995550702");
         Child yuval = data.child(father, "יובל", 8);
-        approve(WhatsAppTemplateCatalog.SESSION_MORNING_HE);
         session(yuval, Duration.ofHours(5), 60); // 17:00 local (the clock is Tuesday 12:00 in Israel)
         session(noa, Duration.ofHours(3), 60);   // 15:00
         session(noa, Duration.ofDays(1), 60);    // tomorrow: not today's
 
         callback("o-3", "SESSION_MORNING_REMINDER", "❤️ דאד קואץ׳:\\n*היום ב-15:00 וב-17:00* זה הזמן שלך ושל נועה ויובל 🙂");
 
-        JsonNode sent = lastSend();
-        assertThat(sent.path("template").path("name").asText()).isEqualTo("dad_coach_session_morning_he");
-        assertThat(component(sent, 0).path("parameters").get(0).path("text").asText()).isEqualTo("15:00 וב-17:00");
-        assertThat(component(sent, 0).path("parameters").get(1).path("text").asText()).isEqualTo("נועה ויובל");
-        assertThat(sent.path("template").path("components")).hasSize(1);
+        JsonNode data = lastSend().path("templateData");
+        assertThat(data.path("variant").asText()).isEqualTo("session_morning_he");
+        assertThat(texts(data.path("values"))).containsExactly("15:00 וב-17:00", "נועה ויובל");
+        assertThat(data.has("payloads")).isFalse();
         assertThat(com.dadcoach.channel.template.WhatsAppTemplateCatalog.require("dad_coach_session_morning_he")
-                .render(java.util.List.of("15:00 וב-17:00", "נועה ויובל")))
+                .render(List.of("15:00 וב-17:00", "נועה ויובל")))
                 .isEqualTo("❤️ דאד קואץ׳:\n*היום ב-15:00 וב-17:00* זה הזמן שלך ושל נועה ויובל 🙂");
     }
 
     @Test
-    @DisplayName("not approved yet, or no session to fill it from: the general template carries the message, as before")
-    void fallsBackToTheGeneralTemplate() throws Exception {
+    @DisplayName("no session to fill its own template from: the kind's default message type, the message as one line")
+    void noSessionIsTheDefaultMessageType() throws Exception {
         setUpFather("+19995550703");
-        session(noa, Duration.ofMinutes(60), 45);
-        callback("o-4", "SESSION_REMINDER_1H", "❤️ דאד קואץ׳:\\nעוד שעה הזמן שלך ושל נועה 🙂\\nיש כבר רעיון מה תעשו?");
-        assertThat(lastSend().path("template").path("name").asText()).isEqualTo(TEMPLATE);
-        assertThat(lastSend().toString()).contains("עוד שעה הזמן שלך ושל נועה 🙂 יש כבר רעיון מה תעשו?");
-
-        approve(WhatsAppTemplateCatalog.SESSION_FOLLOW_UP_HE);
         callback("o-5", "SESSION_FOLLOW_UP", "❤️ דאד קואץ׳:\\nנו, איך היה לכם עם נועה?"); // nothing has ended
-        assertThat(lastSend().path("template").path("name").asText()).isEqualTo(TEMPLATE);
-    }
+        assertThat(fake.platformSends()).as("no session to follow up: skipped, nothing sent").isEmpty();
 
-    @Test
-    @DisplayName("approved at Meta, registered by the sync, then really sent: no manual step between Meta and a send")
-    void approvedAtMetaIsSent() throws Exception {
-        setUpFather("+19995550704");
-        QualityTime next = session(noa, Duration.ofMinutes(60), 45);
-        String body = json.writeValueAsString(WhatsAppTemplateCatalog.require(WhatsAppTemplateCatalog.SESSION_HOUR_BEFORE_HE).body());
-        com.dadcoach.support.FakeServers.INSTANCE.onMetaTemplates(c -> com.dadcoach.support.FakeServers.Reply.json(
-                "{\"data\":[{\"name\":\"dad_coach_session_hour_before_he\",\"language\":\"he\",\"status\":\"APPROVED\","
-                        + "\"category\":\"MARKETING\",\"previous_category\":\"UTILITY\",\"components\":[{\"type\":\"BODY\",\"text\":"
-                        + body + "}]}]}"));
-        assertThat(metaTemplates.refresh()).isTrue();
-
-        callback("o-6", "SESSION_REMINDER_1H", "❤️ דאד קואץ׳:\\nעוד שעה הזמן שלך ושל נועה 🙂\\nיש כבר רעיון מה תעשו?");
-
-        JsonNode sent = lastSend();
-        assertThat(sent.path("template").path("name").asText()).isEqualTo("dad_coach_session_hour_before_he");
-        assertThat(component(sent, 1).path("parameters").get(0).path("payload").asText()).isEqualTo("dc:ideas:" + next.getId());
+        callback("o-6", "ACTIVE_COACHING", "❤️ דאד קואץ׳:\\nהיי, מה המצב השבוע?");
+        JsonNode data = lastSend().path("templateData");
+        assertThat(data.path("variant").asText()).isEmpty();
+        assertThat(data.has("values")).isFalse();
+        assertThat(data.has("payloads")).isFalse();
+        assertThat(data.path("named").path("text").asText()).isEqualTo("היי, מה המצב השבוע?");
     }
 }

@@ -2,7 +2,6 @@ package com.dadcoach.channel.template;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.dadcoach.channel.delivery.ProactiveSender;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -79,7 +78,7 @@ class WhatsAppTemplateCatalogTest {
     void identityLineOnce() {
         WhatsAppTemplateCatalog.Entry e = WhatsAppTemplateCatalog.require(WhatsAppTemplateCatalog.UPDATE_HE);
         String message = "❤️ דאד קואץ׳:\nעוד שעה הזמן שלך ושל מאיה 🙂\nיש כבר רעיון מה תעשו?";
-        String filled = e.body().replace("{{1}}", ProactiveSender.asTemplateParameter(message));
+        String filled = e.body().replace("{{1}}", TemplateText.asTemplateParameter(message));
         assertThat(filled).containsOnlyOnce("דאד קואץ׳:");
         assertThat(filled).contains("עוד שעה הזמן שלך ושל מאיה 🙂 יש כבר רעיון מה תעשו?");
     }

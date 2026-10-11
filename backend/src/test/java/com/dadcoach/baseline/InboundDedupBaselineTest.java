@@ -43,13 +43,9 @@ class InboundDedupBaselineTest extends AbstractIntegrationTest {
         assertThat(status).as("Meta always gets its 200").isEqualTo(200);
     }
 
-    /** The texts of every send that reached Meta, in order. */
-    private List<String> sentTexts() throws Exception {
-        List<String> out = new java.util.ArrayList<>();
-        for (FakeServers.Call c : fake.metaSends()) {
-            out.add(json.readTree(c.body()).path("text").path("body").asText());
-        }
-        return out;
+    /** D-053: the texts of every message handed to the platform's Send API (a re-POST of a key once), in order. */
+    private List<String> sentTexts() {
+        return fake.sentTexts();
     }
 
     private static String reply(String content, boolean duplicate) {
@@ -93,7 +89,7 @@ class InboundDedupBaselineTest extends AbstractIntegrationTest {
         webhook(Webhooks.text(f.getPhone(), "wamid.bl.dupnull", "היי"));
 
         assertThat(turnsFor("wamid.bl.dupnull")).isEqualTo(1);
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.platformSends()).isEmpty();
     }
 
     // ---- KNOWN-BUG DC-B3: the dedupe key is spent before the turn succeeded --------------------------------------------
@@ -135,7 +131,7 @@ class InboundDedupBaselineTest extends AbstractIntegrationTest {
 
     /**
      * DC-B3 (reply never reached the father). Same root cause (WhatsAppWebhookController.java:86 before :90): the
-     * turn ran but Meta refused the reply (HTTP 500), InboundMessageHandler.send only logs the FAILED DeliveryResult
+     * turn ran but the reply was not sent (before D-053: Meta refused it, HTTP 500; now: the platform created nothing), InboundMessageHandler.send only logs the FAILED DeliveryResult
      * (InboundMessageHandler.java:509-516) and the father got nothing. Meta's id is already spent, so when the message
      * comes again it is dropped. Correct: a message the father got no answer to is processed again on redelivery and
      * the reply reaches him.
@@ -146,20 +142,25 @@ class InboundDedupBaselineTest extends AbstractIntegrationTest {
         Father f = data.activeFather("+19995550714");
         data.endpoint(f, true);
         fake.onTurn(c -> FakeServers.Reply.json(reply(REPLY.replace("\n", "\\n"), false)));
-        AtomicBoolean metaUp = new AtomicBoolean(false);
+        AtomicBoolean platformUp = new AtomicBoolean(false);
         AtomicInteger accepted = new AtomicInteger();
-        fake.onMetaSend(c -> metaUp.get()
-                ? FakeServers.Reply.json(Receipts.accepted("wamid.bl.reply." + accepted.incrementAndGet()))
-                : new FakeServers.Reply(500, "{\"error\":{\"message\":\"Service temporarily unavailable\",\"code\":2}}"));
+        // D-053: the platform's Send API created nothing (kill switch) - the reply never reached him
+        fake.onPlatformSend(c -> {
+            if (!platformUp.get()) {
+                return FakeServers.platformDisabled();
+            }
+            accepted.incrementAndGet();
+            return fake.accept(c);
+        });
 
         webhook(Webhooks.text(f.getPhone(), "wamid.bl.lostreply", "היי, היה לנו סופש מעולה"));
-        assertThat(accepted.get()).as("first attempt: Meta accepted nothing").isZero();
+        assertThat(accepted.get()).as("first attempt: the platform took nothing").isZero();
 
-        metaUp.set(true);
+        platformUp.set(true);
         webhook(Webhooks.text(f.getPhone(), "wamid.bl.lostreply", "היי, היה לנו סופש מעולה"));
 
         assertThat(accepted.get())
-                .as("DC-B3: the redelivered message (reply never sent) must be answered - Meta accepted sends")
+                .as("DC-B3: the redelivered message (reply never sent) must be answered - the platform took it")
                 .isEqualTo(1);
     }
 

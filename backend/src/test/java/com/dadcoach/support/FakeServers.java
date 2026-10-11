@@ -17,8 +17,9 @@ import java.util.function.Function;
 
 /**
  * One JDK HttpServer standing in for everything Dad Coach calls (no @MockBean, playbook §50): the AI Workflow
- * Platform (turns, outbound recording, tenancy person lifecycle, session timers - D-037), Meta's Graph API (sends, voice-note media) and
- * ElevenLabs speech to text (D-029) and Google (token endpoint and Calendar API under {@code /google/}). Every
+ * Platform (turns, outbound recording, tenancy person lifecycle, session timers - D-037, the Send API - D-053: the only
+ * sender), Meta's Graph API (voice-note media only; a send there is recorded so the test base can prove none happens)
+ * and ElevenLabs speech to text (D-029) and Google (token endpoint and Calendar API under {@code /google/}). Every
  * request is recorded; the platform's turn answer, the media, the transcript and Google are programmable per test.
  */
 public final class FakeServers {
@@ -74,16 +75,20 @@ public final class FakeServers {
     private final AtomicReference<Function<Call, Reply>> tenancy = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> media = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> speechToText = new AtomicReference<>();
-    private final AtomicReference<Function<Call, Reply>> meta = new AtomicReference<>();
-    private final AtomicReference<Function<Call, Reply>> metaTemplates = new AtomicReference<>();
-    private final AtomicReference<Function<Call, Reply>> gate = new AtomicReference<>();
     private final AtomicReference<Function<Call, Reply>> google = new AtomicReference<>();
     /** null: the in-memory platform below answers {@code /api/v1/worker/scheduled-transitions}. */
     private final AtomicReference<Function<Call, Reply>> scheduledTransitions = new AtomicReference<>();
     /** null: the D-039 timeline reports (/messages/inbound, /messages/turn-outcome) are accepted. */
     private final AtomicReference<Function<Call, Reply>> timelineReports = new AtomicReference<>();
-    /** D-045: the platform's Send API ({@code POST /api/v1/worker/messages/send}); default = inert (503 disabled). */
+    /**
+     * D-045: the platform's Send API ({@code POST /api/v1/worker/messages/send}); default (D-053) = the platform takes
+     * it: ACCEPTED with a wamid, the same key replayed ({@link #accept}).
+     */
     private final AtomicReference<Function<Call, Reply>> platformSend = new AtomicReference<>();
+    /** D-053: {@code GET /api/v1/worker/messaging/kinds} and {@code /whatsapp/templates}; default = the seed, all usable. */
+    private final AtomicReference<Function<Call, Reply>> platformTemplates = new AtomicReference<>();
+    /** What the default Send API accepted, by idempotency key: its message id (a re-POST replays it). */
+    private final Map<String, String> accepted = new java.util.concurrent.ConcurrentHashMap<>();
     /** D-045: {@code GET /api/v1/worker/messages?workerKey&idempotencyKey}; default = 404 not found. */
     private final AtomicReference<Function<Call, Reply>> platformLookup = new AtomicReference<>();
     private final List<Map<String, String>> lookupQueries = new CopyOnWriteArrayList<>();
@@ -108,16 +113,15 @@ public final class FakeServers {
     }
 
     public void reset() {
-        metaTemplates.set(null);
         calls.clear();
+        accepted.clear();
+        platformTemplates.set(null);
         timers.clear();
         scheduledTransitions.set(null);
         timelineReports.set(null);
         lookupQueries.clear();
-        platformSend.set(c -> new Reply(503, "{\"error\":\"messaging.disabled\",\"reason\":\"DISABLED\","
-                + "\"message\":\"the platform does not send this message - send it yourself (nothing was created)\"}"));
+        platformSend.set(this::accept);
         platformLookup.set(c -> new Reply(404, "{\"error\":\"messaging.message_not_found\",\"message\":\"no such message\"}"));
-        meta.set(c -> Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"wamid.out." + sent.incrementAndGet() + "\"}]}"));
         turn.set(c -> Reply.json(turnReply("שלום! מה שלומך?", "GENERATED")));
         tenancy.set(c -> c.method().equals("DELETE")
                 ? Reply.json("{\"outcome\":\"DELETED\",\"workflowInstances\":1,\"messages\":3}")
@@ -128,7 +132,6 @@ public final class FakeServers {
                 : Reply.json("{\"url\":\"" + baseUrl() + "/media-files/" + c.path().substring(c.path().lastIndexOf('/') + 1)
                         + "\",\"mime_type\":\"audio/ogg; codecs=opus\",\"file_size\":7,\"id\":\"media\"}"));
         speechToText.set(c -> Reply.json("{\"language_code\":\"heb\",\"text\":\"רוצה לקבוע זמן עם נועה ביום שישי\"}"));
-        gate.set(c -> Reply.json("{\"send\":true,\"route\":\"dad-coach\",\"why\":\"ON_THIS_PRODUCT\"}"));
         // Google: tokens are granted, the calendar is empty, a new event gets an id
         google.set(c -> c.path().equals("/google/token")
                 ? Reply.json("{\"access_token\":\"fresh-access\",\"refresh_token\":\"fresh-refresh\",\"expires_in\":3600}")
@@ -159,14 +162,83 @@ public final class FakeServers {
         return calls.stream().filter(c -> c.path().equals("/api/v1/worker/messages/send")).toList();
     }
 
+    /** D-053: every {@code /send} request body, parsed, in order. */
+    public List<com.fasterxml.jackson.databind.JsonNode> sendRequests() {
+        return platformSends().stream().map(c -> {
+            try {
+                return JSON.readTree(c.body());
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+        }).toList();
+    }
+
+    /** D-053: the {@code /send} requests of one kind (LOGIN_LINK, SCHEDULED, REPLY, FIXED_LINE, ...). */
+    public List<com.fasterxml.jackson.databind.JsonNode> sendRequests(String kind) {
+        return sendRequests().stream().filter(r -> kind.equals(r.path("kind").asText())).toList();
+    }
+
+    /**
+     * D-053: what a father reads, request by request: the free-form {@code content.text} of each distinct message
+     * (a re-POST of the same key counted once), in order - what Meta's sends used to show.
+     */
+    public List<String> sentTexts() {
+        java.util.Set<String> keys = new java.util.HashSet<>();
+        return sendRequests().stream().filter(r -> keys.add(r.path("idempotencyKey").asText()))
+                .map(r -> r.path("content").path("text").asText(null)).toList();
+    }
+
+    /** D-053: the distinct messages handed to the platform (re-POSTs of a key counted once), in order. */
+    public List<com.fasterxml.jackson.databind.JsonNode> sentMessages() {
+        java.util.Set<String> keys = new java.util.HashSet<>();
+        return sendRequests().stream().filter(r -> keys.add(r.path("idempotencyKey").asText())).toList();
+    }
+
+    /**
+     * D-053: the default Send API - the platform takes the message: 200 ACCEPTED with a new wamid, channel window
+     * SESSION when it carries content, else TEMPLATE; the same key again replays the same message ({@code replayed}).
+     */
+    public Reply accept(Call c) {
+        String key;
+        boolean content;
+        try {
+            com.fasterxml.jackson.databind.JsonNode r = JSON.readTree(c.body());
+            key = r.path("idempotencyKey").asText();
+            content = r.hasNonNull("content");
+        } catch (IOException e) {
+            return new Reply(400, "{\"error\":\"messaging.invalid_request\"}");
+        }
+        String existing = accepted.get(key);
+        String messageId = existing != null ? existing
+                : java.util.UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)).toString();
+        String wamid = "wamid.platform." + messageId.substring(0, 8);
+        accepted.put(key, messageId);
+        return Reply.json("{\"messageId\":\"" + messageId + "\",\"status\":\"ACCEPTED\",\"providerMessageId\":\""
+                + wamid + "\",\"channelWindow\":\"" + (content ? "SESSION" : "TEMPLATE") + "\",\"replayed\":"
+                + (existing != null) + "}");
+    }
+
+    /** The platform's word on a key, as its answers carry it ({@code status} QUEUED / HELD / FAILED / ...). */
+    public static Reply platformAnswer(int httpStatus, String messageId, String status, String reason, String wamid) {
+        return new Reply(httpStatus, "{\"messageId\":\"" + messageId + "\",\"status\":\"" + status + "\""
+                + (reason == null ? "" : ",\"reason\":\"" + reason + "\"")
+                + (wamid == null ? "" : ",\"providerMessageId\":\"" + wamid + "\"") + "}");
+    }
+
+    /** The kill switch's answer (spec v2.5: nothing was created). */
+    public static Reply platformDisabled() {
+        return new Reply(503, "{\"error\":\"messaging.disabled\",\"reason\":\"DISABLED\","
+                + "\"message\":\"the platform does not send this message now (nothing was created)\"}");
+    }
+
+    /** D-053: how the platform answers {@code /messaging/kinds} and {@code /whatsapp/templates} (null = the default). */
+    public void onPlatformTemplates(Function<Call, Reply> answer) {
+        platformTemplates.set(answer);
+    }
+
     /** The query of every lookup by key, in order. */
     public List<Map<String, String>> platformLookups() {
         return List.copyOf(lookupQueries);
-    }
-
-    /** The shared number's gate ({@code POST /api/v1/worker/whatsapp/outbound-gate}; default: send). */
-    public void onGate(Function<Call, Reply> answer) {
-        gate.set(answer);
     }
 
     // ---- the platform's scheduled transitions (D-037) ---------------------------------------------------------------
@@ -308,16 +380,6 @@ public final class FakeServers {
                 && (c.path().startsWith("/media-files/") || c.path().matches("/v[0-9.]+/[^/]+"))).toList();
     }
 
-    /** Meta's {@code GET /<version>/<waba>/message_templates} (default: no templates). */
-    public void onMetaTemplates(Function<Call, Reply> answer) {
-        metaTemplates.set(answer);
-    }
-
-    /** How Meta's Graph API answers a send (default: accepted with a new wamid). */
-    public void onMetaSend(Function<Call, Reply> answer) {
-        meta.set(answer);
-    }
-
     public List<Call> calls(String pathPrefix) {
         return calls.stream().filter(c -> c.path().startsWith(pathPrefix)).toList();
     }
@@ -326,6 +388,7 @@ public final class FakeServers {
         return calls("/api/v1/worker/execute");
     }
 
+    /** Sends to Meta's Graph API ({@code POST /<version>/<phone id>/messages}) - D-053: never (the test base checks). */
     public List<Call> metaSends() {
         return calls.stream().filter(c -> c.path().endsWith("/messages") && !c.path().startsWith("/api/")).toList();
     }
@@ -373,13 +436,14 @@ public final class FakeServers {
             reply = google.get().apply(call);
         } else if (path.equals("/api/v1/worker/execute")) {
             reply = turn.get().apply(call);
-        } else if (path.equals("/api/v1/worker/whatsapp/outbound-gate")) {
-            reply = gate.get().apply(call);
         } else if (path.equals("/api/v1/worker/messages/send")) {
             reply = platformSend.get().apply(call);
         } else if (path.equals("/api/v1/worker/messages") && call.method().equals("GET")) {
             lookupQueries.add(query(ex));
             reply = platformLookup.get().apply(call);
+        } else if (path.equals("/api/v1/worker/messaging/kinds") || path.equals("/api/v1/worker/whatsapp/templates")) {
+            Function<Call, Reply> override = platformTemplates.get();
+            reply = override != null ? override.apply(call) : defaultTemplates(path);
         } else if (path.equals("/api/v1/worker/scheduled-transitions")) {
             Function<Call, Reply> override = scheduledTransitions.get();
             Reply answered = override != null ? override.apply(call) : null;      // null: the in-memory platform answers
@@ -393,13 +457,11 @@ public final class FakeServers {
             reply = tenancy.get().apply(call);
         } else if (path.equals("/v1/speech-to-text")) {
             reply = speechToText.get().apply(call);
-        } else if (call.method().equals("GET") && path.endsWith("/message_templates")) {
-            Function<Call, Reply> answer = metaTemplates.get();
-            reply = answer != null ? answer.apply(call) : Reply.json("{\"data\":[]}");
         } else if (call.method().equals("GET") && (path.startsWith("/media-files/") || path.matches("/v[0-9.]+/[^/]+"))) {
             reply = media.get().apply(call);
         } else if (path.endsWith("/messages")) {
-            reply = meta.get().apply(call);
+            // D-053: Dad Coach never sends to Meta; recorded (metaSends) and refused
+            reply = new Reply(410, "{\"error\":{\"message\":\"Dad Coach does not send to Meta (D-053)\"}}");
         } else {
             reply = new Reply(404, "{}");
         }
@@ -411,6 +473,39 @@ public final class FakeServers {
         ex.sendResponseHeaders(reply.status(), bytes.length);
         try (OutputStream os = ex.getResponseBody()) {
             os.write(bytes);
+        }
+    }
+
+    /** The platform's default view of Dad Coach's templates: the dad_coach seed rows, every template approved. */
+    private static Reply defaultTemplates(String path) {
+        try {
+            com.fasterxml.jackson.databind.JsonNode seed = JSON.readTree(FakeServers.class.getResourceAsStream(
+                    "/kind-template-seed.json"));
+            java.util.Map<String, java.util.List<java.util.Map<String, Object>>> byKind = new java.util.LinkedHashMap<>();
+            java.util.Set<String> names = new java.util.LinkedHashSet<>();
+            for (com.fasterxml.jackson.databind.JsonNode row : seed) {
+                if (!"dad_coach".equals(row.path("product").asText())) {
+                    continue;
+                }
+                String kv = row.path("kind").asText() + "|" + row.path("variant").asText();
+                names.add(row.path("template").asText());
+                byKind.computeIfAbsent(kv, k -> new java.util.ArrayList<>()).add(Map.of("template",
+                        row.path("template").asText(), "language", "he", "enabled", true, "status", "APPROVED", "usable", true));
+            }
+            if (path.endsWith("/templates")) {
+                List<Map<String, Object>> templates = new java.util.ArrayList<>();
+                names.forEach(n -> templates.add(Map.of("name", n, "language", "he", "status", "APPROVED",
+                        "category", "UTILITY")));
+                return Reply.json(JSON.writeValueAsString(Map.of("senderStatus", "OK", "wabaId", "200000000000002",
+                        "templates", templates)));
+            }
+            List<Map<String, Object>> kinds = new java.util.ArrayList<>();
+            byKind.forEach((kv, candidates) -> kinds.add(Map.of("kind", kv.substring(0, kv.indexOf('|')),
+                    "variant", kv.substring(kv.indexOf('|') + 1), "templateUsable", true, "candidates", candidates)));
+            return Reply.json(JSON.writeValueAsString(Map.of("product", "dad_coach", "senderStatus", "OK", "snapshot", true,
+                    "kinds", kinds)));
+        } catch (IOException e) {
+            return new Reply(500, "{}");
         }
     }
 

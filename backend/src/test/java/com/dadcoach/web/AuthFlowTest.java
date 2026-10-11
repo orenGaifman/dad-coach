@@ -97,9 +97,11 @@ class AuthFlowTest extends AbstractWebIntegrationTest {
         String garbage = request("hello").getResponse().getContentAsString();
         assertThat(known).isEqualTo(unknown).isEqualTo(garbage).contains("SENT_IF_REGISTERED").contains("+19995550100");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM login_link WHERE father_id = ?", Long.class, father)).isEqualTo(1);
-        // No WhatsApp channel endpoint in the test database: recorded as a failed delivery, visible to the admin.
+        // D-053: the platform sends it (window or template is its decision); only the father's number was posted
         assertThat(jdbc.queryForObject("SELECT delivery_status FROM login_link WHERE father_id = ?", String.class, father))
-                .isEqualTo("FAILED");
+                .isEqualTo("SENT");
+        assertThat(fake.sentMessages()).hasSize(1);
+        assertThat(fake.sendRequests().get(0).path("to").asText()).isEqualTo(phoneOf(father));
     }
 
     @Test

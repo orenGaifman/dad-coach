@@ -60,6 +60,7 @@ public class AdminController {
     private final PlatformAdminClient platformAdmin;
     private final WorkflowPlatformProperties platform;
     private final ScheduledResponseCallbackConfig callback;
+    private final com.dadcoach.integration.platform.messaging.PlatformTemplateStatus templates;
     private final DashboardProperties properties;
     private final TrainingService training;
     private final VoiceNotes voiceNotes;
@@ -71,6 +72,7 @@ public class AdminController {
 
     public AdminController(AdminQueries queries, AdminFathersService fathers, PlatformAdminClient platformAdmin,
                            WorkflowPlatformProperties platform, ScheduledResponseCallbackConfig callback,
+                           com.dadcoach.integration.platform.messaging.PlatformTemplateStatus templates,
                            DashboardProperties properties, TrainingService training, VoiceNotes voiceNotes, Clock clock,
                            @Value("${dad-coach.whatsapp.phone-number-id:}") String whatsappPhoneNumberId,
                            @Value("${dad-coach.whatsapp.access-token:}") String whatsappAccessToken,
@@ -81,6 +83,7 @@ public class AdminController {
         this.platformAdmin = platformAdmin;
         this.platform = platform;
         this.callback = callback;
+        this.templates = templates;
         this.properties = properties;
         this.training = training;
         this.voiceNotes = voiceNotes;
@@ -193,7 +196,10 @@ public class AdminController {
         plat.put("reachable", platform.isEnabled() && platformAdmin.reachable());
         plat.put("adminPanelConfigured", platformAdmin.configured());
         plat.put("callbackEnabled", callback.isEnabled() && !blank(callback.getApiKey()));
-        plat.put("callbackTemplate", !blank(callback.effectiveTemplateName()));
+        // D-053: whether the platform could send a scheduled message outside the window now (its mapping + registry)
+        plat.put("callbackTemplate", platform.isEnabled() && templates.configured() && templates.current()
+                .map(t -> t.defaultUsable(com.dadcoach.integration.platform.messaging.MessagingSettings.SCHEDULED))
+                .orElse(false));
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("whatsapp", whatsapp);
         body.put("platform", plat);

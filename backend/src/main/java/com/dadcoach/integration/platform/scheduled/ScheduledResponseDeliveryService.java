@@ -1,10 +1,6 @@
 package com.dadcoach.integration.platform.scheduled;
 
 import com.dadcoach.integration.platform.timeline.TimelineReports;
-import com.dadcoach.integration.platform.timeline.TimelineText;
-import com.dadcoach.channel.delivery.DeliveryResult;
-import com.dadcoach.channel.delivery.ProactiveSender;
-import com.dadcoach.common.MaskingUtils;
 import com.dadcoach.domain.father.Father;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,18 +15,14 @@ import com.dadcoach.whatsapp.ReplyLanguageGuard;
 import java.util.Optional;
 
 /**
- * Delivers a Workflow Platform proactive message to a father over WhatsApp, exactly once per
- * idempotency key, respecting WhatsApp's 24-hour customer-service window.
+ * Delivers a Workflow Platform proactive message to a father over WhatsApp, exactly once per idempotency key.
  *
- * <p>Goes through Dad Coach's channel delivery layer ({@link DeliveryService}): free-form text is
- * sent only while the father's session window is open; when it is closed ({@code SESSION_CLOSED})
- * the configured approved template is sent instead, carrying the generated message as its
- * {@code {{1}}} parameter. With no template configured nothing is sent outside the window - the
- * delivery is recorded as FAILED rather than sending a free-form message WhatsApp would drop.</p>
+ * <p>Since D-053 (Unified Workflow 6.4) the platform's Send API is the only sender ({@link ScheduledPlatformSend}): it
+ * decides free-form inside the 24-hour window or the approved template outside it (its kind→template mapping), holds
+ * on the shared number, and reports what became of the message. Dad Coach decides what is said and whether.</p>
  *
- * <p>Idempotency is persistent: a row is claimed under the UNIQUE {@code idempotency_key} before
- * sending, so a repeated or concurrent callback for the same trigger replays the recorded outcome
- * instead of sending again.</p>
+ * <p>Idempotency is persistent: a row is claimed under the UNIQUE {@code idempotency_key} before sending, so a repeated
+ * or concurrent callback for the same trigger replays the recorded outcome instead of sending again.</p>
  */
 @Service
 public class ScheduledResponseDeliveryService {
@@ -38,29 +30,25 @@ public class ScheduledResponseDeliveryService {
     private static final Logger log = LoggerFactory.getLogger(ScheduledResponseDeliveryService.class);
 
     private final ScheduledResponseDeliveryRepository repository;
-    private final ProactiveSender sender;
     private final com.dadcoach.channel.WhatsAppEndpoints endpoints;
     private final SessionButtonOffers buttons;
-    private final ScheduledMessageTemplates templates;
     private final Clock clock;
     private final com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties;
-    private ScheduledPlatformSend platformSend;
+    private final ScheduledPlatformSend platformSend;
 
     public ScheduledResponseDeliveryService(
             ScheduledResponseDeliveryRepository repository,
-            ProactiveSender sender,
             com.dadcoach.channel.WhatsAppEndpoints endpoints,
             SessionButtonOffers buttons,
-            ScheduledMessageTemplates templates,
             Clock clock,
-            com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties) {
+            com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties,
+            ScheduledPlatformSend platformSend) {
         this.platformProperties = platformProperties;
         this.clock = clock;
         this.endpoints = endpoints;
         this.buttons = buttons;
-        this.templates = templates;
         this.repository = repository;
-        this.sender = sender;
+        this.platformSend = platformSend;
     }
 
     public ScheduledResponseResult deliver(Father father, ScheduledResponseRequest request, String idempotencyKey) {
@@ -68,10 +56,10 @@ public class ScheduledResponseDeliveryService {
     }
 
     /**
-     * D-046: what the callback answers. {@code body} is the HTTP body - the result itself (today's shape), or, when the
-     * platform's Send API has (or may have) the message ({@code MESSAGING_MODE_SCHEDULED=PLATFORM}), {@code {}} with the
-     * platform's message id: the platform records the timeline itself. {@code handedOver}: it went out or is on its way
-     * (the coach's mentions are noted); today: the answer is DELIVERED.
+     * D-046: what the callback answers. {@code body} is the HTTP body - the result itself (a replay, a blocked or refused
+     * message), or, when the platform's Send API has (or may have) the message, {@code {}} with the platform's message id:
+     * the platform records the timeline itself. {@code handedOver}: it went out or is on its way (the coach's mentions
+     * are noted).
      */
     public record CallbackAnswer(ScheduledResponseResult result, Object body, boolean handedOver) {
         static CallbackAnswer of(ScheduledResponseResult result) {
@@ -126,80 +114,10 @@ public class ScheduledResponseDeliveryService {
         String content = hebrew.get();
         endpoints.ensure(father); // F1: fathers onboarded on WhatsApp before the fix have no endpoint row yet
         List<OutboundMessageDto.ReplyButton> offered = buttons.forScheduledMessage(father, request.targetStateKey());
-        if (platformSend != null && platformSend.sends()) {
-            // D-046 PLATFORM: the platform's Send API sends it; today's way only when it provably created nothing
-            ScheduledResponseDelivery claimed = delivery;
-            return platformSend.deliver(father, delivery, request, content, offered,
-                    () -> finish(father, claimed, request, content, offered, drafted, sendDirectly(father, request, content, offered)));
-        }
-        ProactiveSender.Outcome outcome = sendDirectly(father, request, content, offered);
-        CallbackAnswer answer = CallbackAnswer.of(finish(father, delivery, request, content, offered, drafted, outcome));
-        if (platformSend != null) {
-            platformSend.shadow(father, delivery, request, content, offered, outcome); // D-046 SHADOW only
-        }
-        return answer;
-    }
-
-    /** Today's send: free-form in the window, else the message's own template, else the general one. */
-    private ProactiveSender.Outcome sendDirectly(Father father, ScheduledResponseRequest request, String content,
-                                                 List<OutboundMessageDto.ReplyButton> offered) {
-        return sender.send(father, content, offered,
-                () -> templates.forScheduledMessage(father, request.targetStateKey()).orElse(null));
-    }
-
-    /** Today's bookkeeping of a send and its answer (D-039 report included). */
-    private ScheduledResponseResult finish(Father father, ScheduledResponseDelivery delivery, ScheduledResponseRequest request,
-                                           String content, List<OutboundMessageDto.ReplyButton> offered, String drafted,
-                                           ProactiveSender.Outcome outcome) {
-        DeliveryResult result = outcome.result();
-        ScheduledResponseDelivery.Mode mode = outcome.mode() == ProactiveSender.Mode.TEMPLATE
-                ? ScheduledResponseDelivery.Mode.TEMPLATE : ScheduledResponseDelivery.Mode.FREE_FORM;
-
-        if (result.isSuccessful()) {
-            // DC-B1/B2: ACCEPTED with Meta's wamid (receipts move it on), or HELD by the shared-number gateway
-            delivery.markAccepted(mode, result, clock.instant());
-            log.info("Scheduled response handed over: triggerId={}, targetStateKey={}, status={}, mode={}, template={}, buttons={}, father={}",
-                    request.triggerId(), request.targetStateKey(), delivery.getStatus(), mode, outcome.template(),
-                    mode == ScheduledResponseDelivery.Mode.FREE_FORM ? offered.size() : 0, MaskingUtils.maskPhone(father.getPhone()));
-        } else {
-            delivery.markFailed(result.failureReason(), clock.instant());
-            log.warn("Scheduled response not delivered: triggerId={}, reason={}", request.triggerId(), result.failureReason());
-        }
-        repository.save(delivery);
-        ScheduledResponseResult answer = ScheduledResponseResult.of(delivery, false);
-        return reporting() ? report(answer, outcome, content, drafted) : answer;
-    }
-
-    /** D-046: the platform's Send API for these messages ({@code MESSAGING_MODE_SCHEDULED}); absent = direct only. */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    public void setPlatformSend(ScheduledPlatformSend platformSend) {
-        this.platformSend = platformSend;
+        return platformSend.deliver(father, delivery, request, content, offered);
     }
 
     private boolean reporting() {
         return platformProperties.isDeliveryReports();
     }
-
-    /**
-     * D-039: AS_IS when the text went out free-form exactly as the platform wrote it (identity line aside) and alone;
-     * otherwise what was sent (the ready message, the cleaned text, the template as he reads it, the buttons with it).
-     * A failed send is FAILED with its reason.
-     */
-    private static ScheduledResponseResult report(ScheduledResponseResult answer, ProactiveSender.Outcome outcome,
-                                                  String content, String drafted) {
-        DeliveryResult result = outcome.result();
-        if (!result.isSuccessful()) {
-            return answer.withOutcome(TimelineReports.FAILED, result.failureReason(), null);
-        }
-        String sent = outcome.sentText() != null ? outcome.sentText() : content;
-        boolean template = outcome.mode() == ProactiveSender.Mode.TEMPLATE;
-        List<java.util.Map<String, Object>> buttons = TimelineText.buttons(outcome.buttons());
-        if (!template && buttons.isEmpty() && TimelineText.sameAsDraft(sent, drafted)) {
-            return answer.withOutcome(TimelineReports.AS_IS, null, result);
-        }
-        return answer.withDelivered(TimelineText.withoutIdentity(sent), result,
-                template ? TimelineText.template(outcome.template(), outcome.templateParams()) : null, buttons,
-                TimelineReports.KIND_SCHEDULED);
-    }
-
 }

@@ -5,9 +5,7 @@ import com.dadcoach.api.tools.DashboardTools;
 import com.dadcoach.auth.LoginLinkService;
 import com.dadcoach.channel.WhatsAppEndpoints;
 import com.dadcoach.channel.dto.InboundMessageDto;
-import com.dadcoach.channel.dto.MessagePriority;
 import com.dadcoach.channel.dto.MessageType;
-import com.dadcoach.channel.dto.OutboundMessageDto;
 import com.dadcoach.channel.delivery.DeliveryResult;
 import com.dadcoach.common.MaskingUtils;
 import com.dadcoach.domain.father.Father;
@@ -35,7 +33,6 @@ import com.dadcoach.replies.TurnLedger;
 import com.dadcoach.whatsapp.ReplyLanguageGuard;
 import com.dadcoach.whatsapp.ReplyStyleGuard;
 import java.util.List;
-import com.dadcoach.whatsapp.WhatsAppAdapter;
 import com.dadcoach.whatsapp.buttons.SessionButtonTaps;
 import com.dadcoach.whatsapp.voice.VoiceNoteReplies;
 import com.dadcoach.whatsapp.voice.VoiceNotes;
@@ -45,7 +42,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -57,7 +53,8 @@ import org.springframework.stereotype.Component;
  *   <li>a voice note, when voice notes are on (D-029): heard (ElevenLabs) and from here on read like the same words
  *       typed - the reply opens with "🎙️ שמעתי: ..."; a note too long, silent or not heard gets its own line, no AI
  *       turn;</li>
- *   <li>"DELETE MY DATA": the deletion request, handled here, never by the AI;</li>
+ *   <li>"DELETE MY DATA": the deletion request, handled here, never by the AI - its answer is sent first (D-053: through
+ *       the platform, naming nobody), then the deletion is requested;</li>
  *   <li>a known father: his WhatsApp endpoint is ensured and his 24-hour window opened (F1);</li>
  *   <li>a voice note (voice notes off) or a file without words: one fixed line (the coach reads text only);</li>
  *   <li>a tapped session button ("dc:done:&lt;id&gt;"...): handled by {@link SessionButtonTaps} - its fixed reply is
@@ -65,7 +62,8 @@ import org.springframework.stereotype.Component;
  *   <li>the turn: worker + workflow named by the caller, correlation id = Meta's message id, the father's timezone,
  *       person ref and name in the request; a new number is onboarded by the workflow itself (D-002);</li>
  *   <li>the reply goes out as written; a SUPPRESSED or blank reply sends nothing; the platform down or refusing: one
- *       short Hebrew line, never English, never silence;</li>
+ *       short Hebrew line, never English, never silence (D-053: that line too goes through the platform's Send API, one
+ *       attempt and one re-POST - if the platform cannot take it, nothing is sent);</li>
  *   <li>D-038 (DC-B4): a duplicate answer (the platform's answer to a retried correlation id) carries the reply the
  *       first attempt wrote: it goes out once - the durable guard {@link #REPLY_SCOPE}/&lt;Meta's message id&gt; is taken
  *       before any reply to this message is sent, and released only when that send failed. A duplicate with no content
@@ -80,6 +78,9 @@ import org.springframework.stereotype.Component;
  * conversation ({@link TimelineReports}, after the send, never blocking it) - the turn's reply AS_IS, or what was sent
  * instead of it (replacing the draft), or DROPPED; a message answered without a turn as his message plus the answer.
  * Path by path: docs/architecture/PHASE3_DADCOACH_SPEC.md.</p>
+ *
+ * <p>D-053 (Unified Workflow 6.4): every line goes through the platform's Send API ({@link ReplyPlatformSend}) - Dad
+ * Coach no longer sends anything to Meta itself.</p>
  */
 @Component
 public class InboundMessageHandler {
@@ -94,7 +95,7 @@ public class InboundMessageHandler {
     /** One message's processing: set when it could not be answered (a refused send, the platform unavailable). */
     static final class Attempt {
         boolean unanswered;
-        /** Sends Meta accepted so far (D-048: or the platform has, or may have). */
+        /** Lines the platform has, or may have, so far. */
         int sent;
         /** D-048: lines sent (or tried) for this message so far - the next line's place in its key. */
         int parts;
@@ -125,6 +126,8 @@ public class InboundMessageHandler {
     /** D-032: every fixed line opens with the identity line, like every other message on the shared number. */
     static final String IDENTITY = "❤️ דאד קואץ׳:\n";
     static final String PLATFORM_DOWN_REPLY = IDENTITY + "משהו השתבש אצלי. נסה שוב עוד רגע.";
+    /** D-053: the key scope of the "something went wrong" line ({@code reply:<wamid>:down:<n>}). */
+    static final String DOWN_SCOPE = ":down";
     /** The phrase to type sits on its own line, so it can be copied. */
     static final String SPOKEN_DELETION_REPLY = IDENTITY + "את מחיקת המידע אי אפשר לבטל, ולכן היא לא נעשית מהקלטה.\n"
             + "אם זה מה שאתה רוצה, כתוב לי במילים:\nמחק את המידע שלי";
@@ -139,7 +142,6 @@ public class InboundMessageHandler {
     private final WhatsAppDeletionRequests deletionRequests;
     private final WorkflowPlatformClient platform;
     private final WorkflowPlatformProperties platformProperties;
-    private final WhatsAppAdapter whatsapp;
     private final WhatsAppInboundRateLimiter rateLimiter;
     private final SessionButtonTaps buttonTaps;
     private final SentMessageRecorder recorder;
@@ -166,7 +168,7 @@ public class InboundMessageHandler {
 
     public InboundMessageHandler(FatherRepository fathers, WhatsAppEndpoints endpoints, DeletedSenders deletedSenders,
                                  WhatsAppDeletionRequests deletionRequests, WorkflowPlatformClient platform,
-                                 WorkflowPlatformProperties platformProperties, WhatsAppAdapter whatsapp,
+                                 WorkflowPlatformProperties platformProperties,
                                  WhatsAppInboundRateLimiter rateLimiter, SessionButtonTaps buttonTaps,
                                  SentMessageRecorder recorder, VoiceNotes voiceNotes, Clock clock, TurnLedger ledger,
                                  CoachMentions mentions, ChildRepository children,
@@ -181,7 +183,6 @@ public class InboundMessageHandler {
         this.deletionRequests = deletionRequests;
         this.platform = platform;
         this.platformProperties = platformProperties;
-        this.whatsapp = whatsapp;
         this.rateLimiter = rateLimiter;
         this.buttonTaps = buttonTaps;
         this.recorder = recorder;
@@ -248,9 +249,11 @@ public class InboundMessageHandler {
                         in.idempotencyKey() + ":reply", line, sent, TimelineReports.KIND_FIXED_LINE);
                 return;
             }
-            // D-039: never reported - he is deleted now and the platform deletes his conversations; a report could
-            // open a new one
-            send(attempt, phone, deletionRequests.handle(phone));
+            // D-053 (spec v2 R7): the answer goes first - through the platform, naming nobody, never recorded (D-039: a
+            // report could open a conversation after his deletion) - then the deletion is requested; the person deletion
+            // that follows removes the platform's message row to his phone too
+            sendDeletionAnswer(attempt, in, deletionRequests.answerFor(phone));
+            deletionRequests.handle(phone);
             return;
         }
         Optional<Father> father = fathers.findByPhone(phone);
@@ -279,7 +282,9 @@ public class InboundMessageHandler {
                 tap = buttonTaps.handle(father.get(), in.buttonId());
             } catch (RuntimeException e) {
                 log.atWarn().setMessage("whatsapp.button.failed").addKeyValue("error", e.getClass().getSimpleName()).log();
-                DeliveryResult sent = send(attempt, phone, PLATFORM_DOWN_REPLY);   // direct forever (D-048)
+                // D-053: the "something went wrong" line goes through the platform too (FIXED_LINE)
+                DeliveryResult sent = send(attempt, in, DOWN_SCOPE, father, MessagingSettings.FIXED_LINE, PLATFORM_DOWN_REPLY,
+                        noTurnRow(father, in.idempotencyKey(), PLATFORM_DOWN_REPLY), in.textContent());
                 reportAnswered(attempt, in, father, in.textContent(), in.idempotencyKey(), PLATFORM_DOWN_REPLY, sent,
                         TimelineReports.KIND_FIXED_LINE);
                 return;
@@ -422,12 +427,16 @@ public class InboundMessageHandler {
             // a redelivery runs it again; a refusal (4xx) is the platform's answer and would be the same again
             attempt.unanswered |= e instanceof PlatformUnavailableException;
             String line = VoiceNoteReplies.withHeard(PLATFORM_DOWN_REPLY, heard);
-            DeliveryResult sent = send(attempt, phone, line);   // direct forever: sent when the platform is not there
-            if (rewriting && !(e instanceof PlatformUnavailableException)) {
-                // D-039: the turn's reply exists (English, not sent) and the platform refused the rewrite for good: the
-                // line went instead of it (when unavailable, the redelivery answers and reports)
-                reportReplaced(attempt, phone, father.isPresent() ? father : fathers.findByPhone(phone), cid, line, sent,
-                        TimelineReports.KIND_FIXED_LINE, superseded);
+            // D-053: through the platform's Send API (FIXED_LINE): the inbound reached Dad Coach through the platform's
+            // gateway seconds ago, a turn failing does not mean /send does; if it cannot take it, nothing is sent.
+            // D-039: when the turn's reply exists (English, not sent) and the platform refused the rewrite for good, the
+            // line goes instead of it (when unavailable, the redelivery answers and records)
+            Optional<Father> who = father.isPresent() ? father : fathers.findByPhone(phone);
+            boolean insteadOfReply = rewriting && !(e instanceof PlatformUnavailableException);
+            DeliveryResult sent = send(attempt, in, DOWN_SCOPE, who, MessagingSettings.FIXED_LINE, line, insteadOfReply
+                    ? ReplyPlatformSend.Timeline.replacing(cid, superseded, line) : ReplyPlatformSend.Timeline.none(), null);
+            if (insteadOfReply) {
+                reportReplaced(attempt, phone, who, cid, line, sent, TimelineReports.KIND_FIXED_LINE, superseded);
             }
         } catch (RuntimeException e) {
             if (replyGuarded && attempt.sent == sentAtGuard) {
@@ -730,26 +739,25 @@ public class InboundMessageHandler {
     }
 
     /**
-     * A reply inside the conversation the father just opened (the 24-hour window is open by definition). A send Meta
-     * (or the gateway's circuit) refused leaves the message unanswered (DC-B3). D-048: the lines that never go through
-     * the platform's Send API (the "something went wrong" line, the deletion answer) - today's way, always.
+     * D-053 (spec v2 R7): the answer to a deletion request - FIXED_LINE through the platform, sent BEFORE the deletion is
+     * requested, naming nobody ({@code to} only: no userId / personRef / personName), {@code sensitive}, never recorded.
      */
-    private DeliveryResult send(Attempt attempt, String phone, String text) {
+    private DeliveryResult sendDeletionAnswer(Attempt attempt, InboundMessageDto in, String text) {
+        ReplyPlatformSend.Line line = new ReplyPlatformSend.Line(MessagingSettings.FIXED_LINE, in.fatherChannelIdentity(),
+                Optional.empty(), in.idempotencyKey(), attempt.parts, in.receivedAt(), text,
+                ReplyPlatformSend.Timeline.none(), true);
         attempt.parts++;
-        DeliveryResult result = deliverDirect(phone, text);
-        log.atInfo().setMessage("whatsapp.delivery.result")
-                .addKeyValue("kind", "CONVERSATIONAL_REPLY")
-                .addKeyValue("status", result.status())
-                .addKeyValue("failure", result.failureReason())
-                .log();
+        DeliveryResult result = replies == null ? notConfigured() : replies.send(line).result();
+        log.atInfo().setMessage("whatsapp.delivery.result").addKeyValue("kind", "CONVERSATIONAL_REPLY")
+                .addKeyValue("status", result.status()).addKeyValue("failure", result.failureReason())
+                .addKeyValue("messagingKind", MessagingSettings.FIXED_LINE).addKeyValue("deletionAnswer", true).log();
         count(attempt, result);
         return result;
     }
 
-    /** Today's send: the adapter (its gate, its circuit, a refused link as text). */
-    private DeliveryResult deliverDirect(String phone, String text) {
-        return whatsapp.sendMessage(new OutboundMessageDto(UUID.randomUUID(), null, WhatsAppEndpoints.CHANNEL,
-                MessageType.TEXT, text, null, false, null, Map.of(), MessagePriority.IMMEDIATE, clock.instant()), phone);
+    private static DeliveryResult notConfigured() {
+        log.atWarn().setMessage("messaging.platform_not_created").addKeyValue("why", "NO_REPLY_SENDER").log();
+        return DeliveryResult.failed(com.dadcoach.integration.platform.messaging.PlatformSendFlow.PLATFORM_NOT_CREATED);
     }
 
     private static void count(Attempt attempt, DeliveryResult result) {
@@ -761,44 +769,45 @@ public class InboundMessageHandler {
     }
 
     /**
-     * D-048: one conversational line of {@code kind} ({@link MessagingSettings#REPLY}, {@code FIXED_LINE},
-     * {@code BUTTON_REPLY}, {@code READY_ANSWER}) - through the platform's Send API when that kind's switch is PLATFORM
-     * ({@link ReplyPlatformSend}), else exactly today's send (SHADOW: plus the platform's dry run, off this thread).
-     * {@code row}: how the platform records it on the timeline. {@code his}: his message as the timeline shows it, for a
-     * line with no turn - reported BEFORE the platform sends the answer (it records the answer itself), so it comes first.
+     * D-048 / D-053: one conversational line of {@code kind} ({@link MessagingSettings#REPLY}, {@code FIXED_LINE},
+     * {@code BUTTON_REPLY}, {@code READY_ANSWER}) through the platform's Send API ({@link ReplyPlatformSend}) - the only
+     * sender. A send that failed (refused, nothing created) leaves the message unanswered (DC-B3: its claim is released,
+     * so the same message arriving again runs it again - Meta does not resend it: the webhook answered 200). {@code row}: how the platform records it on the timeline. {@code his}: his message as the timeline shows
+     * it, for a line with no turn - reported BEFORE the platform sends the answer (it records the answer itself).
      */
     private DeliveryResult send(Attempt attempt, InboundMessageDto in, Optional<Father> father, String kind, String text,
                                 ReplyPlatformSend.Timeline row, String his) {
+        return send(attempt, in, "", father, kind, text, row, his);
+    }
+
+    /**
+     * {@code scope}: appended to his message id in the line's key - the "something went wrong" line has keys of its own
+     * ({@link #DOWN_SCOPE}), so the reply the redelivery of the same message gets never replays it.
+     */
+    private DeliveryResult send(Attempt attempt, InboundMessageDto in, String scope, Optional<Father> father, String kind,
+                                String text, ReplyPlatformSend.Timeline row, String his) {
         String phone = in.fatherChannelIdentity();
-        if (replies == null) {
-            return send(attempt, phone, text);
-        }
-        ReplyPlatformSend.Line line = new ReplyPlatformSend.Line(kind, phone, father, in.idempotencyKey(), attempt.parts,
-                in.receivedAt(), text, row);
-        MessagingSettings.Mode mode = replies.mode(kind);
-        if (mode != MessagingSettings.Mode.PLATFORM) {
-            DeliveryResult result = send(attempt, phone, text);
-            if (mode == MessagingSettings.Mode.SHADOW) {
-                replies.shadow(line, result);
-            }
-            return result;
-        }
+        ReplyPlatformSend.Line line = new ReplyPlatformSend.Line(kind, phone, father, in.idempotencyKey() + scope,
+                attempt.parts, in.receivedAt(), text, row);
         attempt.parts++;
+        if (replies == null) {
+            DeliveryResult none = notConfigured();
+            count(attempt, none);
+            return none;
+        }
         if (his != null && row.records() && reporting() && father.isPresent()) {
-            // only when it landed: otherwise it is queued in the background, and a D-039 report (DIRECT fallback)
-            // queues it once more - the platform records an inbound id once (review 5)
+            // only when it landed: otherwise it is queued in the background - the platform records an inbound id once
             attempt.hisReported = timeline.inboundBeforeAnswer(TimelineReports.Person.of(father.get()),
                     in.idempotencyKey(), his, hisType(in, his), in.buttonId(),
                     in.buttonId() == null ? null : in.textContent(), ReplyPlatformSend.INBOUND_BEFORE);
         }
-        ReplyPlatformSend.Sent sent = replies.send(line, () -> deliverDirect(phone, text));
+        ReplyPlatformSend.Sent sent = replies.send(line);
         DeliveryResult result = sent.result();
         log.atInfo().setMessage("whatsapp.delivery.result")
                 .addKeyValue("kind", "CONVERSATIONAL_REPLY")
                 .addKeyValue("status", result.status())
                 .addKeyValue("failure", result.failureReason())
                 .addKeyValue("messagingKind", kind)
-                .addKeyValue("via", sent.viaPlatform() ? "PLATFORM" : "DIRECT")
                 .addKeyValue("platformStatus", sent.platformStatus())
                 .log();
         count(attempt, result);

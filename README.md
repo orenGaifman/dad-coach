@@ -12,8 +12,9 @@ uses, the WhatsApp channel (Dad Coach's own number), proactive delivery and pers
 
 ```
 father ──WhatsApp──▶ Meta ──webhook──▶ Dad Coach ──/api/v1/worker/execute──▶ AI Workflow Platform
-                                          ▲  ▲                                     │
-          reply / reminders ◀── Meta ◀────┘  └── /api/tools/*, /api/context/* ◀───┘ (agent tools + context)
+                                             ▲  ── /api/v1/worker/messages/send ──▶  │ (every message out, D-053)
+          reply / reminders ◀── Meta ◀── platform ◀──────────────────────────────────┤
+                                             └── /api/tools/*, /api/context/* ◀──────┘ (agent tools + context)
                                              └── /api/integration/workflow/scheduled-response (timed turns)
 ```
 
@@ -26,8 +27,9 @@ father ──WhatsApp──▶ Meta ──webhook──▶ Dad Coach ──/api/
   only from the envelope's WhatsApp number.
 - **Context** (`api/context`): `family_context`, `weekly_plan_context` (this Sunday-Saturday week in his timezone).
 - **Proactive**: the platform owns the timers (morning / 1-hour reminders, follow-up, daily check) and calls back;
-  Dad Coach delivers inside the 24-hour window or with the approved template. Dad Coach's own job: Sunday's weekly
-  completion (belts) with the promotion message.
+  Dad Coach hands each message to the platform's Send API, which sends it inside the 24-hour window or with the
+  template its mapping picks (D-053: Dad Coach never sends to Meta itself). Dad Coach's own job: Sunday's weekly
+  completion (goals, streaks; belts come from sessions, D-030/D-051).
 - **Deletion**: "DELETE MY DATA" or an operator delete → the platform deletes the person via its tenancy API
   (durable outbox) and Dad Coach purges his data.
 - Google Calendar is optional: when connected, sessions also appear in it and busy times are avoided.

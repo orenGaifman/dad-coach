@@ -54,8 +54,6 @@ class SchedulingLanesTest {
     /** The lane table of D-043 ("" = no scheduler named = the default, i.e. the messaging lane). */
     static final Map<String, String> LANES = Map.of(
             "WeeklyGoalCompletionJob.run", SchedulingLanes.MESSAGING,
-            "DeliveryReceipts.retryPending", SchedulingLanes.HOUSEKEEPING,
-            "MetaTemplateDirectory.scheduled", SchedulingLanes.HOUSEKEEPING,
             "IdempotencyService.purgeExpired", SchedulingLanes.HOUSEKEEPING,
             "PlatformPersonDeletions.sendPeriodically", SchedulingLanes.HOUSEKEEPING,
             "KeepWarmJob.keepWarm", SchedulingLanes.HOUSEKEEPING,

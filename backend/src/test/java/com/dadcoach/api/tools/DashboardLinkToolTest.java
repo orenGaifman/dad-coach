@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,8 +26,9 @@ import org.springframework.test.web.servlet.MvcResult;
 
 /**
  * dad_dashboard_link (D-027): "תן לי דשבורד" -> a WhatsApp URL button to his page, as its own message. The token
- * never reaches the tool result; the link behind the button keeps working; a refused button falls back to text with
- * the link on its own line; outside the window the approved template carries it.
+ * never reaches the tool result; the link behind the button keeps working. D-053: the platform's Send API sends it -
+ * the request carries the button, the text form for a refused button (the link on its own line) and, for outside the
+ * window, the one line the platform's template mapping carries.
  */
 class DashboardLinkToolTest extends AbstractIntegrationTest {
 
@@ -59,8 +61,13 @@ class DashboardLinkToolTest extends AbstractIntegrationTest {
         return tool(userId, UUID.randomUUID().toString());
     }
 
-    private JsonNode lastSend() throws Exception {
-        return json.readTree(fake.metaSends().get(fake.metaSends().size() - 1).body());
+    private JsonNode lastSend() {
+        List<JsonNode> sends = fake.sendRequests("LOGIN_LINK");
+        return sends.get(sends.size() - 1);
+    }
+
+    private int links() {
+        return fake.sentMessages().size();
     }
 
     private Cookie signIn(String url) throws Exception {
@@ -86,19 +93,16 @@ class DashboardLinkToolTest extends AbstractIntegrationTest {
         assertThat(result.path("data").path("reply").asText()).isEqualTo(DashboardTools.SENT_REPLY);
         assertThat(result.toString()).doesNotContain("token").doesNotContain("http");
 
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(links()).isEqualTo(1);
         JsonNode sent = lastSend();
-        assertThat(sent.path("to").asText()).isEqualTo("19995550301");
-        assertThat(sent.path("type").asText()).isEqualTo("interactive");
-        JsonNode interactive = sent.path("interactive");
-        assertThat(interactive.path("type").asText()).isEqualTo("cta_url");
-        assertThat(interactive.path("body").path("text").asText())
+        assertThat(sent.path("to").asText()).isEqualTo("+19995550301");
+        JsonNode content = sent.path("content");
+        assertThat(content.path("type").asText()).isEqualTo("link_button");
+        assertThat(content.path("text").asText())
                 .startsWith("❤️ דאד קואץ׳:\n").contains("הדף שלך בדאד קואץ׳").doesNotContain("http");
-        assertThat(interactive.path("footer").path("text").asText()).hasSizeLessThanOrEqualTo(60);
-        assertThat(interactive.path("action").path("name").asText()).isEqualTo("cta_url");
-        JsonNode parameters = interactive.path("action").path("parameters");
-        assertThat(parameters.path("display_text").asText()).isEqualTo("כניסה לדף שלי").hasSizeLessThanOrEqualTo(20);
-        String url = parameters.path("url").asText();
+        assertThat(content.path("footer").asText()).hasSizeLessThanOrEqualTo(60);
+        assertThat(content.path("link").path("title").asText()).isEqualTo("כניסה לדף שלי").hasSizeLessThanOrEqualTo(20);
+        String url = content.path("link").path("url").asText();
         assertThat(url).startsWith(PREFIX);
 
         assertThat(jdbc.queryForObject("SELECT delivery_status FROM login_link WHERE father_id = ?", String.class, f.getId()))
@@ -118,31 +122,25 @@ class DashboardLinkToolTest extends AbstractIntegrationTest {
         JsonNode first = tool(f.getPhone(), key);
         JsonNode replay = tool(f.getPhone(), key);
         assertThat(replay).isEqualTo(first);
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.platformSends()).hasSize(1);
     }
 
     @Test
-    @DisplayName("Meta refuses the button for good (400): the link goes out as text, on its own line")
+    @DisplayName("for a button Meta refuses for good, the request carries the text form: the link on its own line")
     void refusedButtonFallsBackToText() throws Exception {
         Father f = data.activeFather("+19995550303");
         data.endpoint(f, true);
-        fake.onMetaSend(c -> c.body().contains("\"cta_url\"")
-                ? new FakeServers.Reply(400, "{\"error\":{\"code\":131009,\"message\":\"Parameter value is not valid\"}}")
-                : FakeServers.Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"wamid.text\"}]}"));
 
         JsonNode result = tool(f.getPhone());
 
         assertThat(result.path("data").path("delivery").asText()).isEqualTo("SENT");
-        assertThat(fake.metaSends()).hasSize(2);
-        JsonNode text = lastSend();
-        assertThat(text.path("type").asText()).isEqualTo("text");
-        String body = text.path("text").path("body").asText();
+        String body = lastSend().path("fallbackText").asText();
         assertThat(body).startsWith("❤️ דאד קואץ׳:\n");
         assertThat(body.lines().filter(l -> l.startsWith(PREFIX)).count()).as("the link alone on its line").isEqualTo(1);
     }
 
     @Test
-    @DisplayName("outside the 24-hour window the approved template carries the link")
+    @DisplayName("outside the 24-hour window the platform's template carries the link: one line, never a Meta name from here")
     void closedWindowUsesTheTemplate() throws Exception {
         Father f = data.activeFather("+19995550304");
         data.endpoint(f, false);
@@ -151,9 +149,10 @@ class DashboardLinkToolTest extends AbstractIntegrationTest {
 
         assertThat(result.path("data").path("delivery").asText()).isEqualTo("SENT");
         JsonNode sent = lastSend();
-        assertThat(sent.path("type").asText()).isEqualTo("template");
-        assertThat(sent.path("template").path("name").asText()).isEqualTo(TEMPLATE);
-        String parameter = sent.path("template").path("components").get(0).path("parameters").get(0).path("text").asText();
+        assertThat(sent.path("windowPolicy").asText()).isEqualTo("AUTO");
+        assertThat(sent.has("template")).isFalse();
+        assertThat(sent.path("templateData").path("variant").asText()).isEmpty();
+        String parameter = sent.path("templateData").path("named").path("text").asText();
         assertThat(parameter).contains(PREFIX).doesNotContain("\n");
     }
 
@@ -170,11 +169,11 @@ class DashboardLinkToolTest extends AbstractIntegrationTest {
         assertThat(again.path("data").path("sent").asBoolean()).isFalse();
         assertThat(again.path("data").path("delivery").asText()).isEqualTo("ALREADY_SENT");
         assertThat(again.path("data").path("reply").asText()).isEqualTo(DashboardTools.ON_SCREEN_REPLY);
-        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(links()).isEqualTo(1);
 
         clock.advance(com.dadcoach.auth.LoginLinkService.ON_SCREEN);
         assertThat(tool(f.getPhone()).path("data").path("delivery").asText()).isEqualTo("SENT");
-        assertThat(fake.metaSends()).hasSize(2);
+        assertThat(links()).isEqualTo(2);
     }
 
     @Test
@@ -182,7 +181,7 @@ class DashboardLinkToolTest extends AbstractIntegrationTest {
     void gentleRateLimit() throws Exception {
         Father f = data.activeFather("+19995550305");
         data.endpoint(f, true);
-        fake.onMetaSend(c -> new FakeServers.Reply(400, "{\"error\":{\"code\":131009,\"message\":\"bad\"}}"));
+        fake.onPlatformSend(c -> new FakeServers.Reply(422, "{\"error\":\"messaging.param_invalid\",\"field\":\"content\"}"));
         for (int i = 0; i < 5; i++) {
             assertThat(tool(f.getPhone()).path("data").path("delivery").asText()).isEqualTo("FAILED");
         }
@@ -205,7 +204,7 @@ class DashboardLinkToolTest extends AbstractIntegrationTest {
         JsonNode result = tool(paused.getPhone());
         assertThat(result.path("success").asBoolean()).isFalse();
         assertThat(result.path("error_code").asText()).isEqualTo("DASHBOARD_NOT_AVAILABLE");
-        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.platformSends()).isEmpty();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM login_link", Long.class)).isZero();
     }
 
@@ -218,7 +217,7 @@ class DashboardLinkToolTest extends AbstractIntegrationTest {
 
         tool(f.getPhone());
 
-        String url = lastSend().path("interactive").path("action").path("parameters").path("url").asText();
+        String url = lastSend().path("content").path("link").path("url").asText();
         MvcResult me = mvc.perform(get("/api/me").cookie(signIn(url))).andReturn();
         JsonNode caps = json.readTree(me.getResponse().getContentAsByteArray()).path("capabilities");
         assertThat(caps.toString()).contains("father").contains("admin");

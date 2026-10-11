@@ -24,6 +24,10 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * ONE {@link FakeServers} standing in for the platform and Meta. No {@code @MockBean} (playbook §50). The database
  * is created by Flyway from empty (the V23 baseline + V24+), as a fresh install is. Every test starts from empty
  * product tables and a pinned clock (Tuesday 2026-11-03 12:00 in Israel).
+ *
+ * <p>D-053 (Unified Workflow 6.4): the platform's Send API is the only sender - after every test, fake Meta must have
+ * received no send at all ({@link #metaReceivedNoSend}); what a father receives is asserted on the {@code /send}
+ * requests ({@link FakeServers#sendRequests}).</p>
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -32,7 +36,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
         "tool-api.api-key=" + AbstractIntegrationTest.TOOL_KEY,
         "workflow.platform.scheduled-response.enabled=true",
         "workflow.platform.scheduled-response.api-key=" + AbstractIntegrationTest.CALLBACK_KEY,
-        "workflow.platform.scheduled-response.template-name=" + AbstractIntegrationTest.TEMPLATE,
         "dad-coach.security.admin-api-key=" + AbstractIntegrationTest.ADMIN_KEY,
         "dad-coach.whatsapp.webhook-secret=" + AbstractIntegrationTest.WEBHOOK_SECRET,
         "dad-coach.whatsapp.verify-token=test-verify-token",
@@ -49,8 +52,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
         "dadcoach.platform-person-deletion.send-after-commit=false",
         "dadcoach.scheduler.weekly-goal-completion-cron=-",
         "dad-coach.messaging.reconcile-initial-delay=PT24H",
-        // D-052: Meta's kept receipts are re-applied only when a test runs the pass (the forced races stay forced)
-        "dad-coach.whatsapp.receipts.retry-initial-delay=PT24H",
         "spring.datasource.hikari.maximum-pool-size=5",
         // the dashboard (com.dadcoach.auth / web / ops)
         "dadcoach.dashboard.ops-api-key=" + AbstractIntegrationTest.OPS_KEY,
@@ -66,7 +67,6 @@ public abstract class AbstractIntegrationTest {
     public static final String CALLBACK_KEY = "test-only-callback-key-0123456789abc";
     public static final String ADMIN_KEY = "test-only-admin-key-0123456789abcdef";
     public static final String WEBHOOK_SECRET = "test-only-webhook-secret";
-    public static final String TEMPLATE = "dad_coach_message_he";
     public static final String OPS_KEY = "test-ops-key-0123456789abcdef";
     public static final String ELEVENLABS_KEY = "test-elevenlabs-key";
     public static final Instant TUESDAY_NOON_IL = Instant.parse("2026-11-03T10:00:00Z");
@@ -98,10 +98,9 @@ public abstract class AbstractIntegrationTest {
     @Autowired protected TestClock clock;
     @Autowired protected TestData data;
     protected final FakeServers fake = FakeServers.INSTANCE;
-    @Autowired private com.dadcoach.whatsapp.DeliveryReceipts receipts;
     @Autowired private com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties;
-    @Autowired private com.dadcoach.integration.channel.HeldOutcomes heldOutcomes;
     @Autowired private com.dadcoach.integration.platform.messaging.MessagingSettings messaging;
+    @Autowired private com.dadcoach.integration.platform.messaging.PlatformTemplateStatus templateStatus;
 
     @BeforeEach
     void cleanSlate() {
@@ -109,24 +108,23 @@ public abstract class AbstractIntegrationTest {
                 + "communication_endpoints, platform_person_deletion, tool_idempotency, template_messages, site_signup, "
                 + "login_link, dashboard_session, father_deactivation, training_progress, staff_user, father, system_setting "
                 + "RESTART IDENTITY CASCADE");
-        jdbc.update("INSERT INTO template_messages (template_name, language, category, body, status, max_variables) "
-                + "VALUES (?, 'he', 'UTILITY', '{{1}}', 'APPROVED', 1)", TEMPLATE);
         clock.set(TUESDAY_NOON_IL);
         fake.reset();
-        receipts.forgetPending(); // D-038: early "failed" receipts are kept in memory; wamids repeat across tests
         platformProperties.setDeliveryReports(false); // D-039: the switch is off unless a test turns it on
-        heldOutcomes.setEnabled(false); // D-042: GATEWAY_HELD_REPORTS is off unless a test turns it on
-        messaging.setLoginLink(com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-045
-        messaging.setScheduled(com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-046
-        for (String kind : java.util.List.of("REPLY", "FIXED_LINE", "BUTTON_REPLY", "READY_ANSWER")) {
-            messaging.setConversational(kind, com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-048
-        }
+        templateStatus.forget(); // D-053: the platform's template view is cached for 5 minutes
         messaging.setReplyReadTimeoutMs(5000);
+        messaging.setNotCreatedRepostWait(java.time.Duration.ofMillis(20)); // D-053: ≤ 2 s in production
         messaging.setDeliveryStatusEnabled(false);
         messaging.setReconcileAfter(java.time.Duration.ofMinutes(5));
         messaging.setReadTimeoutMs(12000);
         messaging.setLookupReadTimeoutMs(5000); // D-047
         messaging.setReconcilePassBudget(java.time.Duration.ofSeconds(15));
+    }
+
+    /** D-053: Dad Coach never sends to Meta - every message goes through the platform's Send API. */
+    @org.junit.jupiter.api.AfterEach
+    void metaReceivedNoSend() {
+        org.assertj.core.api.Assertions.assertThat(fake.metaSends()).as("D-053: a send reached Meta directly").isEmpty();
     }
 
     @TestConfiguration
