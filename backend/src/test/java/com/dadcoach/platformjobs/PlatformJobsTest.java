@@ -330,6 +330,16 @@ class PlatformJobsTest extends AbstractIntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("production starts lazily (Dockerfile): the registration and the jobs bean are eager, or no job is ever registered")
+    void eagerUnderLazyInitialization() {
+        for (Class<?> c : List.of(DadCoachPlatformJobs.class, PlatformJobs.class)) {
+            org.springframework.context.annotation.Lazy lazy = c.getAnnotation(org.springframework.context.annotation.Lazy.class);
+            assertThat(lazy).as(c.getSimpleName()).isNotNull();
+            assertThat(lazy.value()).as(c.getSimpleName()).isFalse();
+        }
+    }
+
     private static void lock(Connection c, String name) throws Exception {
         try (PreparedStatement ps = c.prepareStatement("SELECT pg_advisory_lock(hashtextextended(?, 0))")) {
             ps.setString(1, name);
