@@ -42,6 +42,9 @@ class PlatformJobsTest extends AbstractIntegrationTest {
     @Autowired PlatformJobsSync sync;
     @Autowired DataSource dataSource;
     @Autowired JdbcTemplate jdbc;
+    @Autowired com.dadcoach.weeklygoal.WeeklyGoalCompletionJob weeklyGoalJob;
+    @Autowired com.dadcoach.integration.platform.SessionTimersOwner sessionTimersOwner;
+    @Autowired com.dadcoach.integration.platform.lifecycle.PlatformPersonDeletions personDeletions;
 
     private final AtomicInteger counter = new AtomicInteger();
 
@@ -160,14 +163,39 @@ class PlatformJobsTest extends AbstractIntegrationTest {
     @DisplayName("the registration lists every Dad Coach job, enabled only when the platform owns it")
     @SuppressWarnings("unchecked")
     void registrationBody() {
-        jobs.setPlatformOwned(Set.of("weekly_goals"));
+        jobs.setPlatformOwned(Set.of("session_timers"));
         Map<String, Object> body = sync.body();
         List<Map<String, Object>> list = (List<Map<String, Object>>) body.get("jobs");
-        assertThat(list).extracting(m -> m.get("jobKey")).contains("weekly_goals", "session_timers", "person_deletions", "qa_probe");
-        assertThat(list).filteredOn(m -> "weekly_goals".equals(m.get("jobKey"))).singleElement()
-                .satisfies(m -> assertThat(m).containsEntry("enabled", true).containsEntry("cron", "0 0 6 * * SUN").containsEntry("timezone", "UTC"));
+        assertThat(list).extracting(m -> m.get("jobKey")).contains("session_timers", "person_deletions", "qa_probe")
+                .as("the tests switch the weekly cron off (\"-\"): nothing to register").doesNotContain("weekly_goals");
         assertThat(list).filteredOn(m -> "session_timers".equals(m.get("jobKey"))).singleElement()
+                .satisfies(m -> assertThat(m).containsEntry("enabled", true).containsEntry("every", "PT10M"));
+        assertThat(list).filteredOn(m -> "person_deletions".equals(m.get("jobKey"))).singleElement()
                 .satisfies(m -> assertThat(m).containsEntry("enabled", false));
+    }
+
+    @Test
+    @DisplayName("weekly goals register with the tick's own cron (Sunday 06:00 UTC by default), never a second schedule")
+    void weeklyGoalsUseTheTicksCron() {
+        PlatformJobs fresh = new PlatformJobs(new org.springframework.boot.autoconfigure.jdbc.DataSourceProperties(), jdbc,
+                new com.fasterxml.jackson.databind.ObjectMapper(), "");
+        new DadCoachPlatformJobs(fresh, weeklyGoalJob, sessionTimersOwner, personDeletions, "0 0 6 * * SUN");
+        assertThat(fresh.job("weekly_goals")).hasValueSatisfying(j -> {
+            assertThat(j.cron()).isEqualTo("0 0 6 * * SUN");
+            assertThat(j.zone()).isEqualTo("UTC");
+            assertThat(j.every()).isNull();
+        });
+    }
+
+    @Test
+    @DisplayName("J-5 watchdog for a cron job: silent only when its last expected fire is over an hour old and nothing ran since - a restart is no floor")
+    void cronWatchdog() {
+        PlatformJobs.Job weekly = PlatformJobs.Job.cron("t_cron", "0 0 6 * * SUN", "UTC", Duration.ofMinutes(5), false, "test", () -> true);
+        Instant sundayNoon = Instant.parse("2026-11-08T12:00:00Z");
+        assertThat(PlatformJobs.lastExpectedFire(weekly, sundayNoon)).isEqualTo(Instant.parse("2026-11-08T06:00:00Z"));
+        assertThat(PlatformJobs.silent(weekly, Instant.parse("2026-11-08T06:00:05Z"), sundayNoon)).as("ran at 06:00").isFalse();
+        assertThat(PlatformJobs.silent(weekly, Instant.parse("2026-11-01T06:00:05Z"), sundayNoon)).as("last ran a week ago").isTrue();
+        assertThat(PlatformJobs.silent(weekly, Instant.EPOCH, Instant.parse("2026-11-08T06:30:00Z"))).as("within the hour's grace").isFalse();
     }
 
     @Test

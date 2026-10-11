@@ -17,9 +17,21 @@ import org.springframework.stereotype.Component;
 public class DadCoachPlatformJobs {
 
     public DadCoachPlatformJobs(PlatformJobs jobs, WeeklyGoalCompletionJob weeklyGoals, SessionTimersOwner sessionTimers,
-                                PlatformPersonDeletions personDeletions) {
-        jobs.register(PlatformJobs.Job.cron(WeeklyGoalCompletionJob.PLATFORM_JOB, "0 0 6 * * SUN", "UTC", Duration.ofMinutes(5), false,
+                                PlatformPersonDeletions personDeletions,
+                                @org.springframework.beans.factory.annotation.Value("${dadcoach.scheduler.weekly-goal-completion-cron:0 0 6 * * SUN}") String weeklyCron) {
+        // the tick's own cron (one property, never two schedules); "-" (switched off, as in the tests) registers nothing
+        if (!"-".equals(weeklyCron)) {
+            registerWeekly(jobs, weeklyGoals, weeklyCron);
+        }
+        registerOthers(jobs, sessionTimers, personDeletions);
+    }
+
+    private static void registerWeekly(PlatformJobs jobs, WeeklyGoalCompletionJob weeklyGoals, String cron) {
+        jobs.register(PlatformJobs.Job.cron(WeeklyGoalCompletionJob.PLATFORM_JOB, cron, "UTC", Duration.ofMinutes(5), false,
                 "weekly goals and streaks of finished weeks", weeklyGoals::platformRun));
+    }
+
+    private static void registerOthers(PlatformJobs jobs, SessionTimersOwner sessionTimers, PlatformPersonDeletions personDeletions) {
         jobs.register(PlatformJobs.Job.every(SessionTimersOwner.PLATFORM_JOB, Duration.ofMinutes(10), Duration.ofMinutes(5), false,
                 "session timer reconcile (D-050)", sessionTimers::platformRun));
         jobs.register(PlatformJobs.Job.every(PlatformPersonDeletions.PLATFORM_JOB, Duration.ofMinutes(5), Duration.ofMinutes(5), false,

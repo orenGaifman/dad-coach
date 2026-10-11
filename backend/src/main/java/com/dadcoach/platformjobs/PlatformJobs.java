@@ -54,7 +54,6 @@ public class PlatformJobs {
     static final Duration LANE_WAIT = Duration.ofSeconds(30);
     /** How long a platform call waits for it before answering BUSY. */
     static final Duration PLATFORM_LANE_WAIT = Duration.ofSeconds(5);
-    static final int LOCK_POOL_SIZE = 8;
     private volatile Duration laneWait = LANE_WAIT;
     private volatile Duration platformLaneWait = PLATFORM_LANE_WAIT;
 
@@ -90,6 +89,13 @@ public class PlatformJobs {
     private final ObjectMapper json;
     private volatile Set<String> platformOwned;
     private final Instant started = Instant.now();
+    private int lockPoolSize = 4;
+
+    /** The lock pool's size (default 4; the tests' many cached contexts use fewer). */
+    @org.springframework.beans.factory.annotation.Autowired
+    void setLockPoolSize(@Value("${app.platform-jobs.lock-pool-size:4}") int lockPoolSize) {
+        this.lockPoolSize = lockPoolSize;
+    }
 
     public PlatformJobs(DataSourceProperties dataSourceProperties, JdbcTemplate jdbc, ObjectMapper json,
                         @Value("${app.platform-jobs.platform-owned:}") String platformOwned) {
@@ -99,7 +105,7 @@ public class PlatformJobs {
         this.platformOwned = parse(platformOwned);
     }
 
-    /** The lock connections' own pool (lazy: built on the first run; idle connections close after a minute). */
+    /** The lock connections' own pool (lazy: built on the first run; idle connections close after 10 s). */
     private HikariDataSource lockPool() {
         HikariDataSource pool = lockPool;
         if (pool == null) {
@@ -107,9 +113,9 @@ public class PlatformJobs {
                 if (lockPool == null) {
                     HikariDataSource p = dataSourceProperties.initializeDataSourceBuilder().type(HikariDataSource.class).build();
                     p.setPoolName("platform-job-locks");
-                    p.setMaximumPoolSize(LOCK_POOL_SIZE);
+                    p.setMaximumPoolSize(lockPoolSize);
                     p.setMinimumIdle(0);
-                    p.setIdleTimeout(Duration.ofMinutes(1).toMillis());
+                    p.setIdleTimeout(Duration.ofSeconds(10).toMillis());
                     p.setConnectionTimeout(Duration.ofSeconds(5).toMillis());
                     lockPool = p;
                 }
@@ -188,7 +194,7 @@ public class PlatformJobs {
 
     /**
      * The tick under the job's locks: PLATFORM_OWNED (nothing ran), SKIPPED (the job is running elsewhere - logged),
-     * FAILED (the locks could not be taken: a database error - logged; the tick's own failures are its own), RAN.
+     * FAILED (the locks could not be taken: a database error - logged), RAN (the tick's own failure is logged ERROR).
      */
     public TickResult tickWith(String key, Runnable tick) {
         Job job = jobs.get(key);
@@ -199,20 +205,31 @@ public class PlatformJobs {
         if (platformOwns(key)) {
             return TickResult.PLATFORM_OWNED;
         }
+        RuntimeException[] bodyFailure = new RuntimeException[1];
+        boolean ran;
         try {
-            boolean ran = runLocked(job, laneWait, () -> {
-                tick.run();
+            ran = runLocked(job, laneWait, () -> {
+                try {
+                    tick.run();
+                } catch (RuntimeException e) {
+                    bodyFailure[0] = e;
+                }
                 return true;
             }).isPresent();
-            if (!ran) {
-                log.atInfo().addKeyValue("jobKey", key).log("platform_jobs.tick_skipped");
-                return TickResult.SKIPPED;
-            }
-            return TickResult.RAN;
         } catch (Exception e) {
             log.atWarn().addKeyValue("jobKey", key).setCause(e).log("platform_jobs.tick_failed");
             return TickResult.FAILED;
         }
+        if (bodyFailure[0] != null) {
+            // the tick's own failure, as an uncaught @Scheduled failure was logged before (ERROR)
+            log.atError().addKeyValue("jobKey", key).setCause(bodyFailure[0]).log("platform_jobs.tick_body_failed");
+            return TickResult.RAN;
+        }
+        if (!ran) {
+            log.atInfo().addKeyValue("jobKey", key).log("platform_jobs.tick_skipped");
+            return TickResult.SKIPPED;
+        }
+        return TickResult.RAN;
     }
 
     // --------------------------------------------------------------------------------------------- the platform's call
@@ -235,7 +252,13 @@ public class PlatformJobs {
             Optional<Outcome> outcome = runLocked(job, platformLaneWait, () -> runSlot(job, slot));
             return outcome.orElseGet(() -> new Outcome(409, Map.of("status", "BUSY")));
         } catch (SQLTransientConnectionException e) {
-            return new Outcome(409, Map.of("status", "BUSY"));
+            if (e.getCause() == null) {
+                // the lock pool is exhausted (other runs hold it): busy, asked again shortly
+                log.atInfo().addKeyValue("jobKey", key).log("platform_jobs.lock_pool_busy");
+                return new Outcome(409, Map.of("status", "BUSY"));
+            }
+            log.atWarn().addKeyValue("jobKey", key).addKeyValue("slot", slot).setCause(e).log("platform_jobs.run_failed");
+            return new Outcome(500, Map.of("status", "FAILED", "error", "DATABASE_UNREACHABLE"));
         } catch (Exception e) {
             log.atWarn().addKeyValue("jobKey", key).addKeyValue("slot", slot).setCause(e).log("platform_jobs.run_failed");
             return new Outcome(500, Map.of("status", "FAILED", "error", e.getClass().getSimpleName()));
@@ -375,7 +398,7 @@ public class PlatformJobs {
     private volatile Instant lastPurge = Instant.EPOCH;
 
     /** Every minute (one job per class in Dad Coach's lane table): the watchdog, and once a day the ledger purge. */
-    @org.springframework.scheduling.annotation.Scheduled(scheduler = com.dadcoach.config.SchedulingLanes.HOUSEKEEPING, initialDelayString = "PT2M", fixedDelayString = "PT1M")
+    @org.springframework.scheduling.annotation.Scheduled(scheduler = com.dadcoach.config.SchedulingLanes.HOUSEKEEPING, initialDelayString = "${app.platform-jobs.watchdog-initial-delay:PT2M}", fixedDelayString = "PT1M")
     public void maintenance() {
         watchdog();
         if (Duration.between(lastPurge, Instant.now()).compareTo(Duration.ofDays(1)) > 0) {
@@ -390,9 +413,9 @@ public class PlatformJobs {
             if (!platformOwns(job.key())) {
                 continue;
             }
-            Duration interval = job.every() != null ? job.every() : Duration.ofDays(7);
-            Instant last = latest(lastPlatformCall.getOrDefault(job.key(), started), lastLedgerStart(job.key()));
-            if (Duration.between(last, now).compareTo(interval.multipliedBy(3)) <= 0) {
+            Instant last = latest(lastPlatformCall.getOrDefault(job.key(), job.every() != null ? started : Instant.EPOCH),
+                    lastLedgerStart(job.key()));
+            if (!silent(job, last, now)) {
                 continue;
             }
             try {
@@ -410,6 +433,34 @@ public class PlatformJobs {
             } catch (Exception e) {
                 log.atWarn().addKeyValue("jobKey", job.key()).setCause(e).log("platform_jobs.watchdog_run_failed");
             }
+        }
+    }
+
+    /**
+     * An interval job: no run for 3× its interval. A cron job: its last expected fire is more than an hour ago and no run
+     * started since (the process start is no floor - a restart must not hide a platform that stopped calling).
+     */
+    static boolean silent(Job job, Instant last, Instant now) {
+        if (job.every() != null) {
+            return Duration.between(last, now).compareTo(job.every().multipliedBy(3)) > 0;
+        }
+        Instant expected = lastExpectedFire(job, now);
+        return expected != null && expected.plus(Duration.ofHours(1)).isBefore(now) && last.isBefore(expected);
+    }
+
+    /** The cron job's last fire at or before {@code now} (searched over the last 8 days; null when none). */
+    static Instant lastExpectedFire(Job job, Instant now) {
+        org.springframework.scheduling.support.CronExpression cron = org.springframework.scheduling.support.CronExpression.parse(job.cron());
+        java.time.ZoneId zone = java.time.ZoneId.of(job.zone() == null ? "UTC" : job.zone());
+        java.time.ZonedDateTime t = now.minus(Duration.ofDays(8)).atZone(zone);
+        Instant found = null;
+        while (true) {
+            java.time.ZonedDateTime next = cron.next(t);
+            if (next == null || next.toInstant().isAfter(now)) {
+                return found;
+            }
+            found = next.toInstant();
+            t = next;
         }
     }
 

@@ -53,7 +53,7 @@ class PlatformJobsControllerTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("PRODUCT_OWNED while the product owns it; DONE then DUPLICATE once the platform does; unknown job 404")
     void runsThroughTheChain() throws Exception {
-        String slot = "2026-11-03T11:" + String.format("%02d", (int) (System.nanoTime() % 60)) + ":00Z";
+        String slot = "2026-11-03T11:" + String.format("%02d", (int) Math.floorMod(System.nanoTime(), 60L)) + ":00Z";
         mvc.perform(post("/api/integration/jobs/qa_probe").header("X-API-Key", CALLBACK_KEY)
                         .header("X-Idempotency-Key", "job:qa_probe:" + slot).contentType(MediaType.APPLICATION_JSON).content(call(slot)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PRODUCT_OWNED"));

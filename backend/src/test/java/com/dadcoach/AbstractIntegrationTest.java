@@ -53,6 +53,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
         "dadcoach.scheduler.weekly-goal-completion-cron=-",
         "dad-coach.messaging.reconcile-initial-delay=PT24H",
         "spring.datasource.hikari.maximum-pool-size=5",
+        // 5.4 v3: the platform jobs' lock pool, small - every cached context has one
+        "app.platform-jobs.lock-pool-size=2",
+        "app.platform-jobs.watchdog-initial-delay=PT24H",
         // the dashboard (com.dadcoach.auth / web / ops)
         "dadcoach.dashboard.ops-api-key=" + AbstractIntegrationTest.OPS_KEY,
         "dadcoach.dashboard.cookie-secure=false",
