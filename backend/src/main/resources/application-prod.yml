@@ -10,3 +10,8 @@ spring:
 
 server:
   address: 0.0.0.0
+
+app:
+  platform-jobs:
+    # 5.4 v3: the platform jobs' lock connections (Supabase session pooler: the main pool is 5)
+    lock-pool-size: 2

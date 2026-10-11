@@ -59,6 +59,8 @@ class SchedulingLanesTest {
             "KeepWarmJob.keepWarm", SchedulingLanes.HOUSEKEEPING,
             "LoginLinkPlatform.scheduledReconcile", SchedulingLanes.MESSAGING,
             "ScheduledPlatformSend.scheduledReconcile", SchedulingLanes.MESSAGING,
+            // 5.4 v3: the platform-jobs watchdog and daily purge (one method)
+            "PlatformJobs.maintenance", SchedulingLanes.HOUSEKEEPING,
             // D-050: reads and arms platform timers, sends no message
             "SessionTimersOwner.scheduledReconcile", SchedulingLanes.HOUSEKEEPING);
 

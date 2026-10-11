@@ -16,6 +16,27 @@ import org.springframework.stereotype.Component;
 @Component
 public class WeeklyGoalCompletionJob {
 
+    /** Unified Workflow 5.4 v3: this job's key on the platform's product-job scheduler. */
+    public static final String PLATFORM_JOB = "weekly_goals";
+
+    private com.dadcoach.platformjobs.PlatformJobs platformJobs;
+
+    /** Optional: hand-built instances in tests tick as before. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPlatformJobs(com.dadcoach.platformjobs.PlatformJobs platformJobs) {
+        this.platformJobs = platformJobs;
+    }
+
+    /**
+     * The body the platform runs for a slot: the tick's own work (same guard, same summary log) without its catch - a
+     * failure reaches the platform, which retries the slot.
+     */
+    public Object platformRun() throws Exception {
+        List<WeeklyGoalService.BeltPromotionResult> promotions = goals.completeWeeklyGoals();
+        log.atInfo().setMessage("weekly_goal.completion").addKeyValue("promotions", promotions.size()).log();
+        return promotions.size();
+    }
+
     private static final Logger log = LoggerFactory.getLogger(WeeklyGoalCompletionJob.class);
 
     private final WeeklyGoalService goals;
@@ -28,6 +49,16 @@ public class WeeklyGoalCompletionJob {
     @Scheduled(cron = "${dadcoach.scheduler.weekly-goal-completion-cron:0 0 6 * * SUN}", zone = "UTC",
             scheduler = SchedulingLanes.MESSAGING)
     public void run() {
+        // Unified Workflow 5.4 v3: the tick goes through PlatformJobs (its locks; nothing when the platform owns the job)
+        if (platformJobs != null) {
+            platformJobs.tick(PLATFORM_JOB, this::runHere);
+            return;
+        }
+        runHere();
+    }
+
+    /** The tick's own work, as before 5.4 v3 (PlatformJobs runs it under the job's locks). */
+    public void runHere() {
         List<WeeklyGoalService.BeltPromotionResult> promotions = goals.completeWeeklyGoals();
         log.atInfo().setMessage("weekly_goal.completion").addKeyValue("promotions", promotions.size()).log();
     }
