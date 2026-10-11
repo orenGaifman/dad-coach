@@ -67,15 +67,23 @@ public class PlatformJobs {
 
     /** A job: its key, schedule (every or cron + zone), the platform's timeout for it, whether it sends, and its body. */
     public record Job(String key, Duration every, String cron, String zone, Duration timeout, boolean sends, String description,
-                      Callable<Object> body) {
+                      Callable<Object> body, boolean platformOnly) {
 
         public static Job every(String key, Duration every, Duration timeout, boolean sends, String description, Callable<Object> body) {
-            return new Job(key, every, null, null, timeout, sends, description, body);
+            return new Job(key, every, null, null, timeout, sends, description, body, false);
         }
 
         public static Job cron(String key, String cron, String zone, Duration timeout, boolean sends, String description,
                                Callable<Object> body) {
-            return new Job(key, null, cron, zone, timeout, sends, description, body);
+            return new Job(key, null, cron, zone, timeout, sends, description, body, false);
+        }
+
+        /**
+         * A job with no {@code @Scheduled} tick left (D-055): the platform always owns it, whatever {@code DC_PLATFORM_JOBS}
+         * says - a list that forgot it can never leave it without a scheduler.
+         */
+        public Job asPlatformOnly() {
+            return new Job(key, every, cron, zone, timeout, sends, description, body, true);
         }
     }
 
@@ -168,7 +176,8 @@ public class PlatformJobs {
     }
 
     public boolean platformOwns(String key) {
-        return platformOwned.contains(key);
+        Job job = jobs.get(key);
+        return (job != null && job.platformOnly()) || platformOwned.contains(key);
     }
 
     /** Tests flip owners on the one cached context. */
@@ -410,8 +419,13 @@ public class PlatformJobs {
     }
 
     public void watchdog() {
+        watchdog(jobs.values());
+    }
+
+    /** The watchdog over {@code these} jobs (tests pass their own, never running the real ones). */
+    void watchdog(Collection<Job> these) {
         Instant now = Instant.now();
-        for (Job job : jobs.values()) {
+        for (Job job : these) {
             if (!platformOwns(job.key())) {
                 continue;
             }

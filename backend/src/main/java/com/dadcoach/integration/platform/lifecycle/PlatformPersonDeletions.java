@@ -18,7 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -41,14 +40,6 @@ public class PlatformPersonDeletions {
 
     /** Unified Workflow 5.4 v3: this job's key on the platform's product-job scheduler. */
     public static final String PLATFORM_JOB = "person_deletions";
-
-    private com.dadcoach.platformjobs.PlatformJobs platformJobs;
-
-    /** Optional: hand-built instances in tests tick as before. */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setPlatformJobs(com.dadcoach.platformjobs.PlatformJobs platformJobs) {
-        this.platformJobs = platformJobs;
-    }
 
     /** The body the platform runs for a slot (exceptions reach the platform, which retries). */
     public Object platformRun() throws Exception {
@@ -143,23 +134,6 @@ public class PlatformPersonDeletions {
         } catch (RuntimeException e) {
             log.warn("Could not start the platform person deletion now (the scan retries): {}", e.getMessage());
         }
-    }
-
-    @Scheduled(initialDelayString = "${dadcoach.platform-person-deletion.initial-delay:PT1M}",
-            fixedDelayString = "${dadcoach.platform-person-deletion.interval:PT5M}",
-            scheduler = SchedulingLanes.HOUSEKEEPING)
-    public void sendPeriodically() {
-        // Unified Workflow 5.4 v3: the tick goes through PlatformJobs (its locks; nothing when the platform owns the job)
-        if (platformJobs != null) {
-            platformJobs.tick(PLATFORM_JOB, this::sendPeriodicallyHere);
-            return;
-        }
-        sendPeriodicallyHere();
-    }
-
-    /** The tick's own work, as before 5.4 v3 (PlatformJobs runs it under the job's locks). */
-    public void sendPeriodicallyHere() {
-        sendDue();
     }
 
     /** Sends every due request. @return how many the platform confirmed */

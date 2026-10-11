@@ -16,7 +16,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -44,17 +43,9 @@ public class SessionTimersOwner {
     /** Unified Workflow 5.4 v3: this job's key on the platform's product-job scheduler. */
     public static final String PLATFORM_JOB = "session_timers";
 
-    private com.dadcoach.platformjobs.PlatformJobs platformJobs;
-
-    /** Optional: hand-built instances in tests tick as before. */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setPlatformJobs(com.dadcoach.platformjobs.PlatformJobs platformJobs) {
-        this.platformJobs = platformJobs;
-    }
-
     /**
-     * The body the platform runs for a slot: the tick's own work (same guard, same summary log) without its catch - a
-     * failure reaches the platform, which retries the slot.
+     * The job, run by the platform once per slot (D-055: its only scheduler): its guard and summary log; a failure reaches
+     * the platform, which retries the slot.
      */
     public Object platformRun() throws Exception {
         if (!enabled()) {
@@ -111,33 +102,6 @@ public class SessionTimersOwner {
             });
         } else {
             cancel.run();
-        }
-    }
-
-    @Scheduled(fixedDelayString = "${app.session-timers.reconcile-interval:PT10M}",
-            initialDelayString = "${app.session-timers.reconcile-initial-delay:PT3M}",
-            scheduler = SchedulingLanes.HOUSEKEEPING)
-    public void scheduledReconcile() {
-        // Unified Workflow 5.4 v3: the tick goes through PlatformJobs (its locks; nothing when the platform owns the job)
-        if (platformJobs != null) {
-            platformJobs.tick(PLATFORM_JOB, this::scheduledReconcileHere);
-            return;
-        }
-        scheduledReconcileHere();
-    }
-
-    /** The tick's own work, as before 5.4 v3 (PlatformJobs runs it under the job's locks). */
-    public void scheduledReconcileHere() {
-        if (!enabled()) {
-            return;
-        }
-        try {
-            int fathersSeen = reconcile();
-            if (fathersSeen > 0) {
-                log.atInfo().addKeyValue("fathers", fathersSeen).log("session.timers.reconciled");
-            }
-        } catch (RuntimeException e) {
-            log.warn("Session timer reconcile failed", e);
         }
     }
 

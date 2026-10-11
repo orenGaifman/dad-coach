@@ -1254,3 +1254,17 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   again in 30 s, not counted); a connection whose unlock failed is evicted.
 - Not moved: the Send API reconciles (rewritten by the 6.4 cleanup first), template refresh and receipt retry (removed by
   it), keep-warm and the idempotency purge (per instance / in-process).
+
+## D-055 — The session-timer reconcile and the person deletions have no tick any more: the platform's product-job scheduler is their one scheduler (Unified Workflow Phase 5.4 v3, 2026-10-12)
+
+- **Why:** owner, 2026-10-11/12: remove the product-side `@Scheduled` code once each job's migration is proven. Proven in
+  production (D-054): both ran on the platform every slot from 2026-10-11 20:35-20:40Z (DONE; the session-timer reconcile
+  answers DISABLED while `DC_SESSION_TIMERS_PRODUCT_OWNED` is off, as its tick did); the scheduler itself was proven on
+  Tair and Big Boss with the same code (one run per slot, duplicates, retries, restarts of the product and the platform).
+- **What:** the ticks of `session_timers` and `person_deletions` (and their `*Here()` bodies) are removed; both are
+  `asPlatformOnly()` - owned by the platform whatever `DC_PLATFORM_JOBS` says. The watchdog here runs a job the platform
+  stopped calling (a degraded mode, not a scheduler; a lab platform needs `PRODUCT_JOBS_ENABLED=true`).
+- **Kept:** `weekly_goals` keeps its Sunday 06:00 UTC tick (a no-op while `DC_PLATFORM_JOBS` lists it) until its first
+  platform slot, 2026-10-18 06:00 UTC, has run - its retirement follows. Also kept: the Send API reconciles (D-053),
+  keep-warm and the idempotency purge (per instance), the platform-jobs maintenance. qa_probe stays opt-in.
+- **Rollback:** revert this commit (the ticks come back, owned by the list as in D-054).
