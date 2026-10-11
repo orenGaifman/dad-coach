@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLTransientConnectionException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -18,10 +19,12 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-import javax.sql.DataSource;
+import com.zaxxer.hikari.HikariDataSource;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -36,6 +39,10 @@ import org.springframework.stereotype.Component;
  * messaging lane's - D-063's "one sending job at a time", now across instances too) on a connection of its own for the
  * whole run. Postgres frees a lock when its process dies, so liveness is the lock, not an age: a busy job answers BUSY,
  * a slot left RUNNING by a dead process is taken over.</p>
+ *
+ * <p>The lock connections come from a small pool of their own (review: holding a lock must never take a connection the
+ * job's own work - or a user's request - needs from the main pool). A platform call waits only briefly for the messaging
+ * lane and otherwise answers BUSY (the platform calls again in 30 s, not counted as an attempt).</p>
  */
 @Component
 public class PlatformJobs {
@@ -43,12 +50,18 @@ public class PlatformJobs {
     private static final Logger log = LoggerFactory.getLogger(PlatformJobs.class);
     static final String LOCK_PREFIX = "dadcoach:job:";
     static final String LANE_LOCK = "dadcoach:lane:messaging";
+    /** How long a tick waits for the messaging lane (the in-process lanes' old queueing). */
     static final Duration LANE_WAIT = Duration.ofSeconds(30);
+    /** How long a platform call waits for it before answering BUSY. */
+    static final Duration PLATFORM_LANE_WAIT = Duration.ofSeconds(5);
+    static final int LOCK_POOL_SIZE = 8;
     private volatile Duration laneWait = LANE_WAIT;
+    private volatile Duration platformLaneWait = PLATFORM_LANE_WAIT;
 
-    /** Tests shorten the lane wait. */
+    /** Tests shorten the lane waits. */
     void setLaneWait(Duration laneWait) {
         this.laneWait = laneWait;
+        this.platformLaneWait = laneWait.compareTo(PLATFORM_LANE_WAIT) < 0 ? laneWait : PLATFORM_LANE_WAIT;
     }
 
     /** A job: its key, schedule (every or cron + zone), the platform's timeout for it, whether it sends, and its body. */
@@ -70,18 +83,48 @@ public class PlatformJobs {
 
     private final Map<String, Job> jobs = new ConcurrentHashMap<>();
     private final Map<String, Instant> lastPlatformCall = new ConcurrentHashMap<>();
-    private final DataSource dataSource;
+    private final Set<String> silentReported = ConcurrentHashMap.newKeySet();
+    private final DataSourceProperties dataSourceProperties;
+    private volatile HikariDataSource lockPool;
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
     private volatile Set<String> platformOwned;
     private final Instant started = Instant.now();
 
-    public PlatformJobs(DataSource dataSource, JdbcTemplate jdbc, ObjectMapper json,
+    public PlatformJobs(DataSourceProperties dataSourceProperties, JdbcTemplate jdbc, ObjectMapper json,
                         @Value("${app.platform-jobs.platform-owned:}") String platformOwned) {
-        this.dataSource = dataSource;
+        this.dataSourceProperties = dataSourceProperties;
         this.jdbc = jdbc;
         this.json = json;
         this.platformOwned = parse(platformOwned);
+    }
+
+    /** The lock connections' own pool (lazy: built on the first run; idle connections close after a minute). */
+    private HikariDataSource lockPool() {
+        HikariDataSource pool = lockPool;
+        if (pool == null) {
+            synchronized (this) {
+                if (lockPool == null) {
+                    HikariDataSource p = dataSourceProperties.initializeDataSourceBuilder().type(HikariDataSource.class).build();
+                    p.setPoolName("platform-job-locks");
+                    p.setMaximumPoolSize(LOCK_POOL_SIZE);
+                    p.setMinimumIdle(0);
+                    p.setIdleTimeout(Duration.ofMinutes(1).toMillis());
+                    p.setConnectionTimeout(Duration.ofSeconds(5).toMillis());
+                    lockPool = p;
+                }
+                pool = lockPool;
+            }
+        }
+        return pool;
+    }
+
+    @PreDestroy
+    void closeLockPool() {
+        HikariDataSource pool = lockPool;
+        if (pool != null) {
+            pool.close();
+        }
     }
 
     static Set<String> parse(String list) {
@@ -101,6 +144,11 @@ public class PlatformJobs {
 
     public void register(Job job) {
         jobs.put(job.key(), job);
+    }
+
+    /** Tests remove the jobs they registered (the shared context's registration body stays the real one). */
+    void unregister(String key) {
+        jobs.remove(key);
     }
 
     public Collection<Job> jobs() {
@@ -123,74 +171,47 @@ public class PlatformJobs {
     // --------------------------------------------------------------------------------------------- the product's tick
 
     /**
-     * The job's {@code @Scheduled} tick: nothing when the platform owns it; otherwise its body under its locks (a run
-     * already holding them - another instance during a deploy, the platform's call - means this tick is skipped). Never
-     * throws (the tick's old behaviour: a failure is logged and the next tick tries again).
+     * The job's {@code @Scheduled} tick: nothing when the platform owns it; otherwise {@code here} - the tick's own body,
+     * exactly as before (its guard, its summary log, its catch) - under the job's locks. A run already holding them
+     * (another instance during a deploy, the platform's call) means this tick is skipped (logged). A job that is not
+     * registered runs {@code here} as before, unlocked - a missing registration never stops a job.
      */
-    public void tick(String key) {
-        Job job = jobs.get(key);
-        if (job == null || platformOwns(key)) {
-            return;
-        }
-        try {
-            runLocked(job, () -> {
-                job.body().call();
-                return true;
-            });
-        } catch (Exception e) {
-            log.atWarn().addKeyValue("jobKey", key).setCause(e).log("platform_jobs.tick_failed");
+    public void tick(String key, Runnable here) {
+        TickResult r = tickWith(key, here);
+        if (r == TickResult.FAILED) {
+            log.atWarn().addKeyValue("jobKey", key).log("platform_jobs.tick_not_run");
         }
     }
 
+    /** What a tick came to. */
+    public enum TickResult { RAN, PLATFORM_OWNED, SKIPPED, FAILED }
+
     /**
-     * Dad Coach: a job's own tick (JobRuns) when its body is the tick itself - nothing when the platform owns the job; else the
-     * tick under the job's locks (skipped when they are taken). Returns false when it did not run.
+     * The tick under the job's locks: PLATFORM_OWNED (nothing ran), SKIPPED (the job is running elsewhere - logged),
+     * FAILED (the locks could not be taken: a database error - logged; the tick's own failures are its own), RAN.
      */
-    public boolean tickWith(String key, Runnable tick) {
+    public TickResult tickWith(String key, Runnable tick) {
         Job job = jobs.get(key);
         if (job == null) {
             tick.run();
-            return true;
+            return TickResult.RAN;
         }
         if (platformOwns(key)) {
-            return false;
+            return TickResult.PLATFORM_OWNED;
         }
         try {
-            return runLocked(job, () -> {
+            boolean ran = runLocked(job, laneWait, () -> {
                 tick.run();
                 return true;
             }).isPresent();
+            if (!ran) {
+                log.atInfo().addKeyValue("jobKey", key).log("platform_jobs.tick_skipped");
+                return TickResult.SKIPPED;
+            }
+            return TickResult.RAN;
         } catch (Exception e) {
             log.atWarn().addKeyValue("jobKey", key).setCause(e).log("platform_jobs.tick_failed");
-            return false;
-        }
-    }
-
-    // ------------------------------------------------------------------------- a platform run, seen by JobRuns (Dad Coach)
-
-    private static final ThreadLocal<String> PLATFORM_RUN = new ThreadLocal<>();
-    private static final ThreadLocal<Object> PLATFORM_RESULT = new ThreadLocal<>();
-
-    /** Whether this thread is running {@code key} for the platform (JobRuns then runs it as is and rethrows). */
-    public static boolean platformRun(String key) {
-        return key.equals(PLATFORM_RUN.get());
-    }
-
-    public static void platformResult(Object result) {
-        PLATFORM_RESULT.set(result);
-    }
-
-    /** Runs {@code tick} as the platform's run of {@code key}; returns what JobRuns recorded for it. */
-    public static Object asPlatformRun(String key, Runnable tick) {
-        PLATFORM_RUN.set(key);
-        PLATFORM_RESULT.remove();
-        try {
-            tick.run();
-            Object result = PLATFORM_RESULT.get();
-            return result == null ? "DONE" : result;
-        } finally {
-            PLATFORM_RUN.remove();
-            PLATFORM_RESULT.remove();
+            return TickResult.FAILED;
         }
     }
 
@@ -211,8 +232,10 @@ public class PlatformJobs {
             return new Outcome(200, duplicate(done.get()));
         }
         try {
-            Optional<Outcome> outcome = runLocked(job, () -> runSlot(job, slot));
+            Optional<Outcome> outcome = runLocked(job, platformLaneWait, () -> runSlot(job, slot));
             return outcome.orElseGet(() -> new Outcome(409, Map.of("status", "BUSY")));
+        } catch (SQLTransientConnectionException e) {
+            return new Outcome(409, Map.of("status", "BUSY"));
         } catch (Exception e) {
             log.atWarn().addKeyValue("jobKey", key).addKeyValue("slot", slot).setCause(e).log("platform_jobs.run_failed");
             return new Outcome(500, Map.of("status", "FAILED", "error", e.getClass().getSimpleName()));
@@ -273,33 +296,37 @@ public class PlatformJobs {
 
     /**
      * Runs {@code work} holding the job's advisory lock (tried once) and, for a sending job, the messaging lane's (waited
-     * for up to {@link #LANE_WAIT}), both on one dedicated connection, released in {@code finally}. Empty when a lock
-     * could not be had.
+     * for up to {@code laneWait}), both on one connection of the lock pool, released in {@code finally} (a connection
+     * whose unlock failed is evicted, never handed out still holding a lock). Empty when a lock could not be had.
      */
-    <T> Optional<T> runLocked(Job job, Callable<T> work) throws Exception {
-        try (Connection c = dataSource.getConnection()) {
-            boolean autoCommit = c.getAutoCommit();
+    <T> Optional<T> runLocked(Job job, Duration laneWait, Callable<T> work) throws Exception {
+        HikariDataSource pool = lockPool();
+        Connection c = pool.getConnection();
+        boolean healthy = true;
+        try {
             c.setAutoCommit(true);
+            if (!tryLock(c, LOCK_PREFIX + job.key())) {
+                return Optional.empty();
+            }
             try {
-                if (!tryLock(c, LOCK_PREFIX + job.key())) {
+                if (job.sends() && !waitLock(c, LANE_LOCK, laneWait)) {
                     return Optional.empty();
                 }
                 try {
-                    if (job.sends() && !waitLock(c, LANE_LOCK, laneWait)) {
-                        return Optional.empty();
-                    }
-                    try {
-                        return Optional.ofNullable(work.call());
-                    } finally {
-                        if (job.sends()) {
-                            unlock(c, LANE_LOCK);
-                        }
-                    }
+                    return Optional.ofNullable(work.call());
                 } finally {
-                    unlock(c, LOCK_PREFIX + job.key());
+                    if (job.sends()) {
+                        healthy &= unlock(c, LANE_LOCK);
+                    }
                 }
             } finally {
-                c.setAutoCommit(autoCommit);
+                healthy &= unlock(c, LOCK_PREFIX + job.key());
+            }
+        } finally {
+            if (healthy) {
+                c.close();
+            } else {
+                pool.evictConnection(c);
             }
         }
     }
@@ -326,20 +353,24 @@ public class PlatformJobs {
         }
     }
 
-    private static void unlock(Connection c, String name) {
+    private static boolean unlock(Connection c, String name) {
         try (PreparedStatement ps = c.prepareStatement("SELECT pg_advisory_unlock(hashtextextended(?, 0))")) {
             ps.setString(1, name);
             ps.executeQuery().close();
+            return true;
         } catch (SQLException e) {
             log.atWarn().addKeyValue("lock", name).log("platform_jobs.unlock_failed");
+            return false;
         }
     }
 
     // --------------------------------------------------------------------------------------------- watchdog + purge
 
     /**
-     * Review J-5: a PLATFORM job the platform has not called for 3× its interval (and not since this process started) is
-     * run once here, under its locks, and logged ERROR - a platform that stopped calling never silently stops a job.
+     * Review J-5: a PLATFORM job the platform has not run for 3× its interval is run once here, under its locks - a
+     * platform that stopped calling never silently stops a job. "Has not run" is read from the shared ledger (its last
+     * slot's start, any instance) and this instance's last call, so an instance the platform's calls do not reach is
+     * not a false alarm; a job still running (its lock held) is not either. ERROR the first time per job, WARN after.
      */
     private volatile Instant lastPurge = Instant.EPOCH;
 
@@ -360,21 +391,39 @@ public class PlatformJobs {
                 continue;
             }
             Duration interval = job.every() != null ? job.every() : Duration.ofDays(7);
-            Instant last = lastPlatformCall.getOrDefault(job.key(), started);
-            if (Duration.between(last, now).compareTo(interval.multipliedBy(3)) > 0) {
-                lastPlatformCall.put(job.key(), now);
-                log.atError().addKeyValue("jobKey", job.key()).addKeyValue("silentFor", Duration.between(last, now))
-                        .log("platform_jobs.platform_silent - running the job here once");
-                try {
-                    runLocked(job, () -> {
-                        job.body().call();
-                        return true;
-                    });
-                } catch (Exception e) {
-                    log.atWarn().addKeyValue("jobKey", job.key()).setCause(e).log("platform_jobs.watchdog_run_failed");
+            Instant last = latest(lastPlatformCall.getOrDefault(job.key(), started), lastLedgerStart(job.key()));
+            if (Duration.between(last, now).compareTo(interval.multipliedBy(3)) <= 0) {
+                continue;
+            }
+            try {
+                Optional<Boolean> ran = runLocked(job, laneWait, () -> {
+                    lastPlatformCall.put(job.key(), Instant.now());
+                    var entry = silentReported.add(job.key()) ? log.atError() : log.atWarn();
+                    entry.addKeyValue("jobKey", job.key()).addKeyValue("silentFor", Duration.between(last, now))
+                            .log("platform_jobs.platform_silent - running the job here once");
+                    job.body().call();
+                    return true;
+                });
+                if (ran.isEmpty()) {
+                    log.atInfo().addKeyValue("jobKey", job.key()).log("platform_jobs.watchdog_skipped_running");
                 }
+            } catch (Exception e) {
+                log.atWarn().addKeyValue("jobKey", job.key()).setCause(e).log("platform_jobs.watchdog_run_failed");
             }
         }
+    }
+
+    private Instant lastLedgerStart(String key) {
+        try {
+            Timestamp t = jdbc.queryForObject("SELECT max(started_at) FROM platform_job_run WHERE job_key = ?", Timestamp.class, key);
+            return t == null ? Instant.EPOCH : t.toInstant();
+        } catch (RuntimeException e) {
+            return Instant.EPOCH;
+        }
+    }
+
+    private static Instant latest(Instant a, Instant b) {
+        return a.isAfter(b) ? a : b;
     }
 
     public void purge() {

@@ -52,9 +52,19 @@ public class SessionTimersOwner {
         this.platformJobs = platformJobs;
     }
 
-    /** The body the platform runs for a slot (exceptions reach the platform, which retries). */
+    /**
+     * The body the platform runs for a slot: the tick's own work (same guard, same summary log) without its catch - a
+     * failure reaches the platform, which retries the slot.
+     */
     public Object platformRun() throws Exception {
-        return enabled() ? reconcile() : "DISABLED";
+        if (!enabled()) {
+            return "DISABLED";
+        }
+        int fathersSeen = reconcile();
+        if (fathersSeen > 0) {
+            log.atInfo().addKeyValue("fathers", fathersSeen).log("session.timers.reconciled");
+        }
+        return fathersSeen;
     }
 
     private static final Logger log = LoggerFactory.getLogger(SessionTimersOwner.class);
@@ -110,7 +120,7 @@ public class SessionTimersOwner {
     public void scheduledReconcile() {
         // Unified Workflow 5.4 v3: the tick goes through PlatformJobs (its locks; nothing when the platform owns the job)
         if (platformJobs != null) {
-            platformJobs.tick(PLATFORM_JOB);
+            platformJobs.tick(PLATFORM_JOB, this::scheduledReconcileHere);
             return;
         }
         scheduledReconcileHere();

@@ -151,7 +151,7 @@ public class PlatformPersonDeletions {
     public void sendPeriodically() {
         // Unified Workflow 5.4 v3: the tick goes through PlatformJobs (its locks; nothing when the platform owns the job)
         if (platformJobs != null) {
-            platformJobs.tick(PLATFORM_JOB);
+            platformJobs.tick(PLATFORM_JOB, this::sendPeriodicallyHere);
             return;
         }
         sendPeriodicallyHere();

@@ -27,9 +27,14 @@ public class WeeklyGoalCompletionJob {
         this.platformJobs = platformJobs;
     }
 
-    /** The body the platform runs for a slot (exceptions reach the platform, which retries). */
+    /**
+     * The body the platform runs for a slot: the tick's own work (same guard, same summary log) without its catch - a
+     * failure reaches the platform, which retries the slot.
+     */
     public Object platformRun() throws Exception {
-        return goals.completeWeeklyGoals().size();
+        List<WeeklyGoalService.BeltPromotionResult> promotions = goals.completeWeeklyGoals();
+        log.atInfo().setMessage("weekly_goal.completion").addKeyValue("promotions", promotions.size()).log();
+        return promotions.size();
     }
 
     private static final Logger log = LoggerFactory.getLogger(WeeklyGoalCompletionJob.class);
@@ -46,7 +51,7 @@ public class WeeklyGoalCompletionJob {
     public void run() {
         // Unified Workflow 5.4 v3: the tick goes through PlatformJobs (its locks; nothing when the platform owns the job)
         if (platformJobs != null) {
-            platformJobs.tick(PLATFORM_JOB);
+            platformJobs.tick(PLATFORM_JOB, this::runHere);
             return;
         }
         runHere();

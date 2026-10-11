@@ -1239,13 +1239,18 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 
 - **Why:** owner, 2026-10-11: the platform owns all scheduling (clock, run-once, retries); products keep business logic.
   Spec `ai-workflow-platform/docs/architecture/PHASE5_4_SPEC.md` §v3/v3.8.
-- `DC_PLATFORM_JOBS` lists the jobs the platform owns (empty = all tick here, as before): `weekly_goals` (hourly on the
-  platform - a scan of finished weeks, idempotent), `session_timers` (D-050's reconcile), `person_deletions`, `qa_probe`
+- `DC_PLATFORM_JOBS` lists the jobs the platform owns (empty = all tick here, as before): `weekly_goals` (its Sunday 06:00
+  UTC slot, as the tick - review: hourly would complete a week right after Israel's Sunday 00:00 and mid-week in other zones), `session_timers` (D-050's reconcile), `person_deletions`, `qa_probe`
   (no business effect, for controlled checks). A listed job's `@Scheduled` tick does nothing; the platform calls
   `POST /api/integration/jobs/{key}` (the callback key) once per slot; an unlisted job answers PRODUCT_OWNED.
 - Every run holds the job's Postgres advisory lock (and the messaging lane's for a job that sends): never overlapping, never
   on two instances. The slot ledger `platform_job_run` (V50) answers a repeated slot with its first result. Startup
-  registration (`PUT /api/v1/worker/jobs`, enabled only when listed); a watchdog runs a listed job here once (ERROR) when
-  the platform has not called it for 3× its interval.
+  registration (`PUT /api/v1/worker/jobs`, enabled only when listed); a watchdog runs a listed job here once (ERROR the first
+  time, then WARN) when neither the ledger (any instance) nor this instance shows a run for 3× its interval and the job is
+  not running.
+- Review (BLOCK, fixed): the tick runs the tick's own body unchanged (guard, summary log, catch); the platform's body is the
+  same work without the catch; an unregistered job ticks as before. Lock connections come from a pool of their own (8,
+  idle-closed), never the main pool; a platform call waits at most 5 s for the messaging lane, then answers BUSY (asked
+  again in 30 s, not counted); a connection whose unlock failed is evicted.
 - Not moved: the Send API reconciles (rewritten by the 6.4 cleanup first), template refresh and receipt retry (removed by
   it), keep-warm and the idempotency purge (per instance / in-process).

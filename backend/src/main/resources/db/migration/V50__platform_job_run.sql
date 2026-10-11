@@ -11,4 +11,6 @@ CREATE TABLE platform_job_run (
   finished_at TIMESTAMPTZ,
   PRIMARY KEY (job_key, slot)
 );
-CREATE INDEX idx_platform_job_run_finished ON platform_job_run (finished_at);
+-- the 14-day purge (started_at) and the watchdog's last start per job
+CREATE INDEX idx_platform_job_run_started ON platform_job_run (started_at);
+CREATE INDEX idx_platform_job_run_job_started ON platform_job_run (job_key, started_at);
