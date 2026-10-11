@@ -786,6 +786,29 @@ class LoginLinkPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("Report tx: Meta's failed receipt that beat the report is applied once the report links its wamid - "
+            + "committed (the work after the report's own transaction is never lost)")
+    void keptReceiptAppliedAfterTheReportCommits() throws Exception {
+        messaging.setLoginLink(Mode.PLATFORM);
+        messaging.setDeliveryStatusEnabled(true);
+        Father f = father("+19995550829");
+        String messageId = UUID.randomUUID().toString();
+        String wamid = "wamid.reporttx." + UUID.randomUUID();
+        fake.onPlatformSend(c -> answer(202, messageId, "QUEUED", null, null, null));
+        links.sendTo(f.getPhone());
+        UUID id = linkId(f);
+
+        webhook(receipt(wamid, "failed", f.getPhone()));   // no row holds the wamid yet: kept
+        assertThat(link(f)).containsEntry("provider_message_id", null);
+
+        assertThat(json(report(id, messageId, "ACCEPTED", wamid, null)).path("applied").asBoolean()).isTrue();
+
+        assertThat(link(f)).as("the report's move and the kept receipt, both committed")
+                .containsEntry("platform_status", "ACCEPTED").containsEntry("provider_message_id", wamid)
+                .containsEntry("receipt_status", "FAILED").containsEntry("delivery_status", "FAILED");
+    }
+
+    @Test
     @DisplayName("A FAILED report after acceptance marks the link FAILED (his next request sends a new card)")
     void failedReport() throws Exception {
         messaging.setLoginLink(Mode.PLATFORM);

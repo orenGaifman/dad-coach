@@ -63,6 +63,7 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
     @Autowired ScheduledPlatformSend platform;
     @Autowired PlatformSendFlow flow;
     @Autowired QualityTimeRepository sessions;
+    @Autowired com.dadcoach.whatsapp.DeliveryReceipts receipts;
 
     Father father;
     Child itamar;
@@ -799,5 +800,25 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
         callback("t-dir", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!");
         report("scheduled-response:t-dir", UUID.randomUUID().toString(), "SCHEDULED", "FAILED", null);
         assertThat(row("t-dir")).as("a row Dad Coach sent itself").containsEntry("status", "ACCEPTED");
+    }
+
+    @Test
+    @DisplayName("Report tx: Meta's failed receipt that beat the report (kind SCHEDULED) is applied once the report links its "
+            + "wamid - committed after the report's own transaction")
+    void keptReceiptAppliedAfterTheReportCommits() throws Exception {
+        messaging.setScheduled(Mode.PLATFORM);
+        messaging.setDeliveryStatusEnabled(true);
+        String messageId = UUID.randomUUID().toString();
+        String wamid = "wamid.reporttx." + UUID.randomUUID();
+        fake.onPlatformSend(c -> answer(202, messageId, "QUEUED", null, null, null, null));
+        callback("t-rtx", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!");
+
+        receipts.apply(new com.dadcoach.channel.dto.StatusUpdateDto(wamid, "failed", "972500000000", Instant.now(), 131026,
+                "undeliverable"));   // no row holds the wamid yet: kept
+        assertThat(report("scheduled-response:t-rtx", messageId, "SCHEDULED", "ACCEPTED", wamid).getResponse().getStatus())
+                .isEqualTo(200);
+
+        assertThat(row("t-rtx")).as("the report's move and the kept receipt, both committed")
+                .containsEntry("provider_message_id", wamid).containsEntry("status", "FAILED");
     }
 }
