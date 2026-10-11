@@ -106,9 +106,10 @@ dad-coach:
     not-created-repost-wait: ${MESSAGING_NOT_CREATED_REPOST_WAIT:PT2S}
 
 app:
-  # Unified Workflow 5.4 v3: the jobs the platform's product-job scheduler runs (comma list: weekly_goals, session_timers,
-  # person_deletions, qa_probe). A listed job's own @Scheduled tick does nothing; the platform calls
-  # POST /api/integration/jobs/{key} once per slot. Empty = every job ticks here, as before. Rollback = drop it from the list.
+  # Unified Workflow 5.4 v3: the jobs the platform's product-job scheduler runs (comma list: weekly_goals, qa_probe).
+  # A listed job's own @Scheduled tick does nothing; the platform calls POST /api/integration/jobs/{key} once per slot.
+  # D-055: session_timers and person_deletions have no tick any more - the platform is their one scheduler, whatever this
+  # list says. weekly_goals keeps its tick until its first platform slot (Sunday 06:00 UTC) has run.
   platform-jobs:
     platform-owned: ${DC_PLATFORM_JOBS:}
     sync: ${DC_PLATFORM_JOBS_SYNC:true}

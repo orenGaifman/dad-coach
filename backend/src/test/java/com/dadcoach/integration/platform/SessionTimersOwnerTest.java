@@ -107,13 +107,13 @@ class SessionTimersOwnerTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("off (the default): the dashboard cancel calls nothing, the scheduled reconcile does nothing")
-    void offIsToday() {
+    @DisplayName("off (the default): the dashboard cancel calls nothing, the platform run answers DISABLED")
+    void offIsToday() throws Exception {
         Father f = father();
         Child noa = data.child(f, "נועה", 6);
         UUID tomorrow = session(f, noa, 24 * 60 + 6 * 60);
 
-        owner.scheduledReconcile();
+        assertThat(owner.platformRun()).isEqualTo("DISABLED");   // D-055: the platform's run, its only scheduler
         sessionsService.cancel(f, tomorrow);
 
         assertThat(FakeServers.INSTANCE.scheduledTransitionCalls()).isEmpty();
@@ -128,7 +128,7 @@ class SessionTimersOwnerTest extends AbstractIntegrationTest {
         Child noa = data.child(f, "נועה", 6);
         UUID tomorrow = session(f, noa, 24 * 60 + 6 * 60);
 
-        assertThatCode(() -> owner.scheduledReconcile()).doesNotThrowAnyException();
+        assertThatCode(() -> owner.platformRun()).doesNotThrowAnyException();
         assertThatCode(() -> sessionsService.cancel(f, tomorrow)).doesNotThrowAnyException();
     }
 

@@ -163,15 +163,20 @@ class PlatformJobsTest extends AbstractIntegrationTest {
     @DisplayName("the registration lists every Dad Coach job, enabled only when the platform owns it")
     @SuppressWarnings("unchecked")
     void registrationBody() {
-        jobs.setPlatformOwned(Set.of("session_timers"));
+        jobs.setPlatformOwned(Set.of("qa_probe"));
         Map<String, Object> body = sync.body();
         List<Map<String, Object>> list = (List<Map<String, Object>>) body.get("jobs");
         assertThat(list).extracting(m -> m.get("jobKey")).contains("session_timers", "person_deletions", "qa_probe")
                 .as("the tests switch the weekly cron off (\"-\"): nothing to register").doesNotContain("weekly_goals");
         assertThat(list).filteredOn(m -> "session_timers".equals(m.get("jobKey"))).singleElement()
-                .satisfies(m -> assertThat(m).containsEntry("enabled", true).containsEntry("every", "PT10M"));
+                .satisfies(m -> assertThat(m).as("D-055: platform-only, not listed").containsEntry("enabled", true).containsEntry("every", "PT10M"));
         assertThat(list).filteredOn(m -> "person_deletions".equals(m.get("jobKey"))).singleElement()
-                .satisfies(m -> assertThat(m).containsEntry("enabled", false));
+                .satisfies(m -> assertThat(m).as("D-055: platform-only (no tick), enabled whatever the list says").containsEntry("enabled", true));
+        assertThat(list).filteredOn(m -> "qa_probe".equals(m.get("jobKey"))).singleElement()
+                .satisfies(m -> assertThat(m).as("the list turns the probe on").containsEntry("enabled", true));
+        jobs.setPlatformOwned(Set.of());
+        assertThat(jobs.platformOwns("qa_probe")).as("the probe stays opt-in").isFalse();
+        assertThat(jobs.platformOwns("session_timers")).isTrue();
     }
 
     @Test
@@ -283,18 +288,18 @@ class PlatformJobsTest extends AbstractIntegrationTest {
         jdbc.update("INSERT INTO platform_job_run (job_key, slot, status, started_at, finished_at) VALUES ('t_wd', ?, 'DONE', now() + interval '1 hour', now())",
                 Timestamp.from(slot(23)));
         Thread.sleep(700);
-        jobs.watchdog();
+        jobs.watchdog(List.of(jobs.job("t_wd").orElseThrow()));
         assertThat(counter.get()).as("another instance ran it recently (the ledger)").isZero();
         jdbc.update("DELETE FROM platform_job_run WHERE job_key = 't_wd'");
         try (Connection other = dataSource.getConnection()) {
             lock(other, PlatformJobs.LOCK_PREFIX + "t_wd");
-            jobs.watchdog();
+            jobs.watchdog(List.of(jobs.job("t_wd").orElseThrow()));
             assertThat(counter.get()).as("still running elsewhere (its lock held)").isZero();
             unlock(other, PlatformJobs.LOCK_PREFIX + "t_wd");
         }
-        jobs.watchdog();
+        jobs.watchdog(List.of(jobs.job("t_wd").orElseThrow()));
         assertThat(counter.get()).isEqualTo(1);
-        jobs.watchdog();
+        jobs.watchdog(List.of(jobs.job("t_wd").orElseThrow()));
         assertThat(counter.get()).as("once per silence, not every minute").isEqualTo(1);
     }
 

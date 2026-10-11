@@ -34,10 +34,11 @@ public class DadCoachPlatformJobs {
     }
 
     private static void registerOthers(PlatformJobs jobs, SessionTimersOwner sessionTimers, PlatformPersonDeletions personDeletions) {
+        // D-055: no tick left - the platform is their one scheduler
         jobs.register(PlatformJobs.Job.every(SessionTimersOwner.PLATFORM_JOB, Duration.ofMinutes(10), Duration.ofMinutes(5), false,
-                "session timer reconcile (D-050)", sessionTimers::platformRun));
+                "session timer reconcile (D-050)", sessionTimers::platformRun).asPlatformOnly());
         jobs.register(PlatformJobs.Job.every(PlatformPersonDeletions.PLATFORM_JOB, Duration.ofMinutes(5), Duration.ofMinutes(5), false,
-                "person deletions to the platform", personDeletions::platformRun));
+                "person deletions to the platform", personDeletions::platformRun).asPlatformOnly());
         QaProbe probe = new QaProbe();
         jobs.registerProbe(probe);
         jobs.register(PlatformJobs.Job.every(QaProbe.KEY, Duration.ofMinutes(5), Duration.ofMinutes(5), false,

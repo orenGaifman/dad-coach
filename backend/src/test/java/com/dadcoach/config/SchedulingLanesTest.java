@@ -55,14 +55,12 @@ class SchedulingLanesTest {
     static final Map<String, String> LANES = Map.of(
             "WeeklyGoalCompletionJob.run", SchedulingLanes.MESSAGING,
             "IdempotencyService.purgeExpired", SchedulingLanes.HOUSEKEEPING,
-            "PlatformPersonDeletions.sendPeriodically", SchedulingLanes.HOUSEKEEPING,
             "KeepWarmJob.keepWarm", SchedulingLanes.HOUSEKEEPING,
             "LoginLinkPlatform.scheduledReconcile", SchedulingLanes.MESSAGING,
             "ScheduledPlatformSend.scheduledReconcile", SchedulingLanes.MESSAGING,
+            // D-055: the person deletions and the session-timer reconcile have no tick - the platform runs them
             // 5.4 v3: the platform-jobs watchdog and daily purge (one method)
-            "PlatformJobs.maintenance", SchedulingLanes.HOUSEKEEPING,
-            // D-050: reads and arms platform timers, sends no message
-            "SessionTimersOwner.scheduledReconcile", SchedulingLanes.HOUSEKEEPING);
+            "PlatformJobs.maintenance", SchedulingLanes.HOUSEKEEPING);
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(TaskSchedulingAutoConfiguration.class,
