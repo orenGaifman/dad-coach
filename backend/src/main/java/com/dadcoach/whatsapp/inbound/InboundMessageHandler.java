@@ -22,6 +22,7 @@ import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import com.dadcoach.integration.platform.lifecycle.DeletedSenders;
 import com.dadcoach.integration.platform.lifecycle.PersonRefs;
 import com.dadcoach.integration.platform.lifecycle.WhatsAppDeletionRequests;
+import com.dadcoach.integration.platform.messaging.MessagingSettings;
 import com.dadcoach.integration.platform.timeline.TimelineReports;
 import com.dadcoach.integration.platform.timeline.TimelineText;
 import com.dadcoach.domain.child.ChildRepository;
@@ -93,8 +94,20 @@ public class InboundMessageHandler {
     /** One message's processing: set when it could not be answered (a refused send, the platform unavailable). */
     static final class Attempt {
         boolean unanswered;
-        /** Sends Meta accepted so far. */
+        /** Sends Meta accepted so far (D-048: or the platform has, or may have). */
         int sent;
+        /** D-048: lines sent (or tried) for this message so far - the next line's place in its key. */
+        int parts;
+        /** D-048: results of lines the platform records on the timeline itself - Dad Coach reports nothing of them. */
+        final java.util.Set<DeliveryResult> recordedByPlatform =
+                java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+
+        /** D-048: his message was reported before the platform was asked to send the answer. */
+        boolean hisReported;
+
+        boolean byPlatform(DeliveryResult result) {
+            return result != null && recordedByPlatform.contains(result);
+        }
 
         Outcome outcome() {
             return unanswered ? Outcome.UNANSWERED : Outcome.HANDLED;
@@ -141,6 +154,7 @@ public class InboundMessageHandler {
     private com.dadcoach.weeklyplan.WeeklyPlanContextBuilder weeklyPlan;
     private SessionTimers sessionTimers;
     private TimelineReports timeline;
+    private ReplyPlatformSend replies;
 
     /** B-4: the reply was not Hebrew - the coach writes it again once, told why (as Tair's HebrewOnly). */
     static final String HEBREW_RETRY_NOTE = "[הודעת מערכת, לא מהאבא: התשובה הקודמת שלך לא נשלחה כי לא הייתה בעברית. "
@@ -216,9 +230,10 @@ public class InboundMessageHandler {
                 Optional<Father> known = fathers.findByPhone(phone);
                 known.ifPresent(endpoints::recordInbound);
                 String line = VoiceNoteReplies.notHeard(outcome);
-                DeliveryResult sent = send(attempt, phone, line);
-                reportAnswered(in, known, TimelineText.marker(MessageType.AUDIO), in.idempotencyKey() + ":reply", line, sent,
-                        TimelineReports.KIND_FIXED_LINE);
+                DeliveryResult sent = send(attempt, in, known, MessagingSettings.FIXED_LINE, line,
+                        noTurnRow(known, in.idempotencyKey() + ":reply", line), TimelineText.marker(MessageType.AUDIO));
+                reportAnswered(attempt, in, known, TimelineText.marker(MessageType.AUDIO), in.idempotencyKey() + ":reply",
+                        line, sent, TimelineReports.KIND_FIXED_LINE);
                 return;
             }
         }
@@ -226,8 +241,10 @@ public class InboundMessageHandler {
             if (heard != null) {
                 // deleting everything cannot be undone - it never rests on a machine transcription; he types it
                 String line = VoiceNoteReplies.withHeard(SPOKEN_DELETION_REPLY, heard);
-                DeliveryResult sent = send(attempt, phone, line);
-                reportAnswered(in, fathers.findByPhone(phone), VoiceNoteReplies.TURN_NOTE + heard,
+                Optional<Father> known = fathers.findByPhone(phone);
+                DeliveryResult sent = send(attempt, in, known, MessagingSettings.FIXED_LINE, line,
+                        noTurnRow(known, in.idempotencyKey() + ":reply", line), VoiceNoteReplies.TURN_NOTE + heard);
+                reportAnswered(attempt, in, known, VoiceNoteReplies.TURN_NOTE + heard,
                         in.idempotencyKey() + ":reply", line, sent, TimelineReports.KIND_FIXED_LINE);
                 return;
             }
@@ -245,9 +262,10 @@ public class InboundMessageHandler {
         }
         if (text == null || text.isBlank()) {
             String line = in.messageType() != MessageType.AUDIO && voiceNotes.active() ? FILE_REPLY : MEDIA_REPLY;
-            DeliveryResult sent = send(attempt, phone, line);
-            reportAnswered(in, father, TimelineText.marker(in.messageType()), in.idempotencyKey() + ":reply", line, sent,
-                    TimelineReports.KIND_FIXED_LINE);
+            DeliveryResult sent = send(attempt, in, father, MessagingSettings.FIXED_LINE, line,
+                    noTurnRow(father, in.idempotencyKey() + ":reply", line), TimelineText.marker(in.messageType()));
+            reportAnswered(attempt, in, father, TimelineText.marker(in.messageType()), in.idempotencyKey() + ":reply", line,
+                    sent, TimelineReports.KIND_FIXED_LINE);
             return;
         }
         if (!admitted && !rateLimiter.tryAcquire(phone)) {
@@ -261,15 +279,19 @@ public class InboundMessageHandler {
                 tap = buttonTaps.handle(father.get(), in.buttonId());
             } catch (RuntimeException e) {
                 log.atWarn().setMessage("whatsapp.button.failed").addKeyValue("error", e.getClass().getSimpleName()).log();
-                DeliveryResult sent = send(attempt, phone, PLATFORM_DOWN_REPLY);
-                reportAnswered(in, father, in.textContent(), in.idempotencyKey(), PLATFORM_DOWN_REPLY, sent,
+                DeliveryResult sent = send(attempt, phone, PLATFORM_DOWN_REPLY);   // direct forever (D-048)
+                reportAnswered(attempt, in, father, in.textContent(), in.idempotencyKey(), PLATFORM_DOWN_REPLY, sent,
                         TimelineReports.KIND_FIXED_LINE);
                 return;
             }
             if (tap.reply() != null) {
-                DeliveryResult sent = send(attempt, phone, tap.reply());
+                DeliveryResult sent = send(attempt, in, father, MessagingSettings.BUTTON_REPLY, tap.reply(),
+                        ReplyPlatformSend.Timeline.newRow(in.idempotencyKey(), tap.reply()), in.textContent());
+                if (attempt.byPlatform(sent)) {
+                    return;     // D-048: the platform records the reply (his tap was reported before it)
+                }
                 if (reporting()) {
-                    reportAnswered(in, father, in.textContent(), in.idempotencyKey(), tap.reply(), sent,
+                    reportAnswered(attempt, in, father, in.textContent(), in.idempotencyKey(), tap.reply(), sent,
                             TimelineReports.KIND_BUTTON_REPLY);
                 } else {
                     recorder.recordSent(father.get(), tap.reply(), in.idempotencyKey());
@@ -342,8 +364,9 @@ public class InboundMessageHandler {
                 if (hebrew.isEmpty()) {
                     outcome = "BLOCKED_NOT_HEBREW";
                     String line = VoiceNoteReplies.withHeard(NOT_HEBREW_FALLBACK, heard);
-                    DeliveryResult sent = send(attempt, phone, line);
-                    reportReplaced(phone, father, cid, line, sent, TimelineReports.KIND_FIXED_LINE, superseded);
+                    DeliveryResult sent = send(attempt, in, father, MessagingSettings.FIXED_LINE, line,
+                            ReplyPlatformSend.Timeline.replacing(cid, superseded, line), null);
+                    reportReplaced(attempt, phone, father, cid, line, sent, TimelineReports.KIND_FIXED_LINE, superseded);
                     return;
                 }
                 outcome = outcome.equals("DUPLICATE_REPLAYED") ? outcome : "REWRITTEN_IN_HEBREW";
@@ -356,8 +379,9 @@ public class InboundMessageHandler {
                 outcome = "DASHBOARD_CARD";
                 if (instead.isPresent()) {
                     String line = VoiceNoteReplies.withHeard(instead.get(), heard);
-                    DeliveryResult sent = send(attempt, phone, line);
-                    reportReplaced(phone, now, cid, line, sent, TimelineReports.KIND_FIXED_LINE, superseded);
+                    DeliveryResult sent = send(attempt, in, now, MessagingSettings.FIXED_LINE, line,
+                            ReplyPlatformSend.Timeline.replacing(cid, superseded, line), null);
+                    reportReplaced(attempt, phone, now, cid, line, sent, TimelineReports.KIND_FIXED_LINE, superseded);
                 } else if (reporting()) {
                     // the card (reported where it is sent) is the answer: nothing of the reply went out
                     timeline.turnOutcome(TimelineReports.Person.of(phone, now), cid, TimelineReports.DROPPED, null,
@@ -367,20 +391,24 @@ public class InboundMessageHandler {
             }
             String checked = checkClaims(hebrew.get(), before, now, phone, platformStart, cid);
             String out = ReplyStyleGuard.clean(VoiceNoteReplies.withHeard(checked, heard));
-            DeliveryResult sent = send(attempt, phone, out);
+            boolean asWritten = superseded.isEmpty() && !rewriting && TimelineText.sameAsDraft(out, reply);
+            DeliveryResult sent = send(attempt, in, now, MessagingSettings.REPLY, out, asWritten
+                    ? ReplyPlatformSend.Timeline.asIs(cid) : ReplyPlatformSend.Timeline.replacing(cid, superseded, out), null);
             now.ifPresent(f -> mentions.sent(f, out));
             if (!checked.equals(hebrew.get())) {
                 outcome = "CLAIM_CORRECTED";
             }
-            if (reporting()) {
+            if (attempt.byPlatform(sent)) {
+                // D-048: the platform records it (AS_IS on the turn, or in place of the draft) - nothing reported here
+            } else if (reporting()) {
                 // D-039: as the platform wrote it -> AS_IS; anything else replaces the draft (no ":corrected" row)
-                if (superseded.isEmpty() && !rewriting && TimelineText.sameAsDraft(out, reply)) {
+                if (asWritten) {
                     if (sent.isSuccessful()) {
                         timeline.turnOutcome(TimelineReports.Person.of(phone, now), cid, TimelineReports.AS_IS, sent, null,
                                 null);
                     }
                 } else {
-                    reportReplaced(phone, now, cid, out, sent, TimelineReports.KIND_REPLY, superseded);
+                    reportReplaced(attempt, phone, now, cid, out, sent, TimelineReports.KIND_REPLY, superseded);
                 }
             } else if (!checked.equals(hebrew.get())) {
                 // the father saw the corrected text: his AI conversation gets it too, so the next turn builds on it
@@ -394,11 +422,11 @@ public class InboundMessageHandler {
             // a redelivery runs it again; a refusal (4xx) is the platform's answer and would be the same again
             attempt.unanswered |= e instanceof PlatformUnavailableException;
             String line = VoiceNoteReplies.withHeard(PLATFORM_DOWN_REPLY, heard);
-            DeliveryResult sent = send(attempt, phone, line);
+            DeliveryResult sent = send(attempt, phone, line);   // direct forever: sent when the platform is not there
             if (rewriting && !(e instanceof PlatformUnavailableException)) {
                 // D-039: the turn's reply exists (English, not sent) and the platform refused the rewrite for good: the
                 // line went instead of it (when unavailable, the redelivery answers and reports)
-                reportReplaced(phone, father.isPresent() ? father : fathers.findByPhone(phone), cid, line, sent,
+                reportReplaced(attempt, phone, father.isPresent() ? father : fathers.findByPhone(phone), cid, line, sent,
                         TimelineReports.KIND_FIXED_LINE, superseded);
             }
         } catch (RuntimeException e) {
@@ -453,11 +481,15 @@ public class InboundMessageHandler {
                 answer.append("\n\nרוצה שנמצא עוד זמן השבוע?");
             }
             String out = ReplyStyleGuard.clean(VoiceNoteReplies.withHeard(answer.toString(), heard));
-            DeliveryResult sent = send(attempt, in.fatherChannelIdentity(), out);
-            if (reporting()) {
+            String his = heard != null ? VoiceNoteReplies.TURN_NOTE + heard : words;
+            DeliveryResult sent = send(attempt, in, Optional.of(father), MessagingSettings.READY_ANSWER, out,
+                    ReplyPlatformSend.Timeline.newRow(in.idempotencyKey(), out), his);
+            if (attempt.byPlatform(sent)) {
+                // D-048: the platform records the answer (his question was reported before it)
+            } else if (reporting()) {
                 // D-039: his question (as a turn would have read it), then the answer
-                reportAnswered(in, Optional.of(father), heard != null ? VoiceNoteReplies.TURN_NOTE + heard : words,
-                        in.idempotencyKey(), out, sent, TimelineReports.KIND_READY_ANSWER);
+                reportAnswered(attempt, in, Optional.of(father), his, in.idempotencyKey(), out, sent,
+                        TimelineReports.KIND_READY_ANSWER);
             } else {
                 recorder.recordSent(father, out, in.idempotencyKey());
             }
@@ -495,24 +527,25 @@ public class InboundMessageHandler {
      * A message answered without a turn: his message, then what was sent - for a known father (a stranger's number never
      * gets a conversation from a report) and only once it reached him (a refused send is redelivered and reported then).
      */
-    private void reportAnswered(InboundMessageDto in, Optional<Father> father, String inboundContent,
+    private void reportAnswered(Attempt attempt, InboundMessageDto in, Optional<Father> father, String inboundContent,
                                 String outCorrelationId, String sentText, DeliveryResult sent, String kind) {
-        if (!reporting() || father.isEmpty() || sent == null || !sent.isSuccessful()) {
+        if (!reporting() || father.isEmpty() || sent == null || !sent.isSuccessful() || attempt.byPlatform(sent)) {
             return;
         }
         TimelineReports.Person person = TimelineReports.Person.of(father.get());
-        String type = in.messageType() == MessageType.AUDIO || inboundContent != null
-                && inboundContent.startsWith(VoiceNoteReplies.TURN_NOTE) ? "audio" : TimelineText.messageType(in.messageType());
-        timeline.inbound(person, in.idempotencyKey(), inboundContent, type, in.buttonId(),
-                in.buttonId() == null ? null : in.textContent());
+        String type = hisType(in, inboundContent);
+        if (!attempt.hisReported) {     // D-048: reported before the platform was asked (it then sent nothing)
+            timeline.inbound(person, in.idempotencyKey(), inboundContent, type, in.buttonId(),
+                    in.buttonId() == null ? null : in.textContent());
+        }
         timeline.outbound(person, TimelineReports.Part.sent(outCorrelationId, TimelineText.withoutIdentity(sentText), sent,
                 kind));
     }
 
     /** What was sent instead of the turn's reply: it replaces the draft (and the superseded turns' rows). */
-    private void reportReplaced(String phone, Optional<Father> father, String cid, String sentText, DeliveryResult sent,
-                                String kind, List<String> superseded) {
-        if (!reporting() || sent == null || !sent.isSuccessful()) {
+    private void reportReplaced(Attempt attempt, String phone, Optional<Father> father, String cid, String sentText,
+                                DeliveryResult sent, String kind, List<String> superseded) {
+        if (!reporting() || sent == null || !sent.isSuccessful() || attempt.byPlatform(sent)) {
             return;
         }
         timeline.outbound(TimelineReports.Person.of(phone, father), TimelineReports.Part.replacing(cid + ":delivered", cid,
@@ -698,21 +731,95 @@ public class InboundMessageHandler {
 
     /**
      * A reply inside the conversation the father just opened (the 24-hour window is open by definition). A send Meta
-     * (or the gateway's circuit) refused leaves the message unanswered (DC-B3).
+     * (or the gateway's circuit) refused leaves the message unanswered (DC-B3). D-048: the lines that never go through
+     * the platform's Send API (the "something went wrong" line, the deletion answer) - today's way, always.
      */
     private DeliveryResult send(Attempt attempt, String phone, String text) {
-        DeliveryResult result = whatsapp.sendMessage(new OutboundMessageDto(UUID.randomUUID(), null, WhatsAppEndpoints.CHANNEL,
-                MessageType.TEXT, text, null, false, null, Map.of(), MessagePriority.IMMEDIATE, clock.instant()), phone);
+        attempt.parts++;
+        DeliveryResult result = deliverDirect(phone, text);
         log.atInfo().setMessage("whatsapp.delivery.result")
                 .addKeyValue("kind", "CONVERSATIONAL_REPLY")
                 .addKeyValue("status", result.status())
                 .addKeyValue("failure", result.failureReason())
                 .log();
+        count(attempt, result);
+        return result;
+    }
+
+    /** Today's send: the adapter (its gate, its circuit, a refused link as text). */
+    private DeliveryResult deliverDirect(String phone, String text) {
+        return whatsapp.sendMessage(new OutboundMessageDto(UUID.randomUUID(), null, WhatsAppEndpoints.CHANNEL,
+                MessageType.TEXT, text, null, false, null, Map.of(), MessagePriority.IMMEDIATE, clock.instant()), phone);
+    }
+
+    private static void count(Attempt attempt, DeliveryResult result) {
         if (result.isSuccessful()) {
             attempt.sent++;
         } else {
             attempt.unanswered = true;
         }
+    }
+
+    /**
+     * D-048: one conversational line of {@code kind} ({@link MessagingSettings#REPLY}, {@code FIXED_LINE},
+     * {@code BUTTON_REPLY}, {@code READY_ANSWER}) - through the platform's Send API when that kind's switch is PLATFORM
+     * ({@link ReplyPlatformSend}), else exactly today's send (SHADOW: plus the platform's dry run, off this thread).
+     * {@code row}: how the platform records it on the timeline. {@code his}: his message as the timeline shows it, for a
+     * line with no turn - reported BEFORE the platform sends the answer (it records the answer itself), so it comes first.
+     */
+    private DeliveryResult send(Attempt attempt, InboundMessageDto in, Optional<Father> father, String kind, String text,
+                                ReplyPlatformSend.Timeline row, String his) {
+        String phone = in.fatherChannelIdentity();
+        if (replies == null) {
+            return send(attempt, phone, text);
+        }
+        ReplyPlatformSend.Line line = new ReplyPlatformSend.Line(kind, phone, father, in.idempotencyKey(), attempt.parts,
+                in.receivedAt(), text, row);
+        MessagingSettings.Mode mode = replies.mode(kind);
+        if (mode != MessagingSettings.Mode.PLATFORM) {
+            DeliveryResult result = send(attempt, phone, text);
+            if (mode == MessagingSettings.Mode.SHADOW) {
+                replies.shadow(line, result);
+            }
+            return result;
+        }
+        attempt.parts++;
+        if (his != null && row.records() && reporting() && father.isPresent()) {
+            timeline.inboundBeforeAnswer(TimelineReports.Person.of(father.get()), in.idempotencyKey(), his,
+                    hisType(in, his), in.buttonId(), in.buttonId() == null ? null : in.textContent(),
+                    ReplyPlatformSend.INBOUND_BEFORE);
+            attempt.hisReported = true;
+        }
+        ReplyPlatformSend.Sent sent = replies.send(line, mode, () -> deliverDirect(phone, text));
+        DeliveryResult result = sent.result();
+        log.atInfo().setMessage("whatsapp.delivery.result")
+                .addKeyValue("kind", "CONVERSATIONAL_REPLY")
+                .addKeyValue("status", result.status())
+                .addKeyValue("failure", result.failureReason())
+                .addKeyValue("messagingKind", kind)
+                .addKeyValue("via", sent.viaPlatform() ? "PLATFORM" : "DIRECT")
+                .addKeyValue("platformStatus", sent.platformStatus())
+                .log();
+        count(attempt, result);
+        if (sent.platformRecords()) {
+            attempt.recordedByPlatform.add(result);
+        }
         return result;
+    }
+
+    /** How the timeline shows his message's type: a voice note (heard or not) is audio. */
+    private static String hisType(InboundMessageDto in, String content) {
+        return in.messageType() == MessageType.AUDIO || content != null && content.startsWith(VoiceNoteReplies.TURN_NOTE)
+                ? "audio" : TimelineText.messageType(in.messageType());
+    }
+
+    /** A line with no turn: a row for a known father; a stranger's number never gets a conversation from it (D-039). */
+    private static ReplyPlatformSend.Timeline noTurnRow(Optional<Father> father, String correlationId, String text) {
+        return father.isPresent() ? ReplyPlatformSend.Timeline.newRow(correlationId, text) : ReplyPlatformSend.Timeline.none();
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setReplies(ReplyPlatformSend replies) {
+        this.replies = replies;
     }
 }

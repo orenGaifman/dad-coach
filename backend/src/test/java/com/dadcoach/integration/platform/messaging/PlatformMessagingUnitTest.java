@@ -48,6 +48,21 @@ class PlatformMessagingUnitTest {
         assertThat(settings.reconcilePassBudget()).as("no budget is never 'no limit'").isEqualTo(java.time.Duration.ofSeconds(15));
     }
 
+    @Test
+    void theConversationalSwitchesDefaultToDirectAndParseAsTheOthers() {
+        var settings = new MessagingSettings("", false, java.time.Duration.ofMinutes(5), 2000, 12000);
+        for (String kind : java.util.List.of("REPLY", "FIXED_LINE", "BUTTON_REPLY", "READY_ANSWER")) {
+            assertThat(settings.conversational(kind)).as(kind).isEqualTo(Mode.DIRECT);
+        }
+        settings.setConversationalModes("platform", " Shadow ", "PLATFROM", "");
+        assertThat(settings.conversational("REPLY")).isEqualTo(Mode.PLATFORM);
+        assertThat(settings.conversational("FIXED_LINE")).isEqualTo(Mode.SHADOW);
+        assertThat(settings.conversational("BUTTON_REPLY")).isEqualTo(Mode.DIRECT);
+        assertThat(settings.conversational("READY_ANSWER")).isEqualTo(Mode.DIRECT);
+        assertThat(settings.conversational("LOGIN_LINK")).as("not a conversational kind").isEqualTo(Mode.DIRECT);
+        assertThat(settings.replyReadTimeoutMs()).as("D-048: the father is waiting").isEqualTo(5000);
+    }
+
     private static WebClientRequestException request(Throwable cause) {
         return new WebClientRequestException(cause, HttpMethod.POST, java.net.URI.create("https://p.test/x"), new HttpHeaders());
     }

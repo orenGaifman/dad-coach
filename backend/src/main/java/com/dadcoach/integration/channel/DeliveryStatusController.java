@@ -34,7 +34,9 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>D-046: by {@code kind} - {@code LOGIN_LINK} to {@code login_link}, {@code SCHEDULED} to
  * {@code scheduled_response_delivery}; no kind: the link first, then the scheduled message; any other kind (e.g.
- * {@code BELT_PROMOTION}, which keeps no ledger) is {@code known:false}.</p>
+ * {@code BELT_PROMOTION}, which keeps no ledger) is {@code known:false}. D-048: so are the conversational lines
+ * ({@code REPLY}, {@code FIXED_LINE}, {@code BUTTON_REPLY}, {@code READY_ANSWER}): no ledger, the sync answer decided
+ * whether the message was answered.</p>
  */
 @RestController
 public class DeliveryStatusController {

@@ -1,0 +1,657 @@
+package com.dadcoach.whatsapp.inbound;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.dadcoach.AbstractIntegrationTest;
+import com.dadcoach.domain.child.Child;
+import com.dadcoach.domain.father.Father;
+import com.dadcoach.integration.channel.DeliveryStatusController;
+import com.dadcoach.integration.platform.WorkflowPlatformProperties;
+import com.dadcoach.integration.platform.messaging.MessagingSettings;
+import com.dadcoach.integration.platform.messaging.MessagingSettings.Mode;
+import com.dadcoach.integration.platform.messaging.PlatformSendFlow;
+import com.dadcoach.integration.platform.timeline.TimelineReports;
+import com.dadcoach.qualitytime.QualityTimeService;
+import com.dadcoach.support.FakeServers;
+import com.dadcoach.support.FakeServers.Reply;
+import com.dadcoach.support.Webhooks;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+/**
+ * D-048 (Unified Workflow Phase 6.3-DC, step DC4): the lines answering a father's WhatsApp message - the coach's reply,
+ * Dad Coach's fixed lines, a session button's answer, an answer from data - through the platform's Send API, one switch
+ * per kind, against a fake platform + fake Meta (FakeServers). No real WhatsApp. Per kind: DIRECT unchanged and byte for
+ * byte equal to SHADOW, SHADOW off the turn's thread, PLATFORM's request and mapping, the latency of the turn's thread,
+ * and ambiguity never sending a line twice.
+ */
+class ReplyPlatformSendTest extends AbstractIntegrationTest {
+
+    /** A number per test: the inbound rate limit (20 a minute per number) runs on the pinned clock. */
+    static final AtomicInteger NUMBERS = new AtomicInteger();
+    String PHONE;
+    static final String IDENTITY = "❤️ דאד קואץ׳:\n";
+    static final List<String> KINDS = List.of(MessagingSettings.REPLY, MessagingSettings.FIXED_LINE,
+            MessagingSettings.BUTTON_REPLY, MessagingSettings.READY_ANSWER);
+    static final Reply EDGE_502 = new Reply(502, "<html><body>Bad Gateway</body></html>", "text/html", null);
+    /** The inbound messages' Meta timestamp (Webhooks): the window hint. */
+    static final Instant INBOUND_AT = Instant.ofEpochSecond(1793700000L);
+
+    @Autowired MockMvc mvc;
+    @Autowired ObjectMapper json;
+    @Autowired MessagingSettings messaging;
+    @Autowired WorkflowPlatformProperties properties;
+    @Autowired TimelineReports reports;
+    @Autowired PlatformSendFlow flow;
+    @Autowired QualityTimeService qualityTime;
+
+    Father father;
+    Child itamar;
+    int wamid;
+
+    @BeforeEach
+    void setUp() {
+        PHONE = String.format("+1999557%04d", NUMBERS.incrementAndGet());
+        reports.setRetryDelay(Duration.ofMillis(10));
+        father = data.father(PHONE, "אורן", com.dadcoach.father.FatherStatus.ACTIVE);
+        itamar = data.child(father, "איתמר", 6);
+        data.endpoint(father, true);
+    }
+
+    @AfterEach
+    void tearDown() throws InterruptedException {
+        settle();
+        reports.setRetryDelay(Duration.ofSeconds(1));
+    }
+
+    // ------------------------------------------------------------------------------------------------- helpers
+
+    void settle() throws InterruptedException {
+        for (int i = 0; i < 100 && !flow.shadowIdle(); i++) {
+            Thread.sleep(50);
+        }
+        assertThat(reports.awaitIdle(Duration.ofSeconds(10))).isTrue();
+    }
+
+    void all(Mode mode) {
+        KINDS.forEach(k -> messaging.setConversational(k, mode));
+    }
+
+    void turn(String... replies) {
+        AtomicInteger n = new AtomicInteger();
+        fake.onTurn(c -> reply(replies[Math.min(n.getAndIncrement(), replies.length - 1)]));
+    }
+
+    Reply reply(String content) {
+        try {
+            return Reply.json(json.writeValueAsString(Map.of("instanceId", "11111111-1111-1111-1111-111111111111",
+                    "currentStateKey", "ACTIVE_COACHING", "responseContent", content, "responseType", "text",
+                    "metadata", Map.of("responseOutcome", "GENERATED"), "isDuplicate", false)));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    String says(String text) throws Exception {
+        String id = "wamid.rp" + (++wamid);
+        webhook(Webhooks.text(PHONE, id, text));
+        settle();
+        return id;
+    }
+
+    void webhook(String body) throws Exception {
+        byte[] raw = body.getBytes(StandardCharsets.UTF_8);
+        mvc.perform(post("/webhook/whatsapp").contentType(MediaType.APPLICATION_JSON)
+                .header("X-Hub-Signature-256", Webhooks.sign(raw, WEBHOOK_SECRET)).content(raw)).andExpect(status().isOk());
+    }
+
+    String tap(String id, String buttonId, String title) {
+        return Webhooks.envelope("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"from\":\"" + PHONE.substring(1)
+                + "\",\"id\":\"" + id + "\",\"timestamp\":\"1793700000\",\"type\":\"interactive\",\"interactive\":"
+                + "{\"type\":\"button_reply\",\"button_reply\":{\"id\":\"" + buttonId + "\",\"title\":\"" + title + "\"}}}]}");
+    }
+
+    JsonNode body(FakeServers.Call call) throws Exception {
+        return json.readTree(call.body());
+    }
+
+    static Reply platform(String status) {
+        return platform(status, null);
+    }
+
+    static Reply platform(String status, String reason) {
+        return Reply.json("{\"messageId\":\"" + UUID.randomUUID() + "\",\"status\":\"" + status + "\""
+                + ("ACCEPTED".equals(status) ? ",\"providerMessageId\":\"wamid.p" + UUID.randomUUID() + "\"" : "")
+                + (reason == null ? "" : ",\"reason\":\"" + reason + "\"")
+                + ",\"channelWindow\":\"SESSION\"}");
+    }
+
+    /** The calls of one kind of interest, in arrival order: Meta sends, timeline reports, the Send API. */
+    List<String> order() {
+        List<String> out = new ArrayList<>();
+        for (FakeServers.Call c : fake.calls("/")) {
+            if (c.path().equals("/api/v1/worker/messages/send")) {
+                out.add("send");
+            } else if (c.path().equals("/api/v1/worker/messages/inbound")) {
+                out.add("inbound");
+            } else if (c.path().equals("/api/v1/worker/messages/outbound") || c.path().equals("/api/v1/worker/messages/turn-outcome")) {
+                out.add("report");
+            } else if (c.path().endsWith("/messages") && !c.path().startsWith("/api/")) {
+                out.add("meta");
+            }
+        }
+        return out;
+    }
+
+    void readyQuestionSetUp() {
+        Instant friday9 = LocalDate.of(2026, 11, 6).atTime(9, 0).atZone(java.time.ZoneId.of("Asia/Jerusalem")).toInstant();
+        qualityTime.scheduleQualityTime(father.getId(), itamar.getId(), friday9, Duration.ofMinutes(90));
+        jdbc.update("INSERT INTO weekly_goal (father_id, week_start_date, target_hours, actual_minutes, starting_belt, status) "
+                + "VALUES (?, '2026-11-01', 3, 0, 'WHITE', 'ACTIVE')", father.getId());
+    }
+
+    /** One message per kind, the same wamid every time (the dedup claims are cleared between runs). */
+    void everyKind() throws Exception {
+        jdbc.execute("TRUNCATE tool_idempotency");
+        turn(IDENTITY + "בסדר גמור, השבוע נשאר כמו שהוא 🙂");
+        webhook(Webhooks.text(PHONE, "wamid.k.reply", "טוב"));                           // REPLY
+        webhook(Webhooks.image(PHONE, "wamid.k.pic", ""));                               // FIXED_LINE
+        webhook(tap("wamid.k.tap", "dc:done:" + new UUID(7, 7), "היה מעולה"));            // BUTTON_REPLY
+        webhook(Webhooks.text(PHONE, "wamid.k.ready", "מה יש לי השבוע?"));                // READY_ANSWER
+        settle();
+    }
+
+    // ------------------------------------------------------------------------------------------------- DIRECT / SHADOW
+
+    @Test
+    @DisplayName("DIRECT (default, every kind): today's sends to Meta, the Send API never asked, D-039 reports as today")
+    void directIsTodaysPath() throws Exception {
+        KINDS.forEach(k -> assertThat(messaging.conversational(k)).isEqualTo(Mode.DIRECT));
+        properties.setDeliveryReports(true);
+        readyQuestionSetUp();
+        fake.reset();
+        everyKind();
+        assertThat(fake.platformSends()).isEmpty();
+        assertThat(fake.metaSends()).hasSize(4);
+        assertThat(fake.turnOutcomes()).hasSize(1);          // the reply AS_IS
+        assertThat(fake.recordedInbound()).hasSize(3);       // the picture, the tap, the question
+        assertThat(fake.recordedOutbound()).hasSize(3);      // their answers
+    }
+
+    @Test
+    @DisplayName("DIRECT and SHADOW send Meta the same bytes and report the same timeline, per kind; SHADOW dry-runs "
+            + "each line once (dryRun, its kind) off the turn's thread")
+    void directAndShadowAreTheSameBytes() throws Exception {
+        properties.setDeliveryReports(true);
+        readyQuestionSetUp();
+        fake.reset();
+        everyKind();
+        List<String> meta = fake.metaSends().stream().map(FakeServers.Call::body).toList();
+        List<String> timeline = fake.timelineCalls().stream().map(c -> c.body().replaceAll("wamid\\.out\\.\\d+", "W"))
+                .sorted().toList();
+
+        fake.reset();
+        all(Mode.SHADOW);
+        fake.onPlatformSend(c -> Reply.json("{\"wouldBe\":\"SEND\",\"channelWindow\":\"SESSION\",\"template\":null}"));
+        everyKind();
+        for (int i = 0; i < 100 && fake.platformSends().size() < 4; i++) {
+            Thread.sleep(50);
+        }
+        settle();
+        assertThat(fake.metaSends().stream().map(FakeServers.Call::body).toList()).isEqualTo(meta);
+        assertThat(fake.timelineCalls().stream().map(c -> c.body().replaceAll("wamid\\.out\\.\\d+", "W")).sorted().toList())
+                .isEqualTo(timeline);
+        assertThat(fake.platformSends()).hasSize(4);
+        List<String> kinds = new ArrayList<>();
+        for (FakeServers.Call c : fake.platformSends()) {
+            JsonNode b = body(c);
+            assertThat(b.path("dryRun").asBoolean()).isTrue();
+            kinds.add(b.path("kind").asText());
+        }
+        assertThat(kinds).containsExactlyInAnyOrderElementsOf(KINDS);
+    }
+
+    @Test
+    @DisplayName("SHADOW never holds the turn's thread: a dry run hanging 3 s does not delay the answer")
+    void shadowIsOffTheTurnThread() throws Exception {
+        messaging.setConversational(MessagingSettings.REPLY, Mode.SHADOW);
+        fake.onPlatformSend(c -> {
+            sleep(3000);
+            return Reply.json("{\"wouldBe\":\"SEND\",\"channelWindow\":\"SESSION\"}");
+        });
+        turn(IDENTITY + "בסדר גמור 🙂");
+        long started = System.nanoTime();
+        webhook(Webhooks.text(PHONE, "wamid.shadow1", "טוב"));
+        long ms = Duration.ofNanos(System.nanoTime() - started).toMillis();
+        assertThat(ms).isLessThan(2500);
+        assertThat(fake.metaSends()).hasSize(1);
+    }
+
+    // ------------------------------------------------------------------------------------------------- PLATFORM
+
+    @Test
+    @DisplayName("PLATFORM REPLY as written: one /send (key reply:<wamid>:0, SERVICE, text, SESSION_ONLY, his message's "
+            + "time as the hint, GATEWAY, ACCEPTED, TURN_AS_IS on the turn); no Meta, no gate, no timeline report")
+    void platformReplyAsWritten() throws Exception {
+        properties.setDeliveryReports(true);
+        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
+        fake.onPlatformSend(c -> platform("ACCEPTED"));
+        turn(IDENTITY + "בסדר גמור, השבוע נשאר כמו שהוא 🙂");
+        String id = says("טוב");
+
+        assertThat(fake.metaSends()).isEmpty();
+        assertThat(fake.calls("/api/v1/worker/whatsapp/outbound-gate")).isEmpty();
+        assertThat(fake.timelineCalls()).isEmpty();
+        assertThat(fake.platformSends()).hasSize(1);
+        JsonNode r = body(fake.platformSends().get(0));
+        assertThat(r.path("idempotencyKey").asText()).isEqualTo("reply:" + id + ":0");
+        assertThat(r.path("kind").asText()).isEqualTo("REPLY");
+        assertThat(r.path("messageClass").asText()).isEqualTo("SERVICE");
+        assertThat(r.path("workerKey").asText()).isEqualTo("dad_3");
+        assertThat(r.path("workflowKey").asText()).isEqualTo("dad-coach-3");
+        assertThat(r.path("userId").asText()).isEqualTo("whatsapp:" + PHONE);
+        assertThat(r.path("to").asText()).isEqualTo(PHONE);
+        assertThat(r.path("personRef").asText()).isNotBlank();
+        assertThat(r.path("content").path("type").asText()).isEqualTo("text");
+        assertThat(r.path("content").path("text").asText()).isEqualTo(IDENTITY + "בסדר גמור, השבוע נשאר כמו שהוא 🙂");
+        assertThat(r.has("template")).isFalse();
+        assertThat(r.path("windowPolicy").asText()).isEqualTo("SESSION_ONLY");
+        assertThat(r.path("outsideWindowWithoutTemplate").asText()).isEqualTo("FAIL");
+        Instant now = clock.instant();
+        assertThat(r.path("windowHint").path("lastInboundAt").asText())
+                .isEqualTo((INBOUND_AT.isAfter(now) ? now : INBOUND_AT).toString());
+        assertThat(r.path("holdPolicy").asText()).isEqualTo("GATEWAY");
+        assertThat(r.path("wait").asText()).isEqualTo("ACCEPTED");
+        assertThat(r.path("dryRun").asBoolean()).isFalse();
+        JsonNode t = r.path("timeline");
+        assertThat(t.path("record").asBoolean()).isTrue();
+        assertThat(t.path("mode").asText()).isEqualTo("TURN_AS_IS");
+        assertThat(t.path("turnCorrelationId").asText()).isEqualTo(id);
+        assertThat(t.has("correlationId")).isFalse();
+
+        // answered: Meta's redelivery of the message is dropped, nothing is posted again
+        webhook(Webhooks.text(PHONE, id, "טוב"));
+        settle();
+        assertThat(fake.platformSends()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("PLATFORM REPLY corrected by Dad Coach's guards: REPLACES_DRAFT <wamid>:delivered with the sent text, "
+            + "no ':corrected' record, no report")
+    void platformReplyCorrectedReplacesTheDraft() throws Exception {
+        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
+        fake.onPlatformSend(c -> platform("ACCEPTED"));
+        turn(IDENTITY + "וואו, לא ידעתי על מטר ונעם 😊 רק רגע ונמשיך משם.");
+        String id = says("מטר בת 8 נעם בת 5");   // D-039 off: today this path writes the legacy ':corrected' row
+
+        JsonNode t = body(fake.platformSends().get(0)).path("timeline");
+        assertThat(t.path("mode").asText()).isEqualTo("REPLACES_DRAFT");
+        assertThat(t.path("correlationId").asText()).isEqualTo(id + ":delivered");
+        assertThat(t.path("turnCorrelationId").asText()).isEqualTo(id);
+        assertThat(t.path("content").asText()).isEqualTo("וואו, לא ידעתי על מטר ונעם 🙂");
+        assertThat(t.has("supersededTurns")).isFalse();
+        assertThat(fake.timelineCalls()).isEmpty();
+        assertThat(fake.metaSends()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("PLATFORM REPLY after the Hebrew rewrite: REPLACES_DRAFT superseding '<wamid>:he'; the not-Hebrew line is "
+            + "FIXED_LINE (its own switch)")
+    void platformRewriteAndNotHebrewLine() throws Exception {
+        properties.setDeliveryReports(true);
+        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
+        messaging.setConversational(MessagingSettings.FIXED_LINE, Mode.PLATFORM);
+        fake.onPlatformSend(c -> platform("ACCEPTED"));
+        turn("Noted — is there something specific I can help you adjust?", IDENTITY + "בסדר גמור 🙂");
+        String id = says("לא הכל טוב");
+        JsonNode r = body(fake.platformSends().get(0));
+        assertThat(r.path("kind").asText()).isEqualTo("REPLY");
+        assertThat(r.path("timeline").path("mode").asText()).isEqualTo("REPLACES_DRAFT");
+        assertThat(r.path("timeline").path("supersededTurns").get(0).asText()).isEqualTo(id + ":he");
+        assertThat(fake.timelineCalls()).isEmpty();
+
+        fake.reset();
+        fake.onPlatformSend(c -> platform("ACCEPTED"));
+        turn("Fine as is, no change needed.");
+        String id2 = says("טוב");
+        JsonNode line = body(fake.platformSends().get(0));
+        assertThat(line.path("kind").asText()).isEqualTo("FIXED_LINE");
+        assertThat(line.path("content").path("text").asText()).isEqualTo(InboundMessageHandler.NOT_HEBREW_FALLBACK);
+        assertThat(line.path("timeline").path("mode").asText()).isEqualTo("REPLACES_DRAFT");
+        assertThat(line.path("timeline").path("correlationId").asText()).isEqualTo(id2 + ":delivered");
+        assertThat(line.path("timeline").path("supersededTurns").get(0).asText()).isEqualTo(id2 + ":he");
+        assertThat(fake.timelineCalls()).isEmpty();
+        assertThat(fake.metaSends()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("PLATFORM FIXED_LINE for a picture: his message reported first (synchronously), then the /send with "
+            + "NEW_ROW <wamid>:reply; no outbound report")
+    void platformFixedLineHisMessageFirst() throws Exception {
+        properties.setDeliveryReports(true);
+        messaging.setConversational(MessagingSettings.FIXED_LINE, Mode.PLATFORM);
+        fake.onPlatformSend(c -> platform("ACCEPTED"));
+        webhook(Webhooks.image(PHONE, "wamid.pic9", ""));
+        settle();
+
+        assertThat(order()).containsExactly("inbound", "send");
+        assertThat(body(fake.recordedInbound().get(0)).path("content").asText()).isEqualTo("[photo]");
+        JsonNode r = body(fake.platformSends().get(0));
+        assertThat(r.path("idempotencyKey").asText()).isEqualTo("reply:wamid.pic9:0");
+        assertThat(r.path("kind").asText()).isEqualTo("FIXED_LINE");
+        assertThat(r.path("timeline").path("mode").asText()).isEqualTo("NEW_ROW");
+        assertThat(r.path("timeline").path("correlationId").asText()).isEqualTo("wamid.pic9:reply");
+        assertThat(r.path("timeline").path("content").asText())
+                .isEqualTo(r.path("content").path("text").asText().substring(IDENTITY.length()));
+        assertThat(fake.recordedOutbound()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("PLATFORM FIXED_LINE to a stranger: not recorded on any timeline, no person, no report")
+    void platformFixedLineToAStranger() throws Exception {
+        properties.setDeliveryReports(true);
+        messaging.setConversational(MessagingSettings.FIXED_LINE, Mode.PLATFORM);
+        fake.onPlatformSend(c -> platform("ACCEPTED"));
+        webhook(Webhooks.image("+19995550999", "wamid.stranger9", ""));
+        settle();
+        JsonNode r = body(fake.platformSends().get(0));
+        assertThat(r.path("timeline").path("record").asBoolean()).isFalse();
+        assertThat(r.path("timeline").has("mode")).isFalse();
+        assertThat(r.has("personRef")).isFalse();
+        assertThat(fake.timelineCalls()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("PLATFORM BUTTON_REPLY: his tap (button_reply) first, then the /send NEW_ROW <wamid>; neither the D-039 "
+            + "report nor (D-039 off) the legacy record")
+    void platformButtonReply() throws Exception {
+        properties.setDeliveryReports(true);
+        messaging.setConversational(MessagingSettings.BUTTON_REPLY, Mode.PLATFORM);
+        fake.onPlatformSend(c -> platform("ACCEPTED"));
+        String buttonId = "dc:done:" + UUID.randomUUID();
+        webhook(tap("wamid.tap9", buttonId, "היה מעולה"));
+        settle();
+        assertThat(order()).containsExactly("inbound", "send");
+        JsonNode inbound = body(fake.recordedInbound().get(0));
+        assertThat(inbound.path("messageType").asText()).isEqualTo("button_reply");
+        assertThat(inbound.path("structured").path("buttonId").asText()).isEqualTo(buttonId);
+        JsonNode r = body(fake.platformSends().get(0));
+        assertThat(r.path("kind").asText()).isEqualTo("BUTTON_REPLY");
+        assertThat(r.path("timeline").path("mode").asText()).isEqualTo("NEW_ROW");
+        assertThat(r.path("timeline").path("correlationId").asText()).isEqualTo("wamid.tap9");
+
+        fake.reset();
+        fake.onPlatformSend(c -> platform("ACCEPTED"));
+        properties.setDeliveryReports(false);
+        webhook(tap("wamid.tap10", buttonId, "היה מעולה"));
+        settle();
+        assertThat(fake.platformSends()).hasSize(1);
+        assertThat(fake.timelineCalls()).isEmpty();   // no legacy recordSent: the platform records it
+        assertThat(fake.metaSends()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("PLATFORM READY_ANSWER: his question first, then the answer NEW_ROW <wamid>; no turn, no report")
+    void platformReadyAnswer() throws Exception {
+        properties.setDeliveryReports(true);
+        readyQuestionSetUp();
+        fake.reset();
+        messaging.setConversational(MessagingSettings.READY_ANSWER, Mode.PLATFORM);
+        fake.onPlatformSend(c -> platform("ACCEPTED"));
+        String id = says("מה יש לי השבוע?");
+        assertThat(fake.turns()).isEmpty();
+        assertThat(order()).containsExactly("inbound", "send");
+        JsonNode r = body(fake.platformSends().get(0));
+        assertThat(r.path("kind").asText()).isEqualTo("READY_ANSWER");
+        assertThat(r.path("content").path("text").asText()).startsWith(IDENTITY + "השבוע: שעה וחצי מתוך 3 שעות.");
+        assertThat(r.path("timeline").path("correlationId").asText()).isEqualTo(id);
+        assertThat(r.path("timeline").path("content").asText()).startsWith("השבוע: שעה וחצי מתוך 3 שעות.");
+    }
+
+    @Test
+    @DisplayName("Every kind PLATFORM: the deletion answer and the 'something went wrong' line still go directly")
+    void deletionAndPlatformDownStayDirect() throws Exception {
+        all(Mode.PLATFORM);
+        fake.onPlatformSend(c -> platform("ACCEPTED"));
+        fake.onTurn(c -> new Reply(500, "{\"error\":\"down\"}"));
+        says("טוב");
+        assertThat(fake.platformSends()).isEmpty();
+        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(json.readTree(fake.metaSends().get(0).body()).path("text").path("body").asText())
+                .isEqualTo(InboundMessageHandler.PLATFORM_DOWN_REPLY);
+
+        fake.reset();
+        fake.onPlatformSend(c -> platform("ACCEPTED"));
+        says("מחק את המידע שלי");
+        assertThat(fake.platformSends()).isEmpty();
+        assertThat(fake.metaSends()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("A long reply is cut to WhatsApp's 4096 exactly as DIRECT does (never refused for its length)")
+    void longReplyIsCutAsToday() throws Exception {
+        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
+        fake.onPlatformSend(c -> platform("ACCEPTED"));
+        turn(IDENTITY + "א".repeat(5000));
+        says("ספר לי");
+        String text = body(fake.platformSends().get(0)).path("content").path("text").asText();
+        assertThat(text).hasSize(4096).endsWith("...");
+    }
+
+    // ------------------------------------------------------------------------------------------------- the answer
+
+    @Test
+    @DisplayName("HELD / QUEUED / UNKNOWN: answered (the platform has it) - a redelivery is dropped, nothing re-posted")
+    void heldQueuedUnknownAreAnswered() throws Exception {
+        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
+        turn(IDENTITY + "בסדר גמור 🙂");
+        for (String status : List.of("HELD", "QUEUED", "UNKNOWN")) {
+            fake.reset();
+            turn(IDENTITY + "בסדר גמור 🙂");
+            fake.onPlatformSend(c -> Reply.json("{\"messageId\":\"" + UUID.randomUUID() + "\",\"status\":\"" + status
+                    + "\",\"heldId\":7}"));
+            String id = says("טוב");
+            webhook(Webhooks.text(PHONE, id, "טוב"));
+            settle();
+            assertThat(fake.platformSends()).as(status).hasSize(1);
+            assertThat(fake.metaSends()).as(status).isEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("FAILED: unanswered (as a refused send today) - Meta's redelivery runs again and posts the same key and "
+            + "the same bytes (the platform replays); never sent directly")
+    void failedIsUnansweredAndTheRedeliveryReplays() throws Exception {
+        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
+        fake.onPlatformSend(c -> platform("FAILED", "META_131026"));
+        turn(IDENTITY + "בסדר גמור 🙂");
+        String id = says("טוב");
+        webhook(Webhooks.text(PHONE, id, "טוב"));
+        settle();
+        assertThat(fake.platformSends()).hasSize(2);
+        assertThat(fake.platformSends().get(1).body()).isEqualTo(fake.platformSends().get(0).body());
+        assertThat(fake.metaSends()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("503 messaging.disabled on the first POST: today's send once, reported by D-039 as today")
+    void disabledSendsDirectly() throws Exception {
+        properties.setDeliveryReports(true);
+        all(Mode.PLATFORM);   // the fake platform's default: 503 messaging.disabled
+        turn(IDENTITY + "בסדר גמור 🙂");
+        String id = says("טוב");
+        assertThat(fake.platformSends()).hasSize(1);
+        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(fake.turnOutcomes()).hasSize(1);
+        assertThat(body(fake.turnOutcomes().get(0)).path("turnCorrelationId").asText()).isEqualTo(id);
+
+        fake.reset();
+        webhook(Webhooks.image(PHONE, "wamid.pic503", ""));
+        settle();
+        assertThat(fake.metaSends()).hasSize(1);
+        assertThat(order()).containsExactly("inbound", "send", "meta", "report");   // his message once, before the POST
+        assertThat(fake.recordedOutbound()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("422 refused: nothing sent at all (never directly), the message unanswered")
+    void refusedSendsNothing() throws Exception {
+        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
+        fake.onPlatformSend(c -> new Reply(422, "{\"error\":\"messaging.param_invalid\",\"field\":\"content.text\"}"));
+        turn(IDENTITY + "בסדר גמור 🙂");
+        String id = says("טוב");
+        assertThat(fake.platformSends()).hasSize(1);
+        assertThat(fake.metaSends()).isEmpty();
+        // unanswered: the redelivery is processed again (and refused again - still nothing sent)
+        webhook(Webhooks.text(PHONE, id, "טוב"));
+        settle();
+        assertThat(fake.platformSends()).hasSize(2);
+        assertThat(fake.metaSends()).isEmpty();
+    }
+
+    // ------------------------------------------------------------------------------------------------- ambiguity
+
+    @Test
+    @DisplayName("An edge 502: one immediate identical re-POST, then answered as on its way - never Meta, never a third "
+            + "POST, a redelivery dropped")
+    void edge502NeverSendsTwice() throws Exception {
+        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
+        fake.onPlatformSend(c -> EDGE_502);
+        turn(IDENTITY + "בסדר גמור 🙂");
+        String id = says("טוב");
+        assertThat(fake.platformSends()).hasSize(2);
+        assertThat(fake.platformSends().get(1).body()).isEqualTo(fake.platformSends().get(0).body());
+        assertThat(fake.metaSends()).isEmpty();
+        webhook(Webhooks.text(PHONE, id, "טוב"));
+        settle();
+        assertThat(fake.platformSends()).hasSize(2);
+        assertThat(fake.metaSends()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Latency: a platform that does not answer holds the turn's thread for the reply timeout only (1 s here), "
+            + "is never re-POSTed after the timeout and never sent directly")
+    void slowPlatformIsBoundedAndNeverDoubled() throws Exception {
+        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
+        messaging.setReplyReadTimeoutMs(1000);
+        fake.onPlatformSend(c -> {
+            sleep(4000);
+            return platform("ACCEPTED");
+        });
+        turn(IDENTITY + "בסדר גמור 🙂");
+        long started = System.nanoTime();
+        webhook(Webhooks.text(PHONE, "wamid.slow1", "טוב"));
+        long ms = Duration.ofNanos(System.nanoTime() - started).toMillis();
+        assertThat(ms).isBetween(900L, 3000L);
+        assertThat(fake.platformSends()).hasSize(1);
+        assertThat(fake.metaSends()).isEmpty();
+        // answered (it may have gone out): the redelivery is dropped, nothing re-posted
+        webhook(Webhooks.text(PHONE, "wamid.slow1", "טוב"));
+        assertThat(fake.platformSends()).hasSize(1);
+        assertThat(fake.metaSends()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("The reply timeout: 5 s by default, never below 1 s nor above the Send API's own")
+    void replyTimeoutBounds() {
+        assertThat(messaging.replyReadTimeoutMs()).isEqualTo(5000);
+        messaging.setReplyReadTimeoutMs(10);
+        assertThat(messaging.replyReadTimeoutMs()).isEqualTo(1000);
+        messaging.setReplyReadTimeoutMs(60000);
+        assertThat(messaging.replyReadTimeoutMs()).isEqualTo(12000);
+    }
+
+    @Test
+    @DisplayName("A 409 carrying the existing message (an earlier processing of the same message used the key): adopted, "
+            + "nothing sent")
+    void conflictIsAdopted() throws Exception {
+        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
+        fake.onPlatformSend(c -> new Reply(409, "{\"error\":\"messaging.idempotency_conflict\",\"messageId\":\""
+                + UUID.randomUUID() + "\",\"status\":\"ACCEPTED\",\"providerMessageId\":\"wamid.first\",\"replayed\":true}"));
+        turn(IDENTITY + "בסדר גמור 🙂");
+        String id = says("טוב");
+        assertThat(fake.platformSends()).hasSize(1);
+        assertThat(fake.metaSends()).isEmpty();
+        webhook(Webhooks.text(PHONE, id, "טוב"));   // answered: dropped
+        settle();
+        assertThat(fake.platformSends()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("A 429: re-POSTed once after its Retry-After (≤ 2 s), same bytes; a second 429 is answered as on its way, "
+            + "never sent directly")
+    void rateLimitedOnce() throws Exception {
+        messaging.setConversational(MessagingSettings.REPLY, Mode.PLATFORM);
+        AtomicInteger n = new AtomicInteger();
+        fake.onPlatformSend(c -> n.getAndIncrement() == 0
+                ? new Reply(429, "{\"error\":\"messaging.rate_limited\"}") : platform("ACCEPTED"));
+        turn(IDENTITY + "בסדר גמור 🙂");
+        says("טוב");
+        assertThat(fake.platformSends()).hasSize(2);
+        assertThat(fake.platformSends().get(1).body()).isEqualTo(fake.platformSends().get(0).body());
+        assertThat(fake.metaSends()).isEmpty();
+
+        fake.reset();
+        fake.onPlatformSend(c -> new Reply(429, "{\"error\":\"messaging.rate_limited\"}"));
+        turn(IDENTITY + "בסדר גמור 🙂");
+        says("טוב");
+        assertThat(fake.platformSends()).hasSize(2);
+        assertThat(fake.metaSends()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("A delivery report for a reply (no ledger) is answered known:false and changes nothing")
+    void reportsAreUnknown() throws Exception {
+        messaging.setDeliveryStatusEnabled(true);
+        String messageId = UUID.randomUUID().toString();
+        String report = json.writeValueAsString(Map.of("messageId", messageId, "idempotencyKey", "reply:wamid.x:0",
+                "kind", "REPLY", "status", "DELIVERED"));
+        JsonNode a = json.readTree(mvc.perform(post(DeliveryStatusController.PATH).contentType(MediaType.APPLICATION_JSON)
+                .header("X-API-Key", CALLBACK_KEY).header("X-Idempotency-Key", "delivery:" + messageId + ":DELIVERED")
+                .content(report)).andReturn().getResponse().getContentAsString());
+        assertThat(a.path("known").asBoolean()).isFalse();
+        assertThat(a.path("applied").asBoolean()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Per kind: PLATFORM for one kind leaves every other kind on today's path")
+    void switchesAreIndependent() throws Exception {
+        readyQuestionSetUp();
+        for (String kind : KINDS) {
+            fake.reset();
+            all(Mode.DIRECT);
+            messaging.setConversational(kind, Mode.PLATFORM);
+            fake.onPlatformSend(c -> platform("ACCEPTED"));
+            everyKind();
+            assertThat(fake.platformSends()).as(kind).hasSize(1);
+            assertThat(body(fake.platformSends().get(0)).path("kind").asText()).isEqualTo(kind);
+            assertThat(fake.metaSends()).as(kind).hasSize(3);
+        }
+    }
+
+    static void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}

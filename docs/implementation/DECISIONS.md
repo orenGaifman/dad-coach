@@ -933,3 +933,87 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   row up exactly once, nothing sent, rows stay SENDING / AMBIGUOUS); `PlatformMessagingUnitTest` (defaults 5000 ms /
   15 s, zero budget = default).
 - **Rollback:** raise the two settings (env), no code change.
+
+## D-048 — Every line answering a father can be sent by the platform's Send API, behind four switches (Unified Workflow Phase 6.3-DC, step DC4, 2026-10-11)
+
+- **Why:** owner 2026-10-11 - migrate all message types (no live customers yet). Spec §17.1 DC4
+  (`ai-workflow-platform/docs/architecture/PHASE6_2_SEND_API_SPEC.md`, "Spec v2" v2.1-v2.16), after LOGIN_LINK (D-045),
+  SCHEDULED and BELT_PROMOTION (D-046). Prepared only: every switch defaults `DIRECT`, nothing is enabled.
+- **Inventory - every outbound WhatsApp send in Dad Coach and where it now stands:**
+
+  | Send | Site | Switch |
+  |---|---|---|
+  | A father's dashboard link (tool, card from a reply, login page) | `LoginLinkDelivery` via `DeliveryService` | `LOGIN_LINK` (D-045) |
+  | Scheduled callbacks (timers, daily check, weekly plan) + their late direct send | `ScheduledResponseDeliveryService` / `ScheduledPlatformSend.sendLate` → `ProactiveSender` | `SCHEDULED` (D-046) |
+  | Belt promotion image + text | `BeltPromotionNotifier` (`WhatsAppApiClient` / `ProactiveSender`) | `BELT_PROMOTION` (D-046) |
+  | The coach's turn reply (as written or corrected) | `InboundMessageHandler` → `WhatsAppAdapter` | **`REPLY`** |
+  | Fixed lines: picture / file, voice note off / not heard / too long, spoken deletion request, not-Hebrew line, line instead of the card | same | **`FIXED_LINE`** |
+  | A session button's fixed answer | same (`SessionButtonTaps`) | **`BUTTON_REPLY`** |
+  | Answers from data ("מה יש לי השבוע?" ...) | same (D-036) | **`READY_ANSWER`** |
+  | "משהו השתבש אצלי" (platform down / refused, a tap that failed in Dad Coach) | same | direct forever (spec) |
+  | The answer to "DELETE MY DATA" (confirmation / no account) | same | direct forever (below) |
+  | A staff member's login link | `LoginLinkDelivery` → adapter | direct (spec: owner call, N3) |
+  | Dashboard notes (`DashboardNotes`) | - | not a WhatsApp send (history only) |
+
+  No other caller of `WhatsAppAdapter.sendMessage`, `WhatsAppApiClient.sendMessage`, `DeliveryService.deliver` or
+  `ProactiveSender.send` exists.
+- **Switches** (`MessagingSettings`, parsed as D-045's): `MESSAGING_MODE_REPLY`, `MESSAGING_MODE_FIXED_LINE`,
+  `MESSAGING_MODE_BUTTON_REPLY`, `MESSAGING_MODE_READY_ANSWER` (`dad-coach.messaging.modes.*`); the kind names are
+  D-039's timeline kinds, so the platform's rows keep today's `kind`. Read once per line (a switch flipped meanwhile
+  never sends a line twice). DIRECT = exactly today's send, log line and reports.
+- **The request** (`whatsapp/inbound/ReplyPlatformSend`, no ledger - spec v2.6, the bytes stay in memory): key
+  `reply:<inbound wamid>:<n>` (spec DC4; n = the line's place among the lines sent for that message, so Meta's
+  redelivery of the message posts the same keys and the platform replays), kind as above, `SERVICE`, `content.text` =
+  exactly DIRECT's text (cut to 4096 as the formatter does), `windowPolicy SESSION_ONLY` (a reply is free-form, as
+  today; the platform now also checks the window, S5), `windowHint.lastInboundAt` = his message's Meta time,
+  `holdPolicy GATEWAY` (Dad Coach does not gate), `wait ACCEPTED`. No `notAfter` (parity: a held reply is released
+  when he is back, as today).
+- **Timeline (no double record, Phase 3):** the reply as the platform wrote it - `TURN_AS_IS` on the turn (D-039's
+  turn-outcome AS_IS); a corrected reply, the Hebrew rewrite (superseding `<wamid>:he`), the not-Hebrew line, the line
+  instead of the card - `REPLACES_DRAFT` `<wamid>:delivered` on the turn; a line with no turn - `NEW_ROW` with D-039's
+  correlation (`<wamid>` for a button / ready answer, `<wamid>:reply` for a fixed line), the text without the identity
+  line; a stranger's number - `record:false` (a report never opens a conversation for a stranger). When the platform
+  has the line (or may have it) Dad Coach reports nothing of it: no turn-outcome, no `/messages/outbound`, no legacy
+  `SentMessageRecorder` row (tap, ready answer, `:corrected`). As D-046, the platform records also while D-039 is off.
+  His own message (no-turn lines, D-039 on) is reported by Dad Coach **before** the POST - one synchronous attempt
+  ≤ 2 s (`TimelineReports.inboundBeforeAnswer`), else the background report (the platform records an inbound id once) -
+  so it comes before the platform's row of the answer; when the platform then sends nothing (DIRECT fallback) the
+  D-039 report skips the inbound already made.
+- **The answer** (`PlatformSendFlow.sendOnce` + new `Options`; default options = the D-046 behaviour, unchanged):
+  - **Latency:** the POST's read timeout is `MESSAGING_REPLY_READ_TIMEOUT_MS` (default 5000, clamped 1000 .. the send
+    timeout) instead of 12 s - the father waits; today's Meta call blocks up to 10 s. No re-POST after a timeout; one
+    immediate re-POST of another ambiguous answer (502 edge, reset); a 429 re-POSTed once after its Retry-After when
+    ≤ 2 s (spec §16 "turn replies: once, ≤ 2 s"; a 429 created nothing, v2.1).
+  - ACCEPTED / DELIVERED / READ → sent with the wamid; HELD → sent (`held:<n>`, as the gate today); QUEUED, UNKNOWN or an
+    ambiguous answer (timeout, 5xx, edge page, a second 429) → answered as "on its way" (spec §16 UNKNOWN-equivalent,
+    D-042): the message is HANDLED, a redelivery is dropped, the line is **never sent directly and never posted again**.
+  - FAILED → unanswered (as a refused send today: the webhook releases the message; a redelivery posts the same key and
+    bytes - the platform replays the FAILED, nothing is sent twice). Refused (400/422) → unanswered, nothing sent.
+  - A 409 `idempotency_conflict` carrying the existing message is **adopted even on the first POST** (`conflictAdopts`):
+    the key belongs to one inbound message, so a 409 means an earlier processing of it (a redelivery whose text came out
+    different) already owns it - one answer per message.
+  - Provably nothing created on the first POST (503 `messaging.disabled`, 401/403, never written) → today's send and
+    today's D-039 reports.
+- **Direct forever (deviation, owner may decide):** besides the spec's "something went wrong" line (also when a tap
+  failed inside Dad Coach - the same fail-safe line), the answer to "DELETE MY DATA": the father's platform person
+  deletion starts at that moment (after commit, in the background); a Send API row created then for his phone could
+  outlive that deletion (person lifecycle: the platform owns deletion), and a timeline record could reopen a
+  conversation (D-039 never reports it). The spoken deletion request ("type it") is an ordinary FIXED_LINE.
+- **Delivery reports:** the conversational kinds keep no ledger - `DeliveryStatusController` answers `known:false`
+  (closes the platform's report), as for BELT_PROMOTION.
+- **Not changed:** the reply guard (`WHATSAPP_REPLY`, D-038), the webhook claim and UNANSWERED rule (DC-B3), the turn,
+  the guards, mentions; no migration (no ledger; V48 stays the latest).
+- **Tests:** `ReplyPlatformSendTest` (23, integration, fake platform + fake Meta, no real WhatsApp): DIRECT default (4
+  Meta sends, D-039 reports as today, Send API never asked); DIRECT = SHADOW byte for byte for all four kinds (Meta
+  bodies, timeline reports) + one dry run per line with its kind; SHADOW never on the turn's thread (a 3 s dry run, the
+  answer < 2.5 s); PLATFORM REPLY as written (every request field, TURN_AS_IS, no Meta / gate / report, redelivery
+  dropped); corrected reply (REPLACES_DRAFT, no `:corrected`); Hebrew rewrite (superseded `:he`) and the not-Hebrew
+  line as FIXED_LINE; FIXED_LINE picture (his message reported first, then the POST, NEW_ROW `<wamid>:reply`);
+  stranger (record false, no person); BUTTON_REPLY (his tap first; D-039 off: no legacy record); READY_ANSWER; the
+  deletion answer and the platform-down line stay direct with every kind on PLATFORM; a 5000-char reply cut as today;
+  HELD / QUEUED / UNKNOWN answered; FAILED unanswered + the redelivery posts the same bytes; 503 → today's send, his
+  message reported once; 422 → nothing sent; edge 502 → one identical re-POST, never Meta, redelivery dropped; latency -
+  a hanging platform holds the turn ≤ the reply timeout (1 s: answered in 0.9-3 s), one POST, never Meta; timeout
+  bounds; 409 with state adopted; 429 once after Retry-After / twice → on its way; report `known:false`; switches
+  independent per kind. `PlatformMessagingUnitTest` +1 (the four switches parse and default DIRECT).
+- **Rollout / rollback:** DEPLOYMENT.md "Platform Send API for the conversational lines (D-048)".

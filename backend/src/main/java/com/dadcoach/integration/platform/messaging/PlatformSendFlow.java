@@ -33,7 +33,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * D-045 / D-046 (Unified Workflow Phase 6.3-DC): the mechanics every kind Dad Coach hands to the platform's Send API
+ * D-045 / D-046 / D-048 (Unified Workflow Phase 6.3-DC): the mechanics every kind Dad Coach hands to the platform's Send API
  * shares - platform spec {@code PHASE6_2_SEND_API_SPEC.md} §3, §7.4, §8, §16 with "Spec v2" v2.1-v2.6. Extracted from
  * D-045's {@code LoginLinkPlatform} without a change in behaviour; each kind supplies its ledger ({@link Ledger}: its
  * table, how a platform status reads on its row, how it is sent directly) and its own logger, so its log lines keep
@@ -49,7 +49,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       key: 200 adopt, 404 {@code messaging.message_not_found} = never created (sent directly if the kind says it is
  *       still worth sending), anything else again for 1 h, then UNKNOWN - never sent.</li>
  *   <li><b>Kinds without a ledger</b> ({@link #sendOnce}, spec v2.6: the bytes stay in memory): the same answer rules
- *       and the one immediate re-POST; an ambiguous answer is logged and never sent directly (no reconcile).</li>
+ *       and the one immediate re-POST; an ambiguous answer is logged and never sent directly (no reconcile). D-048: a
+ *       kind may set {@link Options} - its own read timeout, a 409 with state adopted on the first POST (a key a
+ *       redelivery reuses), one re-POST of a 429 after a short Retry-After.</li>
  *   <li><b>SHADOW</b> ({@link #shadow}): the platform's dry run of the same request on a thread of its own
  *       ({@code messaging-shadow}, queue 100, dropped when full); differences logged, never a second message.</li>
  * </ul>
@@ -591,19 +593,55 @@ public class PlatformSendFlow {
     // ------------------------------------------------------------------------------------------------- no ledger
 
     /**
+     * How a kind without a ledger is sent ({@link #sendOnce}). {@code readTimeoutMs}: the POST's read timeout (null = the
+     * Send API's, 12 s). {@code conflictAdopts}: a 409 {@code idempotency_conflict} that carries the existing message is
+     * adopted even on the first POST - for a key an earlier processing of the same business event may have used (D-048:
+     * a reply keyed by the father's inbound message, whose redelivery runs again). {@code rateLimitWait}: a 429 whose
+     * Retry-After (none = 1 s) is at most this is re-POSTed once after that wait (spec §16: turn replies once, ≤ 2 s).
+     */
+    public record Options(Integer readTimeoutMs, boolean conflictAdopts, Duration rateLimitWait) {
+        public static final Options DEFAULT = new Options(null, false, Duration.ZERO);
+    }
+
+    /**
      * A kind without a ledger row (spec v2.6: the bytes stay in memory): POST, one immediate re-POST of the same bytes
      * when ambiguous (not after a timeout or a 429), then: OWNED / ADOPT - the platform has it; DIRECT (provably nothing
      * created, first attempt only) - {@code direct} sends it today's way; REFUSED - logged, never sent directly;
      * AMBIGUOUS - logged, never sent directly (nothing to reconcile against).
      */
     public <R> Settled<R> sendOnce(String event, Logger log, String idKey, Object id, String body, Supplier<R> direct) {
-        Answer answer = client.send(body);
+        return sendOnce(event, log, idKey, id, body, direct, Options.DEFAULT);
+    }
+
+    /** {@link #sendOnce(String, Logger, String, Object, String, Supplier)} with a kind's {@link Options}. */
+    public <R> Settled<R> sendOnce(String event, Logger log, String idKey, Object id, String body, Supplier<R> direct,
+                                   Options options) {
+        Answer answer = post(body, options);
         Verdict verdict = verdict(answer, false);
-        if (verdict == Verdict.AMBIGUOUS && !"TIMEOUT".equals(answer.error()) && answer.status() != 429) {
+        if (answer.status() == 429 && options.rateLimitWait().compareTo(Duration.ZERO) > 0) {
+            // the platform answers an existing key before its rate limit (v2.1): a 429 created nothing - one more try
+            Duration wait = Duration.ofSeconds(answer.retryAfterSeconds() == null ? 1 : answer.retryAfterSeconds());
+            if (wait.compareTo(options.rateLimitWait()) <= 0) {
+                log.atInfo().setMessage("messaging." + event + ".rate_limited_repost").addKeyValue(idKey, id)
+                        .addKeyValue("waitMs", wait.toMillis()).log();
+                try {
+                    Thread.sleep(wait.toMillis());
+                    answer = post(body, options);
+                    verdict = verdict(answer, false);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        } else if (verdict == Verdict.AMBIGUOUS && !"TIMEOUT".equals(answer.error()) && answer.status() != 429) {
             log.atInfo().setMessage("messaging." + event + ".repost").addKeyValue(idKey, id)
                     .addKeyValue("first", answer.summary()).log();
-            answer = client.send(body);
+            answer = post(body, options);
             verdict = verdict(answer, true);
+        }
+        if (verdict == Verdict.REFUSED && options.conflictAdopts() && answer.status() == 409
+                && PlatformMessagingClient.IDEMPOTENCY_CONFLICT.equals(answer.errorCode())
+                && Snapshot.of(answer.body()).isPresent()) {
+            verdict = Verdict.ADOPT;
         }
         switch (verdict) {
             case OWNED, ADOPT -> {
@@ -632,6 +670,10 @@ public class PlatformSendFlow {
                 return new Settled<>(Verdict.AMBIGUOUS, null, null, null, answer);
             }
         }
+    }
+
+    private Answer post(String body, Options options) {
+        return options.readTimeoutMs() == null ? client.send(body) : client.send(body, options.readTimeoutMs());
     }
 
     private static void logDirect(Logger log, String event, String idKey, Object id, Answer answer) {

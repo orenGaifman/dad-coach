@@ -89,11 +89,16 @@ public class PlatformMessagingClient {
 
     /** {@code POST /send} with exactly these bytes (UTF-8 JSON). */
     public Answer send(String body) {
+        return send(body, settings.readTimeoutMs());
+    }
+
+    /** D-048: {@code POST /send} with its own read timeout (a conversational line: the father is waiting). */
+    public Answer send(String body, int readTimeoutMs) {
         if (!isConfigured()) {
             return new Answer(Kind.NEVER_WRITTEN, 0, null, "NOT_CONFIGURED", null);
         }
         return call(web.post().uri(SEND_PATH).contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(body.getBytes(StandardCharsets.UTF_8)), settings.readTimeoutMs());
+                .bodyValue(body.getBytes(StandardCharsets.UTF_8)), readTimeoutMs);
     }
 
     /** {@code GET /messages?workerKey&idempotencyKey} (v2.5): 200 = the platform has it, 404 = it created nothing. */

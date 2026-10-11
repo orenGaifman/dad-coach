@@ -117,6 +117,10 @@ public abstract class AbstractIntegrationTest {
         messaging.setLoginLink(com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-045
         messaging.setScheduled(com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-046
         messaging.setBeltPromotion(com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-046
+        for (String kind : java.util.List.of("REPLY", "FIXED_LINE", "BUTTON_REPLY", "READY_ANSWER")) {
+            messaging.setConversational(kind, com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-048
+        }
+        messaging.setReplyReadTimeoutMs(5000);
         messaging.setDeliveryStatusEnabled(false);
         messaging.setReconcileAfter(java.time.Duration.ofMinutes(5));
         messaging.setReadTimeoutMs(12000);

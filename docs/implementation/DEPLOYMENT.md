@@ -167,6 +167,34 @@ Keep: everything in the table above (GOOGLE_* stay).
   WHERE platform_state IN ('POSTING','AMBIGUOUS')` is 0 (at most 1 h); V48 stays (harmless); `UPDATE
   scheduled_response_delivery SET platform_request = NULL;`. The new reconcile job (`ScheduledPlatformSend`, messaging
   lane) costs one indexed `SELECT` a minute, empty in DIRECT.
+- **Platform Send API for the conversational lines (D-048, 6.3-DC step DC4)** - last, after SCHEDULED (and BELT_PROMOTION if
+  used) had their 24 h on PLATFORM. Four switches, one kind at a time, each ≥ 24 h before the next, lowest volume first:
+  `BUTTON_REPLY` → `READY_ANSWER` → `FIXED_LINE` → `REPLY` (the bulk - every coach answer). No migration.
+  1. **Deploy Dad Coach** with nothing set (all four unset = DIRECT). Check: health 200; a message to the coach logs
+     `whatsapp.delivery.result kind=CONVERSATIONAL_REPLY status=SENT` with **no** `via` field and no `messaging.reply.*`
+     line. Behaviour is byte-identical (Meta bytes, D-039 reports).
+  2. **Platform** `MESSAGING_ALLOWED_PRODUCTS=…,dad_coach:<KIND>` (restart) for the kind being moved. Keep
+     `MESSAGING_AMBIGUOUS_RETRY_MAX` unset (NONE). Dad Coach's route already has its `DELIVERYREPORTURL` (D-045); reports
+     of these kinds are answered `known:false` (no ledger) - expected, they close the platform's report.
+  3. **Dad Coach** `MESSAGING_MODE_<KIND>=SHADOW` ≥ 24 h. Watch `messaging.shadow.match` / `mismatch kind=<KIND>`;
+     expected mismatches: `hold` when the gate's state moved between the send and the dry run. A `window` mismatch is
+     never expected (the hint is his message's own time) - explain each one before going on. `messaging.shadow.dropped`
+     (lane full, 100 queued per kind) means only that comparisons were skipped.
+  4. **Dad Coach** `MESSAGING_MODE_<KIND>=PLATFORM` (restart). Watch 24 h: `whatsapp.delivery.result via=PLATFORM
+     platformStatus=ACCEPTED|HELD`, `messaging.reply.platform`; **zero** `messaging.reply.refused`,
+     `messaging.platform_auth_failed`, `messaging.reply.request_failed`; `messaging.reply.ambiguous` and
+     `platformStatus=FAILED` rare and each explained (an ambiguous line is answered as "on its way" and never sent
+     again; a FAILED one leaves the message unanswered, as a refused send today); `whatsapp.turn.timing deliveryMs`
+     p95 under 3 s (the turn's thread waits at most `MESSAGING_REPLY_READ_TIMEOUT_MS`, 5 s); admin timeline: exactly one
+     row per answer - the turn's own row with its delivery (REPLY as written), one `<wamid>:delivered` row in place of
+     the draft (a corrected reply, the not-Hebrew line, the line instead of the card), or his message then one
+     `<wamid>` / `<wamid>:reply` row (button answer, ready answer, fixed line), his message first.
+  - **Never through the platform** (whatever the switches): the "something went wrong" line (sent when the platform
+    cannot be reached) and the answer to "DELETE MY DATA" (his platform person is deleted at that moment).
+- **Roll back D-048:** the kind's switch to `DIRECT` (restart) - lines go directly at once. Nothing to reconcile (no
+  ledger): a line the platform still holds (HELD while he is on another product) is sent and recorded by the platform.
+  Without a Dad Coach change: the platform's allow-list without `dad_coach:<KIND>` (503 disabled → Dad Coach sends it
+  itself on the first POST). A code revert needs no data step.
 - **Tests:** `cd backend && ./mvnw test` (Docker needed).
 
 
