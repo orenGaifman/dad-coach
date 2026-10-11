@@ -97,6 +97,7 @@ public abstract class AbstractIntegrationTest {
     protected final FakeServers fake = FakeServers.INSTANCE;
     @Autowired private com.dadcoach.whatsapp.DeliveryReceipts receipts;
     @Autowired private com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties;
+    @Autowired private com.dadcoach.integration.channel.HeldOutcomes heldOutcomes;
 
     @BeforeEach
     void cleanSlate() {
@@ -110,6 +111,7 @@ public abstract class AbstractIntegrationTest {
         fake.reset();
         receipts.forgetPending(); // D-038: early "failed" receipts are kept in memory; wamids repeat across tests
         platformProperties.setDeliveryReports(false); // D-039: the switch is off unless a test turns it on
+        heldOutcomes.setEnabled(false); // D-042: GATEWAY_HELD_REPORTS is off unless a test turns it on
     }
 
     @TestConfiguration

@@ -518,3 +518,74 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 - **Tests:** `BeltPromotionNotifierTest` (unit: throws / unsuccessful / null -> text sent and recorded; OK -> image then
   text; timeline on; a failed text still not recorded), `BeltPromotionTest` and `PlatformDeliveryReportsTest` (Meta
   refuses the image with HTTP 500 -> the text reaches Meta and is recorded / reported BELT_PROMOTION).
+
+## D-042 — The shared number's held messages report back: sent, failed, unknown or expired (Unified Workflow Phase 6.1, 2026-10-11)
+
+- **Why:** a scheduled coach message or a dashboard link the shared-number gateway held kept `held:<n>` forever: Dad
+  Coach never learned whether it went out, and every Meta receipt for the replay was dropped (unknown wamid). Platform
+  6.0 (`e05d846`, V130; spec `ai-workflow-platform/docs/architecture/PHASE6_SHARED_MESSAGING_SPEC.md`, "Spec v2" §v2.7)
+  now POSTs the outcome of every held message it closes to a per-route URL with the route's claim key.
+- **Endpoint:** `POST /api/integration/channel/held-outcome` (the `/api/integration/channel/**` chain opens with the
+  callback key always - the key the platform already uses for the claim). Body `{heldId, workerKey, route, outcome,
+  providerMessageId, errorCode, closedReason, latestStatus, latestStatusAt, latestErrorCode, heldAt, closedAt}`, header
+  `X-Idempotency-Key: held-outcome:<heldId>:<outcome>:<latestStatus|->` (stored in `tool_idempotency`, scope
+  `GATEWAY_HELD_OUTCOME`, 7 days; the same key again = 200 `duplicate`, being applied = 409). An id no row holds = 200
+  `{"applied":false,"known":false}` (never retried). A wrong request = 400 (the platform gives up). Switch
+  `GATEWAY_HELD_REPORTS` (`dad-coach.whatsapp.gateway-held-reports`, default **false**): off = **404**, nothing read or
+  written. 404 rather than the spec's `{"applied":false}`: the platform retries a 404 (backoff up to 24 h), so a report
+  sent while the switch was off is applied once it is on instead of being marked done and lost.
+- **Apply** (`HeldOutcomes`, one transaction, rows by `gateway_hold_id = 'held:'+heldId`; V46 adds the two partial
+  indexes; only a row still HELD moves, so an outcome is applied once and never replaced by another):
+  - **SENT** → scheduled `ACCEPTED` + `provider_message_id` = the wamid; link `receipt_status` NULL (accepted) + wamid,
+    `delivery_status` stays SENT. Then the latest status the gateway saw (`latestStatus`: ACCEPTED = Meta's "sent",
+    DELIVERED, READ, FAILED) and any receipt Dad Coach kept for that wamid are applied through `DeliveryReceipts`, forward
+    only - also on a later report for the same held id (a newer status is a new key), but only to the wamid this held id
+    was linked to. From then on Meta's receipts match as for any send. A SENT without a wamid = ACCEPTED without one.
+  - **FAILED** (Meta refused the replay, or the request was never written) → scheduled FAILED, reason
+    `GATEWAY_<errorCode>`; link `delivery_status` FAILED, `receipt_status` FAILED, `delivery_error` the same.
+  - **EXPIRED**, defined: the gateway closed it **without ever sending it** (`closedReason` NOT_IN_LATEST_10 - not among
+    the latest 10 when he came back - or TTL - held longer than 24 h). He never got it. → FAILED as above, reason
+    `GATEWAY_HELD_EXPIRED_<closedReason>`. **Never re-sent** (whether to resend later, e.g. by template, is the owner's
+    open decision O2; Dad Coach has no path that would).
+  - **UNKNOWN** (5xx / timeout / connection lost after the request was written: Meta may have it) → **not failed**:
+    scheduled status `UNKNOWN` (new enum value; VARCHAR, no CHECK), reason `GATEWAY_UNKNOWN_<errorCode>`; link keeps
+    `delivery_status` SENT with `receipt_status` UNKNOWN. The spec's amendment mapped DC UNKNOWN to FAILED; not done: a
+    FAILED link makes his next request send a second card that may duplicate one on his screen, and the admin would
+    count a message that may have arrived as failed. Never re-sent.
+- **Readers checked - applying an outcome never sends anything, and nothing re-sends on it:**
+  - `scheduled_response_delivery`: `ScheduledResponseDeliveryService.deliver` replays ANY existing row of the trigger's
+    key and never sends again; `ScheduledResponseResult.of` answers a replayed callback FAILED / DELIVERED (UNKNOWN is
+    handed over) - the platform treats every 2xx as delivered and reads only `outcome` / `deliveredContent`, absent on a
+    replay (`ScheduledResponseNotifier`, `ConversationTimelineService.callbackAccepted`), so no retry follows;
+    `DeliveryReceipts` (receipts, `statusOf`: UNKNOWN = PENDING); `AdminQueries` (counts / lists, display only);
+    `FatherDataPurger` (deletion). No job reads the table to send (WeeklyGoalCompletionJob, BeltPromotion, KeepWarm do not).
+  - `login_link`: `sentToFatherSince` (delivery SENT) - `LoginLinkService.sendTo`'s "already on his screen" (10 min) and
+    `InboundMessageHandler` (links created since the turn started: a held link is older than the turn that may run when
+    the report arrives, so it never counts there). A FAILED/EXPIRED link therefore only means that the **next time he
+    asks** for his page a new button goes out instead of "it is on your screen" - the D-038 rule for a link Meta failed;
+    he never got the first one. UNKNOWN keeps SENT (no second card). `useIfValid` (the token) is untouched;
+    `AdminQueries` display; `DeliveryReceipts`.
+  - Not changed: `CoachMentions` recorded the held message's names when the callback answered DELIVERED; a later
+    FAILED/EXPIRED leaves them (the coach repeats a name less, nothing is sent). The platform's own timeline links
+    `held:<n>` itself (spec v2.6).
+- **Early receipts:** `DeliveryReceipts` keeps a receipt of **any** status (was: only "failed") for a wamid no row holds
+  - the latest per status, at most 500 wamids, 2 minutes, re-applied every 15 s in order sent → delivered → read →
+  failed, and at once when a SENT report links the wamid (`applyPending`). Lost on a restart; the report's
+  `latestStatus` covers that (the platform keeps the latest receipt on its held row and re-reports when it changes).
+  The retry now checks that the row exists before applying (one query per kept wamid, no repeated UPDATEs/logs).
+  Receipts of conversational replies (no row) are kept 2 minutes and dropped, as before for "failed".
+- **Admin:** status UNKNOWN reads "לא ידוע אם הגיע"; reasons GATEWAY_HELD_EXPIRED / GATEWAY_UNKNOWN / GATEWAY_* in words.
+- **Tests:** `HeldOutcomeTest` (15, integration: switch off = 404 and no change, then the platform's retry applies;
+  SENT links the wamid and later receipts match, replayed callback sends nothing and does not re-gate; latestStatus
+  forward only across reports; receipt before the report; kept receipt applied by the retry; held link SENT stays "on
+  screen"; FAILED / EXPIRED (scheduled + link: next request only) / UNKNOWN (scheduled + link: no second card); a late
+  SENT cannot revive a FAILED row; duplicate key; unknown id 200; tool / admin / wrong / no key 401; bad requests 400),
+  `HeldOutcomeControllerTest` (3, unit: switch and request checks before any read). `DeliveryReceiptsTest` follows the
+  renames (`PENDING_FOR`, `retryPending`). Full backend suite 424/424; frontend tsc + vitest green.
+- **Rollout:** deploy (switch off; V46 = two partial indexes) → `GATEWAY_HELD_REPORTS=true` → platform env
+  `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_HELDREPORTURL=https://dad-coach.onrender.com/api/integration/channel/held-outcome`
+  (gateway route 1 = `dad-coach`, worker `dad_3`; its claim key is already Dad Coach's callback key, header X-API-Key) →
+  watch `channel.whatsapp.held.reported` (platform) and `whatsapp.held.outcome` (Dad Coach) at the next switch back.
+- **Rollback:** unset the platform URL (reports stop) and/or `GATEWAY_HELD_REPORTS=false` (404; the platform retries
+  for 24 h, then gives up - log noise only). A code revert keeps V46 (indexes only); before it, run
+  `UPDATE scheduled_response_delivery SET status = 'HELD' WHERE status = 'UNKNOWN'` (the old enum cannot load UNKNOWN).

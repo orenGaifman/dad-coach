@@ -39,6 +39,7 @@ public record ScheduledResponseResult(
             case FAILED -> delivery.getFailureReason();
             case HELD -> replayed ? "Already held by the shared number gateway" : "Held by the shared number gateway";
             case ACCEPTED, SENT, DELIVERED, READ -> replayed ? "Already delivered" : "Delivered";
+            case UNKNOWN -> "Sent by the shared number gateway, outcome unknown"; // D-042: never sent again
         };
         return new ScheduledResponseResult(status.handedOver() ? "DELIVERED" : status.name(), detail);
     }

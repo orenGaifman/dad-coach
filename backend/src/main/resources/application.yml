@@ -80,6 +80,9 @@ dad-coach:
     # D-038 (DC-B2): Meta's status receipts update the scheduled message / dashboard link they belong to; false = ignored.
     receipts:
       enabled: ${DAD_COACH_WHATSAPP_RECEIPTS_ENABLED:true}
+    # D-042 (Phase 6.1): the platform's shared-number gateway reports what became of a message it held
+    # (POST /api/integration/channel/held-outcome). Off = the endpoint answers 404 and changes nothing.
+    gateway-held-reports: ${GATEWAY_HELD_REPORTS:false}
   # D-029 (Big Boss D-176): a WhatsApp voice note is transcribed by ElevenLabs and read like a typed message. Turned
   # on and off in the admin's integrations screen (on unless the admin turned it off); without a key it stays off.
   voice-notes:

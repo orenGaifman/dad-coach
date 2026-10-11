@@ -25,9 +25,13 @@ public class ScheduledResponseDelivery {
      * keeps it for later) or FAILED. Meta's receipts then move an ACCEPTED row forward only: SENT -> DELIVERED -> READ,
      * or FAILED (DeliveryReceipts). DELIVERED means a delivery receipt; rows written before V45 used DELIVERED for
      * "accepted" and have no wamid.
+     *
+     * <p>D-042: a HELD row learns from the gateway's report what became of it - ACCEPTED with the wamid (sent), FAILED
+     * (refused, or expired unsent), or UNKNOWN: the gateway's send may have reached Meta (5xx, timeout after the
+     * request was written). UNKNOWN is never treated as failed and never sent again.</p>
      */
     public enum Status {
-        SENDING, ACCEPTED, HELD, SENT, DELIVERED, READ, FAILED;
+        SENDING, ACCEPTED, HELD, SENT, DELIVERED, READ, FAILED, UNKNOWN;
 
         /** Handed over for delivery (the platform is told DELIVERED, as before ACCEPTED existed). */
         public boolean handedOver() {

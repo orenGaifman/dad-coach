@@ -29,8 +29,10 @@ import org.springframework.transaction.annotation.Transactional;
  * ({@code held:<n>}) is never a wamid.
  *
  * <p>Meta can answer a send with "failed" (e.g. 131047) within milliseconds - before the row holding the wamid is
- * committed. A "failed" receipt that matches no row is therefore kept in memory for {@link #PENDING_FAILED_FOR} and
- * re-applied every 15 seconds until its row appears (at most {@link #PENDING_MAX} at once; lost on a restart).
+ * committed - and a message the shared-number gateway held and later sent gets its receipts before the gateway's report
+ * tells Dad Coach its wamid (D-042). A receipt (any status) for a wamid no row holds is therefore kept in memory for
+ * {@link #PENDING_FOR} and re-applied every 15 seconds until its row appears, or at once by {@link #applyPending}
+ * (at most {@link #PENDING_MAX} wamids, one receipt per status each; lost on a restart).
  */
 @Component
 public class DeliveryReceipts {
@@ -51,12 +53,17 @@ public class DeliveryReceipts {
             DeliveryStatus.READ, List.of("SENT", "DELIVERED"),
             DeliveryStatus.FAILED, List.of("SENT"));
 
-    static final Duration PENDING_FAILED_FOR = Duration.ofMinutes(2);
+    static final Duration PENDING_FOR = Duration.ofMinutes(2);
     static final int PENDING_MAX = 500;
 
-    private record Pending(StatusUpdateDto receipt, Instant until) {}
+    /** The order a wamid's kept receipts are re-applied in (forward; "failed" last, so it never jumps a delivery). */
+    private static final List<DeliveryStatus> REPLAY_ORDER =
+            List.of(DeliveryStatus.SENT, DeliveryStatus.DELIVERED, DeliveryStatus.READ, DeliveryStatus.FAILED);
 
-    private final ConcurrentHashMap<String, Pending> pendingFailed = new ConcurrentHashMap<>();
+    /** The receipts kept for one unknown wamid: the latest of each status, until {@code until}. */
+    private record Pending(Map<DeliveryStatus, StatusUpdateDto> receipts, Instant until) {}
+
+    private final ConcurrentHashMap<String, Pending> pending = new ConcurrentHashMap<>();
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
@@ -69,7 +76,7 @@ public class DeliveryReceipts {
     @Transactional
     public int apply(StatusUpdateDto receipt) {
         int moved = move(receipt);
-        if (moved == 0 && "failed".equalsIgnoreCase(receipt.status()) && receipt.providerMessageId() != null
+        if (moved == 0 && statusOfReceipt(receipt) != null && receipt.providerMessageId() != null
                 && !receipt.providerMessageId().startsWith(SharedNumberGate.HELD_PREFIX)
                 && !recorded(receipt.providerMessageId())) {
             remember(receipt);
@@ -78,20 +85,58 @@ public class DeliveryReceipts {
     }
 
     /**
-     * Re-applies the "failed" receipts that came before their row was committed; drops one once its row exists (moved
-     * or not) or its time is up.
+     * D-042: the latest status the shared-number gateway saw for a message it held and then sent (the platform's
+     * timeline vocabulary: ACCEPTED = Meta's "sent", DELIVERED, READ, FAILED), applied like Meta's receipt - forward only.
+     * Returns how many recorded messages it moved.
+     */
+    @Transactional
+    public int applyGatewayStatus(String wamid, String platformStatus, Instant at, String errorCode) {
+        if (wamid == null || platformStatus == null) {
+            return 0;
+        }
+        String meta = switch (platformStatus.trim().toUpperCase(Locale.ROOT)) {
+            case "ACCEPTED" -> "sent";
+            case "DELIVERED" -> "delivered";
+            case "READ" -> "read";
+            case "FAILED" -> "failed";
+            default -> null;
+        };
+        if (meta == null) {
+            return 0;
+        }
+        Integer code = errorCode != null && errorCode.matches("\\d{1,9}") ? Integer.valueOf(errorCode) : null;
+        String message = errorCode != null && code == null ? errorCode : null;
+        return move(new StatusUpdateDto(wamid, meta, null, at, code, message));
+    }
+
+    /**
+     * D-042: applies at once the receipts kept for a wamid that now has its row (a held message the gateway sent: its
+     * receipts can beat the report). Returns how many moves they made.
+     */
+    @Transactional
+    public int applyPending(String wamid) {
+        Pending kept = wamid == null ? null : pending.remove(wamid);
+        if (kept == null) {
+            return 0;
+        }
+        return replay(kept);
+    }
+
+    /**
+     * Re-applies the receipts that came before their row was committed; drops a wamid's receipts once its row exists
+     * (applied, moved or not) or their time is up.
      */
     @Scheduled(fixedDelayString = "PT15S", initialDelayString = "PT15S")
-    public void retryPendingFailed() {
+    public void retryPending() {
         Instant now = clock.instant();
-        for (Map.Entry<String, Pending> e : pendingFailed.entrySet()) {
+        for (Map.Entry<String, Pending> e : pending.entrySet()) {
             if (now.isAfter(e.getValue().until())) {
-                pendingFailed.remove(e.getKey(), e.getValue());
+                pending.remove(e.getKey(), e.getValue());
                 continue;
             }
             try {
-                if (move(e.getValue().receipt()) > 0 || recorded(e.getKey())) {
-                    pendingFailed.remove(e.getKey(), e.getValue());
+                if (recorded(e.getKey()) && pending.remove(e.getKey(), e.getValue())) {
+                    replay(e.getValue());
                 }
             } catch (RuntimeException failure) {
                 log.atWarn().setMessage("whatsapp.receipt.retry_failed").addKeyValue("error", failure.getClass().getSimpleName()).log();
@@ -101,15 +146,46 @@ public class DeliveryReceipts {
 
     /** Test isolation: wamids repeat across tests. */
     public void forgetPending() {
-        pendingFailed.clear();
+        pending.clear();
+    }
+
+    private int replay(Pending kept) {
+        int moved = 0;
+        for (DeliveryStatus status : REPLAY_ORDER) {
+            StatusUpdateDto receipt = kept.receipts().get(status);
+            if (receipt != null) {
+                moved += move(receipt);
+            }
+        }
+        return moved;
     }
 
     private void remember(StatusUpdateDto receipt) {
-        if (pendingFailed.size() >= PENDING_MAX) {
+        String wamid = receipt.providerMessageId();
+        DeliveryStatus status = statusOfReceipt(receipt);
+        if (!pending.containsKey(wamid) && pending.size() >= PENDING_MAX) {
             log.atWarn().setMessage("whatsapp.receipt.pending_full").log();
             return;
         }
-        pendingFailed.put(receipt.providerMessageId(), new Pending(receipt, clock.instant().plus(PENDING_FAILED_FOR)));
+        pending.compute(wamid, (k, kept) -> {
+            Map<DeliveryStatus, StatusUpdateDto> receipts = new java.util.EnumMap<>(DeliveryStatus.class);
+            if (kept != null) {
+                receipts.putAll(kept.receipts());
+            }
+            receipts.put(status, receipt);
+            return new Pending(receipts, kept != null ? kept.until() : clock.instant().plus(PENDING_FOR));
+        });
+    }
+
+    /** Meta's receipt status as one Dad Coach records; null for one it does not (e.g. "deleted", "warning"). */
+    private static DeliveryStatus statusOfReceipt(StatusUpdateDto receipt) {
+        return receipt.status() == null ? null : switch (receipt.status().toLowerCase(Locale.ROOT)) {
+            case "sent" -> DeliveryStatus.SENT;
+            case "delivered" -> DeliveryStatus.DELIVERED;
+            case "read" -> DeliveryStatus.READ;
+            case "failed" -> DeliveryStatus.FAILED;
+            default -> null;
+        };
     }
 
     private boolean recorded(String wamid) {
@@ -120,13 +196,7 @@ public class DeliveryReceipts {
 
     private int move(StatusUpdateDto receipt) {
         String wamid = receipt.providerMessageId();
-        DeliveryStatus to = receipt.status() == null ? null : switch (receipt.status().toLowerCase(Locale.ROOT)) {
-            case "sent" -> DeliveryStatus.SENT;
-            case "delivered" -> DeliveryStatus.DELIVERED;
-            case "read" -> DeliveryStatus.READ;
-            case "failed" -> DeliveryStatus.FAILED;
-            default -> null; // e.g. "deleted", "warning": nothing to record
-        };
+        DeliveryStatus to = statusOfReceipt(receipt); // e.g. "deleted", "warning": nothing to record
         if (wamid == null || wamid.startsWith(SharedNumberGate.HELD_PREFIX) || to == null) {
             return 0;
         }

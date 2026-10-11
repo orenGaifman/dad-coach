@@ -17,6 +17,10 @@ export function reasonLabel(reason: string | null | undefined): string {
   if (reason.startsWith('TEMPLATE_UNAVAILABLE')) return 'אין תבנית מאושרת (NO_APPROVED_TEMPLATE)'
   if (reason.startsWith('ENDPOINT_NOT_FOUND')) return 'אין לאבא ערוץ וואטסאפ רשום'
   if (reason.startsWith('WHATSAPP_NOT_CONFIGURED')) return 'וואטסאפ לא מוגדר בסביבה הזאת'
+  // D-042: what the shared number's gateway reported about a message it held
+  if (reason.startsWith('GATEWAY_HELD_EXPIRED')) return 'לא נשלח — חיכה יותר מדי זמן עד שהאב חזר'
+  if (reason.startsWith('GATEWAY_UNKNOWN')) return 'לא ידוע אם הגיע — אין תשובה מוואטסאפ (לא נשלח שוב)'
+  if (reason.startsWith('GATEWAY_')) return `וואטסאפ דחה את ההודעה שחיכתה (${reason.substring('GATEWAY_'.length)})`
   return reason
 }
 
@@ -28,6 +32,8 @@ export const DELIVERY_STATUS: Record<string, string> = {
   ACCEPTED: 'נשלח', SENT: 'נשלח', READ: 'נקרא',
   // the shared number's gateway keeps it while the father talks to another product (sent when he is back)
   HELD: 'ממתין — האב בשיחה עם מוצר אחר',
+  // D-042: the gateway sent it, but whether it reached WhatsApp is not known (never sent again)
+  UNKNOWN: 'לא ידוע אם הגיע',
 }
 
 export const CHILD_STATUS: Record<string, string> = { ACTIVE: 'פעיל', ARCHIVED: 'בארכיון', INACTIVE: 'לא פעיל' }

@@ -191,7 +191,7 @@ class DeliveryReceiptsTest extends AbstractIntegrationTest {
         failedReceipt("wamid.d038.early", f);
         acceptedRow(f, "d038-early", "wamid.d038.early");
 
-        receipts.retryPendingFailed();
+        receipts.retryPending();
 
         assertThat(row(f, "d038-early").get("status")).isEqualTo("FAILED");
         assertThat((String) row(f, "d038-early").get("failure_reason")).contains("131047");
@@ -203,10 +203,10 @@ class DeliveryReceiptsTest extends AbstractIntegrationTest {
         receipt(WAMID, "delivered", f);
         failedReceipt(WAMID, f);               // its row exists (DELIVERED): ignored, not kept for later
         failedReceipt("wamid.d038.late", f);    // no row yet: kept
-        clock.advance(DeliveryReceipts.PENDING_FAILED_FOR.plusSeconds(1));
+        clock.advance(DeliveryReceipts.PENDING_FOR.plusSeconds(1));
         acceptedRow(f, "d038-late", "wamid.d038.late");
 
-        receipts.retryPendingFailed();
+        receipts.retryPending();
 
         assertThat(row(f, "d038-kept").get("status")).isEqualTo("DELIVERED");
         assertThat(row(f, "d038-late").get("status")).as("too late: dropped").isEqualTo("ACCEPTED");
