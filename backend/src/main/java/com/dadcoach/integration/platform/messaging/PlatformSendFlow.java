@@ -436,12 +436,28 @@ public class PlatformSendFlow {
 
     // ------------------------------------------------------------------------------------------------- reconcile
 
-    /** One reconcile pass over the ledger's due rows; returns how many rows it looked at. */
+    /**
+     * One reconcile pass over the ledger's due rows; returns how many rows it looked at. D-047: the pass stops taking rows
+     * once it has run {@code MESSAGING_RECONCILE_PASS_BUDGET} (real time, 15 s) - a hanging platform must not hold the
+     * scheduler thread (shared by every job while {@code APP_SCHEDULING_LANES} is off) for a batch of timeouts; rows left
+     * are still due and are taken by the next pass. Worst case per pass: the budget plus one call (a lookup 5 s, a
+     * re-POST 12 s).
+     */
     public int reconcileDue(Ledger l) {
+        long started = System.nanoTime();
+        long budgetNanos = settings.reconcilePassBudget().toNanos();
         List<UUID> due = jdbc.queryForList("SELECT id FROM " + l.table() + " WHERE platform_next_at IS NOT NULL "
                 + "AND platform_next_at <= ? ORDER BY platform_next_at LIMIT " + BATCH, UUID.class, Timestamp.from(clock.instant()));
         int seen = 0;
+        int position = 0;
         for (UUID id : due) {
+            if (System.nanoTime() - started >= budgetNanos) {
+                l.log().atWarn().setMessage("messaging." + l.event() + ".reconcile_budget_spent")
+                        .addKeyValue("seen", seen).addKeyValue("left", due.size() - position)
+                        .addKeyValue("budgetMs", settings.reconcilePassBudget().toMillis()).log();
+                break;
+            }
+            position++;
             Instant now = clock.instant();      // per row: a slow row before it must not shorten this one's lease
             // claim: another instance (or the next pass) leaves it alone for the lease
             Integer claimed = tx.execute(s -> jdbc.update("UPDATE " + l.table() + " SET platform_next_at = ? WHERE id = ? "

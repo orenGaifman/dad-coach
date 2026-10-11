@@ -24,6 +24,10 @@ import org.springframework.stereotype.Component;
  *   <li>{@code MESSAGING_RECONCILE_AFTER} (default 5 min): after an ambiguous answer, when Dad Coach asks the platform
  *       by its key whether the message exists (spec v2.5).</li>
  *   <li>{@code MESSAGING_SEND_READ_TIMEOUT_MS} (default 12000 = the platform's wait of 8 s + 4 s, spec §3.1).</li>
+ *   <li>{@code MESSAGING_LOOKUP_READ_TIMEOUT_MS} (default 5000): the reconcile job's {@code GET /messages?idempotencyKey}
+ *       (a lookup has no wait on the platform). {@code MESSAGING_RECONCILE_PASS_BUDGET} (default PT15S): one reconcile
+ *       pass stops taking rows once it has run this long; the rest are taken the next minute (D-047: the job shares the
+ *       scheduler thread with every other job while {@code APP_SCHEDULING_LANES} is off).</li>
  * </ul>
  * Rollback of a kind = its switch back to {@code DIRECT}; keep the delivery-status switch on for 48 h after the last
  * PLATFORM send, so messages the platform still owns are reported.
@@ -47,6 +51,8 @@ public class MessagingSettings {
     private volatile Duration reconcileAfter;
     private final int connectTimeoutMs;
     private volatile int readTimeoutMs;
+    private volatile int lookupReadTimeoutMs = 5000;
+    private volatile Duration reconcilePassBudget = Duration.ofSeconds(15);
 
     /** D-045's switches only (the other kinds DIRECT). */
     public MessagingSettings(String loginLink, boolean deliveryStatusEnabled, Duration reconcileAfter, int connectTimeoutMs,
@@ -111,6 +117,26 @@ public class MessagingSettings {
 
     public int readTimeoutMs() {
         return readTimeoutMs;
+    }
+
+    public int lookupReadTimeoutMs() {
+        return lookupReadTimeoutMs;
+    }
+
+    public Duration reconcilePassBudget() {
+        return reconcilePassBudget;
+    }
+
+    /** D-047: {@code MESSAGING_LOOKUP_READ_TIMEOUT_MS} (default 5000); tests shorten it. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setLookupReadTimeoutMs(@Value("${dad-coach.messaging.lookup-read-timeout-ms:5000}") int lookupReadTimeoutMs) {
+        this.lookupReadTimeoutMs = lookupReadTimeoutMs;
+    }
+
+    /** D-047: {@code MESSAGING_RECONCILE_PASS_BUDGET} (default PT15S); tests shorten it. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setReconcilePassBudget(@Value("${dad-coach.messaging.reconcile-pass-budget:PT15S}") Duration budget) {
+        this.reconcilePassBudget = budget == null || budget.isNegative() || budget.isZero() ? Duration.ofSeconds(15) : budget;
     }
 
     /** Tests flip the switches on the one cached context. */

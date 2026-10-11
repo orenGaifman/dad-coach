@@ -120,6 +120,8 @@ public abstract class AbstractIntegrationTest {
         messaging.setDeliveryStatusEnabled(false);
         messaging.setReconcileAfter(java.time.Duration.ofMinutes(5));
         messaging.setReadTimeoutMs(12000);
+        messaging.setLookupReadTimeoutMs(5000); // D-047
+        messaging.setReconcilePassBudget(java.time.Duration.ofSeconds(15));
     }
 
     @TestConfiguration

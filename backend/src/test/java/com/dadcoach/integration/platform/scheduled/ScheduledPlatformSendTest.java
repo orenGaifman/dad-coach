@@ -699,6 +699,60 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("D-047: a hanging platform never holds the job - lookups time out (5 s, here 300 ms), a pass stops at its "
+            + "budget (15 s, here 1 s) and the rows left are taken by the next passes; nothing is sent")
+    void aHangingPlatformNeverHoldsTheJob() throws Exception {
+        messaging.setScheduled(Mode.PLATFORM);
+        fake.onPlatformSend(c -> EDGE_502);
+        int rows = 8;
+        for (int i = 0; i < rows; i++) {
+            callback("t-hang-" + i, "ACTIVE_COACHING", IDENTITY + "בוקר טוב!");
+        }
+        clock.advance(Duration.ofMinutes(1));
+        assertThat(platform.reconcileDue()).as("the job's re-POSTs answer at once").isEqualTo(rows);
+        assertThat(fake.platformSends()).hasSize(3 * rows);
+
+        messaging.setLookupReadTimeoutMs(300);
+        messaging.setReconcilePassBudget(Duration.ofSeconds(1));
+        CountDownLatch hang = new CountDownLatch(1);
+        fake.onPlatformLookup(c -> {
+            try {
+                hang.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return new Reply(404, "{\"error\":\"messaging.message_not_found\"}");
+        });
+        try {
+            clock.advance(Duration.ofMinutes(4));
+            long started = System.nanoTime();
+            int first = platform.reconcileDue();
+            long tookMs = (System.nanoTime() - started) / 1_000_000;
+            assertThat(first).as("the pass stopped at its budget").isBetween(1, rows - 1);
+            assertThat(tookMs).as("budget + one lookup timeout, not a batch of timeouts").isLessThan(2_500);
+            assertThat(logged("messaging.scheduled.reconcile_budget_spent")).isTrue();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM scheduled_response_delivery WHERE platform_next_at <= ?",
+                    Integer.class, java.sql.Timestamp.from(clock.instant()))).as("the rows left are still due")
+                    .isEqualTo(rows - first);
+
+            int total = first;
+            for (int pass = 0; pass < 10 && total < rows; pass++) {
+                long passStarted = System.nanoTime();
+                total += platform.reconcileDue();
+                assertThat((System.nanoTime() - passStarted) / 1_000_000).isLessThan(2_500);
+            }
+            assertThat(total).as("every row looked up by the following passes").isEqualTo(rows);
+            assertThat(fake.platformLookups()).hasSize(rows);
+        } finally {
+            hang.countDown();
+        }
+        assertThat(fake.metaSends()).as("a lookup that timed out proves nothing: never sent").isEmpty();
+        for (int i = 0; i < rows; i++) {
+            assertThat(row("t-hang-" + i)).containsEntry("status", "SENDING").containsEntry("platform_state", "AMBIGUOUS");
+        }
+    }
+
+    @Test
     @DisplayName("PLATFORM 409 after an ambiguous attempt: adopted, never FAILED; 409 on the first attempt: PLATFORM_KEY_CONFLICT")
     void conflicts() throws Exception {
         messaging.setScheduled(Mode.PLATFORM);

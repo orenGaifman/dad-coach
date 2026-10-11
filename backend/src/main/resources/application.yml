@@ -108,6 +108,9 @@ dad-coach:
     # After an ambiguous answer: ask the platform by key this long after the first POST (then every as long, for 1 h).
     reconcile-after: ${MESSAGING_RECONCILE_AFTER:PT5M}
     send-read-timeout-ms: ${MESSAGING_SEND_READ_TIMEOUT_MS:12000}
+    # D-047: the reconcile job's lookup by key, and how long one reconcile pass may take rows (the rest: next minute)
+    lookup-read-timeout-ms: ${MESSAGING_LOOKUP_READ_TIMEOUT_MS:5000}
+    reconcile-pass-budget: ${MESSAGING_RECONCILE_PASS_BUDGET:PT15S}
 
 app:
   scheduling:

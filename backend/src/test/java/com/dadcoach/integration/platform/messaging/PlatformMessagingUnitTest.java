@@ -39,6 +39,15 @@ class PlatformMessagingUnitTest {
         assertThat(settings.reconcileAfter()).isEqualTo(java.time.Duration.ofMinutes(10));
     }
 
+    @Test
+    void theReconcileLookupAndPassAreBounded() {
+        var settings = new MessagingSettings("PLATFORM", false, java.time.Duration.ofMinutes(5), 2000, 12000);
+        assertThat(settings.lookupReadTimeoutMs()).as("D-047: a lookup has no platform wait").isEqualTo(5000);
+        assertThat(settings.reconcilePassBudget()).isEqualTo(java.time.Duration.ofSeconds(15));
+        settings.setReconcilePassBudget(java.time.Duration.ZERO);
+        assertThat(settings.reconcilePassBudget()).as("no budget is never 'no limit'").isEqualTo(java.time.Duration.ofSeconds(15));
+    }
+
     private static WebClientRequestException request(Throwable cause) {
         return new WebClientRequestException(cause, HttpMethod.POST, java.net.URI.create("https://p.test/x"), new HttpHeaders());
     }

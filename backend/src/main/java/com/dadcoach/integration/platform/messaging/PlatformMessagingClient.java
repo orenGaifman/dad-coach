@@ -93,7 +93,7 @@ public class PlatformMessagingClient {
             return new Answer(Kind.NEVER_WRITTEN, 0, null, "NOT_CONFIGURED", null);
         }
         return call(web.post().uri(SEND_PATH).contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(body.getBytes(StandardCharsets.UTF_8)));
+                .bodyValue(body.getBytes(StandardCharsets.UTF_8)), settings.readTimeoutMs());
     }
 
     /** {@code GET /messages?workerKey&idempotencyKey} (v2.5): 200 = the platform has it, 404 = it created nothing. */
@@ -102,10 +102,11 @@ public class PlatformMessagingClient {
             return new Answer(Kind.NEVER_WRITTEN, 0, null, "NOT_CONFIGURED", null);
         }
         return call(web.get().uri(b -> b.path(MESSAGES_PATH).queryParam("workerKey", "{w}")
-                .queryParam("idempotencyKey", "{k}").build(platform.getWorkerKey(), idempotencyKey)));
+                .queryParam("idempotencyKey", "{k}").build(platform.getWorkerKey(), idempotencyKey)),
+                settings.lookupReadTimeoutMs());   // D-047: a lookup has no platform wait; it must not hold the job
     }
 
-    private Answer call(WebClient.RequestHeadersSpec<?> request) {
+    private Answer call(WebClient.RequestHeadersSpec<?> request, int timeoutMs) {
         try {
             Answer answer = request.exchangeToMono(response -> response.bodyToMono(byte[].class).defaultIfEmpty(new byte[0])
                             .map(bytes -> {
@@ -114,7 +115,7 @@ public class PlatformMessagingClient {
                                         .map(PlatformMessagingClient::seconds).orElse(null);
                                 return new Answer(Kind.ANSWERED, status, parse(bytes), null, retryAfter);
                             }))
-                    .timeout(Duration.ofMillis(settings.readTimeoutMs()))
+                    .timeout(Duration.ofMillis(timeoutMs))
                     .onErrorResume(e -> Mono.just(failure(e)))
                     .block();
             return answer != null ? answer : new Answer(Kind.AMBIGUOUS, 0, null, "NO_ANSWER", null);

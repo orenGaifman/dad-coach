@@ -912,3 +912,24 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   report; 502 → one identical re-POST per part, never direct; report `known:false`; no image configured → text only.
   `SchedulingLanesTest` lists the new job (messaging lane).
 - **Rollout / rollback:** DEPLOYMENT.md "Platform Send API for scheduled messages and the belt promotion (D-046)".
+
+## D-047 — A reconcile pass never holds the scheduler thread for long (Unified Workflow 6.3-DC follow-up, 2026-10-11)
+
+- **Why (Big Boss review, applies here):** Dad Coach runs with `APP_SCHEDULING_LANES` off - one scheduler thread for
+  every job (D-043). A `PlatformSendFlow` reconcile pass takes up to 20 rows, each a lookup or a re-POST with the 12 s
+  Send API read timeout: a hanging platform could hold that thread ~4 min per job (two jobs: login links, scheduled
+  messages), delaying the receipt retry, the template refresh, deletions and the belt job.
+- **Change:** the lookup by key (`GET /messages?idempotencyKey`) has its own read timeout,
+  `MESSAGING_LOOKUP_READ_TIMEOUT_MS` (default 5000 - a lookup has no platform wait); `POST /send` keeps 12 s. Each pass
+  stops taking rows once it has run `MESSAGING_RECONCILE_PASS_BUDGET` (default PT15S, real time; zero/negative = the
+  default, never unlimited), logging `messaging.<event>.reconcile_budget_spent {seen, left, budgetMs}`. Rows not taken
+  keep their `platform_next_at` (still due) and are taken by the next pass a minute later. Worst case per pass: the
+  budget plus one call (lookup 5 s / re-POST 12 s) ≈ 27 s, per job.
+- **Safety unchanged:** a lookup that times out is ambiguous ("not found" needs a 404 with
+  `messaging.message_not_found`), so the row is asked again in 5 min and never sent directly on a timeout; the
+  1-hour give-up still counts from the first POST.
+- **Tests:** `ScheduledPlatformSendTest.aHangingPlatformNeverHoldsTheJob` (8 ambiguous rows, lookups hanging, timeout
+  300 ms, budget 1 s: the first pass stops at its budget in < 2.5 s, the rows left stay due, following passes look every
+  row up exactly once, nothing sent, rows stay SENDING / AMBIGUOUS); `PlatformMessagingUnitTest` (defaults 5000 ms /
+  15 s, zero budget = default).
+- **Rollback:** raise the two settings (env), no code change.
