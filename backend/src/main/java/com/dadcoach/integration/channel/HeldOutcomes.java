@@ -1,5 +1,6 @@
 package com.dadcoach.integration.channel;
 
+import com.dadcoach.integration.platform.GatewayHeldReports;
 import com.dadcoach.integration.platform.SharedNumberGate;
 import com.dadcoach.whatsapp.DeliveryReceipts;
 import java.sql.Timestamp;
@@ -50,26 +51,25 @@ public class HeldOutcomes {
     private final DeliveryReceipts receipts;
     private final Clock clock;
     private final boolean receiptsEnabled;
-    private volatile boolean enabled;
+    private final GatewayHeldReports heldReports;
 
-    public HeldOutcomes(JdbcTemplate jdbc, DeliveryReceipts receipts, Clock clock,
-                        @Value("${dad-coach.whatsapp.gateway-held-reports:false}") boolean enabled,
+    public HeldOutcomes(JdbcTemplate jdbc, DeliveryReceipts receipts, Clock clock, GatewayHeldReports heldReports,
                         @Value("${dad-coach.whatsapp.receipts.enabled:true}") boolean receiptsEnabled) {
         this.jdbc = jdbc;
         this.receipts = receipts;
         this.clock = clock;
-        this.enabled = enabled;
+        this.heldReports = heldReports;
         this.receiptsEnabled = receiptsEnabled;
     }
 
     /** {@code GATEWAY_HELD_REPORTS}: off = the endpoint answers 404 and changes nothing (the platform retries). */
     public boolean isEnabled() {
-        return enabled;
+        return heldReports.isEnabled();
     }
 
     /** Tests flip the switch on the one cached context. */
     public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
+        heldReports.setEnabled(enabled);
     }
 
     public static Optional<Outcome> outcome(String raw) {
@@ -106,8 +106,8 @@ public class HeldOutcomes {
                         + "status_at = ? WHERE gateway_hold_id = ? AND status = 'HELD'", sentId, at, holdId);
                 links = jdbc.update("UPDATE login_link SET receipt_status = NULL, provider_message_id = ? "
                         + "WHERE gateway_hold_id = ? AND receipt_status = 'HELD'", sentId, holdId);
-                // the latest status - also on a later report for the same held id (a newer status is a new report) -
-                // only for the wamid this held id was linked to
+                // the latest status - also on a second report for the same held id (the platform sends one when a newer
+                // status arrived while its report was in flight) - only for the wamid this held id was linked to
                 if (sentId != null && receiptsEnabled && linkedTo(holdId, sentId)) {
                     if (latestStatus != null) {
                         statusMoves += receipts.applyGatewayStatus(sentId, latestStatus,

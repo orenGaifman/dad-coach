@@ -212,6 +212,22 @@ class DeliveryReceiptsTest extends AbstractIntegrationTest {
         assertThat(row(f, "d038-late").get("status")).as("too late: dropped").isEqualTo("ACCEPTED");
     }
 
+    /** D-042 off (GATEWAY_HELD_REPORTS, the default): only "failed" is kept for an unknown wamid, as before D-042. */
+    @Test
+    void withHeldReportsOffOnlyAFailedReceiptIsKeptForAnUnknownWamid() throws Exception {
+        Father f = data.activeFather("+19995550808");
+        receipt("wamid.d042.off.read", "read", f); // not kept
+        failedReceipt("wamid.d042.off.failed", f);                                    // kept
+        acceptedRow(f, "d042-off-read", "wamid.d042.off.read");
+        acceptedRow(f, "d042-off-failed", "wamid.d042.off.failed");
+
+        receipts.retryPending();
+
+        assertThat(row(f, "d042-off-read").get("status")).as("a non-failed early receipt is dropped").isEqualTo("ACCEPTED");
+        assertThat(row(f, "d042-off-failed").get("status")).isEqualTo("FAILED");
+        assertThat(receipts.applyPending("wamid.d042.off.read")).as("nothing kept").isZero();
+    }
+
     @Test
     void aWamidDadCoachNeverRecordedIsPending() {
         assertThat(whatsapp.getDeliveryStatus("wamid.unknown")).isEqualTo(DeliveryStatus.PENDING);

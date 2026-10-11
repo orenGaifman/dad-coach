@@ -72,6 +72,13 @@ Keep: everything in the table above (GOOGLE_* stay).
   → purged now; the platform deletion follows from the outbox (logs `Platform person deletion …`).
 - **A proactive message was not delivered:** `scheduled_response_delivery` row by trigger id (status, failure
   reason: SESSION_CLOSED without a template, ENDPOINT_NOT_FOUND, Meta error).
+- **Roll back D-042 (the gateway's held-outcome reports):** platform env `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_HELDREPORTURL`
+  unset (reports stop) and/or Dad Coach `GATEWAY_HELD_REPORTS=false` (the endpoint answers 404, the receipt buffer keeps
+  only "failed" as before; the platform retries a report for 24 h, then gives up - log noise only). Nothing to undo in
+  the data. Before a **code revert** below D-042 (the old enum cannot load the new status), run once and again a few
+  minutes after the revert is live:
+  `UPDATE scheduled_response_delivery SET status = 'HELD' WHERE status = 'UNKNOWN';`
+  V46 stays (two partial indexes, harmless).
 - **Tests:** `cd backend && ./mvnw test` (Docker needed).
 
 

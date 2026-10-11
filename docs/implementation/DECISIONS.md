@@ -539,8 +539,10 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   - **SENT** → scheduled `ACCEPTED` + `provider_message_id` = the wamid; link `receipt_status` NULL (accepted) + wamid,
     `delivery_status` stays SENT. Then the latest status the gateway saw (`latestStatus`: ACCEPTED = Meta's "sent",
     DELIVERED, READ, FAILED) and any receipt Dad Coach kept for that wamid are applied through `DeliveryReceipts`, forward
-    only - also on a later report for the same held id (a newer status is a new key), but only to the wamid this held id
-    was linked to. From then on Meta's receipts match as for any send. A SENT without a wamid = ACCEPTED without one.
+    only - also on a later report for the same held id, but only to the wamid this held id was linked to. The platform
+    sends such a second report only when a newer status reached its held row while the first report was in flight (the
+    2xx is then not taken as done and the row is reported again at once, with the new status in its key); otherwise one
+    report per held message. From then on Meta's receipts match as for any send. A SENT without a wamid = ACCEPTED without one.
   - **FAILED** (Meta refused the replay, or the request was never written) → scheduled FAILED, reason
     `GATEWAY_<errorCode>`; link `delivery_status` FAILED, `receipt_status` FAILED, `delivery_error` the same.
   - **EXPIRED**, defined: the gateway closed it **without ever sending it** (`closedReason` NOT_IN_LATEST_10 - not among
@@ -568,12 +570,16 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   - Not changed: `CoachMentions` recorded the held message's names when the callback answered DELIVERED; a later
     FAILED/EXPIRED leaves them (the coach repeats a name less, nothing is sent). The platform's own timeline links
     `held:<n>` itself (spec v2.6).
-- **Early receipts:** `DeliveryReceipts` keeps a receipt of **any** status (was: only "failed") for a wamid no row holds
-  - the latest per status, at most 500 wamids, 2 minutes, re-applied every 15 s in order sent → delivered → read →
-  failed, and at once when a SENT report links the wamid (`applyPending`). Lost on a restart; the report's
-  `latestStatus` covers that (the platform keeps the latest receipt on its held row and re-reports when it changes).
-  The retry now checks that the row exists before applying (one query per kept wamid, no repeated UPDATEs/logs).
-  Receipts of conversational replies (no row) are kept 2 minutes and dropped, as before for "failed".
+- **Early receipts (only with `GATEWAY_HELD_REPORTS` on):** `DeliveryReceipts` keeps a receipt of **any** status for a
+  wamid no row holds - the latest per status, at most 500 wamids, 2 minutes, re-applied every 15 s in order sent →
+  delivered → read → failed once the row exists (checked first: one query per kept wamid, no repeated UPDATEs/logs),
+  and at once when a SENT report links the wamid (`applyPending`). Receipts of conversational replies (no row) are
+  kept 2 minutes and dropped. **Off: exactly as before D-042** - only "failed" is kept (one per wamid, a full buffer
+  takes nothing, the existence check only for an unmatched "failed"), re-applied and dropped once it moved or its row
+  exists (`DeliveryReceiptsTest.withHeldReportsOffOnlyAFailedReceiptIsKeptForAnUnknownWamid`). Lost on a restart; what
+  covers it: the report's `latestStatus` carries the latest receipt the platform's held row had when the report was
+  sent (a receipt that reached the platform before the report), and a receipt after the report matches the now-linked
+  wamid directly.
 - **Admin:** status UNKNOWN reads "לא ידוע אם הגיע"; reasons GATEWAY_HELD_EXPIRED / GATEWAY_UNKNOWN / GATEWAY_* in words.
 - **Tests:** `HeldOutcomeTest` (15, integration: switch off = 404 and no change, then the platform's retry applies;
   SENT links the wamid and later receipts match, replayed callback sends nothing and does not re-gate; latestStatus
@@ -581,11 +587,12 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   screen"; FAILED / EXPIRED (scheduled + link: next request only) / UNKNOWN (scheduled + link: no second card); a late
   SENT cannot revive a FAILED row; duplicate key; unknown id 200; tool / admin / wrong / no key 401; bad requests 400),
   `HeldOutcomeControllerTest` (3, unit: switch and request checks before any read). `DeliveryReceiptsTest` follows the
-  renames (`PENDING_FOR`, `retryPending`). Full backend suite 424/424; frontend tsc + vitest green.
+  renames (`PENDING_FOR`, `retryPending`) and adds the switch-off buffer test (9). Full backend suite 425/425; frontend tsc + vitest green.
 - **Rollout:** deploy (switch off; V46 = two partial indexes) → `GATEWAY_HELD_REPORTS=true` → platform env
   `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_HELDREPORTURL=https://dad-coach.onrender.com/api/integration/channel/held-outcome`
   (gateway route 1 = `dad-coach`, worker `dad_3`; its claim key is already Dad Coach's callback key, header X-API-Key) →
   watch `channel.whatsapp.held.reported` (platform) and `whatsapp.held.outcome` (Dad Coach) at the next switch back.
-- **Rollback:** unset the platform URL (reports stop) and/or `GATEWAY_HELD_REPORTS=false` (404; the platform retries
-  for 24 h, then gives up - log noise only). A code revert keeps V46 (indexes only); before it, run
+- **Rollback** (also in DEPLOYMENT.md, Runbooks): unset the platform URL (reports stop) and/or
+  `GATEWAY_HELD_REPORTS=false` (404 and the receipt buffer as before D-042; the platform retries for 24 h, then gives
+  up - log noise only). A code revert keeps V46 (indexes only); before it, run
   `UPDATE scheduled_response_delivery SET status = 'HELD' WHERE status = 'UNKNOWN'` (the old enum cannot load UNKNOWN).

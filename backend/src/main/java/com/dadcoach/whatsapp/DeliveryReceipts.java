@@ -2,6 +2,7 @@ package com.dadcoach.whatsapp;
 
 import com.dadcoach.channel.delivery.DeliveryStatus;
 import com.dadcoach.channel.dto.StatusUpdateDto;
+import com.dadcoach.integration.platform.GatewayHeldReports;
 import com.dadcoach.integration.platform.SharedNumberGate;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -30,9 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Meta can answer a send with "failed" (e.g. 131047) within milliseconds - before the row holding the wamid is
  * committed - and a message the shared-number gateway held and later sent gets its receipts before the gateway's report
- * tells Dad Coach its wamid (D-042). A receipt (any status) for a wamid no row holds is therefore kept in memory for
+ * tells Dad Coach its wamid (D-042). A receipt for a wamid no row holds is therefore kept in memory for
  * {@link #PENDING_FOR} and re-applied every 15 seconds until its row appears, or at once by {@link #applyPending}
- * (at most {@link #PENDING_MAX} wamids, one receipt per status each; lost on a restart).
+ * (at most {@link #PENDING_MAX} wamids; lost on a restart). With {@code GATEWAY_HELD_REPORTS} off only "failed" is
+ * kept, exactly as before D-042; on, every status (one receipt per status per wamid).
  */
 @Component
 public class DeliveryReceipts {
@@ -66,17 +68,22 @@ public class DeliveryReceipts {
     private final ConcurrentHashMap<String, Pending> pending = new ConcurrentHashMap<>();
     private final JdbcTemplate jdbc;
     private final Clock clock;
+    private final GatewayHeldReports heldReports;
 
-    public DeliveryReceipts(JdbcTemplate jdbc, Clock clock) {
+    public DeliveryReceipts(JdbcTemplate jdbc, Clock clock, GatewayHeldReports heldReports) {
         this.jdbc = jdbc;
         this.clock = clock;
+        this.heldReports = heldReports;
     }
 
     /** Applies one receipt; returns how many recorded messages it moved (0: unknown wamid, stale or ignored). */
     @Transactional
     public int apply(StatusUpdateDto receipt) {
         int moved = move(receipt);
-        if (moved == 0 && statusOfReceipt(receipt) != null && receipt.providerMessageId() != null
+        // D-042: with GATEWAY_HELD_REPORTS on, a receipt of any status is kept; off, only "failed" (as before D-042)
+        boolean keepable = heldReports.isEnabled() ? statusOfReceipt(receipt) != null
+                : "failed".equalsIgnoreCase(receipt.status());
+        if (moved == 0 && keepable && receipt.providerMessageId() != null
                 && !receipt.providerMessageId().startsWith(SharedNumberGate.HELD_PREFIX)
                 && !recorded(receipt.providerMessageId())) {
             remember(receipt);
@@ -135,7 +142,12 @@ public class DeliveryReceipts {
                 continue;
             }
             try {
-                if (recorded(e.getKey()) && pending.remove(e.getKey(), e.getValue())) {
+                if (!heldReports.isEnabled()) {
+                    // as before D-042: re-apply, drop once it moved or its row exists
+                    if (replay(e.getValue()) > 0 || recorded(e.getKey())) {
+                        pending.remove(e.getKey(), e.getValue());
+                    }
+                } else if (recorded(e.getKey()) && pending.remove(e.getKey(), e.getValue())) {
                     replay(e.getValue());
                 }
             } catch (RuntimeException failure) {
@@ -163,6 +175,15 @@ public class DeliveryReceipts {
     private void remember(StatusUpdateDto receipt) {
         String wamid = receipt.providerMessageId();
         DeliveryStatus status = statusOfReceipt(receipt);
+        if (!heldReports.isEnabled()) {
+            // as before D-042: one "failed" receipt per wamid, a full buffer takes nothing
+            if (pending.size() >= PENDING_MAX) {
+                log.atWarn().setMessage("whatsapp.receipt.pending_full").log();
+                return;
+            }
+            pending.put(wamid, new Pending(Map.of(status, receipt), clock.instant().plus(PENDING_FOR)));
+            return;
+        }
         if (!pending.containsKey(wamid) && pending.size() >= PENDING_MAX) {
             log.atWarn().setMessage("whatsapp.receipt.pending_full").log();
             return;

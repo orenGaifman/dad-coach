@@ -244,6 +244,7 @@ class HeldOutcomeTest extends AbstractIntegrationTest {
 
     @Test
     void aReceiptOfAnUnknownWamidIsKeptAWhileAndAppliedByTheRetryToo() throws Exception {
+        outcomes.setEnabled(true);
         Father f = data.activeFather("+19995551205");
         receipt("wamid.d042.kept", "read", f);
         jdbc.update("INSERT INTO scheduled_response_delivery (idempotency_key, trigger_id, father_id, status, delivery_mode, "

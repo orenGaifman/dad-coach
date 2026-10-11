@@ -23,7 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>Contract: body {@code {heldId, workerKey, route, outcome SENT|FAILED|UNKNOWN|EXPIRED, providerMessageId,
  * errorCode, closedReason, latestStatus, latestStatusAt, latestErrorCode, heldAt, closedAt}} (no phone, no text),
- * header {@code X-Idempotency-Key: held-outcome:<heldId>:<outcome>:<latestStatus|->} - a newer status is a new key.
+ * header {@code X-Idempotency-Key: held-outcome:<heldId>:<outcome>:<latestStatus|->}. One report per held message;
+ * a second one (new key) only when a newer status reached the platform while the first was in flight.
  * Answers: 200 applied or not (an id no row holds is {@code {"applied":false,"known":false}} - never retried); the same
  * key again is 200 {@code duplicate}; 400 for a request that is wrong in itself (the platform gives up); 404 while
  * {@code GATEWAY_HELD_REPORTS} is off and 409 while the same key is being applied (the platform retries both, so a

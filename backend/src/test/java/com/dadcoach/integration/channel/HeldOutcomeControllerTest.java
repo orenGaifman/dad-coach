@@ -12,7 +12,8 @@ import org.junit.jupiter.api.Test;
  */
 class HeldOutcomeControllerTest {
 
-    private final HeldOutcomes outcomes = new HeldOutcomes(null, null, Clock.systemUTC(), false, true);
+    private final HeldOutcomes outcomes = new HeldOutcomes(null, null, Clock.systemUTC(),
+            new com.dadcoach.integration.platform.GatewayHeldReports(false), true);
     private final HeldOutcomeController controller = new HeldOutcomeController(outcomes, new IdempotencyService(null, Clock.systemUTC()));
 
     private static HeldOutcomeController.Report report(Long heldId, String outcome) {
