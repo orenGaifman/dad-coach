@@ -158,6 +158,27 @@ public class DeliveryReceipts {
         return replay(kept);
     }
 
+    /** D-052: receipts taken out but not applied go back; a receipt kept meanwhile wins per status. */
+    private void keepAgain(String wamid, Pending kept) {
+        pending.merge(wamid, kept, (now, old) -> {
+            Map<DeliveryStatus, StatusUpdateDto> receipts = new java.util.EnumMap<>(DeliveryStatus.class);
+            receipts.putAll(old.receipts());
+            receipts.putAll(now.receipts());
+            return new Pending(receipts, now.until().isAfter(old.until()) ? now.until() : old.until());
+        });
+    }
+
+    /**
+     * D-052: a receipt whose {@link #apply} threw (its transaction rolled back - Meta already got its 200 and never sends it
+     * again) is kept and re-applied by the next pass, as one that came before its row.
+     */
+    public void keepAfterFailure(StatusUpdateDto receipt) {
+        String wamid = receipt.providerMessageId();
+        if (wamid != null && !wamid.startsWith(SharedNumberGate.HELD_PREFIX) && statusOfReceipt(receipt) != null) {
+            remember(receipt);
+        }
+    }
+
     /** D-052: the kept receipts go back to memory when the transaction that applied them does not commit. */
     private void keepAgainUnlessCommitted(String wamid, Pending kept) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -169,13 +190,7 @@ public class DeliveryReceipts {
                 if (status == STATUS_COMMITTED) {
                     return;
                 }
-                // memory only (no write joins the finished transaction); a newer receipt kept meanwhile wins per status
-                pending.merge(wamid, kept, (now, old) -> {
-                    Map<DeliveryStatus, StatusUpdateDto> receipts = new java.util.EnumMap<>(DeliveryStatus.class);
-                    receipts.putAll(old.receipts());
-                    receipts.putAll(now.receipts());
-                    return new Pending(receipts, now.until().isAfter(old.until()) ? now.until() : old.until());
-                });
+                keepAgain(wamid, kept);   // memory only: no write joins the finished transaction
                 log.atWarn().setMessage("whatsapp.receipt.kept_again").addKeyValue("status", status == STATUS_ROLLED_BACK
                         ? "ROLLED_BACK" : "UNKNOWN").log();
             }
@@ -186,7 +201,9 @@ public class DeliveryReceipts {
      * Re-applies the receipts that came before their row was committed; drops a wamid's receipts once its row exists
      * (applied, moved or not) or their time is up.
      */
-    @Scheduled(fixedDelayString = "PT15S", initialDelayString = "PT15S", scheduler = SchedulingLanes.HOUSEKEEPING)
+    @Scheduled(fixedDelayString = "${dad-coach.whatsapp.receipts.retry-interval:PT15S}",
+            initialDelayString = "${dad-coach.whatsapp.receipts.retry-initial-delay:PT15S}",
+            scheduler = SchedulingLanes.HOUSEKEEPING)
     public void retryPending() {
         Instant now = clock.instant();
         for (Map.Entry<String, Pending> e : pending.entrySet()) {
@@ -203,7 +220,12 @@ public class DeliveryReceipts {
                         pending.remove(e.getKey(), e.getValue());
                     }
                 } else if (recorded(e.getKey()) && pending.remove(e.getKey(), e.getValue())) {
-                    replay(e.getValue());
+                    try {
+                        replay(e.getValue());
+                    } catch (RuntimeException failure) {
+                        keepAgain(e.getKey(), e.getValue());   // D-052: taken out, not applied - the next pass tries again
+                        throw failure;
+                    }
                 }
             } catch (RuntimeException failure) {
                 log.atWarn().setMessage("whatsapp.receipt.retry_failed").addKeyValue("error", failure.getClass().getSimpleName()).log();

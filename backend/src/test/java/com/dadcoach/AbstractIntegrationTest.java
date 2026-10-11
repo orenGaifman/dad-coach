@@ -49,6 +49,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
         "dadcoach.platform-person-deletion.send-after-commit=false",
         "dadcoach.scheduler.weekly-goal-completion-cron=-",
         "dad-coach.messaging.reconcile-initial-delay=PT24H",
+        // D-052: Meta's kept receipts are re-applied only when a test runs the pass (the forced races stay forced)
+        "dad-coach.whatsapp.receipts.retry-initial-delay=PT24H",
         "spring.datasource.hikari.maximum-pool-size=5",
         // the dashboard (com.dadcoach.auth / web / ops)
         "dadcoach.dashboard.ops-api-key=" + AbstractIntegrationTest.OPS_KEY,

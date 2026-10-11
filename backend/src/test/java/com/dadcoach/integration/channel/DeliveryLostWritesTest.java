@@ -277,6 +277,23 @@ class DeliveryLostWritesTest extends AbstractIntegrationTest {
         }
     }
 
+    /** Test-only: Meta's FAILED receipt UPDATE of {@code login_link} raises (a database error) while this is open. */
+    final class Fault implements AutoCloseable {
+        Fault() {
+            jdbc.execute("CREATE OR REPLACE FUNCTION d052_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN "
+                    + "IF current_query() LIKE '%SET receipt_status = ''FAILED''%' THEN "
+                    + "RAISE EXCEPTION 'd052 test fault'; END IF; RETURN NULL; END $$");
+            jdbc.execute("DROP TRIGGER IF EXISTS d052_fault ON login_link");
+            jdbc.execute("CREATE TRIGGER d052_fault BEFORE UPDATE ON login_link FOR EACH STATEMENT EXECUTE FUNCTION d052_fault()");
+        }
+
+        @Override
+        public void close() {
+            jdbc.execute("DROP TRIGGER IF EXISTS d052_fault ON login_link");
+            jdbc.execute("DROP FUNCTION IF EXISTS d052_fault()");
+        }
+    }
+
     /** Both run at once: released together by a barrier; both must finish without error. */
     private void together(Callable<?> a, Callable<?> b) throws Exception {
         CyclicBarrier start = new CyclicBarrier(2);
@@ -438,6 +455,44 @@ class DeliveryLostWritesTest extends AbstractIntegrationTest {
         held(5202, "SENT", w, "held-outcome:5202:SENT:-");   // the platform's retry
 
         assertThat(row("d052-held-rb")).containsEntry("status", "FAILED").containsEntry("provider_message_id", w);
+    }
+
+    @Test
+    @DisplayName("LOGIN_LINK sync answer: the kept receipts' apply failing after the platform's answer committed never "
+            + "fails the send - the receipts are kept again and the next pass applies them (D-052)")
+    void failingKeptReceiptsNeverFailTheSend() throws Exception {
+        messaging.setLoginLink(Mode.PLATFORM);
+        Father f = father();
+        String w = wamid();
+        receipt(f, w, "failed");                     // kept: no row holds it yet
+        fake.onPlatformSend(c -> answer(UUID.randomUUID().toString(), "ACCEPTED", w));
+
+        try (Fault fault = new Fault()) {
+            assertThat(links.sendTo(f.getPhone())).isEqualTo(LoginLinkService.SendOutcome.SENT);
+            assertThat(link(f)).containsEntry("provider_message_id", w).containsEntry("delivery_status", "SENT");
+        }
+        receipts.retryPending();                       // the next pass
+
+        assertThat(link(f)).containsEntry("delivery_status", "FAILED").containsEntry("receipt_status", "FAILED");
+    }
+
+    @Test
+    @DisplayName("Meta's receipt whose apply failed (Meta got its 200 and never resends it) is kept and applied by the "
+            + "next pass (D-052)")
+    void aReceiptThatFailedToApplyIsKept() throws Exception {
+        Father f = father();
+        String w = wamid();
+        fake.onMetaSend(c -> Reply.json("{\"messaging_product\":\"whatsapp\",\"messages\":[{\"id\":\"" + w + "\"}]}"));
+        callback(f, "d052-throws");
+        assertThat(row("d052-throws")).containsEntry("status", "ACCEPTED").containsEntry("provider_message_id", w);
+
+        try (Fault fault = new Fault()) {
+            receipt(f, w, "failed");                  // its transaction rolls back; the webhook still answers 200
+            assertThat(row("d052-throws")).containsEntry("status", "ACCEPTED");
+        }
+        receipts.retryPending();
+
+        assertThat(row("d052-throws")).containsEntry("status", "FAILED");
     }
 
     // ------------------------------------------------------------------------------------------------- concurrency (x10)

@@ -1097,6 +1097,15 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   (their own write is already committed); `HeldOutcomes` keeps joining (its write links the wamid in that transaction),
   and any `applyPending` whose transaction does not commit puts the receipts back in memory (`afterCompletion`, memory
   only - no write joins the finished transaction). No migration, no switch; behaviour otherwise unchanged.
+- **Review follow-ups (same decision):** the post-commit `applyPending` in `PlatformSendFlow.apply` /
+  `LoginLinkPlatform.sendDirectly` never fails a send that succeeded (caught, logged
+  `messaging.<event>.pending_receipts_failed`; its receipts are kept again). A receipt whose `apply` threw (Meta got its
+  200 and never resends) is kept (`keepAfterFailure`) for the next pass; receipts the on-mode pass took out and failed to
+  replay go back. The 15-second pass is configurable (`dad-coach.whatsapp.receipts.retry-interval` /
+  `retry-initial-delay`, default PT15S); tests set the first run to PT24H so a forced race is never rescued by it.
+- **Not fixed - removed by Phase 6.4 cleanup** (products drop direct sends, Meta receipts, held outcomes): held outcomes
+  rely on the 15-second pass (their `applyPending` runs before their commit), a held outcome that beats its row's commit
+  is acknowledged `known:false`, a direct link's row is written in the caller's transaction after Meta accepted it.
 - **Checked safe (tests pin them):** platform reports and reconcile lookups use `SELECT ... FOR UPDATE` and forward-only
   rules against Meta's conditional UPDATEs (concurrent "read" + DELIVERED report always READ, both ledgers); kinds with
   no ledger (REPLY, FIXED_LINE, BUTTON_REPLY, READY_ANSWER, BELT_PROMOTION) write nothing but the report's key; the
@@ -1104,4 +1113,6 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 - **Tests:** `DeliveryLostWritesTest` - each race forced by a test-only statement trigger that parks Meta's FAILED
   receipt between its UPDATE and its look for the row (SCHEDULED report, LOGIN_LINK report, held outcome, direct send +
   re-apply pass); the caller's / held outcome's rollback; concurrency x10 (barrier) failed + ACCEPTED report and read +
-  DELIVERED report on both ledgers; reconcile lookup with a kept receipt; no-ledger reports; session-timer notes.
+  DELIVERED report on both ledgers; reconcile lookup with a kept receipt; no-ledger reports; session-timer notes; a
+  failing kept-receipt apply never fails the send; a receipt whose apply threw is kept (both forced by a test-only
+  raising trigger).

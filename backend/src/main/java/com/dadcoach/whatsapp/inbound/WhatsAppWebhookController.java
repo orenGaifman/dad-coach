@@ -133,8 +133,9 @@ public class WhatsAppWebhookController {
             try {
                 receipts.apply(receipt);
             } catch (RuntimeException e) {
-                // Meta always gets its 200; a lost receipt costs the status, never the webhook
+                // Meta always gets its 200 (and never sends it again): D-052 - kept, the next pass re-applies it
                 log.atWarn().setMessage("whatsapp.receipt.failed").addKeyValue("error", e.getClass().getSimpleName()).log();
+                receipts.keepAfterFailure(receipt);
             }
         }
         return ResponseEntity.ok().build();
