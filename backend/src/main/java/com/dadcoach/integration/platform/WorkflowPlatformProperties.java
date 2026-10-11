@@ -27,6 +27,12 @@ public class WorkflowPlatformProperties {
      * replacements, code-answered messages, the scheduled-callback answer). Off = exactly the pre-Phase-3 calls.
      */
     private volatile boolean deliveryReports = false;
+    /**
+     * D-049 (Phase 5.3 slice D, env DC_SESSION_TIMERS_GUARD): the hour-before reminder's guard
+     * ({@code dc_session_timer_card} as {@code execution.guard}) may decline its AI turn when no session is there. Off =
+     * the guard always proceeds: the turn runs exactly as before, with one read-only tool call recorded on it.
+     */
+    private volatile boolean sessionTimersGuard = false;
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -46,4 +52,6 @@ public class WorkflowPlatformProperties {
     public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
     public boolean isDeliveryReports() { return deliveryReports; }
     public void setDeliveryReports(boolean deliveryReports) { this.deliveryReports = deliveryReports; }
+    public boolean isSessionTimersGuard() { return sessionTimersGuard; }
+    public void setSessionTimersGuard(boolean sessionTimersGuard) { this.sessionTimersGuard = sessionTimersGuard; }
 }

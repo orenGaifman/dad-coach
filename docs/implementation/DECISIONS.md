@@ -1039,3 +1039,40 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   unanswered + redelivery re-POST, unmatched report logged at INFO, his message reported again when the synchronous
   attempt failed). `FakeServers.Reply` can carry a `Retry-After` header.
 - **Rollout / rollback:** DEPLOYMENT.md "Platform Send API for the conversational lines (D-048)".
+
+## D-049 — The session timers run from data: morning and follow-up with no model, the hour before behind a guard (Unified Workflow Phase 5.3 slice D, 2026-10-11)
+
+- **Why:** the three session timer turns ran the model, and the callback then replaced its text by the ready line from
+  the data anyway (D-036) or dropped it (`NO_VALID_SESSION`, e.g. a session closed from the dashboard or the "done"
+  button). Platform spec `PHASE5_3_SPEC.md` §4.
+- **Change:** one read-only tool, `dc_session_timer_card` (`api/tools/SessionTimerTools.Card`, logic
+  `integration/platform/scheduled/SessionTimerCard`; platform catalog row V136, never shown to the model), param
+  `timer` = the state (static in the YAML), `firedAt` / `referenceId` only logged; Dad Coach's own clock decides.
+  - `SESSION_MORNING_REMINDER`, `SESSION_FOLLOW_UP`: `execution.mode: TOOL_ONLY` (no model call). `message.text` is
+    `ScheduledReplies.plan`'s text - what the callback sent whatever the model wrote - so the same words, buttons and
+    template go out. Nothing is sent (`message: null`, no callback) exactly where nothing went before:
+    `NO_VALID_SESSION` (the callback's skip); `ALREADY_REMINDED_TODAY` (every session the morning names was already
+    in today's morning: two sessions on one day wake the 08:00 morning twice - the model saw its first reminder in
+    the conversation); `NOT_JUST_ENDED` (the session ended over 3 h ago: the rule's "N up to about 180"; the callback's
+    plan looks back 12 h); `ALREADY_ASKED` (asked about this session in the last 3 h: "one session can wake you more
+    than once"). The two "already" facts are new columns written by the callback when such a message is handed over
+    (`quality_time.morning_reminded_on`, `follow_up_asked_at`, V49). Unknown number: `UNKNOWN_RECIPIENT` (the callback
+    would refuse it).
+  - `SESSION_REMINDER_1H`: stays an AI turn (keeps the D-15 wish) with `execution.guard` = the same tool; it declines
+    only on `NO_VALID_SESSION`, and only with `DC_SESSION_TIMERS_GUARD=true` (default false: always proceeds). A guard
+    failure runs the turn (`onToolFailure: PROCEED`).
+  - The callback is unchanged apart from writing the two notes; it still checks and builds every message.
+- **No product switch for the tool-only pair:** no Dad Coach setting can make the platform run the model for a
+  TOOL_ONLY state, and the tool's text is already what the callback sends, so the switch is the workflow YAML (as for
+  the 5.2 mornings of Tair and Big Boss). Rollback: remove the `execution` blocks, republish, upgrade instances.
+- **Residual (accepted):** what only the conversation shows stays out - a follow-up he answered in words without the
+  session being recorded (the model would stay quiet; the card asks); a session named in a reply before 08:00 is not
+  "reminded" (only a morning reminder counts); when the first morning's callback fails and is retried after the
+  second morning trigger ran, both go (the model would have seen the first turn's text).
+- **Tests:** `SessionTimerCardParityTest` - the grid (15 data situations × morning / follow-up × window open / closed ×
+  three model texts: the AI turn with a rule-keeping scripted model + callback equals the tool-only turn + callback:
+  same decision, text, buttons, template); second morning of the day, a session added after the morning, follow-up
+  asked once within 3 h and again after, each reason; the hour before: decline ⇔ the callback's skip at the same
+  instant, and a decline never where a reminder went out before (callback at +0, +30 s, +2 h), flag off always
+  proceeds, the wish kept when it proceeds; the envelope (read-only, no idempotency, unknown number, bad timer).
+  Provisioning: `test_manifests.test_session_timers_run_from_data`.

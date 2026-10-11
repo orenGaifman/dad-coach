@@ -148,6 +148,9 @@ workflow:
     read-timeout-ms: 90000
     # D-039 (Phase 3.4): report what was actually delivered to the platform's conversation timeline. Off = as before.
     delivery-reports: ${PLATFORM_DELIVERY_REPORTS:false}
+    # D-049 (Phase 5.3 slice D): the hour-before reminder's guard may skip its AI turn when no session is there. Off = it
+    # always proceeds (the turn as before). The morning / follow-up tool-only turns are switched by the workflow YAML.
+    session-timers-guard: ${DC_SESSION_TIMERS_GUARD:false}
     # Receiver for the platform's scheduled-response callback (/api/integration/workflow/scheduled-response).
     scheduled-response:
       enabled: ${WORKFLOW_PLATFORM_CALLBACK_ENABLED:false}

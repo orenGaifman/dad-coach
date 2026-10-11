@@ -70,10 +70,15 @@ public class ScheduledReplies {
     /** The planned message for a session timer's state; empty for any other state (the daily check is the model's). */
     @Transactional(readOnly = true)
     public Optional<Planned> plan(Father father, String targetStateKey) {
-        if (!MORNING.equals(targetStateKey) && !HOUR_BEFORE.equals(targetStateKey) && !FOLLOW_UP.equals(targetStateKey)) {
+        return plan(father, targetStateKey, clock.instant());
+    }
+
+    /** {@link #plan(Father, String)} at a given instant (D-049: the session timer card decides at one {@code now}). */
+    @Transactional(readOnly = true)
+    public Optional<Planned> plan(Father father, String targetStateKey, Instant now) {
+        if (!isSessionTimer(targetStateKey)) {
             return Optional.empty();
         }
-        Instant now = clock.instant();
         ZoneId zone = goals.zoneFor(father);
         LocalDate today = now.atZone(zone).toLocalDate();
         List<QualityTime> scheduled = sessions.findByFatherIdAndStatus(father.getId(), QualityTimeStatus.SCHEDULED);
@@ -110,6 +115,11 @@ public class ScheduledReplies {
                         return new Planned(CoachReplies.followUp(kids), List.of(qt.getId()));
                     }).orElse(none);
         });
+    }
+
+    /** True for the three session timer states (the morning of the session, an hour before, the follow-up). */
+    public static boolean isSessionTimer(String stateKey) {
+        return MORNING.equals(stateKey) || HOUR_BEFORE.equals(stateKey) || FOLLOW_UP.equals(stateKey);
     }
 
     /** The model's message when it says the planned words (the hour-before may end with a wish instead), else the plan. */

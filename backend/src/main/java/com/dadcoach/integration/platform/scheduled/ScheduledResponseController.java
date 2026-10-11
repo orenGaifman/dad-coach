@@ -37,13 +37,16 @@ public class ScheduledResponseController {
     private final ScheduledReplies replies;
     private final com.dadcoach.replies.CoachMentions mentions;
     private final com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties;
+    private final SessionTimerCard timerCards;
 
     static final String IDENTITY = "❤️ דאד קואץ׳:\n";
 
     public ScheduledResponseController(PlatformUserResolver userResolver, ScheduledResponseDeliveryService deliveryService,
                                        ScheduledReplies replies, com.dadcoach.replies.CoachMentions mentions,
-                                       com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties) {
+                                       com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties,
+                                       SessionTimerCard timerCards) {
         this.platformProperties = platformProperties;
+        this.timerCards = timerCards;
         this.userResolver = userResolver;
         this.deliveryService = deliveryService;
         this.replies = replies;
@@ -108,6 +111,8 @@ public class ScheduledResponseController {
         if (answer.handedOver()) {
             mentions.sent(father.get(), content);
             planned.ifPresent(p -> mentions.sessionsNamed(father.get(), p.sessions()));
+            // D-049: the morning and the follow-up note what they named, so the tool-only turns never repeat them
+            planned.ifPresent(p -> timerCards.sent(father.get(), request.targetStateKey(), p.sessions()));
         }
         log.atInfo().setMessage("proactive.callback.result")
                 .addKeyValue("triggerId", request.triggerId())

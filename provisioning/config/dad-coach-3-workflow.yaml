@@ -541,6 +541,19 @@ states:
   advancedBehaviorGuidance: |-
     Woken by the session's morning timer (Transition: session_morning_reminder). sessions_today in the weekly plan lists the still-valid sessions later today. The reminder is exactly ready_replies.morning_reminder_reply ('*היום ב-17:00* זה הזמן שלך ושל [child] 🙂'). Dad Coach sends that ready line and sends nothing when there is no session today.
   displayOrder: 2
+  # D-049 (Unified Workflow Phase 5.3 slice D): the morning reminder calls no model - the platform calls
+  # dc_session_timer_card and its message.text is the reply (null message = no session today, or today's morning
+  # already named them: suppressed, no callback). The callback still checks and sends the same ready text with its
+  # buttons. Rollback: remove this block (the providers and rules below stay for the AI turn), republish, upgrade.
+  execution:
+    mode: TOOL_ONLY
+    toolKey: dc_session_timer_card
+    parameters:
+      timer: SESSION_MORNING_REMINDER
+      firedAt: "{{trigger.scheduledAt}}"
+      referenceId: "{{trigger.referenceId}}"
+    onNoMessage: SUPPRESS
+    onToolFailure: FAIL
   contextProviders:
   - providerKey: weekly_plan_context
     executionOrder: 0
@@ -577,6 +590,9 @@ states:
     actionType: GUIDE_AI
     actionInstruction: "ask a question, push, or write more than one short line."
     displayOrder: 2
+  tools:
+  - toolKey: dc_session_timer_card
+    displayOrder: 0
   transitions:
   - transitionKey: morning_reminder_done
     targetStateKey: ACTIVE_COACHING
@@ -595,6 +611,19 @@ states:
       יש כבר רעיון מה תעשו?
     When he already told you today what they will do ('נבשל', 'בישול'), the second line is a wish instead of the question: 'בהצלחה עם הבישול!'. The ideas are not in your text: Dad Coach puts a 'רוצה רעיונות' button under this message, and a tap brings them.
   displayOrder: 3
+  # D-049 (Unified Workflow Phase 5.3 slice D): the platform first asks dc_session_timer_card (never shown to the model)
+  # whether a session is there to remind about; when not (and DC_SESSION_TIMERS_GUARD is on), the turn ends with no
+  # model call - exactly where the callback would send nothing (NO_VALID_SESSION). Otherwise the AI turn runs as before
+  # and keeps its wish (D-15). Any guard failure runs the turn (PROCEED). Rollback: remove this block, republish.
+  execution:
+    mode: AI
+    guard:
+      toolKey: dc_session_timer_card
+      parameters:
+        timer: SESSION_REMINDER_1H
+        firedAt: "{{trigger.scheduledAt}}"
+        referenceId: "{{trigger.referenceId}}"
+      onToolFailure: PROCEED
   contextProviders:
   - providerKey: family_context
     executionOrder: 0
@@ -628,6 +657,9 @@ states:
     actionInstruction: "write more than the two-line reminder with its one light question, or list activity ideas in
       it - the button under the reminder brings them."
     displayOrder: 2
+  tools:
+  - toolKey: dc_session_timer_card
+    displayOrder: 0
   transitions:
   - transitionKey: hour_reminder_done
     targetStateKey: ACTIVE_COACHING
@@ -643,6 +675,19 @@ states:
   advancedBehaviorGuidance: |-
     Woken by the session's follow-up timer (Transition: session_follow_up). Decide only from awaiting_confirmation in the weekly plan - not from what this conversation said about the session earlier. The question is exactly ready_replies.follow_up_reply ('נו, איך היה לכם עם [child]? 🙂') - never the session's length, like 'השעה'.
   displayOrder: 4
+  # D-049 (Unified Workflow Phase 5.3 slice D): the follow-up calls no model - the platform calls
+  # dc_session_timer_card and its message.text is the reply (null message = no session that just ended, or he was
+  # already asked about it: suppressed, no callback). The callback still checks and sends the same ready text with its
+  # buttons. Rollback: remove this block (the providers and rules below stay for the AI turn), republish, upgrade.
+  execution:
+    mode: TOOL_ONLY
+    toolKey: dc_session_timer_card
+    parameters:
+      timer: SESSION_FOLLOW_UP
+      firedAt: "{{trigger.scheduledAt}}"
+      referenceId: "{{trigger.referenceId}}"
+    onNoMessage: SUPPRESS
+    onToolFailure: FAIL
   contextProviders:
   - providerKey: weekly_plan_context
     executionOrder: 0
@@ -681,6 +726,9 @@ states:
     actionType: GUIDE_AI
     actionInstruction: "add anything beyond one short, natural question naming the child."
     displayOrder: 3
+  tools:
+  - toolKey: dc_session_timer_card
+    displayOrder: 0
   transitions:
   - transitionKey: follow_up_done
     targetStateKey: ACTIVE_COACHING

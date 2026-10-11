@@ -112,6 +112,37 @@ class ManifestTest(unittest.TestCase):
                                      "session_reminder_1h": "SESSION_REMINDER_1H",
                                      "session_follow_up": "SESSION_FOLLOW_UP"})
 
+    def test_session_timers_run_from_data(self):
+        """D-049 (platform Phase 5.1 / 5.3, ScheduledOneShotStateRules): the morning and the follow-up are tool-only
+        (no model), the hour before is an AI turn with a guard; one READ_ONLY tool, bound to each state, serves all three."""
+        [doc] = MANIFESTS.values()
+        shots = one_shot_states(doc)
+        by_key = {s["stateKey"]: s for s in doc["states"]}
+        read_only = {t["key"] for t in CATALOG["tools"] if not t["sideEffect"]}
+        self.assertIn("dc_session_timer_card", read_only)
+        for key, mode in (("SESSION_MORNING_REMINDER", "TOOL_ONLY"), ("SESSION_FOLLOW_UP", "TOOL_ONLY"),
+                          ("SESSION_REMINDER_1H", "AI")):
+            state = by_key[key]
+            self.assertIn(key, shots, f"{key}: execution only on a one-shot state")
+            execution = state["execution"]
+            self.assertEqual(execution["mode"], mode, key)
+            self.assertIn("dc_session_timer_card", {t["toolKey"] for t in state.get("tools", [])}, key)
+            call = execution if mode == "TOOL_ONLY" else execution["guard"]
+            self.assertEqual(call["toolKey"], "dc_session_timer_card", key)
+            self.assertEqual(call["parameters"]["timer"], key, f"{key}: the card is built for its own state")
+            for value in call["parameters"].values():
+                if "{{" in value:
+                    self.assertRegex(value, r"^\{\{trigger\.(scheduledAt|referenceId)\}\}$", key)
+            if mode == "TOOL_ONLY":
+                self.assertEqual(execution["onNoMessage"], "SUPPRESS", key)
+                self.assertEqual(execution["onToolFailure"], "FAIL", key)
+                self.assertNotIn("guard", execution, key)
+            else:
+                self.assertEqual(execution["guard"]["onToolFailure"], "PROCEED", f"{key}: a guard failure runs the turn")
+        for state in doc["states"]:
+            if "execution" in state:
+                self.assertIn(state["stateKey"], {"SESSION_MORNING_REMINDER", "SESSION_FOLLOW_UP", "SESSION_REMINDER_1H"})
+
     def test_behavior_follows_the_standard(self):
         """Playbook §17.1: every state has keyed REQUIRED/PROHIBITED rules + advanced guidance, no legacy text."""
         for name, doc in MANIFESTS.items():
