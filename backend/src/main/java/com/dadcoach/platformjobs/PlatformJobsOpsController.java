@@ -25,13 +25,17 @@ public class PlatformJobsOpsController {
 
     @PostMapping("/api/ops/platform-jobs/qa-probe")
     public ResponseEntity<Map<String, Object>> configure(@RequestBody ProbeConfig config) {
-        QaProbe probe = jobs.probe().orElseThrow();
+        QaProbe probe = jobs.probe().orElse(null);
+        if (probe == null) {
+            return ResponseEntity.status(404).body(Map.of("status", "NO_PROBE"));
+        }
         probe.configure(config.sleepMs() == null ? 0 : config.sleepMs(), config.failNext() == null ? 0 : config.failNext());
         return ResponseEntity.ok(probe.state());
     }
 
     @GetMapping("/api/ops/platform-jobs/qa-probe")
     public ResponseEntity<Map<String, Object>> state() {
-        return ResponseEntity.ok(jobs.probe().orElseThrow().state());
+        return jobs.probe().map(p -> ResponseEntity.ok(p.state()))
+                .orElseGet(() -> ResponseEntity.status(404).body(Map.of("status", "NO_PROBE")));
     }
 }

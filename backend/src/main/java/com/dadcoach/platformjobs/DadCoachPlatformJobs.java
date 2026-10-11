@@ -13,6 +13,8 @@ import org.springframework.stereotype.Component;
  * run is retried by the platform's backoff, not a week later. Not here: the Send API reconciles (rewritten by the 6.4 cleanup first), the template
  * refresh and receipt retry (removed by it), keep-warm and the idempotency purge (per instance / in-process).
  */
+// eager even with spring.main.lazy-initialization=true (the Dockerfile sets it): a lazy one never registers its jobs
+@org.springframework.context.annotation.Lazy(false)
 @Component
 public class DadCoachPlatformJobs {
 

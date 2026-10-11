@@ -44,6 +44,8 @@ import org.springframework.stereotype.Component;
  * job's own work - or a user's request - needs from the main pool). A platform call waits only briefly for the messaging
  * lane and otherwise answers BUSY (the platform calls again in 30 s, not counted as an attempt).</p>
  */
+// eager even with spring.main.lazy-initialization=true (the Dockerfile sets it): a lazy one never registers its jobs
+@org.springframework.context.annotation.Lazy(false)
 @Component
 public class PlatformJobs {
 
