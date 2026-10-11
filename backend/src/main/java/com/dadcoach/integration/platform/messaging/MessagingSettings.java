@@ -9,12 +9,15 @@ import org.springframework.stereotype.Component;
 
 /**
  * D-045 (Unified Workflow Phase 6.3-DC): who sends each kind of message - Dad Coach itself, or the platform's Send API
- * ({@code POST /api/v1/worker/messages/send}, platform spec PHASE6_2_SEND_API_SPEC §15.2). One switch per kind; only
- * {@code LOGIN_LINK} (a father's dashboard link) exists so far.
+ * ({@code POST /api/v1/worker/messages/send}, platform spec PHASE6_2_SEND_API_SPEC §15.2). One switch per kind:
+ * {@code LOGIN_LINK} (a father's dashboard link, D-045), {@code SCHEDULED} (the platform's scheduled-response callbacks:
+ * session timers, daily check, weekly plan - D-046) and {@code BELT_PROMOTION} (the belt text and its optional image,
+ * D-046).
  * <ul>
- *   <li>{@code MESSAGING_MODE_LOGIN_LINK} = {@code DIRECT} (default; anything not recognised too): today's path, nothing
- *       else is called; {@code SHADOW}: today's path, then (off the send thread) the platform's dry run of the same
- *       request, differences logged - never a second message; {@code PLATFORM}: the platform sends it.</li>
+ *   <li>{@code MESSAGING_MODE_LOGIN_LINK} / {@code MESSAGING_MODE_SCHEDULED} / {@code MESSAGING_MODE_BELT_PROMOTION} =
+ *       {@code DIRECT} (default; anything not recognised too): today's path, nothing else is called; {@code SHADOW}:
+ *       today's path, then (off the send thread) the platform's dry run of the same request, differences logged - never
+ *       a second message; {@code PLATFORM}: the platform sends it.</li>
  *   <li>{@code MESSAGING_DELIVERY_STATUS_ENABLED} (default false): the platform's delivery reports
  *       ({@code POST /api/integration/channel/delivery-status}) are applied; off = 404 and nothing changes (the
  *       platform retries for 24 h).</li>
@@ -33,20 +36,35 @@ public class MessagingSettings {
     public enum Mode { DIRECT, SHADOW, PLATFORM }
 
     public static final String LOGIN_LINK = "LOGIN_LINK";
+    public static final String SCHEDULED = "SCHEDULED";
+    public static final String BELT_PROMOTION = "BELT_PROMOTION";
     public static final Duration MIN_RECONCILE_AFTER = Duration.ofMinutes(5);
 
     private volatile Mode loginLink;
+    private volatile Mode scheduled;
+    private volatile Mode beltPromotion;
     private volatile boolean deliveryStatusEnabled;
     private volatile Duration reconcileAfter;
     private final int connectTimeoutMs;
     private volatile int readTimeoutMs;
 
+    /** D-045's switches only (the other kinds DIRECT). */
+    public MessagingSettings(String loginLink, boolean deliveryStatusEnabled, Duration reconcileAfter, int connectTimeoutMs,
+                             int readTimeoutMs) {
+        this(loginLink, "DIRECT", "DIRECT", deliveryStatusEnabled, reconcileAfter, connectTimeoutMs, readTimeoutMs);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
     public MessagingSettings(@Value("${dad-coach.messaging.modes.login-link:DIRECT}") String loginLink,
+                             @Value("${dad-coach.messaging.modes.scheduled:DIRECT}") String scheduled,
+                             @Value("${dad-coach.messaging.modes.belt-promotion:DIRECT}") String beltPromotion,
                              @Value("${dad-coach.messaging.delivery-status-enabled:false}") boolean deliveryStatusEnabled,
                              @Value("${dad-coach.messaging.reconcile-after:PT5M}") Duration reconcileAfter,
                              @Value("${dad-coach.messaging.connect-timeout-ms:2000}") int connectTimeoutMs,
                              @Value("${dad-coach.messaging.send-read-timeout-ms:12000}") int readTimeoutMs) {
         this.loginLink = parse(LOGIN_LINK, loginLink);
+        this.scheduled = parse(SCHEDULED, scheduled);
+        this.beltPromotion = parse(BELT_PROMOTION, beltPromotion);
         this.deliveryStatusEnabled = deliveryStatusEnabled;
         this.reconcileAfter = atLeastMinimum(reconcileAfter);
         this.connectTimeoutMs = connectTimeoutMs;
@@ -71,6 +89,14 @@ public class MessagingSettings {
         return loginLink;
     }
 
+    public Mode scheduled() {
+        return scheduled;
+    }
+
+    public Mode beltPromotion() {
+        return beltPromotion;
+    }
+
     public boolean isDeliveryStatusEnabled() {
         return deliveryStatusEnabled;
     }
@@ -90,6 +116,14 @@ public class MessagingSettings {
     /** Tests flip the switches on the one cached context. */
     public void setLoginLink(Mode mode) {
         this.loginLink = mode;
+    }
+
+    public void setScheduled(Mode mode) {
+        this.scheduled = mode;
+    }
+
+    public void setBeltPromotion(Mode mode) {
+        this.beltPromotion = mode;
     }
 
     public void setDeliveryStatusEnabled(boolean enabled) {

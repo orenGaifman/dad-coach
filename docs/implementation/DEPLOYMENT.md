@@ -35,6 +35,8 @@ Names only — never values. Secrets live on Render (and the owner-local `~/.con
 | MESSAGING_MODE_LOGIN_LINK | no (default DIRECT) | D-045: who sends a father's dashboard link - `DIRECT` (today), `SHADOW` (today + the platform's dry run, differences logged), `PLATFORM` (`POST /api/v1/worker/messages/send`); anything else = DIRECT. Staff links always direct |
 | MESSAGING_DELIVERY_STATUS_ENABLED | no (default false) | D-045: apply the platform's delivery reports (`POST /api/integration/channel/delivery-status`, callback key); off = 404, nothing changes. Platform side: `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_DELIVERYREPORTURL` |
 | MESSAGING_RECONCILE_AFTER, MESSAGING_SEND_READ_TIMEOUT_MS | no (PT5M, 12000) | D-045: when an ambiguous send is looked up by key; the Send API read timeout (platform wait 8 s + 4 s) |
+| MESSAGING_MODE_SCHEDULED | no (default DIRECT) | D-046: who sends the platform's scheduled-response callbacks (session timers, daily check, weekly plan) - `DIRECT` (today) / `SHADOW` / `PLATFORM`; anything else = DIRECT |
+| MESSAGING_MODE_BELT_PROMOTION | no (default DIRECT) | D-046: who sends the belt promotion (image + text) - `DIRECT` / `SHADOW` / `PLATFORM`; anything else = DIRECT |
 | WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, WHATSAPP_WEBHOOK_SECRET, WHATSAPP_VERIFY_TOKEN | yes | Meta |
 | WHATSAPP_WABA_ID, WHATSAPP_API_VERSION, WHATSAPP_API_BASE_URL | no | templates / Graph version / base |
 | JWT_SECRET | yes, ≥32 | HMAC for calendar connect links + OAuth state (historical name) |
@@ -128,6 +130,39 @@ Keep: everything in the table above (GOOGLE_* stay).
   `UPDATE login_link SET receipt_status = NULL WHERE receipt_status = 'QUEUED';` (the old receipt code does not know
   QUEUED) and `UPDATE login_link SET platform_request = NULL;` (no link left in the clear). While D-045 is deployed the
   reconcile job costs one indexed `SELECT` a minute even in DIRECT (`platform_next_at`, partial index - empty in DIRECT).
+- **Platform Send API for scheduled messages and the belt promotion (D-046, 6.3-DC steps DC2 / DC3)** - only after
+  D-045's PLATFORM has had its 24 h, one kind at a time (each ≥ 24 h before the next), same pattern:
+  1. **Deploy Dad Coach** with nothing set (both modes unset = DIRECT). V48 is additive (seven nullable/defaulted
+     `scheduled_response_delivery` columns, two partial indexes). Check: `now at version v48`, health 200; the next
+     morning / timer callback logs `proactive.callback.result … status=DELIVERED` and **no** `messaging.scheduled.*`
+     line. Behaviour is byte-identical (the callback answer is still `{status, detail[, D-039 fields]}`).
+  2. **Platform**, read-only first: `GET /api/v1/worker/whatsapp/templates?workerKey=dad_3` → `dad_coach_session_morning_he`,
+     `dad_coach_session_hour_before_he`, `dad_coach_session_follow_up_he` and the general template APPROVED (a session
+     template not approved = the platform takes the general fallback, as Dad Coach does today). Then
+     `MESSAGING_ALLOWED_PRODUCTS=dad_coach:LOGIN_LINK,dad_coach:SCHEDULED` (restart).
+  3. **Dad Coach** `MESSAGING_MODE_SCHEDULED=SHADOW` ≥ 24 h (a day of mornings, timers and daily checks). Watch
+     `messaging.shadow.match` / `mismatch` with `kind=SCHEDULED`; gate as D-045 step 4.
+  4. **Dad Coach** `MESSAGING_MODE_SCHEDULED=PLATFORM`. Watch 24 h: `messaging.scheduled.platform` (ACCEPTED / HELD /
+     QUEUED), `messaging.delivery_status … applied=true`, **zero** `messaging.scheduled.ambiguous` / `refused` /
+     `platform_after_direct` / `direct_fallback`; the callback answers `{"platformMessageId":…}`; admin timeline: the
+     scheduled turn's draft replaced by exactly one row `callback:scheduled-transition:<triggerId>` (the platform's);
+     `SELECT status, platform_state, platform_status, platform_request IS NULL FROM scheduled_response_delivery ORDER BY
+     created_at DESC LIMIT 5` → ACCEPTED·DELIVERED·READ / OWNED / … / true. Note: the platform's callback read timeout
+     is 8 s and `/send` may take up to 12 s - a slow platform makes it retry the callback, which replays the row
+     (`Already delivered` / `Delivery already in progress`), never a second send.
+  5. **Belt promotion** (no job promotes anyone since D-030 - the switch only matters if that changes): platform
+     `MESSAGING_ALLOWED_PRODUCTS=…,dad_coach:BELT_PROMOTION`, and if the platform's image-host list
+     (6.2b `workflow.messaging.send.image-hosts`, not in its application.yml: env `WORKFLOW_MESSAGING_SEND_IMAGEHOSTS_0=…`)
+     is set it must list the host of the belt images (Dad Coach's `BELT_IMAGES_BASE_URL`, default `WEB_BASE_URL/belts`;
+     empty list = any https host); else the image is refused (400, logged `messaging.belt_promotion.refused`)
+     and only the text goes. Then `MESSAGING_MODE_BELT_PROMOTION=SHADOW`, then `PLATFORM`.
+- **Roll back D-046:** the kind's switch to `DIRECT` (restart) - new messages go directly at once; keep
+  `MESSAGING_DELIVERY_STATUS_ENABLED=true` 48 h after the last PLATFORM send. Without a Dad Coach change: the platform's
+  allow-list without `dad_coach:SCHEDULED` / `:BELT_PROMOTION` (503 disabled → Dad Coach sends it itself). A **code
+  revert** below D-046: first the switches to DIRECT and wait until `SELECT count(*) FROM scheduled_response_delivery
+  WHERE platform_state IN ('POSTING','AMBIGUOUS')` is 0 (at most 1 h); V48 stays (harmless); `UPDATE
+  scheduled_response_delivery SET platform_request = NULL;`. The new reconcile job (`ScheduledPlatformSend`, messaging
+  lane) costs one indexed `SELECT` a minute, empty in DIRECT.
 - **Tests:** `cd backend && ./mvnw test` (Docker needed).
 
 

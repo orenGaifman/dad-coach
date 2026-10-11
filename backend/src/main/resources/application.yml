@@ -100,6 +100,9 @@ dad-coach:
   messaging:
     modes:
       login-link: ${MESSAGING_MODE_LOGIN_LINK:DIRECT}
+      # D-046: the platform's scheduled-response callbacks (timers, daily check, weekly plan) and the belt promotion
+      scheduled: ${MESSAGING_MODE_SCHEDULED:DIRECT}
+      belt-promotion: ${MESSAGING_MODE_BELT_PROMOTION:DIRECT}
     # The platform's delivery reports (POST /api/integration/channel/delivery-status, callback key); off = 404.
     delivery-status-enabled: ${MESSAGING_DELIVERY_STATUS_ENABLED:false}
     # After an ambiguous answer: ask the platform by key this long after the first POST (then every as long, for 1 h).

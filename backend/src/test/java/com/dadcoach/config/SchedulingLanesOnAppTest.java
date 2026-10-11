@@ -32,7 +32,7 @@ class SchedulingLanesOnAppTest extends AbstractIntegrationTest {
         assertThat(threads.keySet()).isEqualTo(SchedulingLanesAppTest.REGISTERED.keySet());
         threads.forEach((job, thread) -> {
             if (SchedulingLanes.MESSAGING.equals(SchedulingLanesAppTest.REGISTERED.get(job))) {
-                // D-045: the login-link reconcile job may send, so it keeps the serial messaging lane
+                // D-045 / D-046: the platform-send reconcile jobs may send, so they keep the serial messaging lane
                 assertThat(thread).as(job).isEqualTo(SchedulingLanesTest.TODAY);
             } else {
                 assertThat(thread).as(job).startsWith(SchedulingLanes.HOUSEKEEPING_PREFIX);

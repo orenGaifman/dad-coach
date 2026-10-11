@@ -3,6 +3,8 @@ package com.dadcoach.integration.channel;
 import com.dadcoach.auth.LoginLinkPlatform;
 import com.dadcoach.idempotency.IdempotencyService;
 import com.dadcoach.integration.platform.messaging.MessagingSettings;
+import com.dadcoach.integration.platform.messaging.PlatformSendFlow;
+import com.dadcoach.integration.platform.scheduled.ScheduledPlatformSend;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -29,6 +31,10 @@ import org.springframework.web.bind.annotation.RestController;
  * {@code known:false} - never retried); the same key again 200 {@code duplicate}; 400 for a request wrong in itself
  * (the platform gives up); 404 while {@code MESSAGING_DELIVERY_STATUS_ENABLED} is off and 409 while the same key is
  * being applied (the platform retries both, for 24 h).</p>
+ *
+ * <p>D-046: by {@code kind} - {@code LOGIN_LINK} to {@code login_link}, {@code SCHEDULED} to
+ * {@code scheduled_response_delivery}; no kind: the link first, then the scheduled message; any other kind (e.g.
+ * {@code BELT_PROMOTION}, which keeps no ledger) is {@code known:false}.</p>
  */
 @RestController
 public class DeliveryStatusController {
@@ -43,11 +49,14 @@ public class DeliveryStatusController {
 
     private final MessagingSettings settings;
     private final LoginLinkPlatform loginLinks;
+    private final ScheduledPlatformSend scheduled;
     private final IdempotencyService idempotency;
 
-    public DeliveryStatusController(MessagingSettings settings, LoginLinkPlatform loginLinks, IdempotencyService idempotency) {
+    public DeliveryStatusController(MessagingSettings settings, LoginLinkPlatform loginLinks, ScheduledPlatformSend scheduled,
+                                    IdempotencyService idempotency) {
         this.settings = settings;
         this.loginLinks = loginLinks;
+        this.scheduled = scheduled;
         this.idempotency = idempotency;
     }
 
@@ -75,13 +84,17 @@ public class DeliveryStatusController {
         if (claim == IdempotencyService.Claim.BUSY) {
             return answer(HttpStatus.CONFLICT, "IN_PROGRESS");
         }
-        LoginLinkPlatform.Applied applied;
+        PlatformSendFlow.Applied applied;
         try {
             String kind = report.hasNonNull("kind") ? report.get("kind").asText() : null;
             String idempotencyKey = report.hasNonNull("idempotencyKey") ? report.get("idempotencyKey").asText() : null;
-            applied = kind == null || MessagingSettings.LOGIN_LINK.equals(kind)
-                    ? loginLinks.applyReport(idempotencyKey, messageId, report)
-                    : new LoginLinkPlatform.Applied(false, false);
+            applied = new PlatformSendFlow.Applied(false, false);
+            if (kind == null || MessagingSettings.LOGIN_LINK.equals(kind)) {
+                applied = loginLinks.applyReport(idempotencyKey, messageId, report);
+            }
+            if (!applied.known() && (kind == null || MessagingSettings.SCHEDULED.equals(kind))) {
+                applied = scheduled.applyReport(idempotencyKey, messageId, report);
+            }
         } catch (RuntimeException e) {
             idempotency.release(SCOPE, key); // not applied: the platform's retry (same key) runs it again
             throw e;

@@ -115,6 +115,8 @@ public abstract class AbstractIntegrationTest {
         platformProperties.setDeliveryReports(false); // D-039: the switch is off unless a test turns it on
         heldOutcomes.setEnabled(false); // D-042: GATEWAY_HELD_REPORTS is off unless a test turns it on
         messaging.setLoginLink(com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-045
+        messaging.setScheduled(com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-046
+        messaging.setBeltPromotion(com.dadcoach.integration.platform.messaging.MessagingSettings.Mode.DIRECT); // D-046
         messaging.setDeliveryStatusEnabled(false);
         messaging.setReconcileAfter(java.time.Duration.ofMinutes(5));
         messaging.setReadTimeoutMs(12000);

@@ -51,7 +51,7 @@ public class ScheduledResponseController {
     }
 
     @PostMapping(value = PATH, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<ScheduledResponseResult> handle(
+    public ResponseEntity<?> handle(
             @RequestHeader(value = IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKeyHeader,
             @RequestBody ScheduledResponseRequest request) {
         if (request.triggerId() == null || request.triggerId().isBlank()) {
@@ -101,9 +101,11 @@ public class ScheduledResponseController {
         content = com.dadcoach.whatsapp.ReplyStyleGuard.clean(content);
         ScheduledResponseRequest effective = new ScheduledResponseRequest(request.triggerId(), request.workflowInstanceId(),
                 request.userId(), request.channel(), request.targetStateKey(), content);
-        ScheduledResponseResult result = deliveryService.deliver(father.get(), effective, expectedKey,
-                request.responseContent());
-        if ("DELIVERED".equals(result.status())) {
+        // D-046: with MESSAGING_MODE_SCHEDULED=PLATFORM the body is {} (+ platformMessageId) while the platform has it
+        ScheduledResponseDeliveryService.CallbackAnswer answer = deliveryService.deliverForCallback(father.get(), effective,
+                expectedKey, request.responseContent());
+        ScheduledResponseResult result = answer.result();
+        if (answer.handedOver()) {
             mentions.sent(father.get(), content);
             planned.ifPresent(p -> mentions.sessionsNamed(father.get(), p.sessions()));
         }
@@ -113,7 +115,7 @@ public class ScheduledResponseController {
                 .addKeyValue("fatherId", father.get().getId())
                 .addKeyValue("status", result.status())
                 .log();
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(answer.body());
     }
 
     private static ResponseEntity<ScheduledResponseResult> badRequest(String detail) {

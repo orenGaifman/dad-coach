@@ -44,6 +44,7 @@ public class ScheduledResponseDeliveryService {
     private final ScheduledMessageTemplates templates;
     private final Clock clock;
     private final com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties;
+    private ScheduledPlatformSend platformSend;
 
     public ScheduledResponseDeliveryService(
             ScheduledResponseDeliveryRepository repository,
@@ -67,17 +68,35 @@ public class ScheduledResponseDeliveryService {
     }
 
     /**
+     * D-046: what the callback answers. {@code body} is the HTTP body - the result itself (today's shape), or, when the
+     * platform's Send API has (or may have) the message ({@code MESSAGING_MODE_SCHEDULED=PLATFORM}), {@code {}} with the
+     * platform's message id: the platform records the timeline itself. {@code handedOver}: it went out or is on its way
+     * (the coach's mentions are noted); today: the answer is DELIVERED.
+     */
+    public record CallbackAnswer(ScheduledResponseResult result, Object body, boolean handedOver) {
+        static CallbackAnswer of(ScheduledResponseResult result) {
+            return new CallbackAnswer(result, result, "DELIVERED".equals(result.status()));
+        }
+    }
+
+    /**
      * @param drafted D-039: the platform's own text for the turn (before ScheduledReplies / ReplyStyleGuard); with
      *                {@code workflow.platform.delivery-reports} on, the answer says what went out compared to it. A
      *                replayed trigger answers as before (what was sent is not stored per trigger).
      */
     public ScheduledResponseResult deliver(Father father, ScheduledResponseRequest request, String idempotencyKey,
                                            String drafted) {
+        return deliverForCallback(father, request, idempotencyKey, drafted).result();
+    }
+
+    /** {@link #deliver}, with the callback's HTTP body (D-046). */
+    public CallbackAnswer deliverForCallback(Father father, ScheduledResponseRequest request, String idempotencyKey,
+                                             String drafted) {
         Optional<ScheduledResponseDelivery> existing = repository.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
             log.info("Scheduled response already handled, not sending again: idempotencyKey={}, status={}",
                     idempotencyKey, existing.get().getStatus());
-            return ScheduledResponseResult.of(existing.get(), true);
+            return CallbackAnswer.of(ScheduledResponseResult.of(existing.get(), true));
         }
 
         ScheduledResponseDelivery delivery;
@@ -90,7 +109,7 @@ public class ScheduledResponseDeliveryService {
             // constraint picked exactly one winner; report its outcome.
             ScheduledResponseDelivery winner = repository.findByIdempotencyKey(idempotencyKey)
                     .orElseThrow(() -> concurrentDuplicate);
-            return ScheduledResponseResult.of(winner, true);
+            return CallbackAnswer.of(ScheduledResponseResult.of(winner, true));
         }
 
         Optional<String> hebrew = ReplyLanguageGuard.clean(request.responseContent().strip());
@@ -101,13 +120,37 @@ public class ScheduledResponseDeliveryService {
             log.warn("Scheduled response blocked, not Hebrew: triggerId={}, targetStateKey={}", request.triggerId(),
                     request.targetStateKey());
             ScheduledResponseResult blocked = ScheduledResponseResult.of(delivery, false);
-            return reporting() ? blocked.withOutcome(TimelineReports.DROPPED, "BLOCKED_NOT_HEBREW", null) : blocked;
+            return CallbackAnswer.of(reporting() ? blocked.withOutcome(TimelineReports.DROPPED, "BLOCKED_NOT_HEBREW", null)
+                    : blocked);
         }
         String content = hebrew.get();
         endpoints.ensure(father); // F1: fathers onboarded on WhatsApp before the fix have no endpoint row yet
         List<OutboundMessageDto.ReplyButton> offered = buttons.forScheduledMessage(father, request.targetStateKey());
-        ProactiveSender.Outcome outcome = sender.send(father, content, offered,
+        if (platformSend != null && platformSend.sends()) {
+            // D-046 PLATFORM: the platform's Send API sends it; today's way only when it provably created nothing
+            ScheduledResponseDelivery claimed = delivery;
+            return platformSend.deliver(father, delivery, request, content, offered,
+                    () -> finish(father, claimed, request, content, offered, drafted, sendDirectly(father, request, content, offered)));
+        }
+        ProactiveSender.Outcome outcome = sendDirectly(father, request, content, offered);
+        CallbackAnswer answer = CallbackAnswer.of(finish(father, delivery, request, content, offered, drafted, outcome));
+        if (platformSend != null) {
+            platformSend.shadow(father, delivery, request, content, offered, outcome); // D-046 SHADOW only
+        }
+        return answer;
+    }
+
+    /** Today's send: free-form in the window, else the message's own template, else the general one. */
+    private ProactiveSender.Outcome sendDirectly(Father father, ScheduledResponseRequest request, String content,
+                                                 List<OutboundMessageDto.ReplyButton> offered) {
+        return sender.send(father, content, offered,
                 () -> templates.forScheduledMessage(father, request.targetStateKey()).orElse(null));
+    }
+
+    /** Today's bookkeeping of a send and its answer (D-039 report included). */
+    private ScheduledResponseResult finish(Father father, ScheduledResponseDelivery delivery, ScheduledResponseRequest request,
+                                           String content, List<OutboundMessageDto.ReplyButton> offered, String drafted,
+                                           ProactiveSender.Outcome outcome) {
         DeliveryResult result = outcome.result();
         ScheduledResponseDelivery.Mode mode = outcome.mode() == ProactiveSender.Mode.TEMPLATE
                 ? ScheduledResponseDelivery.Mode.TEMPLATE : ScheduledResponseDelivery.Mode.FREE_FORM;
@@ -125,6 +168,12 @@ public class ScheduledResponseDeliveryService {
         repository.save(delivery);
         ScheduledResponseResult answer = ScheduledResponseResult.of(delivery, false);
         return reporting() ? report(answer, outcome, content, drafted) : answer;
+    }
+
+    /** D-046: the platform's Send API for these messages ({@code MESSAGING_MODE_SCHEDULED}); absent = direct only. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setPlatformSend(ScheduledPlatformSend platformSend) {
+        this.platformSend = platformSend;
     }
 
     private boolean reporting() {

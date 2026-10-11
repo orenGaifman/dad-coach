@@ -806,3 +806,96 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   for a day → PLATFORM. **Rollback:** `MESSAGING_MODE_LOGIN_LINK=DIRECT` (keep the delivery-status switch on 48 h after
   the last PLATFORM send), or platform-side `MESSAGING_ENABLED=false` / allow-list without it (every new link then gets
   503 disabled and goes directly, no Dad Coach change).
+
+## D-046 — Scheduled messages and the belt promotion can be sent by the platform's Send API, behind switches (Unified Workflow Phase 6.3-DC, steps DC2 / DC3, 2026-10-11)
+
+- **Why:** spec §17.1 (`ai-workflow-platform/docs/architecture/PHASE6_2_SEND_API_SPEC.md`, "Spec v2" v2.1-v2.16): after the
+  login link (D-045), the scheduled callbacks (DC2), then the belt promotion (DC3). Prepared only: both switches default
+  `DIRECT`, nothing is enabled.
+- **Switches** (`MessagingSettings`, same values and parsing as D-045; anything but the three names = DIRECT):
+  `MESSAGING_MODE_SCHEDULED` (`dad-coach.messaging.modes.scheduled`) and `MESSAGING_MODE_BELT_PROMOTION`
+  (`dad-coach.messaging.modes.belt-promotion`). DIRECT = today's path, nothing else called, no new column written.
+  Tested byte for byte: DIRECT and SHADOW send Meta the same bytes and answer the callback the same body
+  (`{"status":"DELIVERED","detail":"Delivered"}` with D-039 off); `PlatformDeliveryReportsTest`, `ScheduledDeliveryBaselineTest`,
+  `BeltPromotionNotifierTest`, `BeltPromotionTest`, `HeldOutcomeTest` pass unchanged.
+- **Refactor (no behaviour change):** D-045's mechanics moved out of `LoginLinkPlatform` into
+  `integration/platform/messaging/PlatformSendFlow`: bytes committed before the first POST, the answer table (`verdict`),
+  the one immediate re-POST (not after a timeout or a 429), settle (OWNED / ADOPT / DIRECT on the first attempt only /
+  REFUSED / AMBIGUOUS), the forward-only `apply` under the row's lock, delivery reports, the reconcile job's state
+  machine (re-POST up to 3 POSTs, lookup by key ≥ `MESSAGING_RECONCILE_AFTER` (5-min floor), 404 = never created,
+  UNKNOWN after 1 h), the SHADOW lane and comparison, and the request's "who" fields + window hint. A kind plugs in a
+  `Ledger` (its table with the same platform columns, how a platform status reads on its row, its refused / gave-up /
+  too-late columns, whether a late direct send is still right, how it is sent directly) and its own logger, so log
+  lines keep their names (`messaging.<event>.*`). `LoginLinkPlatform` is now the `login_link` ledger; its public API, its
+  log lines and SQL effects are unchanged and `LoginLinkPlatformSendTest` (24) passes unchanged. Kinds without a ledger
+  use `sendOnce` (bytes in memory, spec v2.6).
+- **SCHEDULED (DC2)** - everything through the platform's scheduled-response callback (`ScheduledResponseDeliveryService`:
+  session morning / hour-before / follow-up, daily check, weekly plan, any other timer). `ScheduledPlatformSend` is the
+  `scheduled_response_delivery` ledger. What stays in Dad Coach first, in every mode: the row claim under the trigger's
+  UNIQUE key (a replayed trigger never reaches the platform), the no-valid-session skip and the ready texts
+  (`ScheduledReplies`, D-036), `ReplyStyleGuard`, the not-Hebrew block.
+  - **Request:** key `scheduled-response:<triggerId>`, kind `SCHEDULED`, UTILITY; `content` = what DIRECT sends
+    free-form: `buttons` (the session's `dc:` buttons) when they fit an interactive body, else `text`; `template` = the
+    message's own template (`ScheduledMessageTemplates`: `dad_coach_session_morning_he` / `_hour_before_he` /
+    `_follow_up_he` with its quick-reply payloads, values one-lined as DIRECT does) and `fallbackTemplates` = the
+    general one (`WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME`, `{{1}}` = `ProactiveSender.asTemplateParameter`); no own
+    template → the general one is `template`. `expectedBody` = the catalog body when the catalog has the template (DC's
+    BODY_DIFFERS check). `windowPolicy AUTO`, `FAIL` outside without a template, `windowHint.lastInboundAt =
+    session_closes_at − 24 h`, `holdPolicy GATEWAY` (Dad Coach does not gate), `wait ACCEPTED`.
+  - **notAfter** (the platform never sends it later; it matters when the gateway holds it while he is on another
+    product, up to 24 h): morning - the start of the day's last session it names; hour-before - its session's start;
+    follow-up - 12 h after its session ended (the timers' own window); anything else - the end of his local day. Never
+    closer than 15 min (a message sent now is never refused for it).
+  - **Timeline:** `REPLACES_DRAFT`, `turnCorrelationId scheduled-transition:<triggerId>`, `correlationId
+    callback:scheduled-transition:<triggerId>` (the row D-039's `deliveredContent` creates today), `content` = the text
+    without the identity line. Deviation, cosmetic: for a template send the platform's row shows this text, not the
+    rendered template (the template's name is on the row).
+  - **Callback answer:** platform owns it (OWNED / ADOPT, any status incl. FAILED - the platform records it) or may own
+    it (AMBIGUOUS) → `{}` plus `platformMessageId` when known: no `status`, no `outcome` / `deliveredContent`, so the
+    platform records once (`callbackAccepted` ignores a body without them). Provably nothing created → today's send and
+    today's answer (D-039 report included). Refused (400/422/first 409) → FAILED `PLATFORM_<error>[_<reason>]`, answered
+    as a failed send today (`{status: FAILED, detail}` + D-039 `outcome FAILED`): nothing was created, so nothing else
+    records it. `CoachMentions` are noted when it went out or is on its way (DIRECT: as today, on DELIVERED).
+  - **Mapping** (§7.4, forward only; SENDING 0 < QUEUED 1 < HELD / UNKNOWN 2 < ACCEPTED 3 < SENT 4 < DELIVERED 5 < READ
+    6; FAILED final): QUEUED and an ambiguous answer leave the row SENDING (a replay answers "Delivery already in
+    progress"); HELD → HELD + `held:<n>` (the platform excludes linked held rows from held-outcome reports, so D-042 never
+    moves them); ACCEPTED → ACCEPTED + wamid + `delivery_mode` from `channelWindow`; DELIVERED / READ; FAILED →
+    `PLATFORM_<reason>`; UNKNOWN → UNKNOWN (never failed, never re-sent, D-042). Meta's receipts keep matching the wamid
+    (`DeliveryReceipts`), kept early receipts are applied when the wamid is linked.
+  - **Reconcile** (`ScheduledPlatformSend.scheduledReconcile`, every minute, messaging lane - it may send): as D-045.
+    "Never created" (lookup 404 after ≥ 5 min) → sent directly **only before `notAfter`** (else FAILED
+    `PLATFORM_NOT_CREATED_TOO_LATE`), exactly the request's content / buttons / own template through `ProactiveSender`,
+    and - the callback was answered long ago - reported to the timeline as the turn's replacement
+    (`/messages/outbound` `callback:scheduled-transition:<triggerId>`, `replacesDraft`) when D-039 is on.
+  - **Thread / timeouts:** the callback runs on Tomcat; the POST waits up to 12 s (+ one re-POST). The platform's callback
+    read timeout is 8 s: a slow platform makes it retry the callback, which replays the row - never a second send.
+    `wait ACCEPTED` kept (the row gets its wamid at once; reports are not required for the common case).
+- **BELT_PROMOTION (DC3)** - `BeltPromotionPlatform`, no ledger (the job promotes no one since D-030): the image (when
+  configured) `belt-promotion:<fatherId>:<BELT>:image`, `content.image {link, caption}`, `windowPolicy SESSION_ONLY` (as
+  today only inside his window; outside = the platform's FAILED `WINDOW_CLOSED`, nothing sent), timeline not recorded
+  (D-039 never reported the image); then the text `…:text`, `content.text`, the general template, timeline `NEW_ROW`
+  `belt-promotion:<fatherId>:<BELT>` with the text without identity - the platform records it, Dad Coach neither reports
+  nor writes the legacy `SentMessageRecorder` record. Each part: 503 disabled / 401 / 403 / never written on the first
+  attempt → that part today's way (the image only if Dad Coach's window is open); refused or ambiguous → logged, never
+  sent directly (no ledger to reconcile; spec v2.6). A refused image (e.g. its host not on the platform's 6.2b
+  image-host list) never stops the text (D-040). Fixed keys per father and belt: a re-run replays on the platform.
+- **Delivery reports:** `DeliveryStatusController` routes by `kind`: `LOGIN_LINK` → link, `SCHEDULED` → scheduled row (by
+  key `scheduled-response:…`, else by `platform_message_id`), no kind → link then scheduled; `BELT_PROMOTION` and others
+  → `known:false`. A report for a row Dad Coach sent itself is never applied (as D-045).
+- **V48** (additive): the D-045 platform columns on `scheduled_response_delivery` + two partial indexes.
+- **Not changed:** the staff login link and the platform-down line (direct forever); replies (DC4, next); quiet hours (none
+  in Dad Coach).
+- **Tests:** `ScheduledPlatformSendTest` (15, integration, fake platform + fake Meta, no real WhatsApp): DIRECT today's
+  path and columns NULL; DIRECT = SHADOW byte for byte (Meta body, callback body, row); SHADOW off the callback thread +
+  window mismatch logged; PLATFORM ACCEPTED (bytes committed before the POST, every request field incl. own template +
+  quick-reply payloads + `expectedBody`, general fallback, window hint, notAfter, REPLACES_DRAFT, no Meta, no gate, no
+  timeline report, mentions noted, answer exactly `{"platformMessageId":…}`); templates and notAfter per message (daily /
+  hour-before / morning) and the 15-min floor; HELD / QUEUED→lookup / FAILED / UNKNOWN; 503 → direct once with today's
+  answer; 422 → FAILED, no direct; edge 502 → identical re-POSTs, answer `{}`, replayed trigger POSTs nothing, job
+  re-POST, lookup adopts; lookup 404 → sent late once + timeline replacement; 404 past notAfter → FAILED, never sent;
+  lookup never answering → UNKNOWN after 1 h; 409 after ambiguous adopted / first-attempt 409 FAILED; reports by key /
+  by messageId / stale / DIRECT row untouched. `BeltPromotionPlatformTest` (8): DIRECT; DIRECT = SHADOW bytes + two dry
+  runs; PLATFORM image then text (fields), re-run same keys; refused image → text still; 503 → both direct + D-039
+  report; 502 → one identical re-POST per part, never direct; report `known:false`; no image configured → text only.
+  `SchedulingLanesTest` lists the new job (messaging lane).
+- **Rollout / rollback:** DEPLOYMENT.md "Platform Send API for scheduled messages and the belt promotion (D-046)".

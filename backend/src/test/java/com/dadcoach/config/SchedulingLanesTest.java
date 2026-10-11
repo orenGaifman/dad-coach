@@ -59,7 +59,8 @@ class SchedulingLanesTest {
             "IdempotencyService.purgeExpired", SchedulingLanes.HOUSEKEEPING,
             "PlatformPersonDeletions.sendPeriodically", SchedulingLanes.HOUSEKEEPING,
             "KeepWarmJob.keepWarm", SchedulingLanes.HOUSEKEEPING,
-            "LoginLinkPlatform.scheduledReconcile", SchedulingLanes.MESSAGING);
+            "LoginLinkPlatform.scheduledReconcile", SchedulingLanes.MESSAGING,
+            "ScheduledPlatformSend.scheduledReconcile", SchedulingLanes.MESSAGING);
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(TaskSchedulingAutoConfiguration.class,

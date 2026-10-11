@@ -43,6 +43,7 @@ public class BeltPromotionNotifier {
     private final WhatsAppEndpoints endpoints;
     private final SessionWindowService sessionWindows;
     private TimelineReports timeline;
+    private BeltPromotionPlatform platform;
 
     public BeltPromotionNotifier(WhatsAppApiClient whatsAppApiClient, WhatsAppMessageFormatter messageFormatter,
                                  BeltImageConfig beltImageConfig, FatherRepository fatherRepository, ProactiveSender sender,
@@ -62,6 +63,12 @@ public class BeltPromotionNotifier {
         this.timeline = timeline;
     }
 
+    /** D-046: the platform's Send API for the promotion ({@code MESSAGING_MODE_BELT_PROMOTION}); absent = direct only. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setPlatform(BeltPromotionPlatform platform) {
+        this.platform = platform;
+    }
+
     public void sendPromotionNotification(WeeklyGoalService.BeltPromotionResult result) {
         if (!result.promoted()) {
             return;
@@ -72,37 +79,75 @@ public class BeltPromotionNotifier {
         }
         Belt newBelt = result.newBelt();
         try {
+            if (platform != null && platform.sends()) {
+                sendThroughPlatform(father, newBelt, buildPromotionMessage(result));
+                return;
+            }
             boolean windowOpen = sessionWindows.isOpen(endpoints.ensure(father));
+            Boolean imageSent = null;
             if (windowOpen && beltImageConfig.hasImage(newBelt)) {
-                sendBeltImage(father, newBelt);
+                imageSent = sendBeltImage(father, newBelt);
             }
             String text = buildPromotionMessage(result);
-            ProactiveSender.Outcome outcome = sender.send(father, text);
-            log.atInfo().setMessage("whatsapp.delivery.result")
-                    .addKeyValue("kind", "BELT_PROMOTION")
-                    .addKeyValue("fatherId", father.getId())
-                    .addKeyValue("mode", outcome.mode())
-                    .addKeyValue("status", outcome.result().status())
-                    .addKeyValue("failure", outcome.result().failureReason())
-                    .log();
-            if (outcome.result().isSuccessful()) {
-                String correlationId = "belt-promotion:" + father.getId() + ":" + newBelt.name();
-                if (timeline != null && timeline.enabled()) {
-                    // D-039: what he read (the template as rendered, when it went as one) and its delivery
-                    TimelineReports.Part part = TimelineReports.Part.sent(correlationId,
-                            TimelineText.withoutIdentity(outcome.sentText() != null ? outcome.sentText() : text),
-                            outcome.result(), TimelineReports.KIND_BELT_PROMOTION);
-                    if (outcome.mode() == ProactiveSender.Mode.TEMPLATE) {
-                        part = part.withTemplate(TimelineText.template(outcome.template(), outcome.templateParams()));
-                    }
-                    timeline.outbound(TimelineReports.Person.of(father), part);
-                } else {
-                    recorder.recordSent(father, text, correlationId);
-                }
+            ProactiveSender.Outcome outcome = sendText(father, newBelt, text);
+            if (platform != null) {
+                platform.shadow(father, newBelt, beltImageConfig.hasImage(newBelt) ? beltImageConfig.getImageUrl(newBelt) : null,
+                        caption(newBelt), imageSent, text, outcome); // D-046 SHADOW only
             }
         } catch (RuntimeException e) {
             log.error("Belt promotion notification failed: fatherId={}", father.getId(), e);
         }
+    }
+
+    /** Today's text: through the channel layer, logged, and recorded (D-039 report, or the legacy record). */
+    private ProactiveSender.Outcome sendText(Father father, Belt newBelt, String text) {
+        ProactiveSender.Outcome outcome = sender.send(father, text);
+        log.atInfo().setMessage("whatsapp.delivery.result")
+                .addKeyValue("kind", "BELT_PROMOTION")
+                .addKeyValue("fatherId", father.getId())
+                .addKeyValue("mode", outcome.mode())
+                .addKeyValue("status", outcome.result().status())
+                .addKeyValue("failure", outcome.result().failureReason())
+                .log();
+        if (outcome.result().isSuccessful()) {
+            String correlationId = "belt-promotion:" + father.getId() + ":" + newBelt.name();
+            if (timeline != null && timeline.enabled()) {
+                // D-039: what he read (the template as rendered, when it went as one) and its delivery
+                TimelineReports.Part part = TimelineReports.Part.sent(correlationId,
+                        TimelineText.withoutIdentity(outcome.sentText() != null ? outcome.sentText() : text),
+                        outcome.result(), TimelineReports.KIND_BELT_PROMOTION);
+                if (outcome.mode() == ProactiveSender.Mode.TEMPLATE) {
+                    part = part.withTemplate(TimelineText.template(outcome.template(), outcome.templateParams()));
+                }
+                timeline.outbound(TimelineReports.Person.of(father), part);
+            } else {
+                recorder.recordSent(father, text, correlationId);
+            }
+        }
+        return outcome;
+    }
+
+    /**
+     * D-046 PLATFORM: the image (when one is configured; the platform sends it only inside his window) and then the text,
+     * each through the Send API; the platform records the text on the timeline. A part goes today's way only when the
+     * platform provably created nothing for it (the image then only inside Dad Coach's own window, as today). A refused
+     * or unanswered image never stops the text (D-040).
+     */
+    private void sendThroughPlatform(Father father, Belt newBelt, String text) {
+        endpoints.ensure(father);
+        if (beltImageConfig.hasImage(newBelt)) {
+            try {
+                platform.sendImage(father, newBelt, beltImageConfig.getImageUrl(newBelt), caption(newBelt), () ->
+                        sessionWindows.isOpen(endpoints.ensure(father)) ? sendBeltImage(father, newBelt) : Boolean.FALSE);
+            } catch (RuntimeException e) {
+                log.warn("Belt image not sent (text follows): fatherId={} error={}", father.getId(), e.getClass().getSimpleName());
+            }
+        }
+        platform.sendText(father, newBelt, text, () -> sendText(father, newBelt, text).result().isSuccessful());
+    }
+
+    private static String caption(Belt newBelt) {
+        return String.format("עלית ל*%s* 💪", newBelt.getDisplayName("he"));
     }
 
     /**
@@ -110,17 +155,20 @@ public class BeltPromotionNotifier {
      * unsuccessful/empty answer is logged and the congratulation text still follows. It goes straight to the API client
      * (which applies the shared-number gate): the adapter's media path takes an uploaded media id, not a link.
      */
-    private void sendBeltImage(Father father, Belt newBelt) {
+    private boolean sendBeltImage(Father father, Belt newBelt) {
         try {
-            String caption = String.format("עלית ל*%s* 💪", newBelt.getDisplayName("he"));
+            String caption = caption(newBelt);
             WhatsAppApiClient.SendResponse image = whatsAppApiClient.sendMessage(messageFormatter.formatImageMessage(
                     father.getPhone(), beltImageConfig.getImageUrl(newBelt), caption));
             if (image == null || !image.success()) {
                 log.warn("Belt image not sent (text follows): fatherId={} detail={}", father.getId(),
                         image == null ? "no response" : image.errorDetail());
+                return false;
             }
+            return true;
         } catch (RuntimeException e) {
             log.warn("Belt image not sent (text follows): fatherId={} error={}", father.getId(), e.getMessage());
+            return false;
         }
     }
 

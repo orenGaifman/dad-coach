@@ -132,7 +132,7 @@ public class ProactiveSender {
     }
 
     /** A template value: WhatsApp rejects newlines, tabs and more than four spaces in a row. */
-    private static String oneLine(String value) {
+    public static String oneLine(String value) {
         return value.replaceAll("\\s*\\R\\s*", " ").replace('\t', ' ').replaceAll(" {4,}", "   ").strip();
     }
 
