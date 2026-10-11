@@ -382,7 +382,8 @@ public final class FakeServers {
             reply = platformLookup.get().apply(call);
         } else if (path.equals("/api/v1/worker/scheduled-transitions")) {
             Function<Call, Reply> override = scheduledTransitions.get();
-            reply = override != null ? override.apply(call) : platformTimers(call, query(ex));
+            Reply answered = override != null ? override.apply(call) : null;      // null: the in-memory platform answers
+            reply = answered != null ? answered : platformTimers(call, query(ex));
         } else if (path.equals("/api/v1/worker/messages/outbound") || path.equals("/api/v1/worker/messages/inbound")
                 || path.equals("/api/v1/worker/messages/turn-outcome")) {
             Function<Call, Reply> override = timelineReports.get();

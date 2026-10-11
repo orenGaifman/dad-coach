@@ -31,6 +31,8 @@ class SessionTimersOwnerTest extends AbstractIntegrationTest {
     @Autowired WorkflowPlatformProperties properties;
     @Autowired SessionTimersOwner owner;
     @Autowired SessionsService sessionsService;
+    @Autowired SessionTimers sessionTimers;
+    @Autowired com.dadcoach.whatsapp.buttons.SessionButtonTaps taps;
 
     @AfterEach
     void off() {
@@ -129,4 +131,83 @@ class SessionTimersOwnerTest extends AbstractIntegrationTest {
         assertThatCode(() -> owner.scheduledReconcile()).doesNotThrowAnyException();
         assertThatCode(() -> sessionsService.cancel(f, tomorrow)).doesNotThrowAnyException();
     }
+
+    @Test
+    @DisplayName("on: confirming a session on the dashboard cancels its timers after the change commits (the session is COMPLETED by then)")
+    void dashboardConfirmCancelsAfterCommit() {
+        properties.setSessionTimersProductOwned(true);
+        Father f = father();
+        Child noa = data.child(f, "נועה", 6);
+        UUID started = session(f, noa, -30);                         // in progress: its follow-up is pending
+        owner.reconcile();
+        assertThat(pending(started)).isPositive();
+        java.util.List<String> statusAtDelete = new java.util.concurrent.CopyOnWriteArrayList<>();
+        FakeServers.INSTANCE.onScheduledTransitions(call -> {
+            if ("DELETE".equals(call.method())) {
+                statusAtDelete.add(jdbc.queryForObject("SELECT status FROM quality_time WHERE id = ?", String.class, started));
+            }
+            return null;                                              // then the in-memory platform answers
+        });
+
+        sessionsService.confirm(f, started, null);
+
+        assertThat(statusAtDelete).as("the cancel ran after the completion committed").containsExactly("COMPLETED");
+        assertThat(pending(started)).isZero();
+    }
+
+    @Test
+    @DisplayName("on: the 'done' button cancels the session's timers; off, it calls nothing")
+    void doneButtonCancels() {
+        Father f = father();
+        Child noa = data.child(f, "נועה", 6);
+        UUID started = session(f, noa, -30);
+        properties.setSessionTimersProductOwned(true);
+        owner.reconcile();
+        assertThat(pending(started)).isPositive();
+        properties.setSessionTimersProductOwned(false);
+        int deletes = FakeServers.INSTANCE.scheduledTransitionCalls("DELETE").size();
+
+        UUID other = session(f, noa, -20);
+        taps.handle(f, new com.dadcoach.whatsapp.buttons.SessionButton(com.dadcoach.whatsapp.buttons.SessionButton.Action.DONE, other).id());
+        assertThat(FakeServers.INSTANCE.scheduledTransitionCalls("DELETE")).as("off: nothing").hasSize(deletes);
+
+        properties.setSessionTimersProductOwned(true);
+        taps.handle(f, new com.dadcoach.whatsapp.buttons.SessionButton(com.dadcoach.whatsapp.buttons.SessionButton.Action.DONE, started).id());
+        assertThat(pending(started)).isZero();
+    }
+
+    @Test
+    @DisplayName("on: the reconcile skips a cancelled session and a father who asked to be deleted (or was paused)")
+    void reconcileSkipsClosedAndSilent() {
+        properties.setSessionTimersProductOwned(true);
+        Father f = father();
+        Child noa = data.child(f, "נועה", 6);
+        UUID cancelled = session(f, noa, 24 * 60 + 6 * 60);
+        jdbc.update("UPDATE quality_time SET status = 'CANCELLED' WHERE id = ?", cancelled);
+        Father gone = data.father("+19995550751", "יוסי", com.dadcoach.father.FatherStatus.DELETED);
+        Child dan = data.child(gone, "דן", 5);
+        UUID his = session(gone, dan, 24 * 60 + 6 * 60);
+
+        owner.reconcile();
+
+        assertThat(pending(cancelled)).isZero();
+        assertThat(pending(his)).isZero();
+    }
+
+    @Test
+    @DisplayName("the after-turn ensure is unchanged: a session that ended 10 minutes ago is not planned (only the reconcile covers it)")
+    void afterTurnEnsureUnchanged() {
+        Father f = father();
+        Child noa = data.child(f, "נועה", 6);
+        UUID justEnded = session(f, noa, -70);
+        com.dadcoach.qualitytime.QualityTime qt = jdbc.query("SELECT id FROM quality_time WHERE id = ?", (rs, i) -> rs.getObject(1, UUID.class), justEnded)
+                .stream().findFirst().map(id -> qualityTimes.findById(id).orElseThrow()).orElseThrow();
+
+        var confirmations = sessionTimers.ensure(f, java.util.List.of(qt));
+
+        assertThat(confirmations).isEmpty();
+        assertThat(FakeServers.INSTANCE.scheduledTransitionCalls()).isEmpty();
+    }
+
+    @Autowired com.dadcoach.qualitytime.QualityTimeRepository qualityTimes;
 }

@@ -47,6 +47,9 @@ public class SessionTimersOwner {
     static final Duration AHEAD = Duration.ofHours(36);
     /** How far back a still-open session's start may be (a long session's follow-up is still ahead). */
     static final Duration BEHIND = Duration.ofHours(12);
+    /** Fathers never reminded by the reconcile. */
+    static final java.util.Set<com.dadcoach.father.FatherStatus> SILENT = java.util.EnumSet.of(
+            com.dadcoach.father.FatherStatus.DELETED, com.dadcoach.father.FatherStatus.PAUSED, com.dadcoach.father.FatherStatus.CHURNED);
 
     private final WorkflowPlatformProperties properties;
     private final SessionTimers timers;
@@ -115,16 +118,27 @@ public class SessionTimersOwner {
             }
         }
         int seen = 0;
-        for (Map.Entry<Long, List<QualityTime>> entry : byFather.entrySet()) {
-            Optional<Father> father = fathers.findById(entry.getKey());
-            if (father.isEmpty()) {
+        for (Long fatherId : byFather.keySet()) {
+            Optional<Father> father = fathers.findById(fatherId);
+            // a father who asked to be deleted, was paused or left is never reminded; no phone, nothing to address
+            if (father.isEmpty() || father.get().getPhone() == null || SILENT.contains(father.get().getStatus())) {
+                continue;
+            }
+            // re-read right before arming: a session closed since the window query is not armed again
+            Instant at = clock.instant();
+            List<QualityTime> fresh = sessions.findByFatherIdAndStatus(fatherId, QualityTimeStatus.SCHEDULED).stream()
+                    .filter(qt -> qt.getScheduledStart() != null && qt.getScheduledEnd() != null
+                            && qt.getScheduledStart().isBefore(at.plus(AHEAD))
+                            && qt.getScheduledEnd().plus(com.dadcoach.weeklyplan.SessionTimerPlanner.FOLLOW_UP_DELAY).isAfter(at))
+                    .toList();
+            if (fresh.isEmpty()) {
                 continue;
             }
             try {
-                timers.ensure(father.get(), entry.getValue());
+                timers.ensure(father.get(), fresh, true);
                 seen++;
             } catch (RuntimeException e) {
-                log.atWarn().addKeyValue("fatherId", entry.getKey()).addKeyValue("error", e.getClass().getSimpleName())
+                log.atWarn().addKeyValue("fatherId", fatherId).addKeyValue("error", e.getClass().getSimpleName())
                         .log("session.timers.reconcile_failed");
             }
         }

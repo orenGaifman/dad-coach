@@ -19,7 +19,7 @@ Names only — never values. Secrets live on Render (and the owner-local `~/.con
 | PORT | Render sets it | HTTP port |
 | DB_URL, DB_USERNAME, DB_PASSWORD | yes | database |
 | WEB_BASE_URL | yes, https | dashboard base: `dashboard_url` = WEB_BASE_URL/login, calendar redirects, belt images |
-| BELT_IMAGES_BASE_URL | no | default WEB_BASE_URL/belts |
+| ~~BELT_IMAGES_BASE_URL~~ | — | D-051: unused (the belt promotion notifier is retired) |
 | WORKFLOW_PLATFORM_ENABLED | yes (`true`) | platform-only (D-001) |
 | WORKFLOW_PLATFORM_BASE_URL | yes, https | platform |
 | WORKFLOW_PLATFORM_API_KEY | yes, ≥24 | integration key bound to the product |
@@ -38,7 +38,7 @@ Names only — never values. Secrets live on Render (and the owner-local `~/.con
 | MESSAGING_RECONCILE_AFTER, MESSAGING_SEND_READ_TIMEOUT_MS | no (PT5M, 12000) | D-045: when an ambiguous send is looked up by key; the Send API read timeout (platform wait 8 s + 4 s) |
 | MESSAGING_LOOKUP_READ_TIMEOUT_MS, MESSAGING_RECONCILE_PASS_BUDGET | no (5000, PT15S) | D-047: the reconcile job's lookup-by-key timeout, and how long one reconcile pass may take rows (the rest next minute) - a hanging platform holds the shared scheduler thread at most ~budget + one call |
 | MESSAGING_MODE_SCHEDULED | no (default DIRECT) | D-046: who sends the platform's scheduled-response callbacks (session timers, daily check, weekly plan) - `DIRECT` (today) / `SHADOW` / `PLATFORM`; anything else = DIRECT |
-| MESSAGING_MODE_BELT_PROMOTION | no (default DIRECT) | D-046: who sends the belt promotion (image + text) - `DIRECT` / `SHADOW` / `PLATFORM`; anything else = DIRECT |
+| ~~MESSAGING_MODE_BELT_PROMOTION~~ | — | D-051: unused (the belt promotion notifier is retired; the switch is gone) |
 | WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, WHATSAPP_WEBHOOK_SECRET, WHATSAPP_VERIFY_TOKEN | yes | Meta |
 | WHATSAPP_WABA_ID, WHATSAPP_API_VERSION, WHATSAPP_API_BASE_URL | no | templates / Graph version / base |
 | JWT_SECRET | yes, ≥32 | HMAC for calendar connect links + OAuth state (historical name) |
@@ -155,7 +155,7 @@ Keep: everything in the table above (GOOGLE_* stay).
      `SELECT status, platform_state, platform_status, platform_request IS NULL FROM scheduled_response_delivery ORDER BY
      created_at DESC LIMIT 5` → ACCEPTED·DELIVERED·READ / OWNED / … / true. Any `proactive.callback` timeout on the
      platform means the read timeout above was not raised.
-  5. **Belt promotion** (no job promotes anyone since D-030 - the switch only matters if that changes): platform
+  5. **Belt promotion** (D-051: retired - the note below is history; no job promotes anyone since D-030 - the switch only matters if that changes): platform
      `MESSAGING_ALLOWED_PRODUCTS=…,dad_coach:BELT_PROMOTION`, and if the platform's image-host list
      (6.2b `workflow.messaging.send.image-hosts`, not in its application.yml: env `WORKFLOW_MESSAGING_SEND_IMAGEHOSTS_0=…`)
      is set it must list the host of the belt images (Dad Coach's `BELT_IMAGES_BASE_URL`, default `WEB_BASE_URL/belts`;

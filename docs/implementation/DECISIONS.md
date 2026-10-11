@@ -1086,6 +1086,10 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 - **`DC_SESSION_TIMERS_PRODUCT_OWNED` (default false = as before):** a session closed on the dashboard or by its button has
   its pending timers cancelled after the change commits; every 10 minutes (housekeeping lane) the timers of SCHEDULED
   sessions starting within 36 h, until their follow-up time (end + 30 min), are read back and the missing ones armed.
+- **Enabling needs `DC_SESSION_TIMERS_GUARD=true`** (it is, in production): a timer the reconcile re-arms a moment before a
+  cancel is then declined by its tool-only / guarded state, never sent. The reconcile skips fathers who are DELETED, PAUSED
+  or CHURNED, re-reads each father's sessions right before arming, never arms when the platform's timers could not be
+  read, and logs only what it armed; the after-turn ensure is unchanged.
 - **Next (provisioning, not yet):** once this is on and the platform's `PRODUCT_TIMERS_ANY_STATE` is live, the three timer
   transitions get `onEvent` (hidden from the model, refused for its tool; product arming still allowed) and the rules
   `arm-timers-after-booking` / `clear-timers-when-closed` go - the model stops arming.
