@@ -66,6 +66,19 @@ public final class CoachReplies {
         return lines;
     }
 
+    /** D-056: his Google Calendar has a meeting at that time - booked anyway (the calendar is optional), and he's told. */
+    public static final String CALENDAR_CONFLICT_LINE = "שים לב: ביומן שלך יש כבר משהו בשעה הזאת. רוצה שנמצא שעה אחרת?";
+
+    /** The confirmation with the calendar-conflict line right after its first line. */
+    public static List<String> withCalendarConflict(List<String> lines, boolean conflict) {
+        if (!conflict || lines.isEmpty()) {
+            return lines;
+        }
+        List<String> out = new ArrayList<>(lines);
+        out.add(1, CALENDAR_CONFLICT_LINE);
+        return out;
+    }
+
     /** A moved session: the same three lines, no emoji. */
     public static List<String> moved(String when, int minutes, String children, Collection<String> timerKeys, Week week) {
         List<String> lines = new ArrayList<>();

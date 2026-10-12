@@ -18,6 +18,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -106,13 +107,14 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
                 "&timeMax=" + URLEncoder.encode(to.toString(), StandardCharsets.UTF_8) +
                 "&singleEvents=true" +
                 "&orderBy=startTime" +
-                "&maxResults=50";
+                "&maxResults=250"; // D-056: 14 days of a busy calendar fit (50 left later meetings out)
 
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(accessToken);
 
             HttpEntity<Void> request = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
+            // D-056: the URL is already encoded - a String would be encoded again (timeMin "%3A" -> "%253A", Google: 400)
+            ResponseEntity<String> response = restTemplate.exchange(URI.create(url), HttpMethod.GET, request, String.class);
 
             if (response.getStatusCode().is2xxSuccessful()) {
                 JsonNode root = objectMapper.readTree(response.getBody());
@@ -189,7 +191,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
                 return null;
             }
             
-            return new CalendarEvent(eventId, title, description, startTime, endTime, location);
+            return new CalendarEvent(eventId, title, description, startTime, endTime, location, GoogleBusyTime.blocksTime(item));
         } catch (Exception e) {
             log.debug("Failed to parse calendar event: {}", e.getMessage());
             return null;

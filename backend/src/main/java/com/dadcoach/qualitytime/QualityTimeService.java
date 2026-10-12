@@ -113,6 +113,12 @@ public interface QualityTimeService {
     void cancelQualityTime(UUID qualityTimeId);
 
     /**
+     * D-056: the date rules of {@link #scheduleQualityTime} (ONLY_THIS_WEEK, TOO_FAR_AHEAD), checked before a move
+     * cancels the old session - cancelling deletes its Google event, which a rollback cannot bring back.
+     */
+    void checkBookable(Long fatherId, Instant startTime);
+
+    /**
      * Gets the next upcoming (scheduled) Quality Time for a father.
      * 
      * <p>Returns the soonest scheduled Quality Time that hasn't ended yet.

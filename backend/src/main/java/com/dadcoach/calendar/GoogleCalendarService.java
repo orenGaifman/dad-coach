@@ -27,7 +27,8 @@ public interface GoogleCalendarService {
         String description,
         Instant startTime,
         Instant endTime,
-        String location
+        String location,
+        boolean blocksTime // D-056: see GoogleBusyTime
     ) {}
 
     /**

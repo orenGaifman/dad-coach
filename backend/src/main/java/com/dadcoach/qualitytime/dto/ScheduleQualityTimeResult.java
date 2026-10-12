@@ -25,13 +25,14 @@ public record ScheduleQualityTimeResult(
         String calendarError,
         List<String> childNames,
         boolean joinedExistingSession,
-        boolean childAlreadyInSession
+        boolean childAlreadyInSession,
+        boolean calendarConflict // D-056: his Google Calendar has a meeting at that time (booked anyway)
 ) {
 
     public static ScheduleQualityTimeResult success(UUID qualityTimeId, String calendarEventId, String childName,
                                                     Instant startTime, Instant endTime) {
         return new ScheduleQualityTimeResult(qualityTimeId, calendarEventId, childName, startTime, endTime,
-                QualityTimeStatus.SCHEDULED, null, childName == null ? List.of() : List.of(childName), false, false);
+                QualityTimeStatus.SCHEDULED, null, childName == null ? List.of() : List.of(childName), false, false, false);
     }
 
     /** The child joined (or was already in) the father's existing session at exactly this time. */
@@ -39,11 +40,16 @@ public record ScheduleQualityTimeResult(
                                                    List<String> childNames, Instant startTime, Instant endTime,
                                                    boolean alreadyIn) {
         return new ScheduleQualityTimeResult(qualityTimeId, calendarEventId, childName, startTime, endTime,
-                QualityTimeStatus.SCHEDULED, null, List.copyOf(childNames), true, alreadyIn);
+                QualityTimeStatus.SCHEDULED, null, List.copyOf(childNames), true, alreadyIn, false);
     }
 
     public ScheduleQualityTimeResult withCalendarError(String error) {
         return new ScheduleQualityTimeResult(qualityTimeId, calendarEventId, childName, startTime, endTime, status, error,
-                childNames, joinedExistingSession, childAlreadyInSession);
+                childNames, joinedExistingSession, childAlreadyInSession, calendarConflict);
+    }
+
+    public ScheduleQualityTimeResult withCalendarConflict(boolean conflict) {
+        return new ScheduleQualityTimeResult(qualityTimeId, calendarEventId, childName, startTime, endTime, status,
+                calendarError, childNames, joinedExistingSession, childAlreadyInSession, conflict);
     }
 }
