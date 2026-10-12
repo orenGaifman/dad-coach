@@ -24,7 +24,40 @@ import java.util.function.Function;
  */
 public final class FakeServers {
 
-    public record Call(String method, String path, Map<String, List<String>> headers, String body) {
+    public record Call(String method, String path, Map<String, List<String>> headers, String body, String rawQuery) {
+        /** A query parameter decoded ONCE, as Google decodes it (null when absent). */
+        public String param(String name) {
+            if (rawQuery == null) {
+                return null;
+            }
+            for (String pair : rawQuery.split("&")) {
+                int eq = pair.indexOf('=');
+                if (eq > 0 && pair.substring(0, eq).equals(name)) {
+                    return java.net.URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
+                }
+            }
+            return null;
+        }
+
+        /**
+         * D-056: Google's events.list answers 400 when timeMin/timeMax (decoded once) are not RFC 3339 - e.g. a URL
+         * encoded twice ("%253A"). Null when the query is fine.
+         */
+        public Reply rejectedEventsQuery() {
+            for (String name : List.of("timeMin", "timeMax")) {
+                String value = param(name);
+                if (value == null) {
+                    continue;
+                }
+                try {
+                    java.time.OffsetDateTime.parse(value);
+                } catch (java.time.format.DateTimeParseException e) {
+                    return new Reply(400, "{\"error\":{\"code\":400,\"message\":\"Bad Request\"}}");
+                }
+            }
+            return null;
+        }
+
         public String header(String name) {
             return headers.entrySet().stream().filter(e -> e.getKey().equalsIgnoreCase(name))
                     .findFirst().map(e -> e.getValue().get(0)).orElse(null);
@@ -136,6 +169,7 @@ public final class FakeServers {
         google.set(c -> c.path().equals("/google/token")
                 ? Reply.json("{\"access_token\":\"fresh-access\",\"refresh_token\":\"fresh-refresh\",\"expires_in\":3600}")
                 : c.method().equals("POST") ? Reply.json("{\"id\":\"evt-" + sent.incrementAndGet() + "\"}")
+                : c.rejectedEventsQuery() != null ? c.rejectedEventsQuery()
                 : Reply.json("{\"items\":[]}"));
     }
 
@@ -428,7 +462,8 @@ public final class FakeServers {
         // ISO-8859-1 keeps a multipart body's bytes one char each (the audio inside is not text)
         byte[] in = ex.getRequestBody().readAllBytes();
         String body = new String(in, isMultipart(ex) ? StandardCharsets.ISO_8859_1 : StandardCharsets.UTF_8);
-        Call call = new Call(ex.getRequestMethod(), ex.getRequestURI().getPath(), Map.copyOf(ex.getRequestHeaders()), body);
+        Call call = new Call(ex.getRequestMethod(), ex.getRequestURI().getPath(), Map.copyOf(ex.getRequestHeaders()), body,
+                ex.getRequestURI().getRawQuery());
         calls.add(call);
         Reply reply;
         String path = call.path();

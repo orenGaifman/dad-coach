@@ -1,6 +1,7 @@
 package com.dadcoach.qualitytime;
 
 import com.dadcoach.calendar.CalendarIntegrationException;
+import com.dadcoach.calendar.GoogleBusyTime;
 import com.dadcoach.common.AppConstants;
 import com.dadcoach.domain.child.Child;
 import com.dadcoach.domain.child.ChildRepository;
@@ -25,6 +26,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.*;
@@ -133,15 +135,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         // A session may start in the past - a father reporting time he spent but never booked gets credit - but only
         // inside his current Sunday-Saturday week (his timezone); never before it, and never absurdly far ahead.
         Instant now = clock.instant();
-        java.time.LocalDate thisWeek = weeklyGoalService.weekStartFor(father, now);
-        if (weeklyGoalService.weekStartFor(father, startTime).isBefore(thisWeek)) {
-            throw new com.dadcoach.common.BusinessRuleViolationException("ONLY_THIS_WEEK",
-                    "A session can be recorded only from this week (since " + thisWeek + ", Sunday) - earlier weeks are closed.");
-        }
-        if (startTime.isAfter(now.plus(MAX_BOOKING_AHEAD))) {
-            throw new com.dadcoach.common.BusinessRuleViolationException("TOO_FAR_AHEAD",
-                    "A session can be booked at most " + MAX_BOOKING_AHEAD.toDays() + " days ahead.");
-        }
+        requireBookable(father, startTime, now);
         boolean inThePast = !startTime.isAfter(now);
 
         // One block of time with several children is ONE session: a booking at exactly the start and end of one of
@@ -152,22 +146,22 @@ public class QualityTimeServiceImpl implements QualityTimeService {
                 .filter(qt -> startTime.equals(qt.getScheduledStart()) && endTime.equals(qt.getScheduledEnd()))
                 .min(Comparator.comparing(QualityTime::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
         if (sameSlot.isPresent()) {
-            return joinSession(father, sameSlot.get(), child);
+            // D-056: a second child of a booking made a moment ago rebuilds the whole confirmation - it keeps the line
+            return joinSession(father, sameSlot.get(), child).withCalendarConflict(
+                    father.hasGoogleCalendarConfigured() && !inThePast && checkCalendarConflict(father, startTime, endTime));
         }
 
         // D-007: the session lives in Dad Coach; Google Calendar is optional (and never touched for a past session). Without a connected calendar the
-        // session is booked with no calendar event. With one, a conflicting event refuses the slot (read before
-        // write), and the event is created; if creating it fails the booking still stands (calendarEventId null)
-        // and the result says why, so the coach can tell the father.
+        // session is booked with no calendar event. With one, the event is created (D-056: a meeting at that time is
+        // told, not refused); if creating it fails the booking still stands (calendarEventId null) and the result says
+        // why, so the coach can tell the father.
         String calendarEventId = null;
         String calendarError = null;
+        boolean calendarConflict = false;
         if (father.hasGoogleCalendarConfigured() && !inThePast) {
-            if (checkCalendarConflict(father, startTime, endTime)) {
-                log.warn("Calendar conflict detected for father {} at {}-{}", fatherId, startTime, endTime);
-                throw CalendarIntegrationException.conflict(
-                        "The requested time conflicts with an existing calendar event. "
-                                + "Please choose a different slot.");
-            }
+            // D-056: a meeting at that time does not refuse the booking (the calendar is optional, D-007) - the
+            // confirmation tells him, so he can move it
+            calendarConflict = checkCalendarConflict(father, startTime, endTime);
             try {
                 calendarEventId = createCalendarEventWithRetry(father, child, startTime, endTime);
             } catch (CalendarIntegrationException e) {
@@ -187,7 +181,7 @@ public class QualityTimeServiceImpl implements QualityTimeService {
                 child.getName(),
                 startTime,
                 endTime
-        ).withCalendarError(calendarError);
+        ).withCalendarError(calendarError).withCalendarConflict(calendarConflict);
     }
 
     private ScheduleQualityTimeResult joinSession(Father father, QualityTime session, Child child) {
@@ -254,6 +248,29 @@ public class QualityTimeServiceImpl implements QualityTimeService {
      * @param endTime the requested end time
      * @return true if there's a conflict, false otherwise
      */
+    @Override
+    public void checkBookable(Long fatherId, Instant startTime) {
+        Father father = fatherRepository.findById(fatherId)
+                .orElseThrow(() -> new IllegalArgumentException("Father not found: " + fatherId));
+        requireBookable(father, startTime, clock.instant());
+    }
+
+    private void requireBookable(Father father, Instant startTime, Instant now) {
+        java.time.LocalDate thisWeek = weeklyGoalService.weekStartFor(father, now);
+        if (weeklyGoalService.weekStartFor(father, startTime).isBefore(thisWeek)) {
+            throw new com.dadcoach.common.BusinessRuleViolationException("ONLY_THIS_WEEK",
+                    "A session can be recorded only from this week (since " + thisWeek + ", Sunday) - earlier weeks are closed.");
+        }
+        if (startTime.isAfter(now.plus(MAX_BOOKING_AHEAD))) {
+            throw new com.dadcoach.common.BusinessRuleViolationException("TOO_FAR_AHEAD",
+                    "A session can be booked at most " + MAX_BOOKING_AHEAD.toDays() + " days ahead.");
+        }
+    }
+
+    /**
+     * D-056: a timed event he is really in (GoogleBusyTime) overlapping the slot - never one of Dad Coach's own events
+     * (a session moving onto its own time, or a child joining one, is not a conflict). A failed read is no conflict.
+     */
     private boolean checkCalendarConflict(Father father, Instant startTime, Instant endTime) {
         try {
             String accessToken = getValidAccessToken(father);
@@ -283,14 +300,16 @@ public class QualityTimeServiceImpl implements QualityTimeService {
             headers.setBearerAuth(accessToken);
 
             HttpEntity<Void> request = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
+            // D-056: already encoded - a String URL would be encoded again and Google answers 400 (the check never ran)
+            ResponseEntity<String> response = restTemplate.exchange(URI.create(url), HttpMethod.GET, request, String.class);
 
             if (response.getStatusCode().is2xxSuccessful()) {
-                JsonNode responseJson = objectMapper.readTree(response.getBody());
-                JsonNode items = responseJson.get("items");
-                if (items != null && items.isArray() && !items.isEmpty()) {
-                    log.debug("Found {} conflicting events in time range", items.size());
-                    return true;
+                JsonNode items = objectMapper.readTree(response.getBody()).path("items");
+                for (JsonNode item : items) {
+                    if (GoogleBusyTime.blocksTime(item)) {
+                        log.debug("Found a conflicting calendar event in the time range");
+                        return true;
+                    }
                 }
             }
 
@@ -895,6 +914,9 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         } else {
             event.put("description", "Dad Coach scheduled Quality Time — enjoy your moment together!");
         }
+
+        // D-056: marks it as Dad Coach's own, so it never counts as a meeting of his
+        event.put("extendedProperties", Map.of("private", Map.of(GoogleBusyTime.MARKER, "1")));
 
         // Time
         ZonedDateTime startZdt = startTime.atZone(ZoneId.of(timezone));

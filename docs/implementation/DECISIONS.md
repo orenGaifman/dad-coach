@@ -1268,3 +1268,42 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   platform slot, 2026-10-18 06:00 UTC, has run - its retirement follows. Also kept: the Send API reconciles (D-053),
   keep-warm and the idempotency purge (per instance), the platform-jobs maintenance. qa_probe stays opt-in.
 - **Rollback:** revert this commit (the ticks come back, owned by the list as in D-054).
+
+## D-056 — Reading his Google Calendar works again; a meeting is told, never a refusal (2026-10-13)
+
+- **Why:** found in the Google verification E2E (2026-10-12). Every read of a father's calendar answered `400 Bad
+  Request`, because the URL was built with `URLEncoder` and passed as a String to `RestTemplate.exchange`, which encodes it
+  again (`%3A` → `%253A`). So since the calendar was added, free-slot suggestions never saw his meetings, and the
+  conflict check before booking never ran ("Failed to check calendar conflicts … Proceeding with scheduling").
+  Writing (create, move, cancel) was never affected.
+- **What:**
+  - Both reads pass the already-encoded URL as a `URI`, so it is encoded once. A read now takes up to 250 events
+    instead of 50, so 14 busy days fit.
+  - One rule decides what takes up his time (`GoogleBusyTime`): only a timed event he is in. These never count:
+    - all-day events (a birthday, a holiday);
+    - events marked "free";
+    - cancelled events;
+    - invitations he declined;
+    - Dad Coach's own events. New events carry the private property `dadCoach=1`; older ones are recognised by
+      Dad Coach's own descriptions (Hebrew before and after 2026-10-07, and English). So a leftover event, a second child joining, or a session moving onto part of its
+      own time is never "a meeting".
+- **A meeting doesn't refuse a booking.**
+  - Production never refused one: the check never ran. D-007 keeps the calendar optional.
+  - The session is booked with its event, the result says `calendar_conflict: true`, and the confirmation written
+    in code (D-036) adds a line after its first one: "שים לב: ביומן שלך יש כבר משהו בשעה הזאת. רוצה שנמצא שעה
+    אחרת?" This also applies to the second child of a booking made a moment ago, whose call rebuilds the whole
+    confirmation.
+  - No prompt change.
+  - Review: a hard refusal would have been new to fathers. The prompt doesn't know the code, and there was no way to
+    book anyway.
+- **Moves:** `reschedule_quality_time` checks the date rules (`checkBookable`: ONLY_THIS_WEEK, TOO_FAR_AHEAD) before it
+  cancels the old session. Cancelling deletes the old Google event, and a rollback can't bring it back, so a refused move
+  leaves the session and its event exactly as they were.
+- **Tests:**
+  - `CalendarBusyTimeTest` runs against a fake Google as strict as Google: 400 when `timeMin`, decoded once, isn't
+    RFC 3339. The default fake checks this too.
+  - Each test fails on its own mutation: double encoding, the date check after the cancel, and own events counted as
+    meetings.
+- **Not changed:** the other calls (create, patch, delete, exists) still pass a String URL. Their only encoded part is
+  the calendar id, which is always `primary` (nothing ever stores another one).
+- **Rollback:** revert this commit. Reads fail silently again, and nothing else changes.

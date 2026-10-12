@@ -56,6 +56,9 @@ public final class SessionTools {
         if (result.calendarError() != null) {
             data.put("calendar_error", result.calendarError());
         }
+        if (result.calendarConflict()) {
+            data.put("calendar_conflict", true);
+        }
         data.put("child_name", result.childName());
         data.put("child_names", result.childNames());
         if (result.joinedExistingSession()) {
@@ -123,16 +126,16 @@ public final class SessionTools {
             if (result.joinedExistingSession() && !result.childAlreadyInSession() && views.justBooked(result.qualityTimeId())) {
                 // the second child of a booking made a moment ago (one call per child): the whole confirmation, once
                 data.put("note", JUST_BOOKED_NOTE);
-                SessionViews.putReply(data, CoachReplies.booked(when, minutesOf(result), names(result),
-                        views.timerKeys(father, result.startTime(), result.endTime()), week));
+                SessionViews.putReply(data, CoachReplies.withCalendarConflict(CoachReplies.booked(when, minutesOf(result), names(result),
+                        views.timerKeys(father, result.startTime(), result.endTime()), week), result.calendarConflict()));
             } else if (result.joinedExistingSession()) {
                 data.put("note", result.childAlreadyInSession() ? ALREADY_IN_NOTE : JOINED_NOTE);
                 SessionViews.putReply(data, result.childAlreadyInSession()
                         ? CoachReplies.alreadyInSession(child.getName(), when)
                         : CoachReplies.joined(child.getName(), when, SessionChildren.joinHebrew(result.childNames())));
             } else if (result.startTime().isAfter(views.now())) {
-                SessionViews.putReply(data, CoachReplies.booked(when, minutesOf(result), names(result),
-                        views.timerKeys(father, result.startTime(), result.endTime()), week));
+                SessionViews.putReply(data, CoachReplies.withCalendarConflict(CoachReplies.booked(when, minutesOf(result), names(result),
+                        views.timerKeys(father, result.startTime(), result.endTime()), week), result.calendarConflict()));
             } else {
                 data.put("note", PAST_NOTE);
             }
@@ -163,7 +166,9 @@ public final class SessionTools {
             Integer minutes = p.intValue("new_duration_minutes");
             int duration = duration(minutes != null ? minutes
                     : (int) Duration.between(existing.getScheduledStart(), existing.getScheduledEnd()).toMinutes());
-            // one transaction (the controller's): if the new time is refused, the old session stays as it was
+            // one transaction (the controller's): if the new time is refused, the old session stays as it was. D-056: the
+            // date rules first - cancelling deletes the old Google event, which a rollback cannot bring back
+            sessions.checkBookable(father.getId(), start);
             sessions.cancelQualityTime(existing.getId());
             // every child of the session moves with it; the first booking creates the new session (or joins one of
             // his sessions at exactly that time) and each further child joins it
@@ -179,7 +184,7 @@ public final class SessionTools {
                     result = new ScheduleQualityTimeResult(result.qualityTimeId(), booked.calendarEventId(),
                             booked.childName(), result.startTime(), result.endTime(), result.status(),
                             result.calendarError(), booked.childNames(), result.joinedExistingSession(),
-                            result.childAlreadyInSession());
+                            result.childAlreadyInSession(), result.calendarConflict());
                 }
             }
             Map<String, Object> data = new LinkedHashMap<>();
@@ -194,8 +199,8 @@ public final class SessionTools {
             if (result.joinedExistingSession()) {
                 data.put("note", MERGED_NOTE);
             }
-            SessionViews.putReply(data, CoachReplies.moved(views.whenLabel(father, result.startTime()), minutesOf(result),
-                    names(result), views.timerKeys(father, result.startTime(), result.endTime()), week));
+            SessionViews.putReply(data, CoachReplies.withCalendarConflict(CoachReplies.moved(views.whenLabel(father, result.startTime()), minutesOf(result),
+                    names(result), views.timerKeys(father, result.startTime(), result.endTime()), week), result.calendarConflict()));
             return data;
         }
     }

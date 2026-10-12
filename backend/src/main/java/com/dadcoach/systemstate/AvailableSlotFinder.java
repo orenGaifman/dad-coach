@@ -61,7 +61,7 @@ public class AvailableSlotFinder {
         if (father.hasGoogleCalendarConfigured()) {
             try {
                 for (GoogleCalendarService.CalendarEvent e : calendar.getUpcomingEvents(father, now, horizon, false)) {
-                    if (e.startTime() != null && e.endTime() != null) {
+                    if (e.blocksTime() && e.startTime() != null && e.endTime() != null) {
                         busy.add(new Busy(e.startTime(), e.endTime()));
                     }
                 }
