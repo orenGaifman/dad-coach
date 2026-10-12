@@ -93,6 +93,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness")
                         .permitAll()
+                        // Google Search Console ownership file for dad-coach.onrender.com (Google OAuth verification of the
+                        // shared "Gaifman AI" consent screen). Static, public by design; must stay for the verification to hold.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/google78ec5a28baba6e61.html").permitAll()
                         .anyRequest().denyAll())
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(entryPoint));
         return http.build();
