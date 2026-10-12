@@ -30,6 +30,15 @@ class SecurityRoutesTest extends AbstractIntegrationTest {
         mvc.perform(get("/actuator/health/readiness")).andExpect(status().isOk());
     }
 
+    /** Google Search Console's ownership file (OAuth verification of the shared consent screen): public, exact content. */
+    @Test
+    void theSearchConsoleFileIsPublicAndNothingElseIs() throws Exception {
+        mvc.perform(get("/google78ec5a28baba6e61.html")).andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .string("google-site-verification: google78ec5a28baba6e61.html"));
+        mvc.perform(get("/google00000000000000.html")).andExpect(status().isUnauthorized());
+    }
+
     @Test
     void theWebhookAndCalendarHopsAreReachableButCheckTheirOwnSignatures() throws Exception {
         mvc.perform(get("/webhook/whatsapp").param("hub.mode", "subscribe").param("hub.verify_token", "nope")
