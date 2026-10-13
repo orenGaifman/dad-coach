@@ -745,9 +745,17 @@ public class QualityTimeServiceImpl implements QualityTimeService {
      * @param endTime the end time
      * @return the calendar event ID, or null if creation fails
      */
+    /** D-057: the next call refreshes the access token (the refresh token decides whether he is still connected). */
+    private void forgetAccessToken(Father father) {
+        father.setGoogleAccessToken(null);
+        father.setGoogleTokenExpiresAt(null);
+        fatherRepository.save(father);
+    }
+
     private String createCalendarEvent(Father father, String childNames, Instant startTime, Instant endTime) {
         // Obtains a valid token or throws a typed CalendarIntegrationException
         // (NOT_CONNECTED / RECONNECT_REQUIRED / TEMPORARY_FAILURE).
+        boolean cachedToken = !father.needsTokenRefresh();
         String accessToken = obtainAccessToken(father);
 
         String timezone = father.getTimezone() != null ? father.getTimezone() : AppConstants.DEFAULT_TIMEZONE;
@@ -777,6 +785,14 @@ public class QualityTimeServiceImpl implements QualityTimeService {
         } catch (HttpClientErrorException e) {
             // 401/403 => auth is broken; the user must reconnect. Other 4xx are unexpected
             // client errors from a request we control, so treat as transient rather than input.
+            if (e.getStatusCode() == HttpStatus.UNAUTHORIZED && cachedToken) {
+                // D-057: Google refused a cached access token that had not expired (the grant was revoked outside Dad
+                // Coach). Forget it: the retry refreshes - a dead grant then answers invalid_grant and settings say
+                // "reconnect" at once, instead of "connected" until the token's hour runs out.
+                log.warn("Google Calendar refused the cached access token on event create: fatherId={}", father.getId());
+                forgetAccessToken(father);
+                throw CalendarIntegrationException.temporaryFailure("cached access token refused", e);
+            }
             if (e.getStatusCode() == HttpStatus.UNAUTHORIZED || e.getStatusCode() == HttpStatus.FORBIDDEN) {
                 log.error("Google Calendar rejected auth on event create: status={}", e.getStatusCode().value());
                 throw CalendarIntegrationException.reconnectRequired(e);

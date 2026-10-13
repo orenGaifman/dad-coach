@@ -1307,3 +1307,18 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 - **Not changed:** the other calls (create, patch, delete, exists) still pass a String URL. Their only encoded part is
   the calendar id, which is always `primary` (nothing ever stores another one).
 - **Rollback:** revert this commit. Reads fail silently again, and nothing else changes.
+
+## D-057 — A refused access token is forgotten at once, so settings never say "connected" for a dead grant (2026-10-13)
+
+- **Why:** found in the Google verification E2E (2026-10-12). After the grant was revoked outside Dad Coach (then: a Tair
+  disconnect, fixed by Tair D-115; also possible: the father removes access in his Google Account), Google refused the
+  cached access token with 401 before it expired. Bookings answered CALENDAR_RECONNECT_REQUIRED, but the refresh token was
+  kept, so settings said "מחובר" for up to an hour, until the token expired and the refresh met invalid_grant.
+- **What:**
+  - A 401 on a cached, unexpired token, on creating an event or on reading the calendar, forgets the access token.
+  - Creating an event retries once, which refreshes the token: if the grant is dead, Google answers invalid_grant, the
+    father is marked "reconnect" (D-022) and settings say so at once; if only the token was refused, the event is
+    written.
+  - A 401 on a token that was just refreshed, and any 403, still mean reconnect, as before.
+- **Tests:** `CalendarReconnectTest`, three new tests (dead grant, live grant, read). Each fails without the change.
+- **Rollback:** revert. Settings go back to lagging behind for up to an hour.

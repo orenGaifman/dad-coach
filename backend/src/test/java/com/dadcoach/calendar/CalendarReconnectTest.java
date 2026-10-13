@@ -136,4 +136,67 @@ class CalendarReconnectTest extends AbstractIntegrationTest {
                         "/google/calendar/v3/calendars/primary/events/" + moved.calendarEventId());
         assertThat(qualityTimes.findById(moved.qualityTimeId()).orElseThrow().getGoogleCalendarEventId()).isNull();
     }
+
+    private Father connectedWithLiveToken(String phone) {
+        Father f = data.activeFather(phone);
+        f.setGoogleCalendarEnabled(true);
+        f.setGoogleRefreshToken("refresh");
+        f.setGoogleAccessToken("revoked-access");
+        f.setGoogleTokenExpiresAt(Instant.now().plus(Duration.ofMinutes(50)));
+        return fathers.saveAndFlush(f);
+    }
+
+    @Test
+    @DisplayName("D-057: the grant was revoked outside Dad Coach (a live token refused): settings say reconnect at once")
+    void aRefusedLiveTokenWithADeadGrantShowsReconnectAtOnce() {
+        Father f = connectedWithLiveToken("+19995550903");
+        Child noa = data.child(f, "נועה", 7);
+        fake.onGoogle(c -> c.path().equals("/google/token")
+                ? new Reply(400, "{\"error\":\"invalid_grant\",\"error_description\":\"Token has been expired or revoked.\"}")
+                : "Bearer revoked-access".equals(c.header("Authorization")) ? new Reply(401, "{\"error\":{\"code\":401}}")
+                : Reply.json("{\"id\":\"evt-x\"}"));
+
+        ScheduleQualityTimeResult r = sessions.scheduleQualityTime(f.getId(), noa.getId(), WEDNESDAY_4PM_IL, Duration.ofHours(1));
+
+        assertThat(r.calendarEventId()).isNull();
+        assertThat(r.calendarError()).isEqualTo("CALENDAR_RECONNECT_REQUIRED");
+        assertThat(qualityTimes.findById(r.qualityTimeId())).isPresent();
+        Father after = fathers.findById(f.getId()).orElseThrow();
+        assertThat(after.calendarNeedsReconnect()).isTrue();
+        assertThat(settings.view(after).calendarConnected()).isFalse();
+        assertThat(settings.view(after).calendarReconnectRequired()).isTrue();
+    }
+
+    @Test
+    @DisplayName("D-057: only the access token was refused (the grant lives): a refresh and the event is written")
+    void aRefusedLiveTokenWithALiveGrantRecovers() {
+        Father f = connectedWithLiveToken("+19995550904");
+        Child noa = data.child(f, "נועה", 7);
+        fake.onGoogle(c -> c.path().equals("/google/token")
+                ? Reply.json("{\"access_token\":\"fresh-access\",\"expires_in\":3600}")
+                : "Bearer revoked-access".equals(c.header("Authorization")) ? new Reply(401, "{\"error\":{\"code\":401}}")
+                : c.method().equals("POST") ? Reply.json("{\"id\":\"evt-after-refresh\"}")
+                : Reply.json("{\"items\":[]}"));
+
+        ScheduleQualityTimeResult r = sessions.scheduleQualityTime(f.getId(), noa.getId(), WEDNESDAY_4PM_IL, Duration.ofHours(1));
+
+        assertThat(r.calendarEventId()).isEqualTo("evt-after-refresh");
+        assertThat(r.calendarError()).isNull();
+        Father after = fathers.findById(f.getId()).orElseThrow();
+        assertThat(after.getGoogleAccessToken()).isEqualTo("fresh-access");
+        assertThat(settings.view(after).calendarConnected()).isTrue();
+    }
+
+    @Test
+    @DisplayName("D-057: a refused live token on reading the calendar is forgotten, so the next call refreshes")
+    void aRefusedTokenOnReadIsForgotten(@Autowired GoogleCalendarService calendar) {
+        Father f = connectedWithLiveToken("+19995550905");
+        fake.onGoogle(c -> new Reply(401, "{\"error\":{\"code\":401}}"));
+
+        assertThat(calendar.getUpcomingEvents(f, WEDNESDAY_4PM_IL, WEDNESDAY_4PM_IL.plus(Duration.ofDays(1)), false)).isEmpty();
+
+        Father after = fathers.findById(f.getId()).orElseThrow();
+        assertThat(after.getGoogleAccessToken()).isNull();
+        assertThat(after.getGoogleRefreshToken()).as("the grant decides at the next refresh").isEqualTo("refresh");
+    }
 }

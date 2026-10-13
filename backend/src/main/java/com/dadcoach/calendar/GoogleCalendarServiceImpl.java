@@ -143,6 +143,13 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
                 return events;
             }
 
+        } catch (HttpClientErrorException.Unauthorized e) {
+            // D-057: the access token was refused before it expired (the grant was revoked outside Dad Coach): forget it,
+            // so the next call refreshes - and a dead grant is marked "reconnect" instead of showing "connected"
+            log.warn("Google refused the access token on reading the calendar: fatherId={}", father.getId());
+            father.setGoogleAccessToken(null);
+            father.setGoogleTokenExpiresAt(null);
+            fatherRepository.save(father);
         } catch (Exception e) {
             log.error("Failed to fetch calendar events for father {}: {}", father.getId(), e.getMessage());
         }
