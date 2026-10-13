@@ -111,13 +111,13 @@ app:
   # D-055: session_timers and person_deletions have no tick any more - the platform is their one scheduler, whatever this
   # list says. weekly_goals keeps its tick until its first platform slot (Sunday 06:00 UTC) has run.
   platform-jobs:
-    platform-owned: ${DC_PLATFORM_JOBS:}
+    platform-owned: ${DC_PLATFORM_JOBS:qa_probe,person_deletions,session_timers,weekly_goals}
     sync: ${DC_PLATFORM_JOBS_SYNC:true}
   scheduling:
     # D-043 (Unified Workflow 6.0b): true = the jobs that send WhatsApp keep the single scheduler thread and the
     # housekeeping jobs (purges, deletions, keep-warm) get their own small pool;
     # anything else (false, unset, a typo) = one thread runs every job, exactly as before.
-    lanes: ${APP_SCHEDULING_LANES:false}
+    lanes: ${APP_SCHEDULING_LANES:true}
 
 dadcoach:
   scheduler:
@@ -139,14 +139,14 @@ workflow:
     connect-timeout-ms: 5000
     read-timeout-ms: 90000
     # D-039 (Phase 3.4): report what was actually delivered to the platform's conversation timeline. Off = as before.
-    delivery-reports: ${PLATFORM_DELIVERY_REPORTS:false}
+    delivery-reports: ${PLATFORM_DELIVERY_REPORTS:true}
     # D-049 (Phase 5.3 slice D): the hour-before reminder's guard may skip its AI turn when no session is there. Off = it
     # always proceeds (the turn as before). The morning / follow-up tool-only turns are switched by the workflow YAML.
-    session-timers-guard: ${DC_SESSION_TIMERS_GUARD:false}
+    session-timers-guard: ${DC_SESSION_TIMERS_GUARD:true}
     # D-050 (Unified Workflow 5.4): Dad Coach owns its session timers - a session closed from the dashboard or the "done"
     # button cancels its timers too (not only a WhatsApp turn), and every 10 minutes the timers of upcoming sessions are
     # read back and the missing ones armed. Off = only the WhatsApp turn arms and cancels, as before.
-    session-timers-product-owned: ${DC_SESSION_TIMERS_PRODUCT_OWNED:false}
+    session-timers-product-owned: ${DC_SESSION_TIMERS_PRODUCT_OWNED:true}
     # Receiver for the platform's scheduled-response callback (/api/integration/workflow/scheduled-response).
     scheduled-response:
       enabled: ${WORKFLOW_PLATFORM_CALLBACK_ENABLED:false}

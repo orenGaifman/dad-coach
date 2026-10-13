@@ -1404,3 +1404,13 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 - **Rollback:** revert this commit and provision again (the model arms again; Dad Coach's arming stays harmless: the
   platform keeps one timer per key and session). `DC_SESSION_TIMERS_PRODUCT_OWNED` and the platform's
   `PRODUCT_TIMERS_ANY_STATE` must stay on while this is in place - turn either off only after reverting it.
+## D-061 — application.yml defaults are production's values (2026-10-13)
+
+- **Why:** architecture audit. Five switches defaulted to the old path while production sets them on; an environment
+  variable lost in Render (or a new environment) would silently fall back to a path production no longer runs.
+- **What (defaults now = production, Render GET 2026-10-13):** `APP_SCHEDULING_LANES=true`, `PLATFORM_DELIVERY_REPORTS=true`,
+  `DC_SESSION_TIMERS_GUARD=true`, `DC_SESSION_TIMERS_PRODUCT_OWNED=true`,
+  `DC_PLATFORM_JOBS=qa_probe,person_deletions,session_timers,weekly_goals`. `MESSAGING_DELIVERY_STATUS_ENABLED` already
+  defaulted to true. Connection settings (`WORKFLOW_PLATFORM_ENABLED`, URLs, keys) stay per environment.
+- **Tests:** the shared test context now runs as production does; the two lanes-off tests say `lanes=false` themselves.
+- **Rollback:** revert; production is unaffected either way (it sets every one of them).
