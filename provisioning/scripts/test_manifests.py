@@ -112,6 +112,19 @@ class ManifestTest(unittest.TestCase):
                                      "session_reminder_1h": "SESSION_REMINDER_1H",
                                      "session_follow_up": "SESSION_FOLLOW_UP"})
 
+    def test_only_dad_coach_arms_the_session_timers(self):
+        """D-050 Next (D-059): the timers are product-fired (onEvent: hidden from the model, refused for its tool), and the
+        model has neither the arming tools nor the rules that told it to arm or clear them."""
+        [doc] = MANIFESTS.values()
+        for s in doc["states"]:
+            for t in s.get("transitions", []):
+                if t["triggerType"] == "SCHEDULED":
+                    self.assertEqual(t["schedulingRule"].get("onEvent"), "dc." + t["transitionKey"], t["transitionKey"])
+            tools = {x["toolKey"] for x in s.get("tools", [])}
+            self.assertFalse(tools & {"schedule_state_transition", "cancel_scheduled_transition"}, s["stateKey"])
+            rules = {r.get("ruleKey") for r in s.get("behaviorRules") or []}
+            self.assertFalse(rules & {"arm-timers-after-booking", "clear-timers-when-closed"}, s["stateKey"])
+
     def test_session_timers_run_from_data(self):
         """D-049 (platform Phase 5.1 / 5.3, ScheduledOneShotStateRules): the morning and the follow-up are tool-only
         (no model), the hour before is an AI turn with a guard; one READ_ONLY tool, bound to each state, serves all three."""

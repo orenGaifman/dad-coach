@@ -1374,3 +1374,20 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   `theGenericEnvelopeIsTheSameCallAsTheDadCoachClientEnvelope` (all nine live tools, both envelopes, equal answers) and
   `theActorIsOnlyTheWhatsAppNumberNeverANumericId` (channel identities).
 - **Rollback:** the endpoint is additive; the platform's rollback migration points family_context back to its Java path.
+## D-059 — The model stops arming the session timers: Dad Coach is their one owner (D-050 "Next", 2026-10-13)
+
+- **Why:** architecture audit D-2. Since D-050 Dad Coach arms every booked, moved or joined session's timers after the
+  turn and cancels a closed session's (`InboundMessageHandler.confirmTimers`), cancels them from the dashboard and the
+  "done" button, and heals them every 10 minutes (`DC_SESSION_TIMERS_PRODUCT_OWNED`, now on in production). The model
+  still armed and cleared them too, by two REQUIRED rules: the same timers, twice, with tool calls in every booking turn.
+- **What (provisioning, `dad-coach-3`):**
+  - The three timer transitions get `onEvent: dc.<transition key>`: hidden from the prompt and refused for the model's
+    `schedule_state_transition`; product arming is unchanged (platform Phase 5.3 §3.2, `PRODUCT_TIMERS_ANY_STATE=true`).
+  - ACTIVE_COACHING loses the rules `arm-timers-after-booking` and `clear-timers-when-closed`, the tools
+    `schedule_state_transition` and `cancel_scheduled_transition` (no other SCHEDULED transition is visible), and the
+    phrases that told it to arm or clear timers. Nothing else in the prompt changes.
+- **Same timers, same times:** the model copied the scheduling result's `timers`, which are `SessionTimerPlanner`'s;
+  Dad Coach arms exactly those after the turn.
+- **Tests:** `test_manifests.test_only_dad_coach_arms_the_session_timers`.
+- **Rollback:** revert this commit and provision again (the model arms again; Dad Coach's arming stays harmless: the
+  platform keeps one timer per key and session).

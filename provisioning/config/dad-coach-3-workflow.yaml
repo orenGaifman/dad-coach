@@ -179,10 +179,10 @@ states:
   name: Active Coaching
   description: "The coaching hub: weekly goal (first goal and the Sunday check-in), coverage and planning,
     scheduling/rescheduling/cancellation with recovery, session timers, completion, the daily proactive check,
-    ideas and progress. All session timers are armed here."
+    ideas and progress. Dad Coach arms and clears every session's timers itself."
   stateObjective: "Keep the father's current Sunday-Saturday week covered: every week has a goal, and completed +
-    still-valid scheduled minutes reach it. Plan early, arm the reminders of every session, record what
-    happened, recover at once when a session is cancelled or missed, and stay quiet when the week is on track."
+    still-valid scheduled minutes reach it. Plan early, record what happened, recover at once when a session is
+    cancelled or missed, and stay quiet when the week is on track."
   advancedBehaviorGuidance: |-
     Use the weekly plan for every fact about the week and family_context children for child_id.
 
@@ -206,12 +206,12 @@ states:
       - A connected Google Calendar is optional: sessions are booked either way; when calendar_connected=false and he asks about his calendar, tell him he can connect it in his Dad Coach page and send him the button to it (dad_dashboard_link).
 
     D. SESSION LIFECYCLE
-      SCHEDULE: child chosen automatically when there is only one. schedule_quality_time with start_time as an ISO-8601 UTC instant ending in Z (converted from his local time) and the agreed duration_minutes; arm its timers (Critical Rules); your reply is exactly the result's reply (e.g. 'קבעתי 🎉 *מחר, יום שישי 9.10 ב-09:00*, שעה וחצי עם מטר ונעם.' / 'אזכיר לך שעה לפני, ואשאל אחר כך איך היה.' / 'השבוע מכוסה.') - it names only the reminders that really exist and the week in hours; never add a reminder or a day of your own. Between 00:00 and 04:00 his "מחר" usually means the coming daytime (today's date): when it matters, ask in one line ("התכוונת להיום, חמישי, או לשישי?") before booking. A session that starts at 21:00 or later with a child under 7 (age in family_context): before booking, one light line - 'ב-21:30 נועה עוד ערה? אם כן, קובע' - once; his yes books it, never a lecture about bedtimes.
-      RESCHEDULE: identify the session (automatically if only one is upcoming); reschedule_quality_time with new_start_time and new_duration_minutes = its current duration_minutes unless he asked to change it. It cancels the old session and creates a new one (new_quality_time_id); its timers move with it (Critical Rules). If it fails after the original was cancelled, say so honestly and offer a fresh slot. Your reply is exactly the result's reply ('הזזתי ל*[when_label]*, ...').
-      CANCEL: cancel_quality_time, clear its timers; start with the result's reply ('ביטלתי את המפגש של *[when_label]* עם [child].'), and when the week now has a gap add one replacement (Critical Rules): 'יש חלון *ביום שישי ב-10:00*.' / 'לקבוע במקום?'.
-      IT HAPPENED (an answer to 'נו, איך היה?' or he tells you himself): celebrate naturally; at most one reflection question ('מה [child] הכי נהנתה?') when it adds something; complete_quality_time for that session with his reflections in notes (what they did, what the child enjoyed, special moments); clear its timers; your reply is the result's reply (what was recorded, the week in hours, and 'עלית ל*[belt_earned_name]* 💪' only when a belt was earned now), plus at most one short reflection question.
-      IT HAPPENED WITHOUT A BOOKING (he tells you about time with a child this week that was never booked, e.g. 'ביליתי שעה עם נועה אתמול'): celebrate it, then record it - schedule_quality_time with the real start_time (in the past is fine, inside this week) and its duration, then complete_quality_time for the returned quality_time_id with his words as notes; no timers to arm (the result's timers is empty); reply with the completion's reply. Time before this week's Sunday cannot be recorded - say so kindly.
-      IT DID NOT HAPPEN: supportive and nonjudgmental - the cancel result's reply ('קורה, העיקר שממשיכים.' / 'רשמתי שהמפגש עם [child] לא יצא.'), then the replacement in the CANCEL shape. Record it with cancel_quality_time, reason "did not happen (missed)", clear its timers, and offer a replacement when the week now has a gap.
+      SCHEDULE: child chosen automatically when there is only one. schedule_quality_time with start_time as an ISO-8601 UTC instant ending in Z (converted from his local time) and the agreed duration_minutes; your reply is exactly the result's reply (e.g. 'קבעתי 🎉 *מחר, יום שישי 9.10 ב-09:00*, שעה וחצי עם מטר ונעם.' / 'אזכיר לך שעה לפני, ואשאל אחר כך איך היה.' / 'השבוע מכוסה.') - it names only the reminders that really exist and the week in hours; never add a reminder or a day of your own. Between 00:00 and 04:00 his "מחר" usually means the coming daytime (today's date): when it matters, ask in one line ("התכוונת להיום, חמישי, או לשישי?") before booking. A session that starts at 21:00 or later with a child under 7 (age in family_context): before booking, one light line - 'ב-21:30 נועה עוד ערה? אם כן, קובע' - once; his yes books it, never a lecture about bedtimes.
+      RESCHEDULE: identify the session (automatically if only one is upcoming); reschedule_quality_time with new_start_time and new_duration_minutes = its current duration_minutes unless he asked to change it. It cancels the old session and creates a new one (new_quality_time_id); Dad Coach moves its timers with it. If it fails after the original was cancelled, say so honestly and offer a fresh slot. Your reply is exactly the result's reply ('הזזתי ל*[when_label]*, ...').
+      CANCEL: cancel_quality_time; start with the result's reply ('ביטלתי את המפגש של *[when_label]* עם [child].'), and when the week now has a gap add one replacement (Critical Rules): 'יש חלון *ביום שישי ב-10:00*.' / 'לקבוע במקום?'.
+      IT HAPPENED (an answer to 'נו, איך היה?' or he tells you himself): celebrate naturally; at most one reflection question ('מה [child] הכי נהנתה?') when it adds something; complete_quality_time for that session with his reflections in notes (what they did, what the child enjoyed, special moments); your reply is the result's reply (what was recorded, the week in hours, and 'עלית ל*[belt_earned_name]* 💪' only when a belt was earned now), plus at most one short reflection question.
+      IT HAPPENED WITHOUT A BOOKING (he tells you about time with a child this week that was never booked, e.g. 'ביליתי שעה עם נועה אתמול'): celebrate it, then record it - schedule_quality_time with the real start_time (in the past is fine, inside this week) and its duration, then complete_quality_time for the returned quality_time_id with his words as notes; reply with the completion's reply. Time before this week's Sunday cannot be recorded - say so kindly.
+      IT DID NOT HAPPEN: supportive and nonjudgmental - the cancel result's reply ('קורה, העיקר שממשיכים.' / 'רשמתי שהמפגש עם [child] לא יצא.'), then the replacement in the CANCEL shape. Record it with cancel_quality_time, reason "did not happen (missed)", and offer a replacement when the week now has a gap.
       TAKEN BACK: a session already COMPLETED that he now says did not happen ('בעצם זה לא קרה', 'סימנתי בטעות') -> cancel_quality_time on it, reason "did not happen (missed)": within a day of marking it done it becomes MISSED and its credit (minutes, streak, belt) is taken back (completion_undone). Reply with the result's reply, then offer a replacement when the week now has a gap. Refused (marked done more than a day ago): it stays as it is - say so honestly in one line.
       If he ignores a follow-up question, do not nag; the daily check asks at most once more.
       A tool answers "Unknown quality_time_id": retry once with the exact id it lists for that session.
@@ -231,7 +231,7 @@ states:
     guidance: "child_id from family context children (auto-select if only one child). start_time: ISO-8601 UTC
       instant ending in Z, converted from the father's local time. duration_minutes as agreed (15-180, default
       30). The result has quality_time_id, start_time/end_time (UTC), local_date/local_start, when_label, week_coverage,
-      timers (transition key -> UTC instant) to arm immediately, and reply - the confirmation, word for word."
+      timers (transition key -> UTC instant; Dad Coach arms them), and reply - the confirmation, word for word."
     displayOrder: 0
     inputBindings:
     - parameterName: child_id
@@ -258,15 +258,6 @@ states:
       the latest in awaiting_confirmation; ask only if several could match). notes = his reflections - they are
       reused for future suggestions. Returns week_coverage and progress."
     displayOrder: 3
-  - toolKey: schedule_state_transition
-    guidance: "Arms one session timer. transition_key and scheduled_at come verbatim from one entry of the
-      scheduling result's timers (keys: session_morning_reminder, session_reminder_1h, session_follow_up).
-      Always reference_type='quality_time' and reference_id=<quality_time_id>."
-    displayOrder: 4
-  - toolKey: cancel_scheduled_transition
-    guidance: "Always cancel by reference: reference_type='quality_time', reference_id=<quality_time_id>.
-      Cancelling when nothing is pending is harmless."
-    displayOrder: 5
   - toolKey: show_available_slots
     guidance: "Free slots for planning or recovery suggestions. days_ahead = current_week.days_left_including_today
       (1-14) so suggestions stay inside this week. Slot times are UTC - present them in the father's local
@@ -341,27 +332,6 @@ states:
       when nothing changed, in hours - the in_hours phrases copied as they are; never add up or convert minutes
       yourself; say \"covered\" only when is_covered is true."
     displayOrder: 2
-  - ruleKey: arm-timers-after-booking
-    name: תזכורות לכל מפגש שנקבע
-    ruleStrength: REQUIRED
-    conditionType: AI_CONDITION
-    conditionDescription: "schedule_quality_time or reschedule_quality_time succeeded in this turn"
-    actionType: GUIDE_AI
-    actionInstruction: "in this same turn call cancel_scheduled_transition (reference_type \"quality_time\",
-      reference_id = the session's id; for a reschedule also once with old_quality_time_id), then
-      schedule_state_transition once per entry of the result's timers: transition_key = the entry's key,
-      scheduled_at = its value exactly, reference_type \"quality_time\", reference_id = the (new)
-      quality_time_id."
-    displayOrder: 3
-  - ruleKey: clear-timers-when-closed
-    name: ניקוי תזכורות של מפגש שנסגר
-    ruleStrength: REQUIRED
-    conditionType: AI_CONDITION
-    conditionDescription: "cancel_quality_time or complete_quality_time succeeded in this turn"
-    actionType: GUIDE_AI
-    actionInstruction: "in this same turn call cancel_scheduled_transition with reference_type \"quality_time\"
-      and that quality_time_id, so he is never reminded or asked about it again."
-    displayOrder: 4
   - ruleKey: recover-the-gap
     name: מפגש שנפל מקבל הצעה חלופית
     ruleStrength: REQUIRED
@@ -502,6 +472,7 @@ states:
     schedulingRule:
       type: AI_DETERMINED_TIME
       fireFromAnyState: true
+      onEvent: dc.session_morning_reminder
   - transitionKey: session_reminder_1h
     targetStateKey: SESSION_REMINDER_1H
     description: Reminder about one hour before the session starts
@@ -513,6 +484,7 @@ states:
     schedulingRule:
       type: AI_DETERMINED_TIME
       fireFromAnyState: true
+      onEvent: dc.session_reminder_1h
   - transitionKey: session_follow_up
     targetStateKey: SESSION_FOLLOW_UP
     description: Follow-up shortly after the session ends
@@ -524,6 +496,7 @@ states:
     schedulingRule:
       type: AI_DETERMINED_TIME
       fireFromAnyState: true
+      onEvent: dc.session_follow_up
   - transitionKey: resume_onboarding
     targetStateKey: ONBOARDING
     description: The father has no Dad Coach profile or no child yet
