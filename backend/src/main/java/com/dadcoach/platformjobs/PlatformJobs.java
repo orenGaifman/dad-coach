@@ -403,9 +403,10 @@ public class PlatformJobs {
 
     /**
      * Review J-5: a PLATFORM job the platform has not run for 3× its interval is run once here, under its locks - a
-     * platform that stopped calling never silently stops a job. "Has not run" is read from the shared ledger (its last
-     * slot's start, any instance) and this instance's last call, so an instance the platform's calls do not reach is
-     * not a false alarm; a job still running (its lock held) is not either. ERROR the first time per job, WARN after.
+     * platform that stopped calling never silently stops a job. "Has not run": an interval job - no slot started in the
+     * shared ledger (any instance) and no call to this instance; a cron job (D-062) - no call to this instance since its
+     * last expected fire and no DONE row for that slot. A job still running (its lock held) is no alarm either. ERROR the
+     * first time per job, WARN after.
      */
     private volatile Instant lastPurge = Instant.EPOCH;
 
@@ -471,8 +472,9 @@ public class PlatformJobs {
     }
 
     /**
-     * An interval job: no run for 3× its interval. A cron job: its last expected fire is more than an hour ago and no run
-     * started since (the process start is no floor - a restart must not hide a platform that stopped calling).
+     * An interval job: no run for 3× its interval. A cron job: its last expected fire is more than an hour ago and
+     * {@code last} is before it (the process start is no floor - a restart must not hide a platform that stopped calling;
+     * the watchdog then checks the slot's DONE row).
      */
     static boolean silent(Job job, Instant last, Instant now) {
         if (job.every() != null) {
