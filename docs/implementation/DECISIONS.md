@@ -1396,7 +1396,8 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   session (no pending timer), so nothing of his changed.
 - **Code:** a turn that ends without a checked reply (suppressed, blank, already answered, the not-Hebrew fixed line, the
   dashboard card) now arms or clears its sessions' timers too (`InboundMessageHandler.timersAfterTurn`); before, only the
-  model did on those paths. A turn the platform failed is left to the reconcile (it may still hold the conversation).
+  model did on those paths. A turn the platform failed is left to the reconcile (it may still hold the conversation),
+  as is a duplicate whose first attempt booked and then lost its answer (up to 10 minutes late).
 - **Tests:** `test_manifests.test_only_dad_coach_arms_the_session_timers`; `ArmedTimersTest`
   `aTurnWithoutAReplyStillArmsItsTimers` and `aTurnEndingInTheFixedLineStillClearsItsTimers` (both fail without the
   code). Independent review: APPROVE; its points taken (these paths, the transitions' text, the rollback note).
