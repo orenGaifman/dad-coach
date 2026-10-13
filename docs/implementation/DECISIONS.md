@@ -1350,3 +1350,22 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   fails without the change), `claimIsAtomic` (four concurrent claims, 20 rounds: one wins) and
   `refusedMorningGivesTheClaimBack`. Independent review: APPROVE; its non-blocking points are fixed.
 - **Rollback:** revert. Two mornings on one day can both go again.
+
+## D-059 — The platform reads family_context through its generic HTTP provider; Dad Coach answers the agent's view (2026-10-13)
+
+- **Why:** architecture effort P1. The platform still held Dad Coach-only Java (a tool client, a context client and
+  `FamilyContextProvider`, which rebuilt our family_context into the camelCase view the agent reads). Tair and Big Boss
+  use the platform's generic HTTP tools and providers, configured as data. Moving Dad Coach onto the same path lets the
+  platform delete its Dad Coach Java.
+- **What:**
+  - `POST /api/context/agent_family_context` answers the agent's view: exactly what `FamilyContextProvider` built from
+    `family_context` (isNewUser, hasProfile, father{displayName, locale, timezone, preferredCoachingTime,
+    googleCalendarConnected, welcomeStep}, children[{childId, name, age, gender, interests}], hasMultipleChildren,
+    childCount, hasGoogleCalendarConnected; `config.includeChildren=false` leaves the children out). That mapping never
+    found a calendar flag, a coaching time or a welcome step in our answer, so they stay false/null: the agent sees what
+    it saw before. `family_context` itself is unchanged (the platform's old path reads it until its Java is deleted).
+  - The AI tools need nothing new: the generic tool's envelope (`whatsapp:+E164`, every schema parameter with missing
+    ones as null, an `execution_context`) is the same call as the old client's. A contract test proves it.
+- **Tests:** `ContextProvidersTest` (agent view, unknown/deleted father = new user), `ToolsTest`
+  `theGenericEnvelopeIsTheSameCallAsTheDadCoachClientEnvelope` (all nine live tools, both envelopes, equal answers).
+- **Rollback:** the endpoint is additive; the platform's rollback migration points family_context back to its Java path.
