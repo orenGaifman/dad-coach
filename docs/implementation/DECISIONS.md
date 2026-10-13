@@ -1485,3 +1485,18 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   capability - a tool whose result is sent - shared by every product's scheduled turns, while the HTTP tools (agent D)
   and the turn engine (agent E) are changing. The second plan build costs one cheap query; the hops are internal and
   idempotent. Not clearly better: kept. Revisit with the platform's scheduled-send design.
+
+## D-065 — Dad Coach publishes its own platform catalog; shared platform client
+
+- **Date:** 2026-10-13 (platform P2 extensibility, agent F; platform `docs/architecture/P2_EXTENSIBILITY_SPEC.md`).
+- **What:** `backend/src/main/resources/platform-catalog.json` is Dad Coach's catalog on the platform - its HTTP tools, context
+  providers and kind→template mappings, in the format of the platform's `GET /api/v1/worker/catalog` (taken from production, so
+  publishing it changes nothing). At start the backend publishes it with its own key (`PUT /api/v1/worker/catalog`) and then its
+  jobs, through the platform's shared client `com.platform.client.PlatformPublisher` (vendored byte-identically by the platform's
+  `scripts/platform_client.py sync`; `PlatformClientCopyTest` fails on a local edit). `PLATFORM_CATALOG_PUBLISH` = `off` (default) |
+  `dry-run` (the platform only reports) | `apply`. A tool or mapping change is an edit of this file - no platform migration.
+- **Replaces:** `provisioning/catalog/dad-coach-catalog.json` (keys only); the manifest tests read the new file. The copied
+  `kind-template-seed.json` stays for the tests; `PlatformCatalogFileTest` checks every published mapping equals it.
+- **Platform env:** the platform's product registry (`WORKFLOW_PRODUCTS_DADCOACH_*`) replaces `DAD_COACH_WORKER_API_KEY` and the
+  positional `ROUTES_1` variables (switched in production 2026-10-13); `qa-lab/run-platform.sh` uses the new names.
+- **Rollback:** `PLATFORM_CATALOG_PUBLISH=off` (nothing is published; the platform keeps what it has).

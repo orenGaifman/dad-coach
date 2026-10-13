@@ -11,7 +11,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG = ROOT / "config"
-CATALOG = json.loads((ROOT / "catalog" / "dad-coach-catalog.json").read_text(encoding="utf-8"))
+CATALOG = json.loads((ROOT.parent / "backend" / "src" / "main" / "resources" / "platform-catalog.json").read_text(encoding="utf-8"))
 PLATFORM_TOOLS = {"schedule_state_transition", "update_scheduled_transition", "cancel_scheduled_transition"}
 DEAD_FIELDS = {"transitionGuidance", "contextGuidance"}
 TRIGGERS = {"TOOL_RESPONSE", "CONTEXT_CONDITION", "USER_INTENT", "CUSTOM", "SCHEDULED", "AFTER_SCHEDULED_TURN"}
@@ -23,8 +23,8 @@ def load(name):
 
 RESOURCES = json.loads((CONFIG / "platform-resources.json").read_text(encoding="utf-8"))
 MANIFESTS = {name: load(name) for name in RESOURCES["workflows"]}
-TOOL_KEYS = {t["key"] for t in CATALOG["tools"]}
-PROVIDER_KEYS = {p["key"] for p in CATALOG["providers"]}
+TOOL_KEYS = {t["toolKey"] for t in CATALOG["tools"]}
+PROVIDER_KEYS = {p["providerKey"] for p in CATALOG["providers"]}
 
 
 def one_shot_states(doc):
@@ -131,7 +131,7 @@ class ManifestTest(unittest.TestCase):
         [doc] = MANIFESTS.values()
         shots = one_shot_states(doc)
         by_key = {s["stateKey"]: s for s in doc["states"]}
-        read_only = {t["key"] for t in CATALOG["tools"] if not t["sideEffect"]}
+        read_only = {t["toolKey"] for t in CATALOG["tools"] if t["sideEffectType"] == "READ_ONLY"}
         self.assertIn("dc_session_timer_card", read_only)
         for key, mode in (("SESSION_MORNING_REMINDER", "TOOL_ONLY"), ("SESSION_FOLLOW_UP", "TOOL_ONLY"),
                           ("SESSION_REMINDER_1H", "AI")):

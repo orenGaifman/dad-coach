@@ -29,9 +29,9 @@ stops, showing the difference, when the platform's workflow is no longer that.
   --force  overwrite a platform change without taking it (it is lost)
 The first run against a platform records its current workflows as the baseline.
 
-The tool/context-provider catalog itself is not provisioned here - it ships as
-platform Flyway migrations (V18, V38, V62, V69, V114 weekly_plan_context, V115 dad_dashboard_link); provisioning/catalog/
-dad-coach-catalog.json mirrors it so manifest tests catch a missing key.
+The tool/context-provider catalog itself is not provisioned here - the backend publishes
+backend/src/main/resources/platform-catalog.json to the platform at start (PUT /api/v1/worker/catalog,
+PLATFORM_CATALOG_PUBLISH); publish it before republishing a workflow that needs a catalog change.
 
 Usage:
   PLATFORM_BASE_URL=https://<platform-backend> \\

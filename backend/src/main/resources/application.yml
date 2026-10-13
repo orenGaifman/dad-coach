@@ -113,6 +113,10 @@ app:
   platform-jobs:
     platform-owned: ${DC_PLATFORM_JOBS:person_deletions,session_timers,weekly_goals}
     sync: ${DC_PLATFORM_JOBS_SYNC:true}
+  # Platform P2: the product's catalog (platform-catalog.json - HTTP tools, context providers, kind->template mappings) is
+  # published to the platform at start: off | dry-run (the platform reports what it would change, nothing written) | apply.
+  platform-catalog:
+    publish: ${PLATFORM_CATALOG_PUBLISH:off}
   scheduling:
     # D-043 (Unified Workflow 6.0b): true = the jobs that send WhatsApp keep the single scheduler thread and the
     # housekeeping jobs (purges, deletions, keep-warm) get their own small pool;
