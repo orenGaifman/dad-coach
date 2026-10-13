@@ -113,7 +113,8 @@ public class TimelineReports {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record InboundBody(String workerKey, String workflowKey, String userId, String channelId, String correlationId,
                               String content, String messageType, Map<String, Object> structured,
-                              Map<String, Object> metadata, UUID tenantId, String personRef, String personName) {
+                              Map<String, Object> metadata, UUID tenantId, String personRef, String personName,
+                              String occurredAt) {
     }
 
     /** {@code POST /api/v1/worker/messages/outbound} with the Phase 3 fields. */
@@ -122,14 +123,16 @@ public class TimelineReports {
                                Map<String, Object> metadata, UUID tenantId, String personRef, String personName,
                                String workflowKey, String turnCorrelationId, Boolean replacesDraft,
                                String providerMessageId, String deliveryStatus, Map<String, Object> template,
-                               List<Map<String, Object>> buttons, String kind, List<String> supersededTurns) {
+                               List<Map<String, Object>> buttons, String kind, List<String> supersededTurns,
+                               String occurredAt) {
     }
 
     /** {@code POST /api/v1/worker/messages/turn-outcome}. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record TurnOutcomeBody(String workerKey, String workflowKey, String userId, String channelId, UUID tenantId,
                                   String turnCorrelationId, String outcome, String providerMessageId,
-                                  String deliveryStatus, String reason, List<String> supersededTurns) {
+                                  String deliveryStatus, String reason, List<String> supersededTurns,
+                                  String occurredAt) {
     }
 
     private final WorkflowPlatformClient platform;
@@ -184,7 +187,7 @@ public class TimelineReports {
         return new InboundBody(properties.getWorkerKey(),
                 properties.getWorkflowKey(), PersonRefs.whatsappId(person.phone()), CHANNEL, correlationId,
                 content == null ? "" : content, messageType, structured, metadata(person), properties.getTenantId(),
-                personRef(person), person.name());
+                personRef(person), person.name(), java.time.Instant.now().toString());
     }
 
     /**
@@ -248,7 +251,8 @@ public class TimelineReports {
                 properties.getTenantId(), personRef(person), person.name(), properties.getWorkflowKey(),
                 part.turnCorrelationId(), part.replacesDraft() ? Boolean.TRUE : null, providerId, status, part.template(),
                 part.buttons() == null || part.buttons().isEmpty() ? null : part.buttons(), part.kind(),
-                part.supersededTurns() == null || part.supersededTurns().isEmpty() ? null : List.copyOf(part.supersededTurns())));
+                part.supersededTurns() == null || part.supersededTurns().isEmpty() ? null : List.copyOf(part.supersededTurns()),
+                java.time.Instant.now().toString()));
     }
 
     /** What happened to a turn's reply: AS_IS (with the send), DROPPED (nothing of it went out), FAILED. */
@@ -268,7 +272,8 @@ public class TimelineReports {
         submit(WorkflowPlatformClient.TURN_OUTCOME_PATH, turnCorrelationId, person.phone(), true, new TurnOutcomeBody(properties.getWorkerKey(),
                 properties.getWorkflowKey(), PersonRefs.whatsappId(person.phone()), CHANNEL, properties.getTenantId(),
                 turnCorrelationId, outcome, providerId, status, reason,
-                supersededTurns == null || supersededTurns.isEmpty() ? null : List.copyOf(supersededTurns)));
+                supersededTurns == null || supersededTurns.isEmpty() ? null : List.copyOf(supersededTurns),
+                java.time.Instant.now().toString()));
     }
 
     private Map<String, Object> metadata(Person person) {
