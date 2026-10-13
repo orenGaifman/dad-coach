@@ -1508,8 +1508,8 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   - `WorkflowState` (deprecated since the platform owns the workflow) and the three `father` fields mapped on it
     (`current_workflow_state`, `previous_workflow_state`, `workflow_state_entered_at`) are gone; the admin's father page no
     longer shows the state (nothing has set it since the platform took over the workflow: it showed the insert default,
-    `WELCOME`). **The columns stay:** `current_workflow_state` has a value on every row (the entity wrote `WELCOME` on insert;
-    the column's default writes it now), so it is not dropped (no destructive DDL on data). Hibernate validates only mapped
+    `WELCOME`). **The columns stay:** `current_workflow_state` holds data (nullable, default `WELCOME`: the entity wrote `WELCOME` on
+    insert and the column's default writes it now), so it is not dropped (no destructive DDL on data). Hibernate validates only mapped
     columns.
   - `KeepWarmJob` - pinged its own health every 5 minutes so Render's free plan would not idle. Production runs on a paid
     instance (`0.5c-512mb`, Render API 2026-10-13), which never idles; Render's own health check calls the same path.
