@@ -36,9 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@code ALREADY_ASKED} (follow-up) - he was asked about this session within {@link #FOLLOW_UP_FRESH}
  *       ("one session can wake you more than once"): the same rule.</li>
  * </ul>
- * The two "already" facts were read by the model from the conversation; they are recorded here when such a message is
- * handed over ({@link #sent}): {@code quality_time.morning_reminded_on} and {@code quality_time.follow_up_asked_at}
- * (V49). D-058: the morning's is claimed atomically before it is sent ({@link #claimMorning}).
+ * The two "already" facts were read by the model from the conversation; they are recorded here (V49):
+ * {@code quality_time.morning_reminded_on} is claimed atomically right before the morning is sent (D-058,
+ * {@link #claimMorning}), {@code quality_time.follow_up_asked_at} when the follow-up is handed over ({@link #sent}).
  */
 @Component
 public class SessionTimerCard {
@@ -132,7 +132,8 @@ public class SessionTimerCard {
         Map<UUID, LocalDate> before = new java.util.LinkedHashMap<>();
         jdbc.query("""
                 UPDATE quality_time q SET morning_reminded_on = ?
-                FROM (SELECT id, morning_reminded_on AS before FROM quality_time WHERE id = ANY (?::uuid[]) AND father_id = ?) o
+                FROM (SELECT id, morning_reminded_on AS before FROM quality_time WHERE id = ANY (?::uuid[]) AND father_id = ?
+                      ORDER BY id FOR UPDATE) o
                 WHERE q.id = o.id AND q.morning_reminded_on IS DISTINCT FROM ?
                 RETURNING q.id, o.before""",
                 (org.springframework.jdbc.core.RowCallbackHandler) rs -> {
@@ -145,9 +146,14 @@ public class SessionTimerCard {
 
     /** D-058: the claimed morning was provably not sent: the sessions hold what they held before, unless claimed again since. */
     public void releaseMorning(MorningClaim claim) {
-        claim.before().forEach((id, was) -> jdbc.update(
-                "UPDATE quality_time SET morning_reminded_on = ? WHERE id = ? AND father_id = ? AND morning_reminded_on = ?",
-                was, id, claim.fatherId(), claim.day()));
+        try {
+            claim.before().forEach((id, was) -> jdbc.update(
+                    "UPDATE quality_time SET morning_reminded_on = ? WHERE id = ? AND father_id = ? AND morning_reminded_on = ?",
+                    was, id, claim.fatherId(), claim.day()));
+        } catch (RuntimeException e) {
+            // best effort, as the follow-up's note: the callback's answer still goes back
+            log.atWarn().setMessage("session_timer_card.release_failed").addKeyValue("error", e.getClass().getSimpleName()).log();
+        }
     }
 
     /**

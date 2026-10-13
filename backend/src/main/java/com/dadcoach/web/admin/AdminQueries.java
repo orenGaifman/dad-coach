@@ -99,7 +99,8 @@ public class AdminQueries {
     }
 
     public long failedDeliveriesSince(Instant since) {
-        return count("SELECT count(*) FROM scheduled_response_delivery WHERE status = 'FAILED' AND created_at >= ?",
+        return count("SELECT count(*) FROM scheduled_response_delivery WHERE status = 'FAILED' AND created_at >= ? "
+                + "AND failure_reason IS DISTINCT FROM 'ALREADY_REMINDED_TODAY'", // D-058: a rightly skipped morning
                 Timestamp.from(since))
                 + count("SELECT count(*) FROM login_link WHERE delivery_status = 'FAILED' AND created_at >= ?", Timestamp.from(since));
     }
@@ -115,6 +116,7 @@ public class AdminQueries {
                 SELECT x.* , f.display_name FROM (
                   SELECT 'SCHEDULED' AS kind, d.father_id, d.target_state_key AS what, d.status, d.failure_reason AS reason, d.created_at AS at
                   FROM scheduled_response_delivery d WHERE d.status = 'FAILED' AND d.created_at >= ?
+                    AND d.failure_reason IS DISTINCT FROM 'ALREADY_REMINDED_TODAY'
                   UNION ALL
                   SELECT 'LOGIN_LINK', l.father_id, NULL, l.delivery_status, l.delivery_error, l.created_at
                   FROM login_link l WHERE l.delivery_status = 'FAILED' AND l.created_at >= ?
@@ -174,7 +176,8 @@ public class AdminQueries {
     public Map<String, Object> lastFailure() {
         List<Map<String, Object>> rows = jdbc.queryForList("""
                 SELECT failure_reason AS "reason", created_at AS "at" FROM scheduled_response_delivery
-                WHERE status = 'FAILED' ORDER BY created_at DESC LIMIT 1""");
+                WHERE status = 'FAILED' AND failure_reason IS DISTINCT FROM 'ALREADY_REMINDED_TODAY'
+                ORDER BY created_at DESC LIMIT 1""");
         return rows.isEmpty() ? null : rows.get(0);
     }
 

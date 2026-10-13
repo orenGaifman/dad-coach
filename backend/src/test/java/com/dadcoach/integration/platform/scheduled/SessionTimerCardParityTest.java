@@ -303,6 +303,40 @@ class SessionTimerCardParityTest extends AbstractIntegrationTest {
                 father.getId())).extracting(java.sql.Date::toLocalDate).containsOnly(java.time.LocalDate.parse("2026-11-03"));
     }
 
+    @Autowired SessionTimerCard timerCards;
+
+    @Test
+    @DisplayName("D-058: the claim is atomic - of four concurrent claims of the same sessions exactly one wins, every round")
+    void claimIsAtomic() throws Exception {
+        newFather(true);
+        clock.set(Instant.parse("2026-11-03T06:00:00Z"));
+        List<java.util.UUID> ids = List.of(session(noa, Duration.ofHours(7), 60).getId(),
+                session(yuval, Duration.ofHours(9), 60).getId());
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+        try {
+            for (int round = 0; round < 20; round++) {
+                jdbc.update("UPDATE quality_time SET morning_reminded_on = NULL WHERE father_id = ?", father.getId());
+                java.util.concurrent.CyclicBarrier start = new java.util.concurrent.CyclicBarrier(4);
+                List<java.util.concurrent.Future<Boolean>> claims = new ArrayList<>();
+                for (int i = 0; i < 4; i++) {
+                    // alternate the order the sessions are named in (the lock order is fixed by id)
+                    List<java.util.UUID> named = i % 2 == 0 ? ids : List.of(ids.get(1), ids.get(0));
+                    claims.add(pool.submit(() -> {
+                        start.await();
+                        return timerCards.claimMorning(father, named).isPresent();
+                    }));
+                }
+                int won = 0;
+                for (java.util.concurrent.Future<Boolean> c : claims) {
+                    won += c.get(30, java.util.concurrent.TimeUnit.SECONDS) ? 1 : 0;
+                }
+                assertThat(won).as("round " + round).isEqualTo(1);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
     @Test
     @DisplayName("D-058: a morning the platform refused (nothing created) gives its claim back: the next morning goes")
     void refusedMorningGivesTheClaimBack() throws Exception {

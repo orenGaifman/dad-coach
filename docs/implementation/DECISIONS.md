@@ -1342,6 +1342,11 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
     platform said FAILED), the claim is given back: the sessions hold their earlier value, as before, when nothing was
     marked.
   - The follow-up keeps its mark after the send (unchanged).
+  - The claim locks its rows in id order (no deadlock between two mornings); giving it back is best effort. The admin's
+    failure counts and lists leave the skipped morning out (it is no failed delivery).
+  - Accepted: if the winning morning is then refused, the one it skipped does not go either (the same request would
+    almost surely be refused the same way).
 - **Tests:** `SessionTimerCardParityTest.racingMorningsSendOne` (two concurrent callbacks after two cards: one send;
-  fails without the change) and `refusedMorningGivesTheClaimBack`.
+  fails without the change), `claimIsAtomic` (four concurrent claims, 20 rounds: one wins) and
+  `refusedMorningGivesTheClaimBack`. Independent review: APPROVE; its non-blocking points are fixed.
 - **Rollback:** revert. Two mornings on one day can both go again.
