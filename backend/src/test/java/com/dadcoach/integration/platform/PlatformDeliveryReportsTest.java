@@ -490,9 +490,17 @@ class PlatformDeliveryReportsTest extends AbstractIntegrationTest {
     void reportsAreRetriedAndNeverBlock() throws Exception {
         AtomicInteger calls = new AtomicInteger();
         fake.onTimelineReports(c -> calls.incrementAndGet() < 3 ? new FakeServers.Reply(503, "{}") : FakeServers.Reply.json("{}"));
+        java.time.Instant before = java.time.Instant.now();
         notes.childAdded(father, "נועה", 5);
         settle();
         assertThat(fake.recordedOutbound()).hasSize(3);
+        // D-064: each attempt carries the time the note was made - the one that lands late stands where it happened
+        List<String> times = new java.util.ArrayList<>();
+        for (FakeServers.Call c : fake.recordedOutbound()) {
+            times.add(body(c).path("occurredAt").asText());
+        }
+        assertThat(times).containsOnly(times.get(0));
+        assertThat(java.time.Instant.parse(times.get(0))).isBetween(before, java.time.Instant.now());
 
         fake.reset();
         fake.onTimelineReports(c -> new FakeServers.Reply(503, "{}"));

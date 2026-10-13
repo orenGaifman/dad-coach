@@ -1465,3 +1465,23 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   a reply guard taken but never sent, a settled claim, SKIP LOCKED; also: a released row not replayed, lease renewal, give-up, purge, a failed pending row leaves the key free, the webhook
   clears its row answered or released), `FatherDeletionTest`.
 - **Rollback:** revert; V51 only adds a table.
+## D-064 — A timeline report carries the time it happened (architecture effort G, 2026-10-13)
+
+- **Why:** the platform timed every report at its arrival; a report that landed after its retries (or a slow platform)
+  could stand after rows that came after it on the father's conversation.
+- **What:** the three report bodies (`/messages/inbound`, `/messages/outbound`, `/messages/turn-outcome`) carry
+  `occurredAt` (ISO instant) from when the report was built; its retries keep it. The platform orders an inbound / outbound
+  row by it and times a turn outcome's delivery status by it; an older platform ignores the field.
+- **Tests:** `PlatformDeliveryReportsTest.reportsAreRetriedAndNeverBlock` (every attempt carries the same time).
+- **Rollback:** revert (no migration).
+
+## Considered, not changed — the tool-only morning card keeps its callback leg (architecture effort G, 2026-10-13)
+
+- **Asked:** the morning card takes platform → `dc_*` tool (D-049 tool-only state builds the plan) → platform → Dad Coach
+  scheduled callback (builds the plan again, D-058 claim, send) → platform `/send`. Could the tool return the Send API
+  request and the platform send it with no callback?
+- **Why not now:** it moves D-058's claim (atomic, given back when the send is refused) and the callback's outcomes
+  (HELD_UNTIL_WORK_TIME, DROPPED, ALREADY_REMINDED_TODAY, the delivery ledger and its reconcile) into a new platform
+  capability - a tool whose result is sent - shared by every product's scheduled turns, while the HTTP tools (agent D)
+  and the turn engine (agent E) are changing. The second plan build costs one cheap query; the hops are internal and
+  idempotent. Not clearly better: kept. Revisit with the platform's scheduled-send design.
