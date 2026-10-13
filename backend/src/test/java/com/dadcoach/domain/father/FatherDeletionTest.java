@@ -52,6 +52,9 @@ class FatherDeletionTest extends AbstractIntegrationTest {
     @Test
     void hisOwnRequestDeletesOnThePlatformThenPurgesEverything() {
         Father f = fatherWithData("+19995550500");
+        // D-063: his message still waiting for its turn
+        jdbc.update("INSERT INTO pending_inbound (message_id, sender, message, received_at, lease_until) VALUES ('wamid.del', ?, '{}', now(), now())",
+                f.getPhone());
         deletions.requestByFather(f);
         assertThat(jdbc.queryForObject("SELECT status FROM father WHERE id = ?", String.class, f.getId())).isEqualTo("DELETED");
         assertThat(deletedSenders.isDeleted(f.getPhone())).isTrue();
@@ -67,6 +70,7 @@ class FatherDeletionTest extends AbstractIntegrationTest {
         assertThat(rows("communication_endpoints", f)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tool_idempotency", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM site_signup", Integer.class)).as("his site signup too").isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM pending_inbound", Integer.class)).as("his pending message too").isZero();
         assertThat(jdbc.queryForObject("SELECT outcome FROM platform_person_deletion", String.class)).isEqualTo("DELETED");
         assertThat(deletedSenders.isDeleted(f.getPhone())).isFalse(); // confirmed: the number may start over
 

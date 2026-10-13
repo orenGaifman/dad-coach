@@ -100,9 +100,19 @@ public class IdempotencyService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Claim claim(String scope, String key, Duration lease) {
+        return claim(scope, key, lease, () -> { });
+    }
+
+    /**
+     * {@link #claim(String, String, Duration)}; {@code alsoClaimed} runs in the same transaction when the key was claimed
+     * (D-063: his pending message) - if it fails, the key is not claimed either.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Claim claim(String scope, String key, Duration lease, Runnable alsoClaimed) {
         Instant now = clock.instant();
         for (int attempt = 0; attempt < 2; attempt++) {
             if (rows.insertIfAbsent(UUID.randomUUID(), scope, key, "IN_PROGRESS", now, now.plus(DEDUP_RETENTION)) == 1) {
+                alsoClaimed.run();
                 return Claim.CLAIMED;
             }
             var existing = rows.findByScopeAndIdempotencyKey(scope, key);
@@ -112,7 +122,11 @@ public class IdempotencyService {
             if (!"IN_PROGRESS".equals(existing.get().getStatus())) {
                 return Claim.DONE;
             }
-            return rows.takeOverStale(scope, key, now.minus(lease), now) == 1 ? Claim.CLAIMED : Claim.BUSY;
+            if (rows.takeOverStale(scope, key, now.minus(lease), now) == 1) {
+                alsoClaimed.run();
+                return Claim.CLAIMED;
+            }
+            return Claim.BUSY;
         }
         return Claim.BUSY;
     }

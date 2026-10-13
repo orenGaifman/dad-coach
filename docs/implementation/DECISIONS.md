@@ -1439,3 +1439,23 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   before this change).
 - **Note:** the first start after this deploy runs the 2026-10-11 slot once more (one last ERROR) and records it.
 - **Rollback:** revert.
+
+## D-063 — His WhatsApp message survives a crash before its turn (Tair D-124's port, architecture effort, 2026-10-13)
+
+- **Why:** D-038's claim (IN_PROGRESS until answered, released when unanswered) makes a Meta redelivery processable - but
+  after the webhook's 200 none comes (the shared number's gateway does not retry either). A crash, an OOM or a
+  redeploy's queued turns between the 200 and the turn lost his message silently, its claim left IN_PROGRESS.
+- **What:** `pending_inbound` (V51) is written in the claim's transaction (`claim(scope, key, lease, alsoClaimed)`; a
+  failure leaves the key free) and deleted when the turn settled (HANDLED or released, as D-038). The instance holding a
+  message renews its 2-minute lease every 30 s; a row whose lease ran out is claimed with `FOR UPDATE SKIP LOCKED` (one
+  instance), oldest first, and replayed (`whatsapp.inbound.replayed`): the claim is taken over once older than the 2-minute
+  lease and the turn runs on the same per-sender executor; a claim settled meanwhile only clears the row. Given up after 3
+  replays (`whatsapp.inbound.replay_gave_up`); a row older than an hour is purged (`whatsapp.inbound.pending_purged`). His
+  deletion deletes his rows. Only with `retry-unanswered` on (production; the rollback switch keeps the old path).
+- **No second reply:** a replayed turn that reached the platform is a duplicate there; D-038's reply guard
+  (`WHATSAPP_REPLY`) sends its cached reply only when none went.
+- **Not changed:** a released (UNANSWERED) message is still only processed again on a redelivery - the pending row goes.
+- **Tests:** `PendingInboundTest` (failing first: the crash replay with one reply, a reply that went out before the crash,
+  a settled claim, SKIP LOCKED; also: lease renewal, give-up, purge, a failed pending row leaves the key free, the webhook
+  clears its row answered or released), `FatherDeletionTest`.
+- **Rollback:** revert; V51 only adds a table.

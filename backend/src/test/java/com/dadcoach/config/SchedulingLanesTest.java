@@ -55,6 +55,8 @@ class SchedulingLanesTest {
     static final Map<String, String> LANES = Map.of(
             "WeeklyGoalCompletionJob.run", SchedulingLanes.MESSAGING,
             "IdempotencyService.purgeExpired", SchedulingLanes.HOUSEKEEPING,
+            // D-063: renews this instance's pending inbound leases and replays a dead instance's
+            "PendingInbound.tick", SchedulingLanes.HOUSEKEEPING,
             "KeepWarmJob.keepWarm", SchedulingLanes.HOUSEKEEPING,
             "LoginLinkPlatform.scheduledReconcile", SchedulingLanes.MESSAGING,
             "ScheduledPlatformSend.scheduledReconcile", SchedulingLanes.MESSAGING,
