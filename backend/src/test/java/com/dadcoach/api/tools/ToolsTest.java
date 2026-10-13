@@ -81,6 +81,10 @@ class ToolsTest extends AbstractIntegrationTest {
         assertThat(tool("get_activity_ideas", "not-a-phone", Map.of()).status()).isEqualTo(400);
         assertThat(tool("get_activity_ideas", f.getPhone(), Map.of()).success()).isTrue();
         assertThat(tool("get_activity_ideas", "whatsapp:" + f.getPhone(), Map.of()).success()).isTrue();
+        // D-059: every identity the platform's old Dad Coach client accepted - any channel, the plus optional after it
+        assertThat(tool("get_activity_ideas", "whatsapp:" + f.getPhone().substring(1), Map.of()).success()).isTrue();
+        assertThat(tool("get_activity_ideas", "sms:" + f.getPhone(), Map.of()).success()).isTrue();
+        assertThat(tool("get_activity_ideas", f.getPhone().substring(1), Map.of()).status()).isEqualTo(400);
     }
 
     @Test
@@ -373,5 +377,86 @@ class ToolsTest extends AbstractIntegrationTest {
         assertThat(ideas.data().path("ideas").size()).isBetween(1, 3);
         assertThat(ideas.data().path("child_age").asInt()).isEqualTo(6);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tool_idempotency", Integer.class)).isZero();
+    }
+
+    // ── the platform's generic HTTP tool (D-059) ────────────────────────────
+
+    /**
+     * The platform's generic HTTP tool sends every schema parameter (a missing one as null) and an execution_context;
+     * its Dad Coach client sent only the parameters the model gave. Both envelopes are the same call.
+     */
+    @Test
+    void theGenericEnvelopeIsTheSameCallAsTheDadCoachClientEnvelope() throws Exception {
+        assertThat(normalized(scenario("+19995550290", false))).isEqualTo(normalized(scenario("+19995550291", true)));
+    }
+
+    private java.util.List<JsonNode> scenario(String phone, boolean generic) throws Exception {
+        Map<String, java.util.List<String>> schema = Map.of(
+                "save_user_profile", java.util.List.of("displayName", "timezone", "locale", "preferredCoachingTime"),
+                "add_child", java.util.List.of("name", "age", "gender", "interests"),
+                "set_weekly_goal", java.util.List.of("target_hours"),
+                "get_activity_ideas", java.util.List.of("child_id", "activity_type"),
+                "show_available_slots", java.util.List.of("days_ahead"),
+                "schedule_quality_time", java.util.List.of("child_id", "start_time", "duration_minutes"),
+                "reschedule_quality_time", java.util.List.of("quality_time_id", "new_start_time", "new_duration_minutes"),
+                "complete_quality_time", java.util.List.of("quality_time_id", "notes"),
+                "cancel_quality_time", java.util.List.of("quality_time_id", "reason"));
+        java.util.List<JsonNode> out = new java.util.ArrayList<>();
+        java.util.function.BiFunction<String, Map<String, Object>, Call> call = (key, given) -> {
+            Map<String, Object> params = new LinkedHashMap<>();
+            if (generic) {
+                schema.get(key).forEach(p -> params.put(p, given.get(p)));
+            } else {
+                params.putAll(given);
+            }
+            String user = generic ? "whatsapp:" + phone : phone;
+            try {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("execution_id", UUID.randomUUID().toString());
+                String key2 = UUID.randomUUID().toString();
+                body.put("idempotency_key", key2);
+                body.put("user_id", user);
+                if (generic) {
+                    body.put("execution_context", Map.of("correlationId", key2, "workflowInstanceId", UUID.randomUUID().toString()));
+                }
+                body.put("parameters", params);
+                MvcResult r = mvc.perform(post("/api/tools/" + key).header("X-API-Key", TOOL_KEY)
+                        .header("X-Idempotency-Key", key2).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsBytes(body))).andReturn();
+                Call c = new Call(r.getResponse().getStatus(), json.readTree(r.getResponse().getContentAsByteArray()));
+                out.add(json.createObjectNode().put("status", c.status()).set("body", c.body()));
+                return c;
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        };
+        call.apply("save_user_profile", Map.of("displayName", "רועי", "timezone", "Asia/Jerusalem"));
+        call.apply("add_child", Map.of("name", "מאיה", "age", 4));
+        long child = call.apply("add_child", Map.of("name", "יואב", "age", 8, "interests", java.util.List.of("כדורגל")))
+                .data().path("childId").asLong(jdbc.queryForObject(
+                        "SELECT c.id FROM child c JOIN father f ON f.id = c.father_id WHERE f.phone = ? AND c.name = 'יואב'", Long.class, phone));
+        call.apply("set_weekly_goal", Map.of("target_hours", 3));
+        call.apply("get_activity_ideas", Map.of("child_id", child));
+        call.apply("show_available_slots", Map.of());
+        String id = call.apply("schedule_quality_time", Map.of("child_id", child, "start_time", at("2026-11-04", "17:30")))
+                .data().path("quality_time_id").asText();
+        String moved = call.apply("reschedule_quality_time", Map.of("quality_time_id", id, "new_start_time", at("2026-11-05", "18:00")))
+                .data().path("new_quality_time_id").asText();
+        call.apply("cancel_quality_time", Map.of("quality_time_id", moved));
+        String past = call.apply("schedule_quality_time", Map.of("child_id", child, "start_time", at("2026-11-02", "17:00"),
+                "duration_minutes", 30)).data().path("quality_time_id").asText();
+        call.apply("complete_quality_time", Map.of("quality_time_id", past));
+        call.apply("cancel_quality_time", Map.of("quality_time_id", UUID.randomUUID().toString()));
+        call.apply("add_child", Map.of("name", "מאיה", "age", 4));
+        return out;
+    }
+
+    /** Ids and per-call keys differ between two fathers; everything else must be equal. */
+    private String normalized(java.util.List<JsonNode> calls) {
+        return calls.toString()
+                .replaceAll("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "<uuid>")
+                .replaceAll("\"(childId|child_id|goal_id|fatherId|father_id|id)\":\"?\\d+\"?", "\"$1\":<id>")
+                .replaceAll("\"createdAt\":\"[^\"]+\"", "\"createdAt\":<time>")
+                .replace("+19995550290", "<phone>").replace("+19995550291", "<phone>");
     }
 }

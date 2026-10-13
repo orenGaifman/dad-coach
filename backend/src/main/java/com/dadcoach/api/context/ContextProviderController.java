@@ -27,7 +27,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * {@code POST /api/context/{providerKey}} - the two providers bound in dad-coach-3 (playbook §12), loaded fresh on
  * every turn: {@code family_context} (profile + children) and {@code weekly_plan_context} (this week in his
- * timezone, {@link WeeklyPlanContextBuilder}). The father is identified only by his WhatsApp number in
+ * timezone, {@link WeeklyPlanContextBuilder}); {@code agent_family_context} is family_context as the agent reads it
+ * through the platform's generic provider (D-059). The father is identified only by his WhatsApp number in
  * {@code config.phone} (how the platform's Dad Coach context client sends a channel identity); a numeric user_id is
  * never trusted. An unknown or deleted father is a legitimate empty answer (200, father_found=false), not an error.
  * The envelope {success, data, error_code, error_message} is what the platform's client parses.
@@ -57,6 +58,7 @@ public class ContextProviderController {
             ContextProviderResponse response = switch (providerKey) {
                 case "family_context" -> ContextProviderResponse.success(family(father));
                 case "weekly_plan_context" -> ContextProviderResponse.success(weekly(father));
+                case "agent_family_context" -> ContextProviderResponse.success(agentFamily(father, request));
                 default -> {
                     result = "PROVIDER_NOT_FOUND";
                     yield ContextProviderResponse.providerNotFound(providerKey);
@@ -127,6 +129,49 @@ public class ContextProviderController {
         data.put("has_multiple_children", active.size() > 1);
         data.put("has_google_calendar_connected", father.hasGoogleCalendarConfigured());
         data.put("children_count", active.size());
+        return data;
+    }
+
+    /**
+     * D-059: family_context exactly as the platform's own FamilyContextProvider used to rebuild it from
+     * {@link #family} (camelCase, isNewUser/hasProfile flags), so the platform reads it through its generic HTTP
+     * provider with the agent seeing the same data. That mapping never found a calendar flag, a preferred coaching
+     * time or a welcome step in our answer, so those are false/null here too.
+     */
+    private Map<String, Object> agentFamily(Optional<Father> found, ContextProviderRequest request) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("isNewUser", found.isEmpty());
+        data.put("hasProfile", found.isPresent());
+        List<Map<String, Object>> list = new ArrayList<>();
+        if (found.isEmpty()) {
+            data.put("father", Map.of());
+        } else {
+            Father father = found.get();
+            Map<String, Object> profile = new LinkedHashMap<>();
+            profile.put("displayName", father.getDisplayName());
+            profile.put("locale", father.getLocale() != null ? father.getLocale() : "he");
+            profile.put("timezone", FatherTimezones.of(father).getId());
+            profile.put("preferredCoachingTime", null);
+            profile.put("googleCalendarConnected", false);
+            profile.put("welcomeStep", null);
+            data.put("father", profile);
+            Object includeChildren = request.config() == null ? null : request.config().get("includeChildren");
+            if (!Boolean.FALSE.equals(includeChildren)) {
+                for (Child child : children.findByFatherIdAndStatus(father.getId(), "ACTIVE")) {
+                    Map<String, Object> c = new LinkedHashMap<>();
+                    c.put("childId", child.getId());
+                    c.put("name", child.getName());
+                    c.put("age", child.getAge());
+                    c.put("gender", child.getGender());
+                    c.put("interests", child.getInterests() != null ? child.getInterests() : List.of());
+                    list.add(c);
+                }
+            }
+        }
+        data.put("children", list);
+        data.put("hasMultipleChildren", list.size() > 1);
+        data.put("childCount", list.size());
+        data.put("hasGoogleCalendarConnected", false);
         return data;
     }
 
