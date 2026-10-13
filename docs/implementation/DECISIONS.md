@@ -1393,6 +1393,12 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   scheduling result's times; cancelled on his page - its two timers CANCELLED at once and not re-armed by the next pass;
   a third session confirmed done on his page - its follow-up CANCELLED. The one real conversation had no upcoming
   session (no pending timer), so nothing of his changed.
-- **Tests:** `test_manifests.test_only_dad_coach_arms_the_session_timers`.
+- **Code:** a turn that ends without a checked reply (suppressed, blank, already answered, the not-Hebrew fixed line, the
+  dashboard card) now arms or clears its sessions' timers too (`InboundMessageHandler.timersAfterTurn`); before, only the
+  model did on those paths. A turn the platform failed is left to the reconcile (it may still hold the conversation).
+- **Tests:** `test_manifests.test_only_dad_coach_arms_the_session_timers`; `ArmedTimersTest`
+  `aTurnWithoutAReplyStillArmsItsTimers` and `aTurnEndingInTheFixedLineStillClearsItsTimers` (both fail without the
+  code). Independent review: APPROVE; its points taken (these paths, the transitions' text, the rollback note).
 - **Rollback:** revert this commit and provision again (the model arms again; Dad Coach's arming stays harmless: the
-  platform keeps one timer per key and session).
+  platform keeps one timer per key and session). `DC_SESSION_TIMERS_PRODUCT_OWNED` and the platform's
+  `PRODUCT_TIMERS_ANY_STATE` must stay on while this is in place - turn either off only after reverting it.

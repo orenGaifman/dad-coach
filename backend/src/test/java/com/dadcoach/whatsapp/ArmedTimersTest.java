@@ -241,6 +241,40 @@ class ArmedTimersTest extends AbstractIntegrationTest {
                 .isEqualTo("כרגע אני לא מצליח לבדוק את התזכורות שלך.");
     }
 
+    @Test
+    @DisplayName("D-059: a booking turn whose reply is suppressed or blank still gets its timers (the model no longer arms)")
+    void aTurnWithoutAReplyStillArmsItsTimers() throws Exception {
+        AtomicReference<String> id = new AtomicReference<>();
+        fake.onTurn(c -> {
+            id.set(book(FRIDAY_9));
+            return FakeServers.Reply.json(FakeServers.turnReply(null, "SUPPRESSED"));
+        });
+        says("תקבע שישי ב-9");
+
+        assertThat(fake.sentMessages()).isEmpty();
+        assertThat(fake.pendingTimers()).extracting(FakeServers.Timer::transitionKey, FakeServers.Timer::referenceId)
+                .containsExactlyInAnyOrder(org.assertj.core.groups.Tuple.tuple("session_reminder_1h", id.get()),
+                        org.assertj.core.groups.Tuple.tuple("session_follow_up", id.get()));
+    }
+
+    @Test
+    @DisplayName("D-059: a cancel in a turn whose reply is never sent (not Hebrew twice) still clears its timers")
+    void aTurnEndingInTheFixedLineStillClearsItsTimers() throws Exception {
+        String session = book(FRIDAY_9);
+        fake.armAsModel(USER, "session_reminder_1h", FRIDAY_9.minus(Duration.ofHours(1)), session);
+        AtomicInteger turns = new AtomicInteger();
+        fake.onTurn(c -> {
+            if (turns.getAndIncrement() == 0) {
+                qualityTime.cancelQualityTime(java.util.UUID.fromString(session));
+            }
+            return FakeServers.Reply.json(FakeServers.turnReply("I cancelled it.", "GENERATED"));   // and again in English
+        });
+        says("תבטל");
+
+        assertThat(turns).hasValue(2);
+        assertThat(fake.pendingTimers()).isEmpty();
+    }
+
     // ---- helpers ----------------------------------------------------------------------------------------------------
 
     /** Books Friday 09:00 inside the turn; {@code alsoInTurn} gets the new session id (e.g. to play the model arming). */

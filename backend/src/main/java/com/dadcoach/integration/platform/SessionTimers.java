@@ -22,8 +22,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * A session's timers as the platform really holds them (D-037). The model arms them in the booking turn
- * (schedule_state_transition); whether it did is known only to the platform. After the turn returns - never inside a
+ * A session's timers as the platform really holds them (D-037). Dad Coach is their one owner (D-059: the model no longer
+ * arms them). After the turn returns - never inside a
  * tool call, where the turn holds the conversation's lock - every timer {@link SessionTimerPlanner} plans for the
  * session is read back and the missing ones are armed through the platform's worker API. A reply may then promise only
  * the timers the platform confirmed. Nothing here throws: a platform that cannot be reached confirms nothing.

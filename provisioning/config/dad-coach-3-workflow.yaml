@@ -466,9 +466,8 @@ states:
     description: Morning-of-session reminder
     displayOrder: 0
     triggerType: SCHEDULED
-    triggerCondition: "Armed right after a session is scheduled or rescheduled, only when the result's timers
-      contain session_morning_reminder: scheduled_at = that instant, reference_type='quality_time',
-      reference_id=<quality_time_id>."
+    triggerCondition: "Armed by Dad Coach (onEvent: never the model) after the booking turn and by its 10-minute
+      reconcile, at the planner's session_morning_reminder time, reference_type='quality_time', reference_id=<quality_time_id>."
     schedulingRule:
       type: AI_DETERMINED_TIME
       fireFromAnyState: true
@@ -478,9 +477,8 @@ states:
     description: Reminder about one hour before the session starts
     displayOrder: 1
     triggerType: SCHEDULED
-    triggerCondition: "Armed right after a session is scheduled or rescheduled, only when the result's timers
-      contain session_reminder_1h: scheduled_at = that instant, reference_type='quality_time',
-      reference_id=<quality_time_id>."
+    triggerCondition: "Armed by Dad Coach (onEvent: never the model) after the booking turn and by its 10-minute
+      reconcile, at the planner's session_reminder_1h time, reference_type='quality_time', reference_id=<quality_time_id>."
     schedulingRule:
       type: AI_DETERMINED_TIME
       fireFromAnyState: true
@@ -490,9 +488,8 @@ states:
     description: Follow-up shortly after the session ends
     displayOrder: 2
     triggerType: SCHEDULED
-    triggerCondition: "Armed right after a session is scheduled or rescheduled, only when the result's timers
-      contain session_follow_up: scheduled_at = that instant, reference_type='quality_time',
-      reference_id=<quality_time_id>."
+    triggerCondition: "Armed by Dad Coach (onEvent: never the model) after the booking turn and by its 10-minute
+      reconcile, at the planner's session_follow_up time, reference_type='quality_time', reference_id=<quality_time_id>."
     schedulingRule:
       type: AI_DETERMINED_TIME
       fireFromAnyState: true
