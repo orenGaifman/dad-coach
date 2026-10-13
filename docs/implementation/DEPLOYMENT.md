@@ -9,7 +9,7 @@ Names only — never values. Secrets live on Render (and the owner-local `~/.con
 - WhatsApp: Dad Coach's own number (Meta Cloud API, WABA of its own) → webhook `https://<dad-coach>/webhook/whatsapp`.
 - AI Workflow Platform: worker `dad_3`, workflow `dad-coach-3`, tenant `20082bcd-a7bf-57a8-a382-4bad32144b2f`;
   platform → Dad Coach tool/context base URL + `DAD_COACH_API_KEY` (= Dad Coach `TOOL_API_KEY`); scheduled-response
-  callback route `WORKFLOW_SCHEDULEDRESPONSECALLBACK_ROUTES_1_*` (ROUTES_0 is Big Boss).
+  callback route `WORKFLOW_PRODUCTS_DADCOACH_CALLBACK_*`.
 - Dashboard: WS-B (own Render service); until cut-over the Vercel app.
 
 ## Environment (backend)
@@ -34,7 +34,7 @@ Names only — never values. Secrets live on Render (and the owner-local `~/.con
 | ~~GATEWAY_HELD_REPORTS~~ | — | D-053: unused - `/held-outcome` is gone (the platform holds and reports through `/delivery-status`) |
 | APP_SCHEDULING_LANES | no (default true since D-061, as production) | D-043: `true` = the WhatsApp-sending job (weekly belt promotions) keeps the single scheduler thread `scheduling-1`, the housekeeping jobs (receipt retry, template refresh, idempotency purge, platform deletions, keep-warm) run on their own pool of 3 (`scheduling-housekeeping-N`); anything but `true` (any case) = one thread runs every job, as before |
 | ~~MESSAGING_MODE_LOGIN_LINK, MESSAGING_MODE_SCHEDULED, MESSAGING_MODE_REPLY, MESSAGING_MODE_FIXED_LINE, MESSAGING_MODE_BUTTON_REPLY, MESSAGING_MODE_READY_ANSWER~~ | — | D-053: unused - the platform's Send API is the only sender (no DIRECT / SHADOW) |
-| MESSAGING_DELIVERY_STATUS_ENABLED | no (default true since D-053) | apply the platform's delivery reports (`POST /api/integration/channel/delivery-status`, callback key) - the only source of a message's fate since D-053; off = 404, nothing changes (the platform retries 24 h). Platform side: `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_DELIVERYREPORTURL` |
+| MESSAGING_DELIVERY_STATUS_ENABLED | no (default true since D-053) | apply the platform's delivery reports (`POST /api/integration/channel/delivery-status`, callback key) - the only source of a message's fate since D-053; off = 404, nothing changes (the platform retries 24 h). Platform side: `WORKFLOW_PRODUCTS_DADCOACH_WHATSAPP_DELIVERYREPORTURL` |
 | MESSAGING_NOT_CREATED_REPOST_WAIT | no (PT2S, at most 2 s) | D-053: a line without a ledger the platform provably did not create (503 disabled, 401/403, never written) is POSTed once more after this, then not sent - the message stays unanswered (the webhook already answered Meta 200, so Meta does not resend it) |
 | MESSAGING_RECONCILE_AFTER, MESSAGING_SEND_READ_TIMEOUT_MS | no (PT5M, 12000) | D-045: when an ambiguous send is looked up by key; the Send API read timeout (platform wait 8 s + 4 s) |
 | MESSAGING_LOOKUP_READ_TIMEOUT_MS, MESSAGING_RECONCILE_PASS_BUDGET | no (5000, PT15S) | D-047: the reconcile job's lookup-by-key timeout, and how long one reconcile pass may take rows (the rest next minute) - a hanging platform holds the shared scheduler thread at most ~budget + one call |
@@ -95,13 +95,13 @@ Keep: everything in the table above (GOOGLE_* stay).
   5. Deploy Dad Coach. Watch: `messaging.pending_swept` at startup and then hourly (counts); no `messaging.platform_disabled`,
      `messaging.platform_auth_failed`, `messaging.*.request_failed` (ERROR); every reply `whatsapp.delivery.result` with a
      `platformStatus`; the templates screen shows the platform's state.
-  6. Then platform `WORKFLOW_CHANNELS_WHATSAPP_FORWARDSTATUSES=false` and unset `..._ROUTES_1_HELDREPORTURL` (after all
+  6. Then platform `WORKFLOW_CHANNELS_WHATSAPP_FORWARDSTATUSES=false` and unset `WORKFLOW_PRODUCTS_DADCOACH_WHATSAPP_HELDREPORTURL` (after all
      three products), then remove the unused env above.
 - **Roll back D-053:** set back BEFORE the revert deploy `MESSAGING_MODE_LOGIN_LINK|SCHEDULED|REPLY|FIXED_LINE|
   BUTTON_REPLY|READY_ANSWER=PLATFORM`, `GATEWAY_HELD_REPORTS=true`, `MESSAGING_DELIVERY_STATUS_ENABLED=true`,
   `DAD_COACH_WHATSAPP_RECEIPTS_ENABLED`, `WHATSAPP_WABA_ID` and `WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME` (their values
   of today, written down before they were removed); platform
-  `WORKFLOW_CHANNELS_WHATSAPP_FORWARDSTATUSES=true` + `ROUTES_1_HELDREPORTURL`; then `git revert -m 1 <merge>` and deploy.
+  `WORKFLOW_CHANNELS_WHATSAPP_FORWARDSTATUSES=true` + `WORKFLOW_PRODUCTS_DADCOACH_WHATSAPP_HELDREPORTURL`; then `git revert -m 1 <merge>` and deploy.
   No migration to undo. Check first that no row is `platform_state = 'NOT_CREATED'` (the old code would leave it pending
   without re-POSTing). Products first, platform last.
 - **Kill switch since D-053:** platform `MESSAGING_ENABLED=false` / `dad_coach` out of the allow-list = links and scheduled
@@ -112,7 +112,7 @@ Keep: everything in the table above (GOOGLE_* stay).
   → purged now; the platform deletion follows from the outbox (logs `Platform person deletion …`).
 - **A proactive message was not delivered:** `scheduled_response_delivery` row by trigger id (status, failure
   reason: SESSION_CLOSED without a template, ENDPOINT_NOT_FOUND, Meta error).
-- **Roll back D-042 (the gateway's held-outcome reports):** platform env `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_HELDREPORTURL`
+- **Roll back D-042 (the gateway's held-outcome reports):** platform env `WORKFLOW_PRODUCTS_DADCOACH_WHATSAPP_HELDREPORTURL`
   unset (reports stop) and/or Dad Coach `GATEWAY_HELD_REPORTS=false` (the endpoint answers 404, the receipt buffer keeps
   only "failed" as before; the platform retries a report for 24 h, then gives up - log noise only). Nothing to undo in
   the data. Before a **code revert** below D-042 (the old enum cannot load the new status), run once and again a few
@@ -131,7 +131,7 @@ Keep: everything in the table above (GOOGLE_* stay).
   3. **Platform** (one env change, one restart; nothing else of the platform changes):
      - first, read-only: `GET /api/v1/worker/whatsapp/templates?workerKey=dad_3&name=dad_coach_update_he` (Dad Coach's
        integration key) → `APPROVED` (or `sync` off / no snapshot = Meta judges, as today). Spec §17 rule 2.
-     - `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_DELIVERYREPORTURL=https://dad-coach.onrender.com/api/integration/channel/delivery-status`
+     - `WORKFLOW_PRODUCTS_DADCOACH_WHATSAPP_DELIVERYREPORTURL=https://dad-coach.onrender.com/api/integration/channel/delivery-status`
        (route 1 = `dad-coach`; its claim key is Dad Coach's callback key, header `X-API-Key` - no `REPORTAPIKEY` needed)
      - `MESSAGING_ALLOWED_PRODUCTS=dad_coach:LOGIN_LINK` (only this kind; any other Dad Coach kind still gets 503)
      - `MESSAGING_ENABLED=true`
@@ -303,3 +303,9 @@ DADCOACH_WHATSAPP_PUBLIC_NUMBER=+19995550100 java -jar backend/target/dad-coach-
 cd frontend && npm ci && VITE_API_TARGET=http://localhost:8491 npm run dev
 # 4. Tests: npm run build && npm test && E2E_DB_CONTAINER=dc-dash-postgres npx playwright test
 ```
+
+## Platform catalog (platform P2, 2026-10-13)
+
+| Variable (this backend) | Value |
+|---|---|
+| `PLATFORM_CATALOG_PUBLISH` | `off` (default) · `dry-run` (the platform reports what publishing `platform-catalog.json` would change; nothing written) · `apply` (publish at start). Publish before republishing a workflow that needs a catalog change. |

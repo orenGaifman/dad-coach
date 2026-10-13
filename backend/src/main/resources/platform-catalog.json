@@ -1,0 +1,1247 @@
+{
+  "product": "dad_coach",
+  "tools": [
+    {
+      "toolKey": "add_child",
+      "description": "Adds a child to the user profile in Dad Coach service. Use this during onboarding to collect child information. Call this tool immediately after the father provides the child's name and age.",
+      "endpointConfig": {
+        "url": "${DAD_COACH_BASE_URL}/api/tools/add_child",
+        "retry": {
+          "multiplier": 2.0,
+          "maxAttempts": 3,
+          "maxIntervalMs": 10000,
+          "initialIntervalMs": 1000
+        },
+        "method": "POST",
+        "headers": {
+          "X-API-Key": "${DAD_COACH_API_KEY}"
+        },
+        "bodyTemplate": {
+          "user_id": "{{system.userId}}",
+          "parameters": {
+            "age": "{{age}}",
+            "name": "{{name}}",
+            "gender": "{{gender}}",
+            "interests": "{{interests}}"
+          },
+          "execution_id": "{{system.agentExecutionId}}",
+          "idempotency_key": "{{system.idempotencyKey}}",
+          "execution_context": {
+            "correlationId": "{{system.idempotencyKey}}",
+            "workflowInstanceId": "{{system.workflowInstanceId}}"
+          }
+        },
+        "responseDataPath": "data",
+        "idempotencyHeaderName": "X-Idempotency-Key"
+      },
+      "guidance": "## Input Fields\n\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| name | string | Yes | Child's name (1-100 characters) |\n| age | integer | Yes | Child's age in whole years (0-25) |\n| gender | string | No | Child's gender. Valid values: \"boy\", \"girl\", \"other\" |\n| interests | array of strings | No | List of the child's interests and hobbies |\n\n**⚠️ All input fields must be extracted from user conversation** - no context providers return child data for this tool. Extract values directly from what the father tells you about their child.\n\n## Prerequisites\n\n⚠️ **Critical**: This tool can ONLY be used when:\n1. A user/parent account exists and is authenticated in the system\n2. The authenticated user has a valid account ID\n\n**Before attempting to use this tool**, verify that the user is logged in. If you receive a \"Father not found\" or \"Parent not found\" error, this means:\n- The user account does not exist in the system, OR\n- The user is not properly authenticated, OR\n- This is a test/demo environment without a valid user account\n\n**Do NOT retry** this tool if you receive an authentication error. Instead, inform the user that they need to log in or create an account first.\n\n## Response Fields\n\n| Field | Type | Description |\n|-------|------|-------------|\n| childId | string | Unique identifier for the added child |\n| name | string | The saved child name (echoes input) |\n| age | integer | The saved age in years |\n| gender | string | The saved gender (if provided) |\n| interests | array of strings | The saved interests (if provided) |\n| createdAt | string (datetime) | ISO 8601 timestamp when child was added |\n| status | string | Always \"added\" on success |\n| childCount | integer | Total number of children after adding this one |\n\n## Error Responses\n\n| Error Type | Message Pattern | Cause | AI Action Required |\n|------------|----------------|-------|--------------------|\n| AUTHENTICATION_REQUIRED | \"Father not found: {userId}\" or \"Parent not found\" | User is not authenticated or account doesn't exist in system | **STOP**: Do not retry. Inform user they must log in or create an account |\n| INVALID_NAME | \"Invalid name provided\" | Name is empty, too long (>100 chars), or contains invalid characters | Fix the name parameter and retry |\n| INVALID_AGE | \"Age must be between 0 and 25\" | Age is outside the valid range | Verify age with user and retry with correct value |\n| INVALID_GENDER | \"Invalid gender value\" | Gender is not one of: \"boy\", \"girl\", \"other\" | Use only allowed values or omit the field |\n| DUPLICATE_CHILD | \"Child with this name already exists\" | A child with the same name is already registered | Inform user and ask if they want to use a different name |\n\n## Usage Notes\n\n### Parameter Extraction Guidelines:\n- **Age**: Extract as a single integer representing whole years (do not split into years and months). Example: \"7 years old\" → 7\n- **Gender**: Can be inferred from context:\n  - \"daughter\" → \"girl\"\n  - \"son\" → \"boy\"\n  - If ambiguous or not mentioned, omit this field\n- **Interests**: Extract as separate array items, even if mentioned in a single phrase\n  - Example: \"loves soccer, painting, and reading books\" → [\"soccer\", \"painting\", \"reading books\"]\n  - Keep interest descriptions concise but meaningful\n\n### Authentication Handling:\n- If this tool fails with \"Father not found\" or \"Parent not found\", **do not attempt to retry**\n- Respond to the user: \"I cannot add a child to your account because you need to be logged in first. Please log in or create an account to use this feature.\"\n- This is a **terminal error** for this operation - the user must take action outside of this conversation",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "name",
+          "age"
+        ],
+        "properties": {
+          "age": {
+            "type": "integer",
+            "maximum": 25,
+            "minimum": 0,
+            "description": "Child's age in years (0-25)"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "description": "Child's name"
+          },
+          "gender": {
+            "enum": [
+              "boy",
+              "girl",
+              "other"
+            ],
+            "type": "string",
+            "description": "Child's gender"
+          },
+          "interests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Child's interests and hobbies"
+          }
+        }
+      },
+      "name": "Add Child",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "age": {
+                "type": "integer",
+                "description": "The child's age"
+              },
+              "name": {
+                "type": "string",
+                "description": "The child's name"
+              },
+              "gender": {
+                "type": "string",
+                "description": "The child's gender if provided"
+              },
+              "childId": {
+                "type": "integer",
+                "description": "The unique identifier for the child"
+              },
+              "interests": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The child's interests if provided"
+              }
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Whether the child was added successfully"
+          },
+          "errorMessage": {
+            "type": "string",
+            "description": "Error message if the operation failed"
+          }
+        }
+      },
+      "requiresConfirmation": false,
+      "sideEffectType": "SIDE_EFFECTING"
+    },
+    {
+      "toolKey": "cancel_quality_time",
+      "description": "Cancel a planned quality time session. Use when father wants to cancel.",
+      "endpointConfig": {
+        "url": "${DAD_COACH_BASE_URL}/api/tools/cancel_quality_time",
+        "retry": {
+          "multiplier": 2.0,
+          "maxAttempts": 3,
+          "maxIntervalMs": 10000,
+          "initialIntervalMs": 1000
+        },
+        "method": "POST",
+        "headers": {
+          "X-API-Key": "${DAD_COACH_API_KEY}"
+        },
+        "bodyTemplate": {
+          "user_id": "{{system.userId}}",
+          "parameters": {
+            "reason": "{{reason}}",
+            "quality_time_id": "{{quality_time_id}}"
+          },
+          "execution_id": "{{system.agentExecutionId}}",
+          "idempotency_key": "{{system.idempotencyKey}}",
+          "execution_context": {
+            "correlationId": "{{system.idempotencyKey}}",
+            "workflowInstanceId": "{{system.workflowInstanceId}}"
+          }
+        },
+        "responseDataPath": "data",
+        "idempotencyHeaderName": "X-Idempotency-Key"
+      },
+      "guidance": "## Input Fields\n\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| quality_time_id | string (UUID) | Yes | ID of the Quality Time event to cancel. **REQUIRED: Populate this using the `qualityTimeId` field from a quality time event returned by context provider `quality_time_context`.** The provider returns an array `qualityTimeEvents[]` where each event has a `qualityTimeId` field. Select the appropriate event based on the user's cancellation request (matching `childName`, `scheduledStart`, or other details they provide). **Only use events with `status=\"SCHEDULED\"`** - completed or already-canceled events cannot be canceled. **DO NOT accept UUIDs directly from user input** - they may reference old or invalid data. If `quality_time_context` returns no data or no matching scheduled event, inform the user you need to first retrieve their scheduled events or that no scheduled event was found to cancel. |\n| reason | string | No | Optional reason for cancellation (helps track patterns). Extract from user's explanation if provided. This is a free-text field populated from the user's stated reason for canceling. |\n\n## Response Fields\n\n| Field | Type | Description |\n|-------|------|-------------|\n| eventId | string | Identifier of the canceled event |\n| originalDate | string (date) | The date that was canceled |\n| originalTime | string | The time that was canceled |\n| reason | string | The cancellation reason if provided |\n| status | string | Always \"canceled\" on success |\n| canceledAt | string (datetime) | ISO 8601 timestamp when canceled |\n\n## Error Responses\n\n| Field | Type | Description |\n|-------|------|-------------|  \n| error | string | Error type: \"NO_SCHEDULED_EVENT\", \"ALREADY_CANCELED\", \"ALREADY_COMPLETED\" |\n| message | string | Human-readable error description |\n\n**Common Error**: \"QualityTime not found\" means the quality_time_id doesn't exist or was already deleted. Verify the ID is from current scheduled events returned by `quality_time_context`, not user-provided text.",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "quality_time_id"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Reason for cancellation (optional)"
+          },
+          "quality_time_id": {
+            "type": "string",
+            "description": "ID of the Quality Time event to cancel (required)"
+          }
+        }
+      },
+      "name": "Cancel Quality Time",
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "eventId",
+          "status"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Reason provided for cancellation (if any)"
+          },
+          "status": {
+            "enum": [
+              "canceled"
+            ],
+            "type": "string",
+            "description": "Status of the event after cancellation"
+          },
+          "eventId": {
+            "type": "string",
+            "description": "Unique identifier of the cancelled event"
+          },
+          "canceledAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the event was cancelled"
+          }
+        }
+      },
+      "requiresConfirmation": true,
+      "sideEffectType": "SIDE_EFFECTING"
+    },
+    {
+      "toolKey": "complete_quality_time",
+      "description": "Mark quality time as completed. Use when father reports finishing the quality time session.",
+      "endpointConfig": {
+        "url": "${DAD_COACH_BASE_URL}/api/tools/complete_quality_time",
+        "retry": {
+          "multiplier": 2.0,
+          "maxAttempts": 3,
+          "maxIntervalMs": 10000,
+          "initialIntervalMs": 1000
+        },
+        "method": "POST",
+        "headers": {
+          "X-API-Key": "${DAD_COACH_API_KEY}"
+        },
+        "bodyTemplate": {
+          "user_id": "{{system.userId}}",
+          "parameters": {
+            "notes": "{{notes}}",
+            "quality_time_id": "{{quality_time_id}}"
+          },
+          "execution_id": "{{system.agentExecutionId}}",
+          "idempotency_key": "{{system.idempotencyKey}}",
+          "execution_context": {
+            "correlationId": "{{system.idempotencyKey}}",
+            "workflowInstanceId": "{{system.workflowInstanceId}}"
+          }
+        },
+        "responseDataPath": "data",
+        "idempotencyHeaderName": "X-Idempotency-Key"
+      },
+      "guidance": "## Input Fields\n\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| quality_time_id | string (UUID) | Yes | ID of the Quality Time event to mark as completed. **Populate this field using the `qualityTimeId` value from a scheduled quality time event returned by context provider `quality_time_context` in the `qualityTimeEvents` array (where `status` is \"SCHEDULED\").** Do NOT accept or use UUIDs that users mention in their messages - these are often examples or made-up values. If the context provider returns no scheduled quality time events (or returns no data), inform the user that you cannot find a scheduled quality time session to complete and suggest they schedule one first. |\n| notes | string | No | What the father says about the session - what they did and how it went. Capture the father's description of the activities and experience in their own words. |\n\n## Response Fields\n\n| Field | Type | Description |\n|-------|------|-------------|\n| eventId | string | Identifier of the completed event |\n| feedback | string | The submitted feedback if provided |\n| rating | integer | The submitted rating if provided |\n| status | string | Always \"completed\" on success |\n| pointsEarned | integer | Number of points earned for this session |\n| durationMinutes | integer | Duration of the session in minutes |\n| completedAt | string (datetime) | ISO 8601 timestamp when marked complete |\n| achievements | array | Any new achievements unlocked (may be empty) |\n| beltProgress | object | Updated belt progress info if belt level changed |\n\n## Error Responses\n\n| Field | Type | Description |\n|-------|------|-------------|\n| error | string | Error type: \"NO_SCHEDULED_EVENT\", \"ALREADY_COMPLETED\", \"INVALID_RATING\" |\n| message | string | Human-readable error description |",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "quality_time_id"
+        ],
+        "properties": {
+          "notes": {
+            "type": "string",
+            "description": "Notes or feedback from father about the quality time session (optional)"
+          },
+          "quality_time_id": {
+            "type": "string",
+            "description": "ID of the Quality Time event to mark as completed (required)"
+          }
+        }
+      },
+      "name": "Complete Quality Time",
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "eventId",
+          "status",
+          "pointsEarned"
+        ],
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "description": "Rating given by the father (1-5 scale)"
+          },
+          "status": {
+            "enum": [
+              "completed"
+            ],
+            "type": "string",
+            "description": "Status of the event after completion"
+          },
+          "eventId": {
+            "type": "string",
+            "description": "Unique identifier of the completed event"
+          },
+          "feedback": {
+            "type": "string",
+            "description": "Feedback notes from the father about the session"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the event was marked complete"
+          },
+          "pointsEarned": {
+            "type": "integer",
+            "description": "Points earned for completing this quality time"
+          }
+        }
+      },
+      "requiresConfirmation": false,
+      "sideEffectType": "SIDE_EFFECTING"
+    },
+    {
+      "toolKey": "dad_dashboard_link",
+      "description": "Sends the father a button to his Dad Coach page (his week, children, progress, Google Calendar connection), as a separate WhatsApp message. The link behind it keeps working.",
+      "endpointConfig": {
+        "url": "${DAD_COACH_BASE_URL}/api/tools/dad_dashboard_link",
+        "method": "POST",
+        "headers": {
+          "X-API-Key": "${DAD_COACH_API_KEY}"
+        },
+        "bodyTemplate": {
+          "user_id": "{{system.userId}}",
+          "parameters": {},
+          "execution_id": "{{system.agentExecutionId}}",
+          "idempotency_key": "{{system.idempotencyKey}}",
+          "execution_context": {
+            "correlationId": "{{system.idempotencyKey}}",
+            "workflowInstanceId": "{{system.workflowInstanceId}}"
+          }
+        },
+        "responseDataPath": "data",
+        "idempotencyHeaderName": "X-Idempotency-Key"
+      },
+      "guidance": "Use when the father asks for his page, the dashboard ('דשבורד', 'לוח') or needs it for something (connecting Google Calendar, editing a child's details). Never write a link yourself; say in one line that the button is on its way, as the result's note says.",
+      "inputSchema": {
+        "type": "object",
+        "required": [],
+        "properties": {}
+      },
+      "name": "Dad Coach page button",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "sent": {
+            "type": "boolean"
+          },
+          "delivery": {
+            "type": "string"
+          }
+        }
+      },
+      "requiresConfirmation": false,
+      "sideEffectType": "SIDE_EFFECTING"
+    },
+    {
+      "toolKey": "dc_session_timer_card",
+      "description": "A session timer's message built by Dad Coach from this moment's data: {message: {text}} for the morning of the session, the hour before or the follow-up, or {message: null, suppressReason} when nothing is to be sent (no valid session, already reminded today, already asked); proceed tells a guarded turn whether to run. Called by the platform on the session timer turns; not for conversation.",
+      "endpointConfig": {
+        "url": "${DAD_COACH_BASE_URL}/api/tools/dc_session_timer_card",
+        "method": "POST",
+        "headers": {
+          "X-API-Key": "${DAD_COACH_API_KEY}"
+        },
+        "bodyTemplate": {
+          "user_id": "{{system.userId}}",
+          "parameters": {
+            "timer": "{{timer}}",
+            "firedAt": "{{firedAt}}",
+            "referenceId": "{{referenceId}}"
+          },
+          "execution_id": "{{system.agentExecutionId}}",
+          "idempotency_key": "{{system.idempotencyKey}}",
+          "execution_context": {
+            "correlationId": "{{system.idempotencyKey}}",
+            "workflowInstanceId": "{{system.workflowInstanceId}}"
+          }
+        },
+        "responseDataPath": "data"
+      },
+      "guidance": "Platform tool for scheduled session timer turns; never call it in a conversation.",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "timer"
+        ],
+        "properties": {
+          "timer": {
+            "enum": [
+              "SESSION_MORNING_REMINDER",
+              "SESSION_REMINDER_1H",
+              "SESSION_FOLLOW_UP"
+            ],
+            "type": "string",
+            "description": "The session timer state"
+          },
+          "firedAt": {
+            "type": "string",
+            "description": "Optional: the trigger's due time (ISO-8601), for the log only"
+          },
+          "referenceId": {
+            "type": "string",
+            "description": "Optional: the trigger's reference (a session id), for the log only"
+          }
+        }
+      },
+      "name": "Session timer card",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "timer": {
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "{text} to send, or null"
+          },
+          "proceed": {
+            "type": "boolean",
+            "description": "As a guard: true runs the turn, false ends it with nothing sent"
+          },
+          "suppressReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why nothing is sent: NO_VALID_SESSION, ALREADY_REMINDED_TODAY, NOT_JUST_ENDED, ALREADY_ASKED, UNKNOWN_RECIPIENT"
+          }
+        }
+      },
+      "requiresConfirmation": false,
+      "sideEffectType": "READ_ONLY"
+    },
+    {
+      "toolKey": "get_activity_ideas",
+      "description": "Suggest activity ideas for quality time. Use when father asks for ideas or does not know what to do.",
+      "endpointConfig": {
+        "url": "${DAD_COACH_BASE_URL}/api/tools/get_activity_ideas",
+        "retry": {
+          "multiplier": 2.0,
+          "maxAttempts": 3,
+          "maxIntervalMs": 10000,
+          "initialIntervalMs": 1000
+        },
+        "method": "POST",
+        "headers": {
+          "X-API-Key": "${DAD_COACH_API_KEY}"
+        },
+        "bodyTemplate": {
+          "user_id": "{{system.userId}}",
+          "parameters": {
+            "child_id": "{{child_id}}",
+            "activity_type": "{{activity_type}}"
+          },
+          "execution_id": "{{system.agentExecutionId}}",
+          "idempotency_key": "{{system.idempotencyKey}}",
+          "execution_context": {
+            "correlationId": "{{system.idempotencyKey}}",
+            "workflowInstanceId": "{{system.workflowInstanceId}}"
+          }
+        },
+        "responseDataPath": "data",
+        "idempotencyHeaderName": "X-Idempotency-Key"
+      },
+      "guidance": "## Input Fields\n\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| child_id | integer | No | ID of the child to get age-appropriate ideas for. Populate using the `child_id` value from `family_context.children[].child_id` when available. If family_context returns no data, this field should be omitted to get generic suggestions. |\n| activity_type | string | No | Filter by activity type. Allowed values: \"indoor\", \"outdoor\". Omit for both. |\n\n## Response Fields\n\n| Field | Type | Description |\n|-------|------|-------------|\n| activities | array | List of suggested activity objects |\n| activities[].name | string | Name of the activity |\n| activities[].type | string | Category (indoor/outdoor/creative/active/quiet) |\n| activities[].duration | string | Estimated time (e.g., \"30 mins\", \"1 hour\") |\n| activities[].ageRange | string | Suitable age range (e.g., \"3-6\", \"7-12\") |\n| activities[].description | string | Brief description of the activity |\n| category | string | The filter category applied (or \"all\" if none) |\n| totalSuggestions | integer | Number of activities returned |\n\n## Notes\n\n- **child_id**: Populate using the `child_id` value from `family_context.children[].child_id` when the `family_context` provider returns data. If `family_context` returns no data or is empty, omit this field entirely to receive generic suggestions. Do not invent or construct child_id values.\n- Passing child_id gives age-appropriate suggestions; without it, suggestions are generic.\n- Returns 3-5 suggestions by default.\n- **activity_type**: User-driven based on conversation context (indoor vs outdoor preference). This is not populated from a context provider; determine from the user's stated preference or omit for both types.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "child_id": {
+            "type": "integer",
+            "description": "ID of the child to get age-appropriate activity ideas for (optional)"
+          },
+          "activity_type": {
+            "enum": [
+              "indoor",
+              "outdoor"
+            ],
+            "type": "string",
+            "description": "Filter by activity type (optional)"
+          }
+        }
+      },
+      "name": "Get Activity Ideas",
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "activities",
+          "totalSuggestions"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "Category filter applied to results"
+          },
+          "activities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Name of the activity"
+                },
+                "type": {
+                  "type": "string",
+                  "description": "Category of activity (indoor, outdoor, etc.)"
+                },
+                "ageRange": {
+                  "type": "string",
+                  "description": "Recommended age range for children"
+                },
+                "duration": {
+                  "type": "string",
+                  "description": "Estimated duration of the activity"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "Detailed description of the activity"
+                }
+              }
+            },
+            "description": "List of suggested activities for quality time"
+          },
+          "totalSuggestions": {
+            "type": "integer",
+            "description": "Total number of activities returned"
+          }
+        }
+      },
+      "requiresConfirmation": false,
+      "sideEffectType": "READ_ONLY"
+    },
+    {
+      "toolKey": "reschedule_quality_time",
+      "description": "Reschedule an existing quality time session. Use when father wants to change an already scheduled time.",
+      "endpointConfig": {
+        "url": "${DAD_COACH_BASE_URL}/api/tools/reschedule_quality_time",
+        "retry": {
+          "multiplier": 2.0,
+          "maxAttempts": 3,
+          "maxIntervalMs": 10000,
+          "initialIntervalMs": 1000
+        },
+        "method": "POST",
+        "headers": {
+          "X-API-Key": "${DAD_COACH_API_KEY}"
+        },
+        "bodyTemplate": {
+          "user_id": "{{system.userId}}",
+          "parameters": {
+            "new_start_time": "{{new_start_time}}",
+            "quality_time_id": "{{quality_time_id}}",
+            "new_duration_minutes": "{{new_duration_minutes}}"
+          },
+          "execution_id": "{{system.agentExecutionId}}",
+          "idempotency_key": "{{system.idempotencyKey}}",
+          "execution_context": {
+            "correlationId": "{{system.idempotencyKey}}",
+            "workflowInstanceId": "{{system.workflowInstanceId}}"
+          }
+        },
+        "responseDataPath": "data",
+        "idempotencyHeaderName": "X-Idempotency-Key"
+      },
+      "guidance": "## Input Fields\n\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| quality_time_id | string (UUID) | Yes | ID of the existing Quality Time event to reschedule. **This value MUST come from context provider `quality_time_context` in the field `qualityTimeEvents[].qualityTimeId`.** Do NOT invent or fabricate this UUID. |\n| new_start_time | string (ISO 8601 date-time) | Yes | New absolute start instant in UTC, e.g. \"2024-01-15T15:00:00Z\". A complete timestamp: date AND time. |\n| new_duration_minutes | integer | No | New session length in minutes (15-180). Default: 30 |\n\n## Resolving quality_time_id\n\n**CRITICAL:** The quality_time_id is a UUID that identifies an existing scheduled Quality Time session. You MUST obtain this from the `quality_time_context` context provider data.\n\n- **Populate this field using `qualityTimeEvents[].qualityTimeId` from context provider `quality_time_context`.** Match the session the user is referring to by child name (`childName`), scheduled time (`scheduledStart`), status (`status`), or other identifying details mentioned by the user.\n- **If quality_time_context data is NOT available or empty:** You cannot proceed. Inform the user that quality time context data is needed to identify the session to reschedule, or ask the user to provide more specific information.\n- **If the user references a session ambiguously** (e.g., \"the session with Itamar\" when multiple exist): Ask the user to clarify which specific session they mean, or list the matching sessions from `qualityTimeEvents[]` (showing `childName`, `scheduledStart`) and ask them to choose.\n- **NEVER fabricate or guess a UUID value.** This field must be a real `qualityTimeId` from `quality_time_context.qualityTimeEvents[]`.\n\n## Resolving new_start_time\n\nProvide an absolute ISO 8601 datetime in UTC (e.g., \"2024-01-15T15:00:00Z\").\n\n- If the user specifies a date and time, convert their local wall-clock time to UTC using the father's timezone from `family_context.father_profile.timezone` (if available).\n- **If `calendar_context` returns `availableSlots[]`**, you may suggest times from `availableSlots[].startTime` to avoid scheduling conflicts. These are already in ISO 8601 format and can be used directly.\n- Never invent or guess a calendar date. If the father uses a relative expression (e.g., \"tomorrow\", \"next Tuesday\") and you cannot resolve it to an absolute date, ask for clarification or use available context data to determine the correct date.\n- The timestamp must include both date AND time components.\n\n## Response Fields\n\n| Field | Type | Description |\n|-------|------|-------------|\n| eventId | string | Identifier of the rescheduled event |\n| oldDate | string (date) | Previous scheduled date |\n| oldTime | string | Previous scheduled time |\n| newDate | string (date) | New scheduled date in YYYY-MM-DD format |\n| newTime | string | New scheduled time in HH:MM format |\n| status | string | Always \"rescheduled\" on success |\n| updatedAt | string (datetime) | ISO 8601 timestamp of the update |\n\n## Error Responses\n\n| Field | Type | Description |\n|-------|------|-------------|\n| error | string | Error type: \"NO_SCHEDULED_EVENT\", \"INVALID_DAY\", \"INVALID_TIME\", \"SLOT_UNAVAILABLE\" |\n| message | string | Human-readable error description |",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "quality_time_id",
+          "new_start_time"
+        ],
+        "properties": {
+          "new_start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "New start time in ISO 8601 format (e.g., 2024-01-15T15:00:00Z) (required)"
+          },
+          "quality_time_id": {
+            "type": "string",
+            "description": "ID of the Quality Time event to reschedule (required)"
+          },
+          "new_duration_minutes": {
+            "type": "integer",
+            "default": 30,
+            "maximum": 180,
+            "minimum": 15,
+            "description": "New duration in minutes (optional, default: 30)"
+          }
+        }
+      },
+      "name": "Reschedule Quality Time",
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "eventId",
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "rescheduled"
+            ],
+            "type": "string",
+            "description": "Status of the event after rescheduling"
+          },
+          "eventId": {
+            "type": "string",
+            "description": "Unique identifier of the rescheduled event"
+          },
+          "newDate": {
+            "type": "string",
+            "format": "date",
+            "description": "New date for the quality time"
+          },
+          "newTime": {
+            "type": "string",
+            "description": "New time for the quality time in HH:MM format"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the event was updated"
+          }
+        }
+      },
+      "requiresConfirmation": true,
+      "sideEffectType": "SIDE_EFFECTING"
+    },
+    {
+      "toolKey": "save_user_profile",
+      "description": "Creates or updates the user profile in Dad Coach service. Use this during onboarding when the user provides their display name. This tool should be called immediately after the father provides their name.",
+      "endpointConfig": {
+        "url": "${DAD_COACH_BASE_URL}/api/tools/save_user_profile",
+        "retry": {
+          "multiplier": 2.0,
+          "maxAttempts": 3,
+          "maxIntervalMs": 10000,
+          "initialIntervalMs": 1000
+        },
+        "method": "POST",
+        "headers": {
+          "X-API-Key": "${DAD_COACH_API_KEY}"
+        },
+        "bodyTemplate": {
+          "user_id": "{{system.userId}}",
+          "parameters": {
+            "locale": "{{locale}}",
+            "timezone": "{{timezone}}",
+            "displayName": "{{displayName}}",
+            "preferredCoachingTime": "{{preferredCoachingTime}}"
+          },
+          "execution_id": "{{system.agentExecutionId}}",
+          "idempotency_key": "{{system.idempotencyKey}}",
+          "execution_context": {
+            "correlationId": "{{system.idempotencyKey}}",
+            "workflowInstanceId": "{{system.workflowInstanceId}}"
+          }
+        },
+        "responseDataPath": "data",
+        "idempotencyHeaderName": "X-Idempotency-Key"
+      },
+      "guidance": "## Input Fields\n\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| displayName | string | Yes | The father's chosen display name for personalized greetings (1-100 characters). This should be collected directly from the user during onboarding. |\n| locale | string | No | Language/locale preference (default: \"he-IL\"). Common values: \"he-IL\" (Hebrew), \"en-US\" (English). If not specified, system default will be used. |\n| timezone | string | No | IANA timezone identifier (default: \"Asia/Jerusalem\"). Examples: \"Asia/Jerusalem\", \"America/New_York\", \"Europe/London\". If not specified, system default will be used. |\n| preferredCoachingTime | string | No | Preferred time for daily coaching reminders in 24-hour HH:mm format (e.g., \"09:00\", \"14:30\", \"22:15\"). If not specified, no preferred time will be set. |\n\n**Important:** Only displayName is mandatory. Collect this directly from the user during onboarding.\n\n## Response Fields\n\n| Field | Type | Description |\n|-------|------|-------------|\n| profileId | string | Unique identifier for the created profile |\n| displayName | string | The saved display name (echoes input) |\n| phoneNumber | string | The saved phone number (system-managed) |\n| createdAt | string (datetime) | ISO 8601 timestamp when profile was created |\n| status | string | Always \"created\" on success |\n\n## Error Responses\n\n| Field | Type | Description |\n|-------|------|-------------|\n| error | string | Error type: \"PROFILE_EXISTS\" (user already registered), \"INVALID_NAME\" (displayName validation failed) |\n| message | string | Human-readable error description |\n\n## Usage Notes\n\n- **Display Name Collection:** Ask the user for their preferred name during onboarding. This is the only required field.\n- **User Identification:** Phone number and user identification are handled automatically by the system. Do not ask for or attempt to provide a phone number.\n- **Profile Creation:** This tool creates a new user profile. If the user is already registered, you'll receive a PROFILE_EXISTS error.\n- **Optional Fields:** If locale, timezone, or preferredCoachingTime are not provided, system defaults will be used (he-IL locale, Asia/Jerusalem timezone).\n- **Error Handling:** If you receive INVALID_NAME error, ask the user to provide a valid display name (1-100 characters).",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "displayName"
+        ],
+        "properties": {
+          "locale": {
+            "type": "string",
+            "default": "he-IL",
+            "example": "he-IL",
+            "description": "Language/locale preference"
+          },
+          "timezone": {
+            "type": "string",
+            "default": "Asia/Jerusalem",
+            "example": "Asia/Jerusalem",
+            "description": "IANA timezone identifier (e.g., Asia/Jerusalem)"
+          },
+          "displayName": {
+            "type": "string",
+            "example": "Test User",
+            "maxLength": 100,
+            "minLength": 1,
+            "description": "Father's display name"
+          },
+          "preferredCoachingTime": {
+            "type": "string",
+            "example": "10:30",
+            "description": "Preferred time for coaching reminders in HH:mm format (e.g., 09:00)"
+          }
+        }
+      },
+      "name": "Save User Profile",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "locale": {
+                "type": "string",
+                "description": "The language/locale preference"
+              },
+              "fatherId": {
+                "type": "integer",
+                "description": "The unique identifier for the father profile"
+              },
+              "timezone": {
+                "type": "string",
+                "description": "The configured timezone"
+              },
+              "displayName": {
+                "type": "string",
+                "description": "The father's display name"
+              },
+              "preferredCoachingTime": {
+                "type": "string",
+                "description": "Preferred coaching time if set"
+              }
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Whether the profile was created successfully"
+          },
+          "errorMessage": {
+            "type": "string",
+            "description": "Error message if the operation failed"
+          }
+        }
+      },
+      "requiresConfirmation": false,
+      "sideEffectType": "SIDE_EFFECTING"
+    },
+    {
+      "toolKey": "schedule_quality_time",
+      "description": "Schedule a new quality time session with the child. Use when father wants to schedule quality time.",
+      "endpointConfig": {
+        "url": "${DAD_COACH_BASE_URL}/api/tools/schedule_quality_time",
+        "retry": {
+          "multiplier": 2.0,
+          "maxAttempts": 3,
+          "maxIntervalMs": 10000,
+          "initialIntervalMs": 1000
+        },
+        "method": "POST",
+        "headers": {
+          "X-API-Key": "${DAD_COACH_API_KEY}"
+        },
+        "bodyTemplate": {
+          "user_id": "{{system.userId}}",
+          "parameters": {
+            "child_id": "{{child_id}}",
+            "start_time": "{{start_time}}",
+            "duration_minutes": "{{duration_minutes}}"
+          },
+          "execution_id": "{{system.agentExecutionId}}",
+          "idempotency_key": "{{system.idempotencyKey}}",
+          "execution_context": {
+            "correlationId": "{{system.idempotencyKey}}",
+            "workflowInstanceId": "{{system.workflowInstanceId}}"
+          }
+        },
+        "responseDataPath": "data",
+        "idempotencyHeaderName": "X-Idempotency-Key"
+      },
+      "guidance": "## Input Fields\n\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| child_id | integer | Yes | ID of the child to schedule with. Populate using the `childId` value from `family_context.children[]` response. |\n| start_time | string (ISO 8601 date-time) | Yes | Absolute session start instant in UTC, e.g. \"2024-01-15T15:00:00Z\". A complete timestamp: date AND time. |\n| duration_minutes | integer | No | Session length in minutes (15-180). Default: 30 |\n\n## Resolving child_id\n\n**CRITICAL**: Use the actual `childId` value returned by the `family_context` context provider from the `children[]` array. Do NOT invent or guess child IDs.\n\n- If `family_context` returned data: Use `family_context.children[].childId` for the child you want to schedule with\n- If `family_context` returned no data: You cannot schedule quality time without knowing the child IDs. Request family context first.\n\n**Note**: The `family_context` provider currently returned no data. You must wait for or request family context before scheduling.\n\n## Resolving start_time\n\nThis tool requires one absolute instant in UTC. There is no day-offset parameter and no separate time parameter.\n\n**CRITICAL WORKFLOW FOR RELATIVE DATES:**\n\nWhen the father uses a relative date expression (\"היום\", \"מחר\", \"יום ראשון\", \"בשבוע הבא\", etc.):\n\n1. **FIRST**: Call show_available_slots to get absolute calendar dates. This tool returns slots[].start_time with actual ISO 8601 timestamps.\n2. **THEN**: Use the returned absolute timestamp from show_available_slots as the start_time parameter for schedule_quality_time.\n\n**When you have absolute dates from context providers:**\n\nUse calendar dates you can actually read from context data:\n- show_available_slots response: `slots[].start_time`\n- `calendar_context.availableSlots[].startTime` - Populate start_time using this field when available slots are returned by the calendar_context provider\n- `quality_time_context.qualityTimeEvents[].scheduledStart` - Use this field when rescheduling an existing session\n\n**Never invent or guess:**\n\n- Do NOT calculate \"tomorrow\" yourself\n- Do NOT assume today's date\n- Do NOT fabricate ISO 8601 timestamps\n- If no absolute timestamp is available and you haven't called show_available_slots yet, call it first\n\n**Timezone conversion:**\n\n- Wall-clock times the father states are in his local timezone (`family_context.father.timezone`)\n- Convert to UTC for the start_time parameter\n- When using timestamps from show_available_slots or `calendar_context.availableSlots`, they are already in the correct format (ISO 8601)\n\n**Note**: All context providers currently returned no data. You will need to either call show_available_slots or wait for context providers to return data before scheduling.\n\n## Response Fields\n\n| Field | Type | Description |\n|-------|------|-------------|\n| eventId | string | Unique identifier for the created quality time event |\n| scheduledDate | string (date) | The scheduled date in YYYY-MM-DD format |\n| scheduledTime | string | The scheduled time in HH:MM format |\n| childSelection | integer | Which child the session is scheduled with |\n| status | string | Always \"scheduled\" on success |\n| createdAt | string (datetime) | ISO 8601 timestamp when the event was created |\n\n## Error Responses\n\n| Field | Type | Description |\n|-------|------|-------------|\n| error | string | Error type: \"INVALID_DAY\", \"INVALID_TIME\", \"SLOT_UNAVAILABLE\", \"NO_CHILDREN\" |\n| message | string | Human-readable error description |",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "child_id",
+          "start_time"
+        ],
+        "properties": {
+          "child_id": {
+            "type": "integer",
+            "description": "ID of the child to schedule quality time with (required)"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start time in ISO 8601 format (e.g., 2024-01-15T15:00:00Z) (required)"
+          },
+          "duration_minutes": {
+            "type": "integer",
+            "default": 30,
+            "maximum": 180,
+            "minimum": 15,
+            "description": "Duration in minutes (optional, default: 30)"
+          }
+        }
+      },
+      "name": "Schedule Quality Time",
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "eventId",
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "scheduled"
+            ],
+            "type": "string",
+            "description": "Status of the event (scheduled when created)"
+          },
+          "eventId": {
+            "type": "string",
+            "description": "Unique identifier for the scheduled event"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the event was created"
+          },
+          "scheduledDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Date of the scheduled quality time"
+          },
+          "scheduledTime": {
+            "type": "string",
+            "description": "Time of the scheduled quality time in HH:MM format"
+          },
+          "childSelection": {
+            "type": "integer",
+            "description": "Index of the selected child (if multiple children)"
+          }
+        }
+      },
+      "requiresConfirmation": true,
+      "sideEffectType": "SIDE_EFFECTING"
+    },
+    {
+      "toolKey": "set_weekly_goal",
+      "description": "Set a weekly goal for quality time sessions. Use when father wants to set a weekly target or after weekly summary.",
+      "endpointConfig": {
+        "url": "${DAD_COACH_BASE_URL}/api/tools/set_weekly_goal",
+        "retry": {
+          "multiplier": 2.0,
+          "maxAttempts": 3,
+          "maxIntervalMs": 10000,
+          "initialIntervalMs": 1000
+        },
+        "method": "POST",
+        "headers": {
+          "X-API-Key": "${DAD_COACH_API_KEY}"
+        },
+        "bodyTemplate": {
+          "user_id": "{{system.userId}}",
+          "parameters": {
+            "target_hours": "{{target_hours}}"
+          },
+          "execution_id": "{{system.agentExecutionId}}",
+          "idempotency_key": "{{system.idempotencyKey}}",
+          "execution_context": {
+            "correlationId": "{{system.idempotencyKey}}",
+            "workflowInstanceId": "{{system.workflowInstanceId}}"
+          }
+        },
+        "responseDataPath": "data",
+        "idempotencyHeaderName": "X-Idempotency-Key"
+      },
+      "guidance": "## Input Fields\n\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| target_hours | integer | Yes | Number of hours to target for quality time this week. Minimum value is 1. Examples: 1=one hour, 2=two hours, 3=three hours. This value should be determined based on user input and conversation context. |\n\n**Note:** All input fields for this tool must be populated from user conversation. No context provider data is required or available to pre-populate fields.\n\n## Prerequisites\n\n**IMPORTANT:** This tool requires the user to be registered and authenticated in the system. Before calling this tool:\n- The user must have completed registration (use registration tools if needed)\n- The user must have an active account in the system\n- If you receive a \"Father not found\" error, the user needs to register first\n\n## When to Use This Tool\n\nUse this tool when:\n- User explicitly wants to set a weekly quality time goal\n- User mentions setting a target or goal for hours with their children\n- User asks to establish or create a weekly commitment\n\nDo NOT use this tool if:\n- User is asking about goals in general without wanting to set one\n- User has not yet registered in the system\n- User is just exploring features\n\n**Context-Aware Usage:**\n- If `quality_time_context` returns `hasWeeklyGoal=true`, the user already has a goal for the current week. Inform them they may need to update their existing goal instead of creating a new one (expect \"GOAL_ALREADY_EXISTS\" error).\n- If `quality_time_context` returns `hasWeeklyGoal=false`, this is an appropriate time to help the user set their first or new weekly goal.\n- If `quality_time_context` is unavailable or returns no data, proceed based on user intent but be prepared for potential \"GOAL_ALREADY_EXISTS\" errors.\n\n## Response Fields\n\n| Field | Type | Description |\n|-------|------|-------------|\n| goalId | string | Unique identifier for the created weekly goal |\n| targetHours | integer | The target hours that was set (echoes input) |\n| weekNumber | integer | ISO week number (1-52) |\n| year | integer | Year for the goal (e.g., 2024) |\n| status | string | Goal status, always \"active\" for new goals |\n| createdAt | string (datetime) | ISO 8601 timestamp when the goal was created |\n\n## Error Responses\n\n| Field | Type | Description |\n|-------|------|-------------|\n| error | string | Error type: \"INVALID_HOURS\" (hours below minimum), \"GOAL_ALREADY_EXISTS\" (goal already set for current week), \"FATHER_NOT_FOUND\" (user not registered/authenticated) |\n| message | string | Human-readable error description |\n\n**Handling Errors:**\n- If \"FATHER_NOT_FOUND\": Guide user to register first\n- If \"GOAL_ALREADY_EXISTS\": Inform user they already have a goal for this week and may need to update it instead\n- If \"INVALID_HOURS\": Remind user minimum is 1 hour",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "target_hours"
+        ],
+        "properties": {
+          "target_hours": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Target number of quality time hours per week (required, minimum: 1)"
+          }
+        }
+      },
+      "name": "Set Weekly Goal",
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "goalId",
+          "targetHours",
+          "status"
+        ],
+        "properties": {
+          "year": {
+            "type": "integer",
+            "description": "Year the goal applies to"
+          },
+          "goalId": {
+            "type": "string",
+            "description": "Unique identifier for the created goal"
+          },
+          "status": {
+            "enum": [
+              "active"
+            ],
+            "type": "string",
+            "description": "Status of the goal (always active when created)"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the goal was created"
+          },
+          "weekNumber": {
+            "type": "integer",
+            "description": "ISO week number the goal applies to"
+          },
+          "targetHours": {
+            "type": "integer",
+            "description": "Target hours set for the week"
+          }
+        }
+      },
+      "requiresConfirmation": false,
+      "sideEffectType": "SIDE_EFFECTING"
+    },
+    {
+      "toolKey": "show_available_slots",
+      "description": "Show available time slots for scheduling quality time. Use when father asks when they can schedule.",
+      "endpointConfig": {
+        "url": "${DAD_COACH_BASE_URL}/api/tools/show_available_slots",
+        "retry": {
+          "multiplier": 2.0,
+          "maxAttempts": 3,
+          "maxIntervalMs": 10000,
+          "initialIntervalMs": 1000
+        },
+        "method": "POST",
+        "headers": {
+          "X-API-Key": "${DAD_COACH_API_KEY}"
+        },
+        "bodyTemplate": {
+          "user_id": "{{system.userId}}",
+          "parameters": {
+            "days_ahead": "{{days_ahead}}"
+          },
+          "execution_id": "{{system.agentExecutionId}}",
+          "idempotency_key": "{{system.idempotencyKey}}",
+          "execution_context": {
+            "correlationId": "{{system.idempotencyKey}}",
+            "workflowInstanceId": "{{system.workflowInstanceId}}"
+          }
+        },
+        "responseDataPath": "data",
+        "idempotencyHeaderName": "X-Idempotency-Key"
+      },
+      "guidance": "## Input Fields\n\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| days_ahead | integer | No | How many days ahead to look for free slots (1-14). Default: 7 |\n\n**Note:** All input fields for this tool use default or user-specified values. No fields need to be populated from context providers.\n\n## Response Fields\n\n| Field | Type | Description |\n|-------|------|-------------|\n| slots | array | List of free time slots, ordered by proximity to now |\n| slots[].start_time | string (ISO 8601 date-time) | Absolute slot start instant in UTC. Use this value directly as start_time / new_start_time when scheduling. |\n| slots[].end_time | string (ISO 8601 date-time) | Absolute slot end instant in UTC |\n| slots[].duration_minutes | integer | Slot length in minutes |\n| calendar_connected | boolean | Whether the father has Google Calendar connected |\n| timezone | string (IANA) | The father's timezone, e.g. \"Asia/Jerusalem\". Use it to describe slots in local time. |\n\n## Notes\n\n- When calendar_connected is false, slots is empty and the father should be offered connect_calendar.\n- slots[].start_time is the authoritative absolute timestamp for scheduling. Present it to the\n  father in his timezone, but pass the UTC value unchanged to schedule_quality_time or\n  reschedule_quality_time.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "days_ahead": {
+            "type": "integer",
+            "default": 7,
+            "maximum": 14,
+            "minimum": 1,
+            "description": "Number of days to look ahead for available slots (optional, default: 7, max: 14)"
+          }
+        }
+      },
+      "name": "Show Available Slots",
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "availableSlots",
+          "totalSlots"
+        ],
+        "properties": {
+          "totalSlots": {
+            "type": "integer",
+            "description": "Total number of available time slots returned"
+          },
+          "availableSlots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Date of the available slot in ISO format"
+                },
+                "time": {
+                  "type": "string",
+                  "description": "Time of the slot in HH:MM format"
+                },
+                "dayLabel": {
+                  "type": "string",
+                  "description": "Human-readable day label (e.g., Sunday, Monday)"
+                },
+                "dayNumber": {
+                  "type": "integer",
+                  "description": "Day number relative to today (1=today, 2=tomorrow, etc.)"
+                },
+                "timeLabel": {
+                  "type": "string",
+                  "description": "Human-readable time label"
+                }
+              }
+            },
+            "description": "List of available time slots for scheduling quality time"
+          }
+        }
+      },
+      "requiresConfirmation": false,
+      "sideEffectType": "READ_ONLY"
+    }
+  ],
+  "providers": [
+    {
+      "providerKey": "family_context",
+      "cacheTtlSeconds": 300,
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "includeParentingPhilosophy": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "description": "Provides family structure data including father information, children list, and parenting philosophy. Data changes infrequently.",
+      "endpointConfig": {
+        "url": "${DAD_COACH_BASE_URL}/api/context/agent_family_context",
+        "method": "POST",
+        "headers": {
+          "X-API-Key": "${DAD_COACH_API_KEY}"
+        },
+        "bodyTemplate": {
+          "config": "{{providerConfig}}",
+          "user_id": null
+        },
+        "responseDataPath": "data"
+      },
+      "guidance": "FAMILY CONTEXT - Use this data to personalize your responses:\n\nThis provides the family structure for the current user session:\n- Father's name and preferences\n- List of children with names, ages, and interests\n- Parenting philosophy and goals\n\nHOW TO USE:\n1. Address the father by name when appropriate\n2. Reference children by name when discussing activities\n3. Suggest activities matching children's ages and interests\n4. Align encouragement with the stated parenting philosophy\n\nEXAMPLE DATA FORMAT:\n{\n  \"father\": {\"name\": \"David\", \"timezone\": \"Asia/Jerusalem\"},\n  \"children\": [{\"name\": \"Yoav\", \"age\": 8, \"interests\": [\"soccer\", \"lego\"]}],\n  \"parentingPhilosophy\": \"Quality over quantity - focused attention matters\"\n}\n\nNOTE: This data changes rarely. Use it to make conversations feel personal and relevant.",
+      "name": "Family Context Provider",
+      "passThrough": false,
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "father": {
+            "type": "object",
+            "properties": {
+              "locale": {
+                "type": "string",
+                "description": "Locale code."
+              },
+              "timezone": {
+                "type": "string",
+                "description": "IANA timezone."
+              },
+              "displayName": {
+                "type": "string",
+                "description": "Father display name."
+              },
+              "welcomeStep": {
+                "type": "string",
+                "description": "Current onboarding step."
+              },
+              "preferredCoachingTime": {
+                "type": "string",
+                "description": "Preferred coaching time."
+              },
+              "googleCalendarConnected": {
+                "type": "boolean",
+                "description": "Whether the calendar is connected."
+              }
+            },
+            "description": "Father profile (empty object for new users)."
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "age": {
+                  "type": "integer",
+                  "description": "Child age."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Child name."
+                },
+                "gender": {
+                  "type": "string",
+                  "description": "Child gender."
+                },
+                "childId": {
+                  "type": "integer",
+                  "description": "Unique child identifier."
+                },
+                "interests": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Child interests."
+                }
+              }
+            },
+            "description": "The father's children."
+          },
+          "isNewUser": {
+            "type": "boolean",
+            "description": "True if the user has no profile yet."
+          },
+          "childCount": {
+            "type": "integer",
+            "description": "Number of children."
+          },
+          "hasProfile": {
+            "type": "boolean",
+            "description": "True if a father profile exists."
+          },
+          "hasMultipleChildren": {
+            "type": "boolean",
+            "description": "True if more than one child."
+          },
+          "hasGoogleCalendarConnected": {
+            "type": "boolean",
+            "description": "True if Google Calendar is connected."
+          }
+        }
+      }
+    },
+    {
+      "providerKey": "weekly_plan_context",
+      "cacheTtlSeconds": 0,
+      "description": "Authoritative state of the father's current Sunday-Saturday quality-time week, computed by Dad Coach in the father's timezone: local now, week boundaries, weekly goal, coverage in minutes (completed + valid planned vs target), sessions with lifecycle phase, today's and next session, sessions awaiting confirmation, previous-week result, progress and links.",
+      "endpointConfig": {
+        "url": "${DAD_COACH_BASE_URL}/api/context/weekly_plan_context",
+        "method": "POST",
+        "headers": {
+          "X-API-Key": "${DAD_COACH_API_KEY}"
+        },
+        "bodyTemplate": {
+          "config": {
+            "phone": "{{userId}}"
+          },
+          "user_id": null
+        },
+        "responseDataPath": "data"
+      },
+      "guidance": "Source of truth for the father's current Sunday-Saturday week, computed by Dad Coach in the father's timezone - never recompute. father_found=false: no Dad Coach profile yet. timezone; now = local_date, local_time, weekday. current_week = week_start, week_end, days_left_including_today. goal = this week's goal (exists, status, target_hours, target_minutes, credited_minutes). coverage = target_minutes, completed_minutes (credited), planned_minutes (still-valid scheduled sessions of this week that have not ended), covered_minutes, uncovered_minutes (gap still to plan), is_covered, awaiting_confirmation_minutes (not counted). Sessions are one line each: 'PHASE | child | N min | WEEKDAY date HH:mm-HH:mm | starts in N min / ended N min ago | id=<quality_time_id>' with PHASE UPCOMING, IN_PROGRESS, AWAITING_CONFIRMATION (ended, not confirmed), COMPLETED, CANCELLED or MISSED; collections are keyed by local 'date time' and say 'none' when empty: sessions_this_week, sessions_today (still-valid, later today), next_session, awaiting_confirmation, scheduled_after_this_week. previous_week = week_start, week_end, goal_exists, goal_status, goal_target_minutes, goal_credited_minutes, goal_met, completed_minutes, completed_sessions, not_completed_sessions; previous_week_completion_notes. goal_history = has_any_goal, weeks_with_goal, latest_previous_target_hours. progress = belt and streaks. calendar_connected; dashboard_url.",
+      "name": "Dad Coach Weekly Plan",
+      "passThrough": false,
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "now": {},
+          "goal": {},
+          "coverage": {},
+          "progress": {},
+          "timezone": {},
+          "current_week": {},
+          "father_found": {},
+          "goal_history": {},
+          "next_session": {},
+          "dashboard_url": {},
+          "previous_week": {},
+          "sessions_today": {},
+          "calendar_connected": {},
+          "sessions_this_week": {},
+          "awaiting_confirmation": {},
+          "scheduled_after_this_week": {},
+          "previous_week_completion_notes": {}
+        }
+      }
+    }
+  ],
+  "kindTemplates": [
+    {
+      "kind": "LOGIN_LINK",
+      "variant": "",
+      "candidates": [
+        {
+          "bodyRefs": [
+            "text"
+          ],
+          "enabled": true,
+          "language": "he",
+          "templateName": "dad_coach_update_he"
+        }
+      ]
+    },
+    {
+      "kind": "SCHEDULED",
+      "variant": "",
+      "candidates": [
+        {
+          "bodyRefs": [
+            "text"
+          ],
+          "enabled": true,
+          "language": "he",
+          "templateName": "dad_coach_update_he"
+        }
+      ]
+    },
+    {
+      "kind": "SCHEDULED",
+      "variant": "session_follow_up_he",
+      "candidates": [
+        {
+          "enabled": true,
+          "language": "he",
+          "templateName": "dad_coach_session_follow_up_he"
+        },
+        {
+          "bodyRefs": [
+            "text"
+          ],
+          "enabled": true,
+          "language": "he",
+          "templateName": "dad_coach_update_he"
+        }
+      ]
+    },
+    {
+      "kind": "SCHEDULED",
+      "variant": "session_hour_before_he",
+      "candidates": [
+        {
+          "enabled": true,
+          "language": "he",
+          "templateName": "dad_coach_session_hour_before_he"
+        },
+        {
+          "bodyRefs": [
+            "text"
+          ],
+          "enabled": true,
+          "language": "he",
+          "templateName": "dad_coach_update_he"
+        }
+      ]
+    },
+    {
+      "kind": "SCHEDULED",
+      "variant": "session_morning_he",
+      "candidates": [
+        {
+          "enabled": true,
+          "language": "he",
+          "templateName": "dad_coach_session_morning_he"
+        },
+        {
+          "bodyRefs": [
+            "text"
+          ],
+          "enabled": true,
+          "language": "he",
+          "templateName": "dad_coach_update_he"
+        }
+      ]
+    }
+  ]
+}

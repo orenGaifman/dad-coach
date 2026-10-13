@@ -1,115 +1,80 @@
 package com.dadcoach.platformjobs;
 
-import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import com.platform.client.PlatformPublisher;
+import com.dadcoach.integration.platform.WorkflowPlatformProperties;
 import java.util.List;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Unified Workflow 5.4 v3: at start (off the main thread) Dad Coach registers its jobs with the platform -
- * {@code PUT /api/v1/worker/jobs}, the full list, each enabled when the platform owns it ({@code DC_PLATFORM_JOBS}, or
- * {@code asPlatformOnly} - D-055). Idempotent; a failure is retried a few times and then logged (a job the platform never
- * calls is run by the watchdog - a degraded mode, not a scheduler).
+ * At start (off the main thread) the product registers with the platform through the shared client
+ * ({@link PlatformPublisher}, platform P2_EXTENSIBILITY_SPEC §2-§3): its catalog ({@code platform-catalog.json}: HTTP
+ * tools, context providers, kind→template mappings) when {@code app.platform-catalog.publish} is {@code dry-run} (report
+ * only) or {@code apply}, then its jobs - the full list, each enabled when the platform owns it. Idempotent; a failure is
+ * retried a few times and then logged (a job the platform never calls is run by the watchdog - a degraded mode).
  */
 @Component
 public class PlatformJobsSync {
 
-    private static final Logger log = LoggerFactory.getLogger(PlatformJobsSync.class);
+    static final String CATALOG = "/platform-catalog.json";
 
     private final PlatformJobs jobs;
     private final WorkflowPlatformProperties platform;
     private final ObjectMapper json;
     private final String workerKey;
     private final boolean enabled;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    private final String catalogMode;
 
+    @Autowired
     public PlatformJobsSync(PlatformJobs jobs, WorkflowPlatformProperties platform, ObjectMapper json,
                             @Value("${workflow.platform.worker-key:dad_3}") String workerKey,
-                            @Value("${app.platform-jobs.sync:true}") boolean enabled) {
+                            @Value("${app.platform-jobs.sync:true}") boolean enabled,
+                            @Value("${app.platform-catalog.publish:off}") String catalogMode) {
         this.jobs = jobs;
         this.platform = platform;
         this.json = json;
         this.workerKey = workerKey;
         this.enabled = enabled;
+        this.catalogMode = catalogMode;
+    }
+
+    /** Tests: jobs only. */
+    PlatformJobsSync(PlatformJobs jobs, WorkflowPlatformProperties platform, ObjectMapper json, String workerKey, boolean enabled) {
+        this(jobs, platform, json, workerKey, enabled, "off");
+    }
+
+    private PlatformPublisher publisher() {
+        return new PlatformPublisher(platform.getBaseUrl(), platform.getApiKey(), json);
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public void onReady() {
-        if (!enabled || !platform.isEnabled() || platform.getBaseUrl() == null || platform.getBaseUrl().isBlank()) {
-            return;
+        if (enabled && platform.isEnabled() && publisher().configured()) {
+            publisher().register(workerKey, catalogMode, () -> getClass().getResourceAsStream(CATALOG), this::jobsList);
         }
-        Thread t = new Thread(this::syncWithRetries, "platform-jobs-sync");
-        t.setDaemon(true);
-        t.start();
     }
 
     void syncWithRetries() {
-        long[] waits = {0, 30, 120, 600};
-        for (long wait : waits) {
-            try {
-                Thread.sleep(wait * 1000);
-                int status = sync();
-                if (status >= 200 && status < 300) {
-                    return;
-                }
-                if (status == 404) {
-                    log.atInfo().log("platform_jobs.sync_unsupported - the platform has no job API yet");
-                    return;
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            } catch (Exception e) {
-                log.atWarn().addKeyValue("error", e.getClass().getSimpleName()).log("platform_jobs.sync_failed");
-            }
-        }
-        log.atWarn().log("platform_jobs.sync_gave_up");
+        PlatformPublisher publisher = publisher();
+        publisher.withRetries("jobs", () -> publisher.publishJobs(workerKey, jobsList()));
+    }
+
+    int sync() {
+        return publisher().publishJobs(workerKey, jobsList()).status();
     }
 
     /** The registration body: every job, enabled when the platform owns it. */
     Map<String, Object> body() {
-        List<Map<String, Object>> list = new ArrayList<>();
-        for (PlatformJobs.Job job : jobs.jobs()) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("jobKey", job.key());
-            if (job.every() != null) {
-                m.put("every", job.every().toString());
-            } else {
-                m.put("cron", job.cron());
-                m.put("timezone", job.zone());
-            }
-            m.put("timeout", job.timeout().toString());
-            m.put("enabled", jobs.platformOwns(job.key()));
-            m.put("description", job.description());
-            list.add(m);
-        }
-        return Map.of("workerKey", workerKey, "jobs", list);
+        return Map.of("workerKey", workerKey, "jobs", jobsList());
     }
 
-    int sync() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(platform.getBaseUrl().replaceAll("/+$", "") + "/api/v1/worker/jobs"))
-                .timeout(Duration.ofSeconds(20))
-                .header("Content-Type", "application/json")
-                .header("X-API-Key", platform.getApiKey() == null ? "" : platform.getApiKey())
-                .PUT(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body())))
-                .build();
-        HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-        log.atInfo().addKeyValue("status", response.statusCode()).addKeyValue("jobs", jobs.jobs().size())
-                .addKeyValue("platformOwned", jobs.jobs().stream().filter(j -> jobs.platformOwns(j.key())).map(PlatformJobs.Job::key).toList())
-                .log("platform_jobs.synced");
-        return response.statusCode();
+    private List<Map<String, Object>> jobsList() {
+        return jobs.jobs().stream().map(j -> PlatformPublisher.job(j.key(), j.every(), j.cron(), j.zone(), j.timeout(),
+                jobs.platformOwns(j.key()), j.description())).toList();
     }
 }
