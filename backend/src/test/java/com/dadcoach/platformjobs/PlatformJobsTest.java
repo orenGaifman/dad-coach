@@ -304,6 +304,38 @@ class PlatformJobsTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("J-5 watchdog, cron job: a missed slot run here is recorded for that slot - a restart neither runs it again "
+            + "nor alarms, and a late platform call for the slot is a duplicate")
+    void cronWatchdogRunIsRecordedForItsSlot() throws Exception {
+        int hour = java.time.ZonedDateTime.now(java.time.ZoneOffset.UTC).minusHours(2).getHour();
+        jobs.register(PlatformJobs.Job.cron("t_wdcron", "0 0 " + hour + " * * *", "UTC", Duration.ofMinutes(1), false, "test",
+                () -> Map.of("n", counter.incrementAndGet())));
+        jobs.setPlatformOwned(Set.of("t_wdcron"));
+        jdbc.update("DELETE FROM platform_job_run WHERE job_key = 't_wdcron'");
+
+        jobs.watchdog(List.of(jobs.job("t_wdcron").orElseThrow()));
+        assertThat(counter.get()).as("the platform missed its slot: run here once").isEqualTo(1);
+
+        jobs.forgetPlatformCallsForTests();   // a restart: nothing in memory, only the ledger
+        jobs.watchdog(List.of(jobs.job("t_wdcron").orElseThrow()));
+        assertThat(counter.get()).as("a restart does not run the covered slot again").isEqualTo(1);
+
+        Instant missed = PlatformJobs.lastExpectedFire(jobs.job("t_wdcron").orElseThrow(), Instant.now());
+        assertThat(jobs.runForPlatform("t_wdcron", missed).body()).containsEntry("status", "DUPLICATE");
+        assertThat(counter.get()).isEqualTo(1);
+
+        // a run cut off mid-slot (its process died): the RUNNING row is no cover - the next start takes it over
+        jdbc.update("UPDATE platform_job_run SET status = 'RUNNING', result = NULL, finished_at = NULL, started_at = now() "
+                + "WHERE job_key = 't_wdcron'");
+        jobs.forgetPlatformCallsForTests();
+        jobs.watchdog(List.of(jobs.job("t_wdcron").orElseThrow()));
+        assertThat(counter.get()).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT status FROM platform_job_run WHERE job_key = 't_wdcron'", String.class))
+                .isEqualTo("DONE");
+        jdbc.update("DELETE FROM platform_job_run WHERE job_key = 't_wdcron'");
+    }
+
+    @Test
     @DisplayName("the startup registration PUTs the full list to /api/v1/worker/jobs with the worker's key; a 404 (no job API) is not retried")
     void syncOverHttp() throws Exception {
         List<String> bodies = new CopyOnWriteArrayList<>();

@@ -403,9 +403,10 @@ public class PlatformJobs {
 
     /**
      * Review J-5: a PLATFORM job the platform has not run for 3× its interval is run once here, under its locks - a
-     * platform that stopped calling never silently stops a job. "Has not run" is read from the shared ledger (its last
-     * slot's start, any instance) and this instance's last call, so an instance the platform's calls do not reach is
-     * not a false alarm; a job still running (its lock held) is not either. ERROR the first time per job, WARN after.
+     * platform that stopped calling never silently stops a job. "Has not run": an interval job - no slot started in the
+     * shared ledger (any instance) and no call to this instance; a cron job (D-062) - no call to this instance since its
+     * last expected fire and no DONE row for that slot. A job still running (its lock held) is no alarm either. ERROR the
+     * first time per job, WARN after.
      */
     private volatile Instant lastPurge = Instant.EPOCH;
 
@@ -423,6 +424,11 @@ public class PlatformJobs {
         watchdog(jobs.values());
     }
 
+    /** Tests: a restart - what this process remembers of the platform's calls is gone, the ledger stays. */
+    void forgetPlatformCallsForTests() {
+        lastPlatformCall.clear();
+    }
+
     /** The watchdog over {@code these} jobs (tests pass their own, never running the real ones). */
     void watchdog(Collection<Job> these) {
         Instant now = Instant.now();
@@ -430,9 +436,15 @@ public class PlatformJobs {
             if (!platformOwns(job.key())) {
                 continue;
             }
-            Instant last = latest(lastPlatformCall.getOrDefault(job.key(), job.every() != null ? started : Instant.EPOCH),
-                    lastLedgerStart(job.key()));
+            // D-062: a cron job is covered by its slot's DONE row (the platform's run or the watchdog's), never by a
+            // start time - a run cut off mid-slot leaves a RUNNING row that the run below takes over
+            Instant last = job.cron() != null ? lastPlatformCall.getOrDefault(job.key(), Instant.EPOCH)
+                    : latest(lastPlatformCall.getOrDefault(job.key(), started), lastLedgerStart(job.key()));
             if (!silent(job, last, now)) {
+                continue;
+            }
+            if (job.cron() != null && doneResult(job.key(), lastExpectedFire(job, now)).isPresent()) {
+                lastPlatformCall.put(job.key(), now);
                 continue;
             }
             try {
@@ -441,7 +453,13 @@ public class PlatformJobs {
                     var entry = silentReported.add(job.key()) ? log.atError() : log.atWarn();
                     entry.addKeyValue("jobKey", job.key()).addKeyValue("silentFor", Duration.between(last, now))
                             .log("platform_jobs.platform_silent - running the job here once");
-                    job.body().call();
+                    if (job.cron() != null) {
+                        // the missed slot's own ledger row (as the platform's run would write it): a restart finds it,
+                        // and a late platform call for the slot is a duplicate - never a second run
+                        runSlot(job, lastExpectedFire(job, now));
+                    } else {
+                        job.body().call();
+                    }
                     return true;
                 });
                 if (ran.isEmpty()) {
@@ -454,8 +472,9 @@ public class PlatformJobs {
     }
 
     /**
-     * An interval job: no run for 3× its interval. A cron job: its last expected fire is more than an hour ago and no run
-     * started since (the process start is no floor - a restart must not hide a platform that stopped calling).
+     * An interval job: no run for 3× its interval. A cron job: its last expected fire is more than an hour ago and
+     * {@code last} is before it (the process start is no floor - a restart must not hide a platform that stopped calling;
+     * the watchdog then checks the slot's DONE row).
      */
     static boolean silent(Job job, Instant last, Instant now) {
         if (job.every() != null) {
