@@ -1421,3 +1421,18 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   stale-text points and the test-order point fixed; the lazy-start lanes-on combination stays covered by
   `SchedulingLanesTest` only.
 - **Rollback:** revert; production is unaffected either way (it sets every one of them).
+
+## D-062 — The watchdog's run of a missed cron slot is recorded for that slot, so a restart does not run it again or alarm (2026-10-13)
+
+- **Why:** after every restart Dad Coach logged `platform_jobs.platform_silent` at ERROR and ran `weekly_goals` again. The
+  platform registered the job (2026-10-11 20:13 UTC) after its Sunday 06:00 slot, so the watchdog rightly ran that slot
+  here - but outside the slot ledger. A new process remembers no platform call and the ledger has no run since the slot,
+  so every restart saw the same "silence".
+- **What:** for a cron job the watchdog now runs the missed slot through the slot ledger (`platform_job_run`, the
+  platform call's own path): a restart finds the run and stays quiet; a late platform call for that slot answers
+  DUPLICATE instead of running it twice. Interval jobs are unchanged (their silence clock starts at the process start).
+  A platform that really stops calling still raises the ERROR at the next missed slot.
+- **Tests:** `PlatformJobsTest.cronWatchdogRunIsRecordedForItsSlot` (a restart after the watchdog's run: it ran twice
+  before this change).
+- **Note:** the first start after this deploy runs the 2026-10-11 slot once more (one last ERROR) and records it.
+- **Rollback:** revert.

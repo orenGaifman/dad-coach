@@ -423,6 +423,11 @@ public class PlatformJobs {
         watchdog(jobs.values());
     }
 
+    /** Tests: a restart - what this process remembers of the platform's calls is gone, the ledger stays. */
+    void forgetPlatformCallsForTests() {
+        lastPlatformCall.clear();
+    }
+
     /** The watchdog over {@code these} jobs (tests pass their own, never running the real ones). */
     void watchdog(Collection<Job> these) {
         Instant now = Instant.now();
@@ -441,7 +446,13 @@ public class PlatformJobs {
                     var entry = silentReported.add(job.key()) ? log.atError() : log.atWarn();
                     entry.addKeyValue("jobKey", job.key()).addKeyValue("silentFor", Duration.between(last, now))
                             .log("platform_jobs.platform_silent - running the job here once");
-                    job.body().call();
+                    if (job.cron() != null) {
+                        // the missed slot's own ledger row (as the platform's run would write it): a restart finds it,
+                        // and a late platform call for the slot is a duplicate - never a second run
+                        runSlot(job, lastExpectedFire(job, now));
+                    } else {
+                        job.body().call();
+                    }
                     return true;
                 });
                 if (ran.isEmpty()) {
