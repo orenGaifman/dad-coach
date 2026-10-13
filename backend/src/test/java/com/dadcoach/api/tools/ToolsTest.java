@@ -81,6 +81,10 @@ class ToolsTest extends AbstractIntegrationTest {
         assertThat(tool("get_activity_ideas", "not-a-phone", Map.of()).status()).isEqualTo(400);
         assertThat(tool("get_activity_ideas", f.getPhone(), Map.of()).success()).isTrue();
         assertThat(tool("get_activity_ideas", "whatsapp:" + f.getPhone(), Map.of()).success()).isTrue();
+        // D-059: every identity the platform's old Dad Coach client accepted - any channel, the plus optional after it
+        assertThat(tool("get_activity_ideas", "whatsapp:" + f.getPhone().substring(1), Map.of()).success()).isTrue();
+        assertThat(tool("get_activity_ideas", "sms:" + f.getPhone(), Map.of()).success()).isTrue();
+        assertThat(tool("get_activity_ideas", f.getPhone().substring(1), Map.of()).status()).isEqualTo(400);
     }
 
     @Test

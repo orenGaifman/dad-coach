@@ -27,7 +27,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * {@code POST /api/context/{providerKey}} - the two providers bound in dad-coach-3 (playbook §12), loaded fresh on
  * every turn: {@code family_context} (profile + children) and {@code weekly_plan_context} (this week in his
- * timezone, {@link WeeklyPlanContextBuilder}). The father is identified only by his WhatsApp number in
+ * timezone, {@link WeeklyPlanContextBuilder}); {@code agent_family_context} is family_context as the agent reads it
+ * through the platform's generic provider (D-059). The father is identified only by his WhatsApp number in
  * {@code config.phone} (how the platform's Dad Coach context client sends a channel identity); a numeric user_id is
  * never trusted. An unknown or deleted father is a legitimate empty answer (200, father_found=false), not an error.
  * The envelope {success, data, error_code, error_message} is what the platform's client parses.

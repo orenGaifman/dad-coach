@@ -1364,8 +1364,13 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
     childCount, hasGoogleCalendarConnected; `config.includeChildren=false` leaves the children out). That mapping never
     found a calendar flag, a coaching time or a welcome step in our answer, so they stay false/null: the agent sees what
     it saw before. `family_context` itself is unchanged (the platform's old path reads it until its Java is deleted).
+  - The tools accept every identity the platform's old client accepted: any `{channel}:` prefix, with or without
+    the plus (the generic tool sends the platform identity as is). A bare number (a father id) is still refused.
+  - One difference, on purpose: when this endpoint fails, the platform now reports the failure; its old path showed
+    the agent a brand-new father (isNewUser) and could start onboarding someone we know.
   - The AI tools need nothing new: the generic tool's envelope (`whatsapp:+E164`, every schema parameter with missing
     ones as null, an `execution_context`) is the same call as the old client's. A contract test proves it.
 - **Tests:** `ContextProvidersTest` (agent view, unknown/deleted father = new user), `ToolsTest`
-  `theGenericEnvelopeIsTheSameCallAsTheDadCoachClientEnvelope` (all nine live tools, both envelopes, equal answers).
+  `theGenericEnvelopeIsTheSameCallAsTheDadCoachClientEnvelope` (all nine live tools, both envelopes, equal answers) and
+  `theActorIsOnlyTheWhatsAppNumberNeverANumericId` (channel identities).
 - **Rollback:** the endpoint is additive; the platform's rollback migration points family_context back to its Java path.
