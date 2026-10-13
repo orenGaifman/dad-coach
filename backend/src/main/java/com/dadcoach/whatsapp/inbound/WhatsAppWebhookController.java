@@ -127,6 +127,9 @@ public class WhatsAppWebhookController {
                         .addKeyValue("state", claim).log();
                 continue;
             }
+            if (pending != null) {
+                pending.hold(key);
+            }
             // claimed here, in arrival order; the turn still runs one at a time per sender
             executor.submit(in.fatherChannelIdentity(), () -> answer(in, receivedAt));
         }
@@ -143,9 +146,13 @@ public class WhatsAppWebhookController {
      * an Error escaping it leaves the default UNANSWERED.
      */
     private void answer(InboundMessageDto in, Instant receivedAt) {
+        answer(in, receivedAt, false);
+    }
+
+    private void answer(InboundMessageDto in, Instant receivedAt, boolean replayed) {
         InboundMessageHandler.Outcome outcome = InboundMessageHandler.Outcome.UNANSWERED;
         try {
-            outcome = handler.handle(in, receivedAt);
+            outcome = replayed ? handler.handleReplayed(in, receivedAt) : handler.handle(in, receivedAt);
         } finally {
             settle(in.idempotencyKey(), outcome);
             if (pending != null) {
@@ -161,6 +168,11 @@ public class WhatsAppWebhookController {
      */
     void replay(InboundMessageDto in) {
         String key = in.idempotencyKey();
+        if (!idempotency.exists(DEDUP_SCOPE, key)) {
+            // released (UNANSWERED) and its row not cleared: as D-038, only a redelivery processes it again
+            pending.done(key);
+            return;
+        }
         IdempotencyService.Claim claim = idempotency.claim(DEDUP_SCOPE, key, PendingInbound.LEASE);
         if (claim == IdempotencyService.Claim.DONE) {
             pending.done(key);
@@ -171,7 +183,7 @@ public class WhatsAppWebhookController {
             return;
         }
         pending.hold(key);
-        executor.submit(in.fatherChannelIdentity(), () -> answer(in, clock.instant()));
+        executor.submit(in.fatherChannelIdentity(), () -> answer(in, clock.instant(), true));
     }
 
     private void settle(String key, InboundMessageHandler.Outcome outcome) {

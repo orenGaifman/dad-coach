@@ -61,7 +61,7 @@ public class PendingInbound {
         this.replayer = replayer;
     }
 
-    /** Inside the claim's transaction: his message, until its turn settled. Held by this instance from now. */
+    /** Inside the claim's transaction: his message, until its turn settled (the caller holds it once committed). */
     void record(InboundMessageDto in) {
         Instant now = clock.instant();
         String message;
@@ -74,7 +74,6 @@ public class PendingInbound {
                         + " ON CONFLICT (message_id) DO UPDATE SET lease_until = excluded.lease_until",
                 in.idempotencyKey(), in.fatherChannelIdentity(), message, Timestamp.from(now),
                 Timestamp.from(now.plus(LEASE)));
-        held.add(in.idempotencyKey());
     }
 
     /** A replayed message this instance runs now: its lease is renewed until its turn settled. */
@@ -158,8 +157,13 @@ public class PendingInbound {
             }
             log.atWarn().setMessage("whatsapp.inbound.replayed").addKeyValue("messageId", r.id())
                     .addKeyValue("replay", r.attempts() + 1).log();
-            replayer.accept(in);
-            count++;
+            try {
+                replayer.accept(in);
+                count++;
+            } catch (RuntimeException e) {
+                // the rest of the batch still runs; this one is tried again after its lease
+                log.atError().setMessage("whatsapp.inbound.replay_failed").addKeyValue("messageId", r.id()).setCause(e).log();
+            }
         }
         return count;
     }

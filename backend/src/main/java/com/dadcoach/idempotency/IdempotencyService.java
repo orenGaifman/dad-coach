@@ -131,6 +131,12 @@ public class IdempotencyService {
         return Claim.BUSY;
     }
 
+    /** D-063: whether the key has a row in this scope (claimed or done; a released claim has none). */
+    @Transactional(readOnly = true)
+    public boolean exists(String scope, String key) {
+        return rows.findByScopeAndIdempotencyKey(scope, key).isPresent();
+    }
+
     /** Removes a key whatever its state (a guard taken for a send that then failed). */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void forget(String scope, String key) {

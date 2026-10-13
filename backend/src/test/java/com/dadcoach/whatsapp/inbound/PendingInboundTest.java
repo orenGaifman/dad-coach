@@ -92,7 +92,8 @@ class PendingInboundTest extends AbstractIntegrationTest {
         Father f = data.activeFather("+19995550832");
         data.endpoint(f, true);
         acceptedThenCrashed(text(f, "wamid.d063-sent", "היי"));
-        // the instance sent the reply (its guard is there) and died before the claim settled
+        // the instance sent the reply (its guard is there, the platform has its line) and died before the claim settled
+        fake.onPlatformLookup(c -> FakeServers.Reply.json("{\"status\":\"SENT\"}"));
         jdbc.update("INSERT INTO tool_idempotency (id, scope, idempotency_key, status, created_at, expires_at)"
                 + " VALUES (?, 'WHATSAPP_REPLY', 'wamid.d063-sent', 'SUCCEEDED', now(), now() + interval '7 days')", UUID.randomUUID());
         fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\nאיזה כיף!", "GENERATED")
@@ -103,6 +104,37 @@ class PendingInboundTest extends AbstractIntegrationTest {
 
         assertThat(fake.sentMessages()).isEmpty();
         assertThat(inboundStatus("wamid.d063-sent")).isEqualTo("SUCCEEDED");
+        assertThat(pendingRows()).isZero();
+    }
+
+    /** The instance took the reply guard and died before the send: the platform has no line - the replay sends it. */
+    @Test
+    void aReplyGuardTakenButNeverSentIsSentByTheReplay() {
+        Father f = data.activeFather("+19995550839");
+        data.endpoint(f, true);
+        acceptedThenCrashed(text(f, "wamid.d063-guard", "היי"));
+        jdbc.update("INSERT INTO tool_idempotency (id, scope, idempotency_key, status, created_at, expires_at)"
+                + " VALUES (?, 'WHATSAPP_REPLY', 'wamid.d063-guard', 'SUCCEEDED', now(), now() + interval '7 days')", UUID.randomUUID());
+        fake.onTurn(c -> FakeServers.Reply.json(FakeServers.turnReply("❤️ דאד קואץ׳:\\nאיזה כיף!", "GENERATED")
+                .replace("\"isDuplicate\":false", "\"isDuplicate\":true")));
+        clock.advance(PAST_LEASE);
+
+        assertThat(pending.replayDue()).isEqualTo(1);
+
+        assertThat(fake.sentMessages()).hasSize(1);
+        assertThat(inboundStatus("wamid.d063-guard")).isEqualTo("SUCCEEDED");
+        assertThat(pendingRows()).isZero();
+    }
+
+    /** Released (UNANSWERED) and its row left behind: as D-038, only a redelivery processes it again. */
+    @Test
+    void aReleasedMessageWhoseRowStayedIsNotReplayed() {
+        Father f = data.activeFather("+19995550840");
+        acceptedThenCrashed(text(f, "wamid.d063-released", "היי"));
+        idempotency.release("WHATSAPP_INBOUND", "wamid.d063-released");
+        clock.advance(PAST_LEASE);
+        pending.replayDue();
+        assertThat(fake.turns()).isEmpty();
         assertThat(pendingRows()).isZero();
     }
 
@@ -150,11 +182,13 @@ class PendingInboundTest extends AbstractIntegrationTest {
     void aLiveInstanceRenewsItsLeaseSoNoOtherInstanceReplaysIt() {
         Father f = data.activeFather("+19995550836");
         acceptedThenCrashed(text(f, "wamid.d063-live", "היי"));
+        pending.hold("wamid.d063-live");
         clock.advance(Duration.ofMinutes(2).minusSeconds(10));
         pending.renewHeld();
         clock.advance(Duration.ofSeconds(30));
         assertThat(pending.replayDue()).isZero();
         assertThat(pendingRows()).isEqualTo(1);
+        pending.done("wamid.d063-live");
     }
 
     @Test

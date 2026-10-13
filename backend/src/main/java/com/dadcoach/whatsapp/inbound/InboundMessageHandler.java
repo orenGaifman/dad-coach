@@ -190,6 +190,37 @@ public class InboundMessageHandler {
         this.clock = clock;
     }
 
+    /** D-063: this thread is handling a message replayed after a crash ({@link PendingInbound}). */
+    private static final ThreadLocal<Boolean> REPLAY = new ThreadLocal<>();
+
+    /**
+     * D-063: a message replayed after a crash. Its reply guard may have been taken by the instance that died before the
+     * reply went out: the guard then counts only when the platform has the reply's line.
+     */
+    public Outcome handleReplayed(InboundMessageDto in, Instant receivedAt) {
+        REPLAY.set(Boolean.TRUE);
+        try {
+            return handle(in, receivedAt);
+        } finally {
+            REPLAY.remove();
+        }
+    }
+
+    /**
+     * D-038's guard was taken: a reply to this message went out - unless this is a replay (D-063) and the platform has no
+     * line under the key the reply would use (the instance died between the guard and the send). Unknown = went out.
+     */
+    private boolean alreadyReplied(String cid, Attempt attempt) {
+        if (!Boolean.TRUE.equals(REPLAY.get()) || replies == null) {
+            return true;
+        }
+        boolean sent = replies.created(cid, attempt.parts).orElse(true);
+        if (!sent) {
+            log.atWarn().setMessage("whatsapp.reply.replayed_unsent").addKeyValue("correlationId", cid).log();
+        }
+        return sent;
+    }
+
     public Outcome handle(InboundMessageDto in, Instant receivedAt) {
         Attempt attempt = new Attempt();
         try {
@@ -342,7 +373,7 @@ public class InboundMessageHandler {
             }
             // D-038 (DC-B4): a duplicate answer carries the reply of the attempt whose answer was lost - it goes out,
             // but only once per inbound message, whatever retries or redeliveries follow
-            if (!idempotency.firstTime(REPLY_SCOPE, cid)) {
+            if (!idempotency.firstTime(REPLY_SCOPE, cid) && alreadyReplied(cid, attempt)) {
                 outcome = response.isDuplicate() ? "DUPLICATE" : "ALREADY_REPLIED";
                 timersAfterTurn(before, father, phone);
                 return;

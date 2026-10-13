@@ -1452,10 +1452,16 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   lease and the turn runs on the same per-sender executor; a claim settled meanwhile only clears the row. Given up after 3
   replays (`whatsapp.inbound.replay_gave_up`); a row older than an hour is purged (`whatsapp.inbound.pending_purged`). His
   deletion deletes his rows. Only with `retry-unanswered` on (production; the rollback switch keeps the old path).
-- **No second reply:** a replayed turn that reached the platform is a duplicate there; D-038's reply guard
-  (`WHATSAPP_REPLY`) sends its cached reply only when none went.
-- **Not changed:** a released (UNANSWERED) message is still only processed again on a redelivery - the pending row goes.
+- **No second reply, no lost one:** a replayed turn that reached the platform is a duplicate there; D-038's reply guard
+  (`WHATSAPP_REPLY`) sends its cached reply only when none went. On a replay a taken guard counts only when the platform
+  has the reply's line (`GET /messages?workerKey&idempotencyKey`, key `reply:<id>:<part>`): the instance may have died
+  between the guard and the send (`whatsapp.reply.replayed_unsent`); unknown (platform unreachable) = it went.
+- **Not changed:** a released (UNANSWERED) message is still only processed again on a redelivery - the pending row goes
+  (a row left behind finds no claim and is only cleared).
+- **Residuals:** a replay redoes a voice note's transcription (cost; the transcript may differ); with
+  `app.scheduling.lanes=false` the lease renewal shares the one scheduler thread with the sending jobs, so a sending batch
+  over ~90 s could let a live instance's row be replayed (its claim and reply guard still hold).
 - **Tests:** `PendingInboundTest` (failing first: the crash replay with one reply, a reply that went out before the crash,
-  a settled claim, SKIP LOCKED; also: lease renewal, give-up, purge, a failed pending row leaves the key free, the webhook
+  a reply guard taken but never sent, a settled claim, SKIP LOCKED; also: a released row not replayed, lease renewal, give-up, purge, a failed pending row leaves the key free, the webhook
   clears its row answered or released), `FatherDeletionTest`.
 - **Rollback:** revert; V51 only adds a table.
