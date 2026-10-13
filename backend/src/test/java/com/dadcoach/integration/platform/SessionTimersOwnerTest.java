@@ -36,7 +36,7 @@ class SessionTimersOwnerTest extends AbstractIntegrationTest {
 
     @AfterEach
     void off() {
-        properties.setSessionTimersProductOwned(false);
+        properties.setSessionTimersProductOwned(true); // production's value, the default (D-061)
     }
 
     private Father father() {

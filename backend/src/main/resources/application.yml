@@ -111,12 +111,12 @@ app:
   # D-055: session_timers and person_deletions have no tick any more - the platform is their one scheduler, whatever this
   # list says. weekly_goals keeps its tick until its first platform slot (Sunday 06:00 UTC) has run.
   platform-jobs:
-    platform-owned: ${DC_PLATFORM_JOBS:qa_probe,person_deletions,session_timers,weekly_goals}
+    platform-owned: ${DC_PLATFORM_JOBS:person_deletions,session_timers,weekly_goals}
     sync: ${DC_PLATFORM_JOBS_SYNC:true}
   scheduling:
     # D-043 (Unified Workflow 6.0b): true = the jobs that send WhatsApp keep the single scheduler thread and the
     # housekeeping jobs (purges, deletions, keep-warm) get their own small pool;
-    # anything else (false, unset, a typo) = one thread runs every job, exactly as before.
+    # unset = true (D-061, as production); anything but true (false, a typo) = one thread runs every job, as before.
     lanes: ${APP_SCHEDULING_LANES:true}
 
 dadcoach:

@@ -29,10 +29,10 @@ Names only — never values. Secrets live on Render (and the owner-local `~/.con
 | WORKFLOW_PLATFORM_CALLBACK_ENABLED | yes (`true`) | scheduled-response receiver |
 | WORKFLOW_PLATFORM_CALLBACK_API_KEY | yes when enabled, ≥24 | callback key (today `${tool-api.api-key}`) |
 | ~~WORKFLOW_PLATFORM_CALLBACK_TEMPLATE_NAME~~ | — | D-053: unused - the platform's kind→template mapping picks the template |
-| PLATFORM_DELIVERY_REPORTS | no (default false) | D-039: report what was delivered to the platform's conversation timeline; turn on only after the platform's Phase 3 (V123) is live |
-| DC_SESSION_TIMERS_GUARD | no (default false) | D-049: the hour-before reminder's platform guard may skip its AI turn when no session is there (the callback's NO_VALID_SESSION); off = the guard always proceeds. The morning / follow-up tool-only turns are switched by the workflow YAML, not by an env |
+| PLATFORM_DELIVERY_REPORTS | no (default true since D-061, as production) | D-039: report what was delivered to the platform's conversation timeline; turn on only after the platform's Phase 3 (V123) is live |
+| DC_SESSION_TIMERS_GUARD | no (default true since D-061, as production) | D-049: the hour-before reminder's platform guard may skip its AI turn when no session is there (the callback's NO_VALID_SESSION); off = the guard always proceeds. The morning / follow-up tool-only turns are switched by the workflow YAML, not by an env |
 | ~~GATEWAY_HELD_REPORTS~~ | — | D-053: unused - `/held-outcome` is gone (the platform holds and reports through `/delivery-status`) |
-| APP_SCHEDULING_LANES | no (default false) | D-043: `true` = the WhatsApp-sending job (weekly belt promotions) keeps the single scheduler thread `scheduling-1`, the housekeeping jobs (receipt retry, template refresh, idempotency purge, platform deletions, keep-warm) run on their own pool of 3 (`scheduling-housekeeping-N`); anything but `true` (any case) = one thread runs every job, as before |
+| APP_SCHEDULING_LANES | no (default true since D-061, as production) | D-043: `true` = the WhatsApp-sending job (weekly belt promotions) keeps the single scheduler thread `scheduling-1`, the housekeeping jobs (receipt retry, template refresh, idempotency purge, platform deletions, keep-warm) run on their own pool of 3 (`scheduling-housekeeping-N`); anything but `true` (any case) = one thread runs every job, as before |
 | ~~MESSAGING_MODE_LOGIN_LINK, MESSAGING_MODE_SCHEDULED, MESSAGING_MODE_REPLY, MESSAGING_MODE_FIXED_LINE, MESSAGING_MODE_BUTTON_REPLY, MESSAGING_MODE_READY_ANSWER~~ | — | D-053: unused - the platform's Send API is the only sender (no DIRECT / SHADOW) |
 | MESSAGING_DELIVERY_STATUS_ENABLED | no (default true since D-053) | apply the platform's delivery reports (`POST /api/integration/channel/delivery-status`, callback key) - the only source of a message's fate since D-053; off = 404, nothing changes (the platform retries 24 h). Platform side: `WORKFLOW_CHANNELS_WHATSAPP_ROUTES_1_DELIVERYREPORTURL` |
 | MESSAGING_NOT_CREATED_REPOST_WAIT | no (PT2S, at most 2 s) | D-053: a line without a ledger the platform provably did not create (503 disabled, 401/403, never written) is POSTed once more after this, then not sent - the message stays unanswered (the webhook already answered Meta 200, so Meta does not resend it) |
@@ -119,7 +119,7 @@ Keep: everything in the table above (GOOGLE_* stay).
   minutes after the revert is live:
   `UPDATE scheduled_response_delivery SET status = 'HELD' WHERE status = 'UNKNOWN';`
   V46 stays (two partial indexes, harmless).
-- **Roll back D-043 (scheduler lanes):** `APP_SCHEDULING_LANES=false` (or unset) and restart - one scheduler thread
+- **Roll back D-043 (scheduler lanes):** `APP_SCHEDULING_LANES=false` (unset = on since D-061) and restart - one scheduler thread
   runs every job again. Nothing in the data. Check after turning it on: the log lines of `whatsapp.receipt` /
   `meta.templates.refreshed` show thread `scheduling-housekeeping-N`, `weekly_goal.completion` thread `scheduling-1`.
 - **Platform Send API for the login link (D-045, Unified Workflow 6.3-DC step DC1) - rollout, in this order:**

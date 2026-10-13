@@ -21,6 +21,7 @@ import org.springframework.scheduling.config.ScheduledTaskHolder;
  */
 // the switch off explicitly: production (and the default) has it on
 @org.springframework.test.context.TestPropertySource(properties = "app.scheduling.lanes=false")
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 class SchedulingLanesAppTest extends AbstractIntegrationTest {
 
     /** The registered jobs of the test context: everything but WeeklyGoalCompletionJob (cron "-"). */

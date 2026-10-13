@@ -56,7 +56,7 @@ class SessionTimerCardParityTest extends AbstractIntegrationTest {
 
     @AfterEach
     void guardOff() {
-        properties.setSessionTimersGuard(false);
+        properties.setSessionTimersGuard(true); // production's value, the default (D-061)
     }
 
     // ------------------------------------------------------------------------------------------------ fixtures
