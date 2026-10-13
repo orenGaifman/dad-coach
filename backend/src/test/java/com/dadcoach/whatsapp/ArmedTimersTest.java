@@ -242,7 +242,7 @@ class ArmedTimersTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("D-059: a booking turn whose reply is suppressed or blank still gets its timers (the model no longer arms)")
+    @DisplayName("D-060: a booking turn whose reply is suppressed or blank still gets its timers (the model no longer arms)")
     void aTurnWithoutAReplyStillArmsItsTimers() throws Exception {
         AtomicReference<String> id = new AtomicReference<>();
         fake.onTurn(c -> {
@@ -258,7 +258,7 @@ class ArmedTimersTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("D-059: a cancel in a turn whose reply is never sent (not Hebrew twice) still clears its timers")
+    @DisplayName("D-060: a cancel in a turn whose reply is never sent (not Hebrew twice) still clears its timers")
     void aTurnEndingInTheFixedLineStillClearsItsTimers() throws Exception {
         String session = book(FRIDAY_9);
         fake.armAsModel(USER, "session_reminder_1h", FRIDAY_9.minus(Duration.ofHours(1)), session);

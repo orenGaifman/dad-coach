@@ -635,7 +635,7 @@ public class InboundMessageHandler {
     }
 
     /**
-     * D-059: a turn that ended without a checked reply (suppressed, blank, already answered, the fixed line, the card)
+     * D-060: a turn that ended without a checked reply (suppressed, blank, already answered, the fixed line, the card)
      * still has its sessions' timers armed or cleared - the model no longer does it in the turn. Best effort.
      */
     private void timersAfterTurn(TurnLedger.Snapshot before, Optional<Father> father, String phone) {

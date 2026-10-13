@@ -1375,6 +1375,7 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   `theActorIsOnlyTheWhatsAppNumberNeverANumericId` (channel identities).
 - **Rollback:** the endpoint is additive; the platform's rollback migration points family_context back to its Java path.
 ## D-059 — The model stops arming the session timers: Dad Coach is their one owner (D-050 "Next", 2026-10-13)
+## D-060 — The model stops arming the session timers: Dad Coach is their one owner (D-050 "Next", 2026-10-13)
 
 - **Why:** architecture audit D-2. Since D-050 Dad Coach arms every booked, moved or joined session's timers after the
   turn and cancels a closed session's (`InboundMessageHandler.confirmTimers`), cancels them from the dashboard and the

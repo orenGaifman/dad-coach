@@ -113,7 +113,7 @@ class ManifestTest(unittest.TestCase):
                                      "session_follow_up": "SESSION_FOLLOW_UP"})
 
     def test_only_dad_coach_arms_the_session_timers(self):
-        """D-050 Next (D-059): the timers are product-fired (onEvent: hidden from the model, refused for its tool), and the
+        """D-050 Next (D-060): the timers are product-fired (onEvent: hidden from the model, refused for its tool), and the
         model has neither the arming tools nor the rules that told it to arm or clear them."""
         [doc] = MANIFESTS.values()
         for s in doc["states"]:
