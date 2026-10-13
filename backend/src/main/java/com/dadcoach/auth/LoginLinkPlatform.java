@@ -6,7 +6,7 @@ import com.dadcoach.channel.template.TemplateText;
 import com.dadcoach.domain.father.Father;
 import com.dadcoach.domain.father.FatherRepository;
 import com.dadcoach.integration.platform.messaging.MessagingSettings;
-import com.dadcoach.integration.platform.messaging.PlatformMessagingClient.Answer;
+import com.platform.client.PlatformMessagingClient.Answer;
 import com.dadcoach.integration.platform.messaging.PlatformSendFlow;
 import com.dadcoach.integration.platform.messaging.PlatformSendFlow.Settled;
 import com.dadcoach.integration.platform.messaging.PlatformSendFlow.Snapshot;

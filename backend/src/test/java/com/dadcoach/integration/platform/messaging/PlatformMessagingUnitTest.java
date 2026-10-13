@@ -2,7 +2,7 @@ package com.dadcoach.integration.platform.messaging;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.dadcoach.integration.platform.messaging.PlatformMessagingClient.Kind;
+import com.platform.client.PlatformMessagingClient.Kind;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.UnknownHostException;
