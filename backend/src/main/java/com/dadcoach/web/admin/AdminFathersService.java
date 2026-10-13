@@ -44,7 +44,7 @@ public class AdminFathersService {
 
     public record Profile(long id, String name, String phone, String status, String timezone, Instant createdAt,
                           Instant lastInteractionAt, String belt, int completed, int streakWeeks, int longestStreakWeeks,
-                          boolean calendarConnected, String onboardingState, String workflowState) {
+                          boolean calendarConnected, String onboardingState) {
     }
 
     public record ChildRow(long id, String name, int age, String status) {
@@ -97,8 +97,7 @@ public class AdminFathersService {
         Profile profile = new Profile(f.getId(), f.getDisplayName(), f.getPhone(), f.getStatus().name(), zone.getId(),
                 f.getCreatedAt(), f.getLastInteractionAt(), f.getCurrentBelt() == null ? null : f.getCurrentBelt().name(),
                 f.getTotalQualityTimesCompleted(), nz(f.getCurrentStreakWeeks()), nz(f.getLongestStreakWeeks()),
-                f.hasGoogleCalendarConfigured(), f.getOnboardingState() == null ? null : f.getOnboardingState().name(),
-                f.getCurrentWorkflowState() == null ? null : f.getCurrentWorkflowState().name());
+                f.hasGoogleCalendarConfigured(), f.getOnboardingState() == null ? null : f.getOnboardingState().name());
         List<ChildRow> kids = children.findByFatherId(fatherId).stream()
                 .map(c -> new ChildRow(c.getId(), c.getName(), c.getAge(), c.getStatus())).toList();
         List<GoalRow> goalRows = goals.findByFatherIdOrderByWeekStartDateDesc(fatherId).stream().limit(26)

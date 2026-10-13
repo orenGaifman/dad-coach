@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
  * scheduler. The weekly completion keeps its Sunday 06:00 UTC slot (review: an hourly run would complete a week right after
  * Israel's Sunday 00:00 - sessions logged late Saturday would miss it, and other zones' weeks would end mid-week); a failed
  * run is retried by the platform's backoff, not a week later. Not here: the Send API reconciles (rewritten by the 6.4 cleanup first), the template
- * refresh and receipt retry (removed by it), keep-warm and the idempotency purge (per instance / in-process).
+ * refresh and receipt retry (removed by it) and the idempotency purge (per instance / in-process).
  */
 // eager even with spring.main.lazy-initialization=true (the Dockerfile sets it): a lazy one never registers its jobs
 @org.springframework.context.annotation.Lazy(false)

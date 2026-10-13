@@ -130,7 +130,7 @@ export interface DeliveryRow {
 export interface FatherDetail {
   profile: { id: number; name: string | null; phone: string; status: string; timezone: string; createdAt: string;
              lastInteractionAt: string | null; belt: Belt; completed: number; streakWeeks: number; longestStreakWeeks: number;
-             calendarConnected: boolean; onboardingState: string | null; workflowState: string | null }
+             calendarConnected: boolean; onboardingState: string | null }
   children: { id: number; name: string; age: number; status: string }[]
   goals: { weekStart: string; targetHours: number; creditedMinutes: number; status: string }[]
   sessions: { id: string; childName: string | null; phase: Phase; start: string; end: string; notes: string | null }[]

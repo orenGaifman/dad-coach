@@ -119,7 +119,7 @@ app:
     publish: ${PLATFORM_CATALOG_PUBLISH:off}
   scheduling:
     # D-043 (Unified Workflow 6.0b): true = the jobs that send WhatsApp keep the single scheduler thread and the
-    # housekeeping jobs (purges, deletions, keep-warm) get their own small pool;
+    # housekeeping jobs (purges, inbound leases, platform-jobs maintenance) get their own small pool;
     # unset = true (D-061, as production); anything but true (false, a typo) = one thread runs every job, as before.
     lanes: ${APP_SCHEDULING_LANES:true}
 
