@@ -35,6 +35,7 @@ public class ScheduledResponseDeliveryService {
     private final Clock clock;
     private final com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties;
     private final ScheduledPlatformSend platformSend;
+    private final SessionTimerCard timerCards;
 
     public ScheduledResponseDeliveryService(
             ScheduledResponseDeliveryRepository repository,
@@ -42,13 +43,15 @@ public class ScheduledResponseDeliveryService {
             SessionButtonOffers buttons,
             Clock clock,
             com.dadcoach.integration.platform.WorkflowPlatformProperties platformProperties,
-            ScheduledPlatformSend platformSend) {
+            ScheduledPlatformSend platformSend,
+            SessionTimerCard timerCards) {
         this.platformProperties = platformProperties;
         this.clock = clock;
         this.endpoints = endpoints;
         this.buttons = buttons;
         this.repository = repository;
         this.platformSend = platformSend;
+        this.timerCards = timerCards;
     }
 
     public ScheduledResponseResult deliver(Father father, ScheduledResponseRequest request, String idempotencyKey) {
@@ -80,6 +83,16 @@ public class ScheduledResponseDeliveryService {
     /** {@link #deliver}, with the callback's HTTP body (D-046). */
     public CallbackAnswer deliverForCallback(Father father, ScheduledResponseRequest request, String idempotencyKey,
                                              String drafted) {
+        return deliverForCallback(father, request, idempotencyKey, drafted, List.of());
+    }
+
+    /**
+     * @param morning D-058: the sessions a morning reminder names - claimed for today right before it is sent; nothing is
+     *                sent when every one was already claimed today, and the claim is given back when the message was
+     *                provably not handed over. Empty for any other message.
+     */
+    public CallbackAnswer deliverForCallback(Father father, ScheduledResponseRequest request, String idempotencyKey,
+                                             String drafted, List<java.util.UUID> morning) {
         Optional<ScheduledResponseDelivery> existing = repository.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
             log.info("Scheduled response already handled, not sending again: idempotencyKey={}, status={}",
@@ -114,7 +127,25 @@ public class ScheduledResponseDeliveryService {
         String content = hebrew.get();
         endpoints.ensure(father); // F1: fathers onboarded on WhatsApp before the fix have no endpoint row yet
         List<OutboundMessageDto.ReplyButton> offered = buttons.forScheduledMessage(father, request.targetStateKey());
-        return platformSend.deliver(father, delivery, request, content, offered);
+        Optional<SessionTimerCard.MorningClaim> claim = Optional.empty();
+        if (!morning.isEmpty()) {
+            claim = timerCards.claimMorning(father, morning);
+            if (claim.isEmpty()) {
+                // D-058: another morning reminder of today already named these sessions - he gets one
+                delivery.markFailed(SessionTimerCard.ALREADY_REMINDED_TODAY, clock.instant());
+                repository.save(delivery);
+                log.info("Morning reminder already sent today, not sending again: triggerId={}", request.triggerId());
+                ScheduledResponseResult skipped = ScheduledResponseResult.of(delivery, false);
+                return CallbackAnswer.of(reporting()
+                        ? skipped.withOutcome(TimelineReports.DROPPED, SessionTimerCard.ALREADY_REMINDED_TODAY, null)
+                        : skipped);
+            }
+        }
+        CallbackAnswer answer = platformSend.deliver(father, delivery, request, content, offered);
+        if (!answer.handedOver()) {
+            claim.ifPresent(timerCards::releaseMorning);
+        }
+        return answer;
     }
 
     private boolean reporting() {

@@ -123,7 +123,7 @@ class SessionTimerCardParityTest extends AbstractIntegrationTest {
 
     private Sent callback(String state, String content) throws Exception {
         int before = fake.sentMessages().size();
-        String trigger = "parity-" + (++triggers);
+        String trigger = "parity-" + nextTrigger();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("triggerId", trigger);
         body.put("workflowInstanceId", "w1");
@@ -144,6 +144,10 @@ class SessionTimerCardParityTest extends AbstractIntegrationTest {
         sent.path("content").path("buttons").forEach(b -> buttons.add(b.path("id").asText()));
         return new Sent(sent.path("content").path("type").asText(), sent.path("content").path("text").asText(), buttons,
                 sent.path("templateData").toString());
+    }
+
+    private synchronized int nextTrigger() {
+        return ++triggers;
     }
 
     JsonNode card(String timer) throws Exception {
@@ -263,6 +267,63 @@ class SessionTimerCardParityTest extends AbstractIntegrationTest {
         // the record decides it: without it the second morning would go again
         jdbc.update("UPDATE quality_time SET morning_reminded_on = NULL WHERE father_id = ?", father.getId());
         assertThat(card(MORNING).path("message").path("text").asText()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("D-058: two mornings of one day pass the card before either is sent, their callbacks race: one reminder")
+    void racingMorningsSendOne() throws Exception {
+        newFather(true);
+        clock.set(Instant.parse("2026-11-03T06:00:00Z")); // 08:00 in Israel
+        session(noa, Duration.ofHours(7), 60);
+        session(yuval, Duration.ofHours(9), 60);
+        // both tool-only turns built their card before either callback (the platform released the conversation)
+        String text = card(MORNING).path("message").path("text").asText();
+        assertThat(card(MORNING).path("message").path("text").asText()).isEqualTo(text).isNotBlank();
+
+        java.util.concurrent.CyclicBarrier start = new java.util.concurrent.CyclicBarrier(2);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            List<java.util.concurrent.Future<Sent>> results = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                results.add(pool.submit(() -> {
+                    start.await();
+                    return callback(MORNING, text);
+                }));
+            }
+            for (java.util.concurrent.Future<Sent> r : results) {
+                r.get(60, java.util.concurrent.TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(fake.sendRequests("SCHEDULED")).as("one morning reminder").hasSize(1);
+        assertThat(jdbc.queryForList("SELECT failure_reason FROM scheduled_response_delivery WHERE father_id = ? "
+                + "AND status = 'FAILED'", String.class, father.getId())).containsExactly(SessionTimerCard.ALREADY_REMINDED_TODAY);
+        assertThat(jdbc.queryForList("SELECT morning_reminded_on FROM quality_time WHERE father_id = ?", java.sql.Date.class,
+                father.getId())).extracting(java.sql.Date::toLocalDate).containsOnly(java.time.LocalDate.parse("2026-11-03"));
+    }
+
+    @Test
+    @DisplayName("D-058: a morning the platform refused (nothing created) gives its claim back: the next morning goes")
+    void refusedMorningGivesTheClaimBack() throws Exception {
+        newFather(true);
+        clock.set(Instant.parse("2026-11-03T06:00:00Z"));
+        session(noa, Duration.ofHours(7), 60);
+        String text = card(MORNING).path("message").path("text").asText();
+        fake.onPlatformSend(c -> new com.dadcoach.support.FakeServers.Reply(422,
+                "{\"error\":\"messaging.param_invalid\",\"field\":\"content\"}"));
+        callback(MORNING, text);
+        assertThat(jdbc.queryForObject("SELECT morning_reminded_on FROM quality_time WHERE father_id = ?", java.sql.Date.class,
+                father.getId())).as("claim given back").isNull();
+
+        fake.onPlatformSend(fake::accept);
+        clock.advance(Duration.ofMinutes(1));
+        assertThat(card(MORNING).path("message").path("text").asText()).isEqualTo(text);
+        int before = fake.sentMessages().size();
+        callback(MORNING, text);
+        assertThat(fake.sentMessages()).hasSize(before + 1);
+        assertThat(jdbc.queryForObject("SELECT morning_reminded_on FROM quality_time WHERE father_id = ?", java.sql.Date.class,
+                father.getId())).isNotNull();
     }
 
     @Test

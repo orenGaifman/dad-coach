@@ -38,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  * The two "already" facts were read by the model from the conversation; they are recorded here when such a message is
  * handed over ({@link #sent}): {@code quality_time.morning_reminded_on} and {@code quality_time.follow_up_asked_at}
- * (V49).
+ * (V49). D-058: the morning's is claimed atomically before it is sent ({@link #claimMorning}).
  */
 @Component
 public class SessionTimerCard {
@@ -118,10 +118,42 @@ public class SessionTimerCard {
         return new Card(planned.text(), null, planned.sessions());
     }
 
+    /** D-058: the sessions a morning reminder claimed for today, with what they held before (to give the claim back). */
+    public record MorningClaim(long fatherId, LocalDate day, Map<UUID, LocalDate> before) {
+    }
+
     /**
-     * A session timer's message was handed over for delivery (the callback): the morning and the follow-up note the
-     * sessions they named, so the next timer of the same day / the same session sends nothing again. Best effort: a
-     * failure here never stops a message.
+     * D-058: the morning reminder claims today for the sessions it names, in one atomic update, before it is sent. Two
+     * sessions on one day wake the morning twice and both tool-only turns can pass {@link #build} before either message
+     * is handed over; the claim lets exactly one of them go. Empty: every session was already claimed today.
+     */
+    public Optional<MorningClaim> claimMorning(Father father, List<UUID> sessions) {
+        LocalDate today = clock.instant().atZone(goals.zoneFor(father)).toLocalDate();
+        Map<UUID, LocalDate> before = new java.util.LinkedHashMap<>();
+        jdbc.query("""
+                UPDATE quality_time q SET morning_reminded_on = ?
+                FROM (SELECT id, morning_reminded_on AS before FROM quality_time WHERE id = ANY (?::uuid[]) AND father_id = ?) o
+                WHERE q.id = o.id AND q.morning_reminded_on IS DISTINCT FROM ?
+                RETURNING q.id, o.before""",
+                (org.springframework.jdbc.core.RowCallbackHandler) rs -> {
+                    java.sql.Date was = rs.getDate("before");
+                    before.put(rs.getObject("id", UUID.class), was == null ? null : was.toLocalDate());
+                },
+                today, sessions.stream().map(UUID::toString).toArray(String[]::new), father.getId(), today);
+        return before.isEmpty() ? Optional.empty() : Optional.of(new MorningClaim(father.getId(), today, before));
+    }
+
+    /** D-058: the claimed morning was provably not sent: the sessions hold what they held before, unless claimed again since. */
+    public void releaseMorning(MorningClaim claim) {
+        claim.before().forEach((id, was) -> jdbc.update(
+                "UPDATE quality_time SET morning_reminded_on = ? WHERE id = ? AND father_id = ? AND morning_reminded_on = ?",
+                was, id, claim.fatherId(), claim.day()));
+    }
+
+    /**
+     * A session timer's message was handed over for delivery (the callback): the follow-up notes the session it named,
+     * so the next timer of the same session sends nothing again (the morning claims its day before it is sent:
+     * {@link #claimMorning}). Best effort: a failure here never stops a message.
      */
     public void sent(Father father, String timerState, List<UUID> sessions) {
         if (sessions == null || sessions.isEmpty()) {
@@ -129,12 +161,7 @@ public class SessionTimerCard {
         }
         try {
             Instant now = clock.instant();
-            if (ScheduledReplies.MORNING.equals(timerState)) {
-                LocalDate today = now.atZone(goals.zoneFor(father)).toLocalDate();
-                for (UUID id : sessions) {
-                    jdbc.update("UPDATE quality_time SET morning_reminded_on = ? WHERE id = ? AND father_id = ?", today, id, father.getId());
-                }
-            } else if (ScheduledReplies.FOLLOW_UP.equals(timerState)) {
+            if (ScheduledReplies.FOLLOW_UP.equals(timerState)) {
                 for (UUID id : sessions) {
                     jdbc.update("UPDATE quality_time SET follow_up_asked_at = ? WHERE id = ? AND father_id = ?",
                             Timestamp.from(now), id, father.getId());
