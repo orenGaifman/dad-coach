@@ -1320,5 +1320,8 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
     father is marked "reconnect" (D-022) and settings say so at once; if only the token was refused, the event is
     written.
   - A 401 on a token that was just refreshed, and any 403, still mean reconnect, as before.
+  - Forgetting is a targeted update (`forgetAccessToken`: only that token, only if it's still stored), never a save of
+    a possibly stale copy. Review: a slots read holds a detached father and could have put back tokens a reconnect had
+    just replaced.
 - **Tests:** `CalendarReconnectTest`, three new tests (dead grant, live grant, read). Each fails without the change.
 - **Rollback:** revert. Settings go back to lagging behind for up to an hour.

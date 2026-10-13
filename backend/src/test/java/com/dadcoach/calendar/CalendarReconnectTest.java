@@ -199,4 +199,21 @@ class CalendarReconnectTest extends AbstractIntegrationTest {
         assertThat(after.getGoogleAccessToken()).isNull();
         assertThat(after.getGoogleRefreshToken()).as("the grant decides at the next refresh").isEqualTo("refresh");
     }
+
+    @Test
+    @DisplayName("D-057: a stale copy refused on read never puts back tokens a reconnect has just replaced")
+    void aStaleCopyNeverUndoesAReconnect(@Autowired GoogleCalendarService calendar) {
+        Father stale = connectedWithLiveToken("+19995550906");
+        Father reconnected = fathers.findById(stale.getId()).orElseThrow();
+        reconnected.setGoogleRefreshToken("new-refresh");
+        reconnected.setGoogleAccessToken("new-access");
+        fathers.saveAndFlush(reconnected);
+        fake.onGoogle(c -> new Reply(401, "{\"error\":{\"code\":401}}"));
+
+        calendar.getUpcomingEvents(stale, WEDNESDAY_4PM_IL, WEDNESDAY_4PM_IL.plus(Duration.ofDays(1)), false);
+
+        Father after = fathers.findById(stale.getId()).orElseThrow();
+        assertThat(after.getGoogleRefreshToken()).isEqualTo("new-refresh");
+        assertThat(after.getGoogleAccessToken()).isEqualTo("new-access");
+    }
 }

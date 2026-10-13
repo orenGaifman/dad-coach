@@ -4,6 +4,7 @@ import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -21,4 +22,13 @@ public interface FatherRepository extends JpaRepository<Father, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT f FROM Father f WHERE f.id = :id")
     Optional<Father> findByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * D-057: forgets a refused access token - only that token, only if it is still the stored one. A targeted update, never
+     * a save of a possibly stale copy (which could put back tokens a reconnect has just replaced).
+     */
+    @Modifying
+    @Query("UPDATE Father f SET f.googleAccessToken = null, f.googleTokenExpiresAt = null "
+            + "WHERE f.id = :id AND f.googleAccessToken = :token")
+    int forgetAccessToken(@Param("id") Long id, @Param("token") String token);
 }
