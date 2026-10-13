@@ -53,6 +53,8 @@ public class WhatsAppWebhookController {
     private final InboundMessageHandler handler;
     private final ObjectMapper json;
     private final Clock clock;
+    /** D-063: keeps a claimed message until its turn settled, replayed after a crash. */
+    private PendingInbound pending;
     private final boolean retryUnanswered;
     private final Duration claimLease;
 
@@ -72,6 +74,12 @@ public class WhatsAppWebhookController {
         this.handler = handler;
         this.json = json;
         this.clock = clock;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPendingInbound(PendingInbound pending) {
+        this.pending = pending;
+        pending.replayWith(this::replay);
     }
 
     @GetMapping("/webhook/whatsapp")
@@ -111,11 +119,16 @@ public class WhatsAppWebhookController {
                 executor.submit(in.fatherChannelIdentity(), () -> handler.handle(in, receivedAt));
                 continue;
             }
-            IdempotencyService.Claim claim = idempotency.claim(DEDUP_SCOPE, key, claimLease);
+            // D-063: the claim and his pending message in one transaction - a crash before the turn settled replays it
+            IdempotencyService.Claim claim = pending == null ? idempotency.claim(DEDUP_SCOPE, key, claimLease)
+                    : idempotency.claim(DEDUP_SCOPE, key, claimLease, () -> pending.record(in));
             if (claim != IdempotencyService.Claim.CLAIMED) {
                 log.atInfo().setMessage("whatsapp.inbound.duplicate").addKeyValue("messageId", key)
                         .addKeyValue("state", claim).log();
                 continue;
+            }
+            if (pending != null) {
+                pending.hold(key);
             }
             // claimed here, in arrival order; the turn still runs one at a time per sender
             executor.submit(in.fatherChannelIdentity(), () -> answer(in, receivedAt));
@@ -133,12 +146,44 @@ public class WhatsAppWebhookController {
      * an Error escaping it leaves the default UNANSWERED.
      */
     private void answer(InboundMessageDto in, Instant receivedAt) {
+        answer(in, receivedAt, false);
+    }
+
+    private void answer(InboundMessageDto in, Instant receivedAt, boolean replayed) {
         InboundMessageHandler.Outcome outcome = InboundMessageHandler.Outcome.UNANSWERED;
         try {
-            outcome = handler.handle(in, receivedAt);
+            outcome = replayed ? handler.handleReplayed(in, receivedAt) : handler.handle(in, receivedAt);
         } finally {
             settle(in.idempotencyKey(), outcome);
+            if (pending != null) {
+                pending.done(in.idempotencyKey());
+            }
         }
+    }
+
+    /**
+     * D-063: a message whose turn never settled (its instance died after the 200) runs now, as it would have: its claim is
+     * taken over once older than the pending lease; settled meanwhile (a redelivery answered it), only the row goes. A turn
+     * that had reached the platform is a duplicate there; its cached reply goes once (D-038's reply guard).
+     */
+    void replay(InboundMessageDto in) {
+        String key = in.idempotencyKey();
+        if (!idempotency.exists(DEDUP_SCOPE, key)) {
+            // released (UNANSWERED) and its row not cleared: as D-038, only a redelivery processes it again
+            pending.done(key);
+            return;
+        }
+        IdempotencyService.Claim claim = idempotency.claim(DEDUP_SCOPE, key, PendingInbound.LEASE);
+        if (claim == IdempotencyService.Claim.DONE) {
+            pending.done(key);
+            return;
+        }
+        if (claim == IdempotencyService.Claim.BUSY) {
+            log.atInfo().setMessage("whatsapp.inbound.replay_busy").addKeyValue("messageId", key).log();
+            return;
+        }
+        pending.hold(key);
+        executor.submit(in.fatherChannelIdentity(), () -> answer(in, clock.instant(), true));
     }
 
     private void settle(String key, InboundMessageHandler.Outcome outcome) {

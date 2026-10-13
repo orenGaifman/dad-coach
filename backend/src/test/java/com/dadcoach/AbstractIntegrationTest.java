@@ -108,7 +108,7 @@ public abstract class AbstractIntegrationTest {
     void cleanSlate() {
         jdbc.execute("TRUNCATE quality_time, weekly_goal, goal, message_log, scheduled_response_delivery, child, "
                 + "communication_endpoints, platform_person_deletion, tool_idempotency, template_messages, site_signup, "
-                + "login_link, dashboard_session, father_deactivation, training_progress, staff_user, father, system_setting "
+                + "login_link, dashboard_session, father_deactivation, training_progress, staff_user, father, system_setting, pending_inbound "
                 + "RESTART IDENTITY CASCADE");
         clock.set(TUESDAY_NOON_IL);
         fake.reset();

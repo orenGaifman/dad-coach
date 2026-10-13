@@ -133,6 +133,30 @@ public class ReplyPlatformSend {
     private final WhatsAppMessageFormatter formatter;
     private final Clock clock;
 
+    /** D-063: looks up whether a line was created on the platform; absent in hand-built tests. */
+    private com.dadcoach.integration.platform.messaging.PlatformMessagingClient client;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setClient(com.dadcoach.integration.platform.messaging.PlatformMessagingClient client) {
+        this.client = client;
+    }
+
+    /**
+     * D-063: whether the platform created the line {@code part} of the answer to {@code inboundId} - true / false when it
+     * answered (200 / 404), empty when it is not known (unreachable, ambiguous).
+     */
+    public java.util.Optional<Boolean> created(String inboundId, int part) {
+        if (client == null) {
+            return java.util.Optional.empty();
+        }
+        var answer = client.byKey(PlatformSendFlow.platformKey(KEY_PREFIX + inboundId + ":" + part));
+        if (answer.kind() == com.dadcoach.integration.platform.messaging.PlatformMessagingClient.Kind.ANSWERED
+                && (answer.status() == 200 || answer.status() == 404)) {
+            return java.util.Optional.of(answer.status() == 200);
+        }
+        return java.util.Optional.empty();
+    }
+
     public ReplyPlatformSend(MessagingSettings settings, PlatformSendFlow flow, WhatsAppMessageFormatter formatter, Clock clock) {
         this.settings = settings;
         this.flow = flow;
