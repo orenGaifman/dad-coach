@@ -1430,8 +1430,11 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
   so every restart saw the same "silence".
 - **What:** for a cron job the watchdog now runs the missed slot through the slot ledger (`platform_job_run`, the
   platform call's own path): a restart finds the run and stays quiet; a late platform call for that slot answers
-  DUPLICATE instead of running it twice. Interval jobs are unchanged (their silence clock starts at the process start).
-  A platform that really stops calling still raises the ERROR at the next missed slot.
+  DUPLICATE instead of running it twice. A cron job counts as run by its slot's DONE row, not by a start time, so a run
+  cut off mid-slot (a RUNNING row) is taken over at the next start. Interval jobs are unchanged (their silence clock
+  starts at the process start). A platform that really stops calling is still caught at the next missed slot (ERROR
+  the first time in a process, WARN after, as before). Independent review: APPROVE; its stale-RUNNING and DONE-slot
+  points taken.
 - **Tests:** `PlatformJobsTest.cronWatchdogRunIsRecordedForItsSlot` (a restart after the watchdog's run: it ran twice
   before this change).
 - **Note:** the first start after this deploy runs the 2026-10-11 slot once more (one last ERROR) and records it.

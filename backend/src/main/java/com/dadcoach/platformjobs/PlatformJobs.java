@@ -435,9 +435,15 @@ public class PlatformJobs {
             if (!platformOwns(job.key())) {
                 continue;
             }
-            Instant last = latest(lastPlatformCall.getOrDefault(job.key(), job.every() != null ? started : Instant.EPOCH),
-                    lastLedgerStart(job.key()));
+            // D-062: a cron job is covered by its slot's DONE row (the platform's run or the watchdog's), never by a
+            // start time - a run cut off mid-slot leaves a RUNNING row that the run below takes over
+            Instant last = job.cron() != null ? lastPlatformCall.getOrDefault(job.key(), Instant.EPOCH)
+                    : latest(lastPlatformCall.getOrDefault(job.key(), started), lastLedgerStart(job.key()));
             if (!silent(job, last, now)) {
+                continue;
+            }
+            if (job.cron() != null && doneResult(job.key(), lastExpectedFire(job, now)).isPresent()) {
+                lastPlatformCall.put(job.key(), now);
                 continue;
             }
             try {

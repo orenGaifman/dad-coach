@@ -323,6 +323,15 @@ class PlatformJobsTest extends AbstractIntegrationTest {
         Instant missed = PlatformJobs.lastExpectedFire(jobs.job("t_wdcron").orElseThrow(), Instant.now());
         assertThat(jobs.runForPlatform("t_wdcron", missed).body()).containsEntry("status", "DUPLICATE");
         assertThat(counter.get()).isEqualTo(1);
+
+        // a run cut off mid-slot (its process died): the RUNNING row is no cover - the next start takes it over
+        jdbc.update("UPDATE platform_job_run SET status = 'RUNNING', result = NULL, finished_at = NULL, started_at = now() "
+                + "WHERE job_key = 't_wdcron'");
+        jobs.forgetPlatformCallsForTests();
+        jobs.watchdog(List.of(jobs.job("t_wdcron").orElseThrow()));
+        assertThat(counter.get()).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT status FROM platform_job_run WHERE job_key = 't_wdcron'", String.class))
+                .isEqualTo("DONE");
         jdbc.update("DELETE FROM platform_job_run WHERE job_key = 't_wdcron'");
     }
 
