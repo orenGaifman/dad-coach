@@ -19,6 +19,9 @@ import org.springframework.scheduling.config.ScheduledTaskHolder;
  * off in tests by its "-" cron; its lane is checked from its annotation in {@link SchedulingLanesTest}) and the
  * thread each one is routed to with the switch off (the shared test context); on: {@link SchedulingLanesOnAppTest}.
  */
+// the switch off explicitly: production (and the default) has it on
+@org.springframework.test.context.TestPropertySource(properties = "app.scheduling.lanes=false")
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 class SchedulingLanesAppTest extends AbstractIntegrationTest {
 
     /** The registered jobs of the test context: everything but WeeklyGoalCompletionJob (cron "-"). */

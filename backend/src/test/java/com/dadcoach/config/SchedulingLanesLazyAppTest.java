@@ -16,7 +16,7 @@ import org.springframework.test.context.TestPropertySource;
  * (Dockerfile) - with the switch off (unset): every registered job is on today's single thread. Its own context,
  * closed after the class.
  */
-@TestPropertySource(properties = "spring.main.lazy-initialization=true")
+@TestPropertySource(properties = {"spring.main.lazy-initialization=true", "app.scheduling.lanes=false"})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class SchedulingLanesLazyAppTest extends AbstractIntegrationTest {
 

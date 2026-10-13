@@ -1404,3 +1404,20 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 - **Rollback:** revert this commit and provision again (the model arms again; Dad Coach's arming stays harmless: the
   platform keeps one timer per key and session). `DC_SESSION_TIMERS_PRODUCT_OWNED` and the platform's
   `PRODUCT_TIMERS_ANY_STATE` must stay on while this is in place - turn either off only after reverting it.
+## D-061 — application.yml defaults are production's values (2026-10-13)
+
+- **Why:** architecture audit. Five switches defaulted to the old path while production sets them on; an environment
+  variable lost in Render (or a new environment) would silently fall back to a path production no longer runs.
+- **What (defaults now = production, Render GET 2026-10-13):** `APP_SCHEDULING_LANES=true`, `PLATFORM_DELIVERY_REPORTS=true`,
+  `DC_SESSION_TIMERS_GUARD=true`, `DC_SESSION_TIMERS_PRODUCT_OWNED=true`,
+  `DC_PLATFORM_JOBS=person_deletions,session_timers,weekly_goals` (production also lists `qa_probe`; the probe stays
+  opt-in per environment, as Big Boss's). `MESSAGING_DELIVERY_STATUS_ENABLED` already defaulted to true. Connection
+  settings (`WORKFLOW_PLATFORM_ENABLED`, URLs, keys) stay per environment.
+- **Tests:** the shared test context starts with lanes, the guard and product ownership on; the classes that switch the
+  guard or product ownership off restore production's value; the lanes-off tests set `lanes=false` themselves (their
+  own contexts, closed after them). Delivery reports stay reset off per test (`AbstractIntegrationTest`), as before.
+- **Local note:** without a platform, `weekly_goals` and `session_timers` are run by the platform-jobs watchdog after a
+  start (it logs the platform as silent) - the result is the same, the log is louder. Independent review: its two
+  stale-text points and the test-order point fixed; the lazy-start lanes-on combination stays covered by
+  `SchedulingLanesTest` only.
+- **Rollback:** revert; production is unaffected either way (it sets every one of them).

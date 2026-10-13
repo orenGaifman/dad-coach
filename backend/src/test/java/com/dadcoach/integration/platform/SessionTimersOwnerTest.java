@@ -36,7 +36,7 @@ class SessionTimersOwnerTest extends AbstractIntegrationTest {
 
     @AfterEach
     void off() {
-        properties.setSessionTimersProductOwned(false);
+        properties.setSessionTimersProductOwned(true); // production's value, the default (D-061)
     }
 
     private Father father() {
@@ -107,8 +107,9 @@ class SessionTimersOwnerTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("off (the default): the dashboard cancel calls nothing, the platform run answers DISABLED")
+    @DisplayName("off: the dashboard cancel calls nothing, the platform run answers DISABLED")
     void offIsToday() throws Exception {
+        properties.setSessionTimersProductOwned(false);   // on by default since D-061, as in production
         Father f = father();
         Child noa = data.child(f, "נועה", 6);
         UUID tomorrow = session(f, noa, 24 * 60 + 6 * 60);
