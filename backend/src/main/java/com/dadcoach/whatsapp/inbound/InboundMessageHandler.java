@@ -337,12 +337,14 @@ public class InboundMessageHandler {
             String reply = response.responseContent();
             if (response.suppressed() || reply == null || reply.isBlank()) {
                 outcome = response.suppressed() ? "SUPPRESSED" : response.isDuplicate() ? "DUPLICATE" : "BLANK";
+                timersAfterTurn(before, father, phone);
                 return;
             }
             // D-038 (DC-B4): a duplicate answer carries the reply of the attempt whose answer was lost - it goes out,
             // but only once per inbound message, whatever retries or redeliveries follow
             if (!idempotency.firstTime(REPLY_SCOPE, cid)) {
                 outcome = response.isDuplicate() ? "DUPLICATE" : "ALREADY_REPLIED";
+                timersAfterTurn(before, father, phone);
                 return;
             }
             replyGuarded = true;
@@ -372,6 +374,7 @@ public class InboundMessageHandler {
                     DeliveryResult sent = send(attempt, in, father, MessagingSettings.FIXED_LINE, line,
                             ReplyPlatformSend.Timeline.replacing(cid, superseded, line), null);
                     reportReplaced(attempt, phone, father, cid, line, sent, TimelineReports.KIND_FIXED_LINE, superseded);
+                    timersAfterTurn(before, father, phone);
                     return;
                 }
                 outcome = outcome.equals("DUPLICATE_REPLAYED") ? outcome : "REWRITTEN_IN_HEBREW";
@@ -392,6 +395,7 @@ public class InboundMessageHandler {
                     timeline.turnOutcome(TimelineReports.Person.of(phone, now), cid, TimelineReports.DROPPED, null,
                             "SENT_LINE_CARD", superseded);
                 }
+                timersAfterTurn(before, now, phone);
                 return;
             }
             String checked = checkClaims(hebrew.get(), before, now, phone, platformStart, cid);
@@ -628,6 +632,19 @@ public class InboundMessageHandler {
      */
     record TimerCheck(boolean applies, SessionTimers.Confirmation single, String expectedLine) {
         static final TimerCheck NONE = new TimerCheck(false, null, null);
+    }
+
+    /**
+     * D-060: a turn that ended without a checked reply (suppressed, blank, already answered, the fixed line, the card)
+     * still has its sessions' timers armed or cleared - the model no longer does it in the turn. Best effort.
+     */
+    private void timersAfterTurn(TurnLedger.Snapshot before, Optional<Father> father, String phone) {
+        try {
+            Optional<Father> now = father.isPresent() ? father : fathers.findByPhone(phone);
+            confirmTimers(now, ledger.after(before, now));
+        } catch (RuntimeException e) {
+            log.atWarn().setMessage("session.timers.after_turn_failed").addKeyValue("error", e.getClass().getSimpleName()).log();
+        }
     }
 
     private TimerCheck confirmTimers(Optional<Father> father, TurnLedger.Changes changes) {
