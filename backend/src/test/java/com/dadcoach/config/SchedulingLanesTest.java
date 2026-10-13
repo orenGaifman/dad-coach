@@ -57,7 +57,6 @@ class SchedulingLanesTest {
             "IdempotencyService.purgeExpired", SchedulingLanes.HOUSEKEEPING,
             // D-063: renews this instance's pending inbound leases and replays a dead instance's
             "PendingInbound.tick", SchedulingLanes.HOUSEKEEPING,
-            "KeepWarmJob.keepWarm", SchedulingLanes.HOUSEKEEPING,
             "LoginLinkPlatform.scheduledReconcile", SchedulingLanes.MESSAGING,
             "ScheduledPlatformSend.scheduledReconcile", SchedulingLanes.MESSAGING,
             // D-055: the person deletions and the session-timer reconcile have no tick - the platform runs them

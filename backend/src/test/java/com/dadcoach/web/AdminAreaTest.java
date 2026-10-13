@@ -74,6 +74,7 @@ class AdminAreaTest extends AbstractWebIntegrationTest {
         mvc.perform(staff.on(get("/api/admin/fathers").param("q", digits))).andExpect(jsonPath("$[0].id").value(father));
         mvc.perform(staff.on(get("/api/admin/fathers/" + father))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.profile.name").value("מחפשים אותי"))
+                .andExpect(jsonPath("$.profile.workflowState").doesNotExist())
                 .andExpect(jsonPath("$.children[0].name").value("דנה"))
                 .andExpect(jsonPath("$.deleteConfirmation").value("מחפשים אותי"));
         mvc.perform(staff.on(get("/api/admin/fathers/" + father + "/platform"))).andExpect(jsonPath("$.configured").value(false));

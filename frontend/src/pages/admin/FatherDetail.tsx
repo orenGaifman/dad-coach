@@ -40,7 +40,7 @@ export function FatherDetailPage() {
             <dt>מפגשים שהיו</dt><dd className="num">{p.completed}</dd>
             <dt>שבועות ברצף</dt><dd className="num">{p.streakWeeks} (שיא {p.longestStreakWeeks})</dd>
             <dt>יומן גוגל</dt><dd>{p.calendarConnected ? 'מחובר' : 'לא מחובר'}</dd>
-            <dt>מצב בזרימה</dt><dd className="ltr">{p.workflowState ?? '—'} / {p.onboardingState ?? '—'}</dd>
+            <dt>מצב הצטרפות</dt><dd className="ltr">{p.onboardingState ?? '—'}</dd>
             <dt>חיבורים פעילים לדף</dt><dd className="num">{d.liveDashboardSessions}</dd>
           </dl>
         </section>

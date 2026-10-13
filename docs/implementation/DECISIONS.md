@@ -1500,3 +1500,21 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
 - **Platform env:** the platform's product registry (`WORKFLOW_PRODUCTS_DADCOACH_*`) replaces `DAD_COACH_WORKER_API_KEY` and the
   positional `ROUTES_1` variables (switched in production 2026-10-13); `qa-lab/run-platform.sh` uses the new names.
 - **Rollback:** `PLATFORM_CATALOG_PUBLISH=off` (nothing is published; the platform keeps what it has).
+
+## D-066 — Dead code removed: the old workflow-state enum, the keep-warm ping, the unused outbound message record (architecture effort H, 2026-10-13)
+
+- **Why:** cleanup stage of the architecture effort - code nothing runs any more.
+- **What:**
+  - `WorkflowState` (deprecated since the platform owns the workflow) and the three `father` fields mapped on it
+    (`current_workflow_state`, `previous_workflow_state`, `workflow_state_entered_at`) are gone; the admin's father page no
+    longer shows the state (nothing has set it since the platform took over the workflow: it showed the insert default,
+    `WELCOME`). **The columns stay:** `current_workflow_state` has a value on every row (the entity wrote `WELCOME` on insert;
+    the column's default writes it now), so it is not dropped (no destructive DDL on data). Hibernate validates only mapped
+    columns.
+  - `KeepWarmJob` - pinged its own health every 5 minutes so Render's free plan would not idle. Production runs on a paid
+    instance (`0.5c-512mb`, Render API 2026-10-13), which never idles; Render's own health check calls the same path.
+    `RENDER_EXTERNAL_URL` (set by Render itself) is no longer read.
+  - `MessagePriority` and the never-built `OutboundMessageDto` record (D-053: the platform's Send API sends every
+    message); `OutboundMessageDto` keeps only its `ReplyButton` / `LinkButton` records, so their callers are unchanged.
+- **Tests:** `AdminAreaTest.screens` (the profile has no `workflowState`); `SchedulingLanesTest`'s lane table without the job.
+- **Rollback:** revert (no migration, no environment change).

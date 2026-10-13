@@ -7,7 +7,6 @@ import com.dadcoach.father.FatherStatus;
 import com.dadcoach.father.OnboardingState;
 import com.dadcoach.workflow.Belt;
 import com.dadcoach.workflow.WelcomeStep;
-import com.dadcoach.workflow.WorkflowState;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -126,22 +125,11 @@ public class Father {
     @Column(name = "total_quality_minutes", nullable = false)
     private Integer totalQualityMinutes = 0;
 
-    // ─── Workflow State (Deterministic Workflow Engine) ──────────────────
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "current_workflow_state", length = 30)
-    private WorkflowState currentWorkflowState = WorkflowState.WELCOME;
+    // ─── Welcome ─────────────────────────────────────────────────────────
 
     @Enumerated(EnumType.STRING)
     @Column(name = "welcome_step", length = 40)
     private WelcomeStep welcomeStep = WelcomeStep.INTRO;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "previous_workflow_state", length = 30)
-    private WorkflowState previousWorkflowState;
-
-    @Column(name = "workflow_state_entered_at")
-    private Instant workflowStateEnteredAt;
 
     @Column(name = "welcomed_at")
     private Instant welcomedAt;
@@ -460,31 +448,7 @@ public class Father {
         this.totalQualityMinutes = totalQualityMinutes;
     }
 
-    // ─── Workflow State Getters & Setters ────────────────────────────────
-
-    public WorkflowState getCurrentWorkflowState() {
-        return currentWorkflowState;
-    }
-
-    public void setCurrentWorkflowState(WorkflowState currentWorkflowState) {
-        this.currentWorkflowState = currentWorkflowState;
-    }
-
-    public WorkflowState getPreviousWorkflowState() {
-        return previousWorkflowState;
-    }
-
-    public void setPreviousWorkflowState(WorkflowState previousWorkflowState) {
-        this.previousWorkflowState = previousWorkflowState;
-    }
-
-    public Instant getWorkflowStateEnteredAt() {
-        return workflowStateEnteredAt;
-    }
-
-    public void setWorkflowStateEnteredAt(Instant workflowStateEnteredAt) {
-        this.workflowStateEnteredAt = workflowStateEnteredAt;
-    }
+    // ─── Welcome Getters & Setters ───────────────────────────────────────
 
     public WelcomeStep getWelcomeStep() {
         return welcomeStep;
