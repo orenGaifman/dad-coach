@@ -1388,6 +1388,11 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
     phrases that told it to arm or clear timers. Nothing else in the prompt changes.
 - **Same timers, same times:** the model copied the scheduling result's `timers`, which are `SessionTimerPlanner`'s;
   Dad Coach arms exactly those after the turn.
+- **Production check before (2026-10-13, `DC_SESSION_TIMERS_PRODUCT_OWNED=true` live 11:25 UTC, scratch +1999 father,
+  no model call):** two sessions booked by tool (nothing armed) - the 11:30 reconcile armed all five timers at exactly the
+  scheduling result's times; cancelled on his page - its two timers CANCELLED at once and not re-armed by the next pass;
+  a third session confirmed done on his page - its follow-up CANCELLED. The one real conversation had no upcoming
+  session (no pending timer), so nothing of his changed.
 - **Tests:** `test_manifests.test_only_dad_coach_arms_the_session_timers`.
 - **Rollback:** revert this commit and provision again (the model arms again; Dad Coach's arming stays harmless: the
   platform keeps one timer per key and session).
