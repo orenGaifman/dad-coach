@@ -1325,3 +1325,28 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
     just replaced.
 - **Tests:** `CalendarReconnectTest`, three new tests (dead grant, live grant, read). Each fails without the change.
 - **Rollback:** revert. Settings go back to lagging behind for up to an hour.
+
+## D-058 — A morning reminder claims its day before it is sent, so two sessions on one day never send two (2026-10-13)
+
+- **Why:** architecture audit D-1. Two sessions on one day wake the morning twice, both at 08:00. The tool-only turn
+  (D-049) skips when every session it names was already reminded today, but that mark was written only after the
+  callback's send (`SessionTimerCard.sent`), and the platform releases the conversation before it calls back. Both turns
+  could pass the card before either callback, and both callbacks sent. Prod had no organic case yet (one real morning
+  ever); the race is real in tests.
+- **What:**
+  - The scheduled callback claims today for the morning's sessions in one atomic update, right before the send:
+    `morning_reminded_on = today WHERE id IN (...) AND morning_reminded_on IS DISTINCT FROM today`. Nothing claimed:
+    nothing is sent, the row is FAILED `ALREADY_REMINDED_TODAY` (a replay answers the same) and the platform is told
+    DROPPED.
+  - When the message was provably not handed over (the platform refused it, the request could not be built, the
+    platform said FAILED), the claim is given back: the sessions hold their earlier value, as before, when nothing was
+    marked.
+  - The follow-up keeps its mark after the send (unchanged).
+  - The claim locks its rows in id order (no deadlock between two mornings); giving it back is best effort. The admin's
+    failure counts and lists leave the skipped morning out (it is no failed delivery).
+  - Accepted: if the winning morning is then refused, the one it skipped does not go either (the same request would
+    almost surely be refused the same way).
+- **Tests:** `SessionTimerCardParityTest.racingMorningsSendOne` (two concurrent callbacks after two cards: one send;
+  fails without the change), `claimIsAtomic` (four concurrent claims, 20 rounds: one wins) and
+  `refusedMorningGivesTheClaimBack`. Independent review: APPROVE; its non-blocking points are fixed.
+- **Rollback:** revert. Two mornings on one day can both go again.

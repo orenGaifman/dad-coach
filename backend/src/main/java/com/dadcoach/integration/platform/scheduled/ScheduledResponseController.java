@@ -105,13 +105,16 @@ public class ScheduledResponseController {
         ScheduledResponseRequest effective = new ScheduledResponseRequest(request.triggerId(), request.workflowInstanceId(),
                 request.userId(), request.channel(), request.targetStateKey(), content);
         // D-046: with MESSAGING_MODE_SCHEDULED=PLATFORM the body is {} (+ platformMessageId) while the platform has it
+        // D-058: a morning reminder claims its sessions for today before it is sent
+        java.util.List<java.util.UUID> morning = planned.isPresent() && ScheduledReplies.MORNING.equals(request.targetStateKey())
+                ? planned.get().sessions() : java.util.List.of();
         ScheduledResponseDeliveryService.CallbackAnswer answer = deliveryService.deliverForCallback(father.get(), effective,
-                expectedKey, request.responseContent());
+                expectedKey, request.responseContent(), morning);
         ScheduledResponseResult result = answer.result();
         if (answer.handedOver()) {
             mentions.sent(father.get(), content);
             planned.ifPresent(p -> mentions.sessionsNamed(father.get(), p.sessions()));
-            // D-049: the morning and the follow-up note what they named, so the tool-only turns never repeat them
+            // D-049: the follow-up notes what it named, so the tool-only turns never repeat it (the morning: D-058 claim)
             planned.ifPresent(p -> timerCards.sent(father.get(), request.targetStateKey(), p.sessions()));
         }
         log.atInfo().setMessage("proactive.callback.result")
