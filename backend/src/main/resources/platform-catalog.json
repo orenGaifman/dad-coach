@@ -1229,6 +1229,18 @@
       "variant": "session_morning_he",
       "candidates": [
         {
+          "buttonRefs": [
+            {
+              "index": 0,
+              "ref": "link",
+              "subType": "url"
+            }
+          ],
+          "enabled": true,
+          "language": "he",
+          "templateName": "dad_coach_session_morning_dash_he"
+        },
+        {
           "enabled": true,
           "language": "he",
           "templateName": "dad_coach_session_morning_he"

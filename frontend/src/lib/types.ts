@@ -190,6 +190,12 @@ export interface AdminTemplateRow {
   /** D-053: the message types (KIND or KIND/variant) the platform's mapping sends with it, comma separated */
   inUseAs: string | null
   usedFor?: string[]
+  /** D-067: a URL button's text (the dashboard button), or null */
+  urlButton?: string | null
+  /** D-067: its address as Meta stores it ({{1}} = the personal sign-in token), or null */
+  urlButtonUrl?: string | null
+  /** D-067: the template as submitted to Meta (name, language, category, components) */
+  definition?: Record<string, unknown>
 }
 
 export interface AdminTemplates {

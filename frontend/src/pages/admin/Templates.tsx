@@ -97,12 +97,29 @@ function TemplateCard({ t }: { t: AdminTemplateRow }) {
               <div className={ui.row}>{t.quickReplies.map((b) => <span key={b} className={ui.chip}>{b}</span>)}</div>
             </>
           )}
+          {t.urlButton && t.urlButtonUrl && (
+            <>
+              <div className={styles.tplLabelRow}>
+                <span className={ui.label}>כפתור קישור (<bdi dir="ltr">{'{{1}}'}</bdi> = הקישור האישי)</span>
+                <CopyButton text={t.urlButtonUrl} />
+              </div>
+              <div className={ui.row}><span className={ui.chip}>{t.urlButton} ↗</span></div>
+              <pre className={styles.tplRaw}><bdi dir="ltr">{t.urlButtonUrl}</bdi></pre>
+            </>
+          )}
+          {t.definition && (
+            <div className={styles.tplLabelRow}>
+              <span className={ui.label}>ההגדרה ל-Meta (JSON)</span>
+              <CopyButton text={JSON.stringify(t.definition, null, 2)} />
+            </div>
+          )}
         </div>
         <div className={ui.stackSm}>
           <span className={ui.label}>כך זה ייקרא אצל האבא</span>
           <div className={styles.tplScreen}>
             <div className={styles.tplBubble}>{t.sample}</div>
             {t.quickReplies.map((b) => <div key={b} className={styles.tplButton}>{b}</div>)}
+            {t.urlButton && <div className={styles.tplButton}>{t.urlButton} ↗</div>}
           </div>
         </div>
       </div>

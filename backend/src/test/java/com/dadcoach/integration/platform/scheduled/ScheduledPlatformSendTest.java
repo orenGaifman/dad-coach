@@ -290,6 +290,136 @@ class ScheduledPlatformSendTest extends AbstractIntegrationTest {
         assertThat(fake.metaSends()).isEmpty();
     }
 
+    // ------------------------------------------------------------------------------------------------- D-067
+
+    @Autowired com.dadcoach.auth.LoginLinkService links;
+
+    QualityTime sessionToday() {
+        Instant at15 = Instant.parse("2026-11-03T13:00:00Z");   // 15:00 in Israel, today
+        return sessions.saveAndFlush(new QualityTime(father, itamar, at15, at15.plus(Duration.ofMinutes(45))));
+    }
+
+    List<Map<String, Object>> morningLinks() {
+        return jdbc.queryForList("SELECT id, token_hash, created_at, expires_at, revoked_at, revoked_reason, delivery_status "
+                + "FROM login_link WHERE father_id = ? ORDER BY created_at", father.getId());
+    }
+
+    static String token(JsonNode request) {
+        return request.path("templateData").path("named").path("link").asText();
+    }
+
+    @Test
+    @DisplayName("D-067: the morning goes as one link_button - the text exactly as without it, his dashboard label, no "
+            + "footer, sensitive; the token is minted for the send, only its hash is kept, never in the stored bytes, the "
+            + "row or the timeline; tapping it signs him in")
+    void morningCarriesTheDashboardButton() throws Exception {
+        sessionToday();
+        String messageId = UUID.randomUUID().toString();
+        AtomicReference<String> storedAtPost = new AtomicReference<>();
+        fake.onPlatformSend(c -> {
+            storedAtPost.set(jdbc.queryForObject("SELECT platform_request FROM scheduled_response_delivery WHERE trigger_id = ?",
+                    String.class, "t-dash"));
+            return accepted(messageId);
+        });
+
+        callback("t-dash", "SESSION_MORNING_REMINDER", IDENTITY + "בוקר טוב");
+
+        assertThat(fake.platformSends()).hasSize(1);
+        String posted = fake.platformSends().get(0).body();
+        JsonNode q = json.readTree(posted);
+        String text = IDENTITY + com.dadcoach.replies.CoachReplies.morning(List.of("15:00"), "איתמר");
+        String token = token(q);
+        assertThat(token).isNotBlank();
+        String url = q.path("content").path("link").path("url").asText();
+        assertThat(q.path("content").path("type").asText()).isEqualTo("link_button");
+        assertThat(q.path("content").path("text").asText()).as("the morning's text, unchanged").isEqualTo(text);
+        assertThat(q.path("content").path("link").path("title").asText()).isEqualTo("כניסה לדף שלי");
+        assertThat(url).endsWith("/auth/consume#token=" + token);
+        assertThat(q.path("content").has("footer")).isFalse();
+        assertThat(q.path("fallbackText").asText()).isEqualTo(text + "\n" + url);
+        assertThat(q.path("sensitive").asBoolean()).isTrue();
+        assertThat(q.path("timeline").path("content").asText()).isEqualTo(text.substring(IDENTITY.length()));
+        JsonNode data = q.path("templateData");
+        assertThat(data.path("variant").asText()).isEqualTo("session_morning_he");
+        assertThat(data.path("values").get(0).asText()).isEqualTo("15:00");
+        assertThat(data.path("values").get(1).asText()).isEqualTo("איתמר");
+        assertThat(data.path("named").path("text").asText()).isEqualTo(TemplateText.asTemplateParameter(text));
+
+        // rule 5: the stored bytes are the posted ones but for the token
+        assertThat(storedAtPost.get()).doesNotContain(token).contains(ScheduledPlatformSend.LINK_TOKEN_MARK);
+        assertThat(ScheduledPlatformSend.withToken(storedAtPost.get(), token)).isEqualTo(posted);
+        assertThat(jdbc.queryForObject("SELECT row_to_json(d)::text FROM scheduled_response_delivery d WHERE trigger_id = ?",
+                String.class, "t-dash")).doesNotContain(token);
+        assertThat(row("t-dash")).containsEntry("status", "ACCEPTED").containsEntry("platform_request", null);
+
+        List<Map<String, Object>> rows = morningLinks();
+        assertThat(rows).as("one link for the morning that went out").hasSize(1);
+        assertThat(rows.get(0).get("token_hash")).isEqualTo(com.dadcoach.auth.TokenHashing.sha256Hex(token));
+        assertThat(((java.sql.Timestamp) rows.get(0).get("expires_at")).toInstant())
+                .isEqualTo(clock.instant().plus(Duration.ofDays(7)));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM login_link WHERE token_hash = ?", Integer.class, token)).isZero();
+        assertThat(links.use(token)).as("the button signs him in").hasValueSatisfying(subject ->
+                assertThat(subject.fatherId()).isEqualTo(father.getId()));
+    }
+
+    @Test
+    @DisplayName("D-067: a morning that is not sent issues no link - no session (skipped), already reminded today, refused "
+            + "by the platform (its link is ended); other messages never carry one")
+    void noLinkWithoutAMorning() throws Exception {
+        fake.onPlatformSend(c -> accepted(UUID.randomUUID().toString()));
+        callback("t-none", "SESSION_MORNING_REMINDER", IDENTITY + "בוקר טוב");
+        assertThat(fake.platformSends()).as("no session today: nothing sent").isEmpty();
+        assertThat(morningLinks()).isEmpty();
+
+        sessionToday();
+        callback("t-first", "SESSION_MORNING_REMINDER", IDENTITY + "בוקר טוב");
+        assertThat(morningLinks()).hasSize(1);
+        callback("t-again", "SESSION_MORNING_REMINDER", IDENTITY + "בוקר טוב");
+        assertThat(row("t-again")).containsEntry("failure_reason", SessionTimerCard.ALREADY_REMINDED_TODAY);
+        assertThat(morningLinks()).as("the second morning of the day is quiet: no link").hasSize(1);
+
+        callback("t-daily", "ACTIVE_COACHING", IDENTITY + "בוקר טוב!\nאיך הולך השבוע?");
+        JsonNode daily = json.readTree(fake.platformSends().get(fake.platformSends().size() - 1).body());
+        assertThat(daily.path("content").path("type").asText()).isEqualTo("text");
+        assertThat(daily.has("sensitive")).isFalse();
+        assertThat(morningLinks()).hasSize(1);
+
+        jdbc.update("UPDATE quality_time SET morning_reminded_on = NULL WHERE father_id = ?", father.getId());
+        fake.onPlatformSend(c -> new Reply(422, "{\"error\":\"messaging.template_unusable\",\"reason\":\"NOT_FOUND\"}"));
+        callback("t-refused", "SESSION_MORNING_REMINDER", IDENTITY + "בוקר טוב");
+        assertThat(row("t-refused")).containsEntry("status", "FAILED");
+        List<Map<String, Object>> rows = morningLinks();
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(1).get("revoked_at")).as("nothing was created: nobody holds it").isNotNull();
+        assertThat(rows.get(1).get("revoked_reason")).isEqualTo("NOT_SENT");
+        assertThat(rows.get(0).get("revoked_at")).isNull();
+    }
+
+    @Test
+    @DisplayName("D-067: a morning nothing was created for keeps the mark, never the token, in its stored bytes; the job's "
+            + "re-POST carries a newly minted link")
+    void notCreatedMorningRePostsWithANewLink() throws Exception {
+        sessionToday();
+        fake.onPlatformSend(c -> FakeServers.platformDisabled());
+        callback("t-dash-off", "SESSION_MORNING_REMINDER", IDENTITY + "בוקר טוב");
+        assertThat(row("t-dash-off")).containsEntry("status", "SENDING").containsEntry("platform_state", "NOT_CREATED");
+        String first = token(json.readTree(fake.platformSends().get(0).body()));
+        String stored = (String) row("t-dash-off").get("platform_request");
+        assertThat(stored).doesNotContain(first).contains(ScheduledPlatformSend.LINK_TOKEN_MARK);
+
+        String messageId = UUID.randomUUID().toString();
+        fake.onPlatformSend(c -> accepted(messageId));
+        clock.advance(Duration.ofMinutes(1));
+        assertThat(platform.reconcileDue()).isEqualTo(1);
+        assertThat(fake.platformSends()).hasSize(2);
+        String again = fake.platformSends().get(1).body();
+        String second = token(json.readTree(again));
+        assertThat(second).isNotBlank().isNotEqualTo(first);
+        assertThat(again).isEqualTo(ScheduledPlatformSend.withToken(stored, second));
+        assertThat(row("t-dash-off")).containsEntry("status", "ACCEPTED").containsEntry("platform_request", null);
+        assertThat(links.use(second)).isPresent();
+    }
+
     @Test
     @DisplayName("PLATFORM notAfter is never closer than 15 minutes: a message sent now is never refused for it")
     void notAfterHasAFloor() {

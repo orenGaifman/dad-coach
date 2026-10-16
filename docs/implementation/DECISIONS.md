@@ -1518,3 +1518,41 @@ off in the admin, exactly like in Big Boss" (Big Boss D-176, same code shape, sa
     message); `OutboundMessageDto` keeps only its `ReplyButton` / `LinkButton` records, so their callers are unchanged.
 - **Tests:** `AdminAreaTest.screens` (the profile has no `workflowState`); `SchedulingLanesTest`'s lane table without the job.
 - **Rollback:** revert (no migration, no environment change).
+
+## D-067 — The session-day morning carries his dashboard button (2026-10-16)
+
+- **Why:** the owner: attach the dashboard to the morning message as a nice button, never a visible link ("בלי לינק, צריך
+  כפתור יפה"), so the dashboard is not forgotten. Shared spec for the three products; Dad Coach's morning is the session-day
+  `SESSION_MORNING_REMINDER` (the daily check, the weekly plan, the hour-before and the follow-up are unchanged).
+- **What (inside the window):** the morning goes as one `link_button` (WhatsApp `cta_url`): `content.text` is the morning
+  exactly as before (`CoachReplies.morning`, the identity line first), under it one URL button with the dashboard card's own
+  label (`LoginLinkDelivery.fatherLabel()`, "כניסה לדף שלי"); **no footer** (the text does not change). `fallbackText` = the
+  text with the link on its own line (`LinkButton.asText`, the login card's fallback without its footer). The request is
+  `sensitive` (the platform keeps only the link's host). The timeline row is the text, never the link. Tap = signed in on his
+  home: a personal sign-in link from the existing machinery (`/auth/consume#token=`, hash-only), **valid 7 days**
+  (`LoginLinkService.MORNING_LINK_TTL`, `issueMorning`), reusable; one new `login_link` row (ISSUED, never "SENT", so the
+  coach's "already on screen" check is unchanged) per morning that goes out. A morning that is skipped (no session),
+  already sent today (D-058 claim) or blocked never reaches the send, so never issues a link; one the platform refuses
+  (400/422/409) ends its link (`revoked_reason = NOT_SENT`); a father who may not sign in gets today's plain morning.
+- **The token is never stored:** the Send API flow commits the request bytes before the first POST (v2.6) and re-POSTs
+  them. The morning's stored bytes (`scheduled_response_delivery.platform_request`) hold the mark `{{dashboard-token}}`;
+  `PlatformSendFlow.send(ledger, id, stored, posted, …)` POSTs the minted token (and re-POSTs the same bytes at once); a
+  reconcile re-POST asks the ledger (`Ledger.toPost`, default = the stored bytes) and `ScheduledPlatformSend` mints a new
+  link for it (null = no link can be issued: never posted again, as a blocker). A re-POST with a new token is safe on both
+  sides of the answer table: nothing was created (NOT_CREATED / 404) = a fresh message; the earlier POST did create it = the
+  platform's 409 carries it and the flow adopts it (its link keeps working). Rare ambiguous re-POSTs leave at most two
+  extra unused links (hash only, 7 days). Dad Coach holds no morning itself (the gateway hold is the platform's,
+  `holdPolicy: GATEWAY`, on a sensitive request).
+- **Outside the window:** new template `dad_coach_session_morning_dash_he` = the morning's body and examples, UTILITY, he,
+  plus one URL button "כניסה לדף שלי" → `<WEB_BASE_URL>/auth/consume#token={{1}}`. `platform-catalog.json` (and the test
+  seed) map `SCHEDULED/session_morning_he` to it first (`buttonRefs [{index 0, subType url, ref link}]`, `named.link` =
+  the token), then `dad_coach_session_morning_he`, then `dad_coach_update_he` - nothing changes until Meta approves it.
+  The catalog gained URL buttons (`WhatsAppTemplateCatalog.UrlButton`); the admin templates screen shows the button and
+  each template's Meta definition (`AdminTemplatesController.definition`, Tair D-105's shape).
+- **Reply buttons:** the morning has none (only the hour-before and the follow-up do), so every morning that goes out
+  carries the button; a message with reply buttons or longer than an interactive body would not.
+- **Tests:** `MorningDashboardButtonTest` (unit), `ScheduledPlatformSendTest` (morning button, no link without a morning,
+  re-POST mints again), `SessionButtonsTest`, `OwnTemplatesTest`, `SessionTimerCardParityTest` (type and label compared,
+  the token masked after checking it is the button's), `KindTemplateSeedContractTest`, `WhatsAppTemplateCatalogTest`
+  (the definition), `AdminTemplatesTest`.
+- **Rollback:** revert (no migration). To stop only the template: disable the `_dash` row in the catalog mapping.

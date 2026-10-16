@@ -25,7 +25,9 @@ import org.junit.jupiter.api.Test;
  * {@code docs/architecture/p64/seed.json} in {@code kind-template-seed.json}), and its values fit the mapped template:
  * as many positional values as the session template's body parameters, as many payloads as its quick replies, and a
  * {@code named.text} wherever a row reads {@code ["text"]} (the general {@code dad_coach_update_he}). The kinds without
- * {@code templateData} are session-only lines (free-form in the window, never a template).
+ * {@code templateData} are session-only lines (free-form in the window, never a template). D-067: a URL-button row
+ * ({@code dad_coach_session_morning_dash_he}, first for the morning) reads its button's {@code named} value ({@code link},
+ * the sign-in token) - the morning carries it.
  */
 public class KindTemplateSeedContractTest {
 
@@ -58,11 +60,15 @@ public class KindTemplateSeedContractTest {
                 .sorted((a, b) -> Integer.compare(a.path("position").asInt(), b.path("position").asInt())).toList();
     }
 
-    /** Every templateData SCHEDULED can carry: each session template with values / payloads, and the default. */
+    /**
+     * Every templateData SCHEDULED can carry: each session template with values / payloads (the morning with its
+     * dashboard link's token, D-067), and the default. A URL-button template is no message type of its own: it is mapped
+     * under the message it carries a button for.
+     */
     static Map<String, Map<String, Object>> scheduledEmits() {
         Map<String, Map<String, Object>> out = new LinkedHashMap<>();
         for (WhatsAppTemplateCatalog.Entry e : WhatsAppTemplateCatalog.ALL) {
-            if (e.name().equals(WhatsAppTemplateCatalog.UPDATE_HE)) {
+            if (e.name().equals(WhatsAppTemplateCatalog.UPDATE_HE) || e.urlButton() != null) {
                 continue;
             }
             List<String> values = Collections.nCopies(e.maxVariables(), "ערך");
@@ -70,8 +76,10 @@ public class KindTemplateSeedContractTest {
             for (int i = 0; i < e.quickReplies().size(); i++) {
                 payloads.add("dc:done:" + UUID.randomUUID());
             }
+            String link = e.name().equals(WhatsAppTemplateCatalog.SESSION_MORNING_HE) ? "Xk3vQ9pLm2RtY7wB4nZc8dHs6fJa1gEu5iKo0qWxTyU"
+                    : null;
             Map<String, Object> data = ScheduledPlatformSend.templateData("❤️ דאד קואץ׳:\nשורה\nועוד",
-                    Optional.of(new TemplateCall(e.name(), values, payloads)));
+                    Optional.of(new TemplateCall(e.name(), values, payloads)), link);
             out.put((String) data.get("variant"), data);
         }
         out.put("", ScheduledPlatformSend.templateData("❤️ דאד קואץ׳:\nבוקר טוב!", Optional.empty()));
@@ -111,7 +119,29 @@ public class KindTemplateSeedContractTest {
             WhatsAppTemplateCatalog.Entry entry = WhatsAppTemplateCatalog.require(row.path("template").asText());
             assertThat(row.path("expect").path("bodyParamCount").asInt()).as(row.toString()).isEqualTo(entry.maxVariables());
             assertThat(row.path("expect").path("quickReplies").asInt()).as(row.toString()).isEqualTo(entry.quickReplies().size());
+            assertThat(row.path("expect").path("urlButtons").asInt()).as(row.toString()).isEqualTo(entry.urlButton() == null ? 0 : 1);
+            assertThat(row.path("buttonRefs").isArray()).as(row + ": a URL button is filled by its row's buttonRefs")
+                    .isEqualTo(entry.urlButton() != null);
         }
+    }
+
+    @Test
+    @DisplayName("D-067: the morning maps its dashboard-button template first, its own template second, the general third")
+    void morningMapsTheDashboardButtonFirst() throws Exception {
+        List<JsonNode> rows = rows(MessagingSettings.SCHEDULED, "session_morning_he");
+        assertThat(rows).extracting(r -> r.path("template").asText()).containsExactly(
+                WhatsAppTemplateCatalog.SESSION_MORNING_DASH_HE, WhatsAppTemplateCatalog.SESSION_MORNING_HE,
+                WhatsAppTemplateCatalog.UPDATE_HE);
+        JsonNode button = rows.get(0).path("buttonRefs");
+        assertThat(button).hasSize(1);
+        assertThat(button.get(0).path("index").asInt()).isZero();
+        assertThat(button.get(0).path("subType").asText()).isEqualTo("url");
+        assertThat(button.get(0).path("ref").asText()).isEqualTo("link");
+        // without a link (he may not sign in) the morning still has its two templates: the dash row is skipped
+        Map<String, Object> noLink = ScheduledPlatformSend.templateData("❤️ דאד קואץ׳:\nשורה",
+                Optional.of(TemplateCall.of(WhatsAppTemplateCatalog.SESSION_MORNING_HE, "17:00", "מאיה")));
+        check(noLink, rows.subList(1, rows.size()));
+        assertThat(((Map<?, ?>) noLink.get("named")).containsKey("link")).isFalse();
     }
 
     /** At least the first usable row's references resolve against what Dad Coach sends; every row's refs do. */
@@ -139,6 +169,16 @@ public class KindTemplateSeedContractTest {
                     }
                 });
                 assertThat(row.path("expect").path("quickReplies").asInt()).isZero();
+            }
+            for (JsonNode button : row.path("buttonRefs")) {
+                JsonNode ref = button.path("ref");
+                if (ref.isTextual()) {
+                    assertThat(named).as("named '%s' for %s's button", ref.asText(), row.path("template").asText())
+                            .containsKey(ref.asText());
+                    assertThat(named.get(ref.asText())).isNotBlank().doesNotContain("\n").doesNotContain(" ");
+                } else {
+                    assertThat(payloads.size()).isGreaterThan(ref.asInt());
+                }
             }
         }
     }

@@ -115,10 +115,12 @@ class SessionTimerCardParityTest extends AbstractIntegrationTest {
 
     /**
      * What one scheduled turn hands the platform's Send API (D-053: the only sender): nothing, or the content's type, text
-     * and buttons, and the template the platform's mapping would use outside the window (the message type and its values).
+     * and buttons (D-067: the morning's dashboard button's label), and the template the platform's mapping would use
+     * outside the window (the message type and its values; the morning link's token - new for every morning - as
+     * {@code <token>}, after checking it is the button's).
      */
-    record Sent(String type, String text, List<String> buttons, String template) {
-        static final Sent NOTHING = new Sent("NOTHING", null, List.of(), null);
+    record Sent(String type, String text, List<String> buttons, String link, String template) {
+        static final Sent NOTHING = new Sent("NOTHING", null, List.of(), null, null);
     }
 
     private Sent callback(String state, String content) throws Exception {
@@ -142,8 +144,14 @@ class SessionTimerCardParityTest extends AbstractIntegrationTest {
         JsonNode sent = fake.sentMessages().get(before);
         List<String> buttons = new ArrayList<>();
         sent.path("content").path("buttons").forEach(b -> buttons.add(b.path("id").asText()));
+        String template = sent.path("templateData").toString();
+        String token = sent.path("templateData").path("named").path("link").asText("");
+        if (!token.isEmpty()) {
+            assertThat(sent.path("content").path("link").path("url").asText()).endsWith("/auth/consume#token=" + token);
+            template = template.replace(token, "<token>");
+        }
         return new Sent(sent.path("content").path("type").asText(), sent.path("content").path("text").asText(), buttons,
-                sent.path("templateData").toString());
+                sent.path("content").path("link").path("title").asText(null), template);
     }
 
     private synchronized int nextTrigger() {
@@ -236,6 +244,11 @@ class SessionTimerCardParityTest extends AbstractIntegrationTest {
                         resetNotes();
                         Sent after = toolOnlyTurn(state);
                         assertThat(after).as(where).isEqualTo(before);
+                        if (MORNING.equals(state) && before != Sent.NOTHING) {
+                            // D-067: the card's text goes with his dashboard button under it
+                            assertThat(before.type()).as(where).isEqualTo("link_button");
+                            assertThat(before.link()).as(where).isEqualTo("כניסה לדף שלי");
+                        }
                         compared++;
                         if (before != Sent.NOTHING) {
                             sentCount++;

@@ -185,6 +185,15 @@ public class PlatformSendFlow {
 
         /** Nothing created (yet): whether it is still worth sending - the kind's relevance rule. */
         boolean stillSendable(UUID id, String body, Instant now);
+
+        /**
+         * D-067: the bytes a reconcile re-POST sends, from the stored ones - the stored bytes themselves unless the kind
+         * keeps a secret out of them (a morning's sign-in token: a new one is minted for each re-POST); null when they can
+         * no longer be built (then it is never posted again).
+         */
+        default String toPost(UUID id, String stored) {
+            return stored;
+        }
     }
 
     private final MessagingSettings settings;
@@ -298,12 +307,21 @@ public class PlatformSendFlow {
      * answer is acted on as the class comment says.
      */
     public Settled send(Ledger l, UUID id, String body, Runnable reserve) {
+        return send(l, id, body, body, reserve);
+    }
+
+    /**
+     * D-067: {@code stored} is committed, {@code posted} is POSTed (and re-POSTed at once) - the same bytes but for a
+     * secret the stored ones never hold; a reconcile re-POST sends {@link Ledger#toPost} of the stored bytes.
+     */
+    public Settled send(Ledger l, UUID id, String stored, String posted, Runnable reserve) {
         Instant now = clock.instant();
+        String body = posted;
         // the bytes are durable before the first POST (v2.6): every re-POST and reconcile sends exactly these
         tx.executeWithoutResult(s -> {
             reserve.run();
             jdbc.update("UPDATE " + l.table() + " SET platform_request = ?, platform_state = 'POSTING', platform_posts = 1, "
-                    + "platform_first_post_at = ?, platform_next_at = ? WHERE id = ?", body, Timestamp.from(now),
+                    + "platform_first_post_at = ?, platform_next_at = ? WHERE id = ?", stored, Timestamp.from(now),
                     Timestamp.from(now.plus(LEASE)), id);
         });
         Answer answer = client.send(body);
@@ -538,8 +556,13 @@ public class PlatformSendFlow {
         Instant firstPost = row.get("platform_first_post_at") == null ? now
                 : ((Timestamp) row.get("platform_first_post_at")).toInstant();
         if (posts < MAX_POSTS) {
+            String posted = l.toPost(id, body);
+            if (posted == null) {
+                giveUp(l, id, "NO_REQUEST");      // it may have gone out with the first bytes: UNKNOWN, never sent again
+                return;
+            }
             jdbc.update("UPDATE " + l.table() + " SET platform_posts = platform_posts + 1 WHERE id = ?", id);
-            Answer a = client.send(body);
+            Answer a = client.send(posted);
             Verdict v = verdict(a, true);
             if (v == Verdict.AMBIGUOUS) {
                 ambiguous(l, id, a);
@@ -590,14 +613,16 @@ public class PlatformSendFlow {
     private void repostNotCreated(Ledger l, UUID id, String body, int posts) {
         Instant now = clock.instant();
         String blocker = l.blocker(id, body);
-        if (blocker != null || !l.stillSendable(id, body, now)) {
+        boolean relevant = blocker == null && l.stillSendable(id, body, now);
+        String posted = relevant ? l.toPost(id, body) : null;
+        if (posted == null) {
             l.log().atWarn().setMessage("messaging." + l.event() + ".not_created_ended").addKeyValue(l.idKey(), id)
-                    .addKeyValue("why", blocker != null ? blocker : "NO_LONGER_RELEVANT").log();
+                    .addKeyValue("why", blocker != null ? blocker : !relevant ? "NO_LONGER_RELEVANT" : "NO_REQUEST").log();
             end(l, id, PLATFORM_NOT_CREATED);
             return;
         }
         jdbc.update("UPDATE " + l.table() + " SET platform_posts = platform_posts + 1 WHERE id = ?", id);
-        Answer a = client.send(body);
+        Answer a = client.send(posted);
         Verdict v = verdict(a, false);   // every earlier attempt provably created nothing
         if (v == Verdict.AMBIGUOUS) {
             // it may exist now: the ambiguous path (re-POST, then the lookup by key) takes it from here

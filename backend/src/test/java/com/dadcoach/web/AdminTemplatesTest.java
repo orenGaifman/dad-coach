@@ -61,7 +61,21 @@ class AdminTemplatesTest extends AbstractWebIntegrationTest {
                 .andExpect(jsonPath("$.templates[0].metaStatus").value("APPROVED"))
                 .andExpect(jsonPath("$.templates[0].ready").value(true))
                 .andExpect(jsonPath("$.templates[0].usedFor.length()").value(5))
-                .andExpect(jsonPath("$.templates[2].quickReplies[0]").value("רוצה רעיונות"));
+                .andExpect(jsonPath("$.templates[2].quickReplies[0]").value("רוצה רעיונות"))
+                .andExpect(jsonPath("$.templates[2].urlButton").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.templates[2].definition.components[1].buttons[0].type").value("QUICK_REPLY"))
+                // D-067: the morning's dashboard twin, its URL button and the definition submitted to Meta
+                .andExpect(jsonPath("$.templates[4].name").value("dad_coach_session_morning_dash_he"))
+                .andExpect(jsonPath("$.templates[4].body").value(WhatsAppTemplateCatalog.require(
+                        WhatsAppTemplateCatalog.SESSION_MORNING_HE).body()))
+                .andExpect(jsonPath("$.templates[4].quickReplies.length()").value(0))
+                .andExpect(jsonPath("$.templates[4].urlButton").value("כניסה לדף שלי"))
+                .andExpect(jsonPath("$.templates[4].urlButtonUrl").value(org.hamcrest.Matchers.endsWith("/auth/consume#token={{1}}")))
+                .andExpect(jsonPath("$.templates[4].usedFor[0]").value("SCHEDULED/session_morning_he"))
+                .andExpect(jsonPath("$.templates[4].definition.name").value("dad_coach_session_morning_dash_he"))
+                .andExpect(jsonPath("$.templates[4].definition.category").value("UTILITY"))
+                .andExpect(jsonPath("$.templates[4].definition.components[1].buttons[0].type").value("URL"))
+                .andExpect(jsonPath("$.templates[4].definition.components[1].buttons[0].text").value("כניסה לדף שלי"));
         assertThat(FakeServers.INSTANCE.calls("/api/v1/worker/whatsapp/templates")).hasSize(1);
         assertThat(FakeServers.INSTANCE.calls("/api/v1/worker/messaging/kinds")).hasSize(1);
         assertThat(FakeServers.INSTANCE.calls("/v")).as("never Meta").isEmpty();
