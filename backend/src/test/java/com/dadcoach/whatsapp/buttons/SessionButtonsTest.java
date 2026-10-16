@@ -125,8 +125,9 @@ class SessionButtonsTest extends AbstractIntegrationTest {
         assertThat(lastSend().path("content").path("type").asText()).isEqualTo("link_button");
         assertThat(lastSend().path("content").has("buttons")).isFalse();
         assertThat(lastSend().path("content").path("link").path("title").asText()).isEqualTo("כניסה לדף שלי");
-        callback("f-2", "SESSION_FOLLOW_UP", "נו, איך היה?"); // nothing has ended
-        assertThat(lastSend().path("content").path("type").asText()).isEqualTo("text");
+        int sentBefore = fake.sentMessages().size();
+        callback("f-2", "SESSION_FOLLOW_UP", "נו, איך היה?"); // nothing has ended: skipped, nothing goes
+        assertThat(fake.sentMessages()).hasSize(sentBefore);
 
         setUpFather("+19995550603", false);
         session(Duration.ofMinutes(-90), 60);
