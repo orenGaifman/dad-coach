@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,8 +30,19 @@ public class LoginLinkService {
 
     private static final Logger log = LoggerFactory.getLogger(LoginLinkService.class);
     public static final Duration LINK_TTL = Duration.ofDays(365);
+    /**
+     * D-067: the morning's dashboard button is for that day and week; an older one has expired and the sign-in page
+     * takes over.
+     */
+    public static final Duration MORNING_LINK_TTL = Duration.ofDays(7);
+    /** Where a link's token goes: in the fragment after this path (a template's URL button ends with it, D-067). */
+    public static final String CONSUME_PATH = "/auth/consume#token=";
 
     public record IssuedLink(String url, Instant expiresAt) {
+    }
+
+    /** D-067: a morning's link - its row and the raw token, which only the message that carries it ever holds. */
+    public record MorningLink(UUID id, String token) {
     }
 
     /** What {@link #sendTo} did: SENT, ALREADY_SENT (his button from minutes ago is right above and keeps working),
@@ -124,6 +136,32 @@ public class LoginLinkService {
         });
     }
 
+    /**
+     * D-067: the link behind the morning reminder's button, for whoever signs in with this number (as his own dashboard
+     * button would be), valid {@link #MORNING_LINK_TTL}; not sent here - the morning carries it. Empty when the number may
+     * not sign in (the morning then goes without the button).
+     */
+    @Transactional
+    public Optional<MorningLink> issueMorning(String e164) {
+        return policy.forPhone(e164).map(subject -> {
+            String raw = TokenHashing.newRawToken();
+            Instant now = clock.instant();
+            LoginLink link = links.save(new LoginLink(subject, TokenHashing.sha256Hex(raw), now, now.plus(MORNING_LINK_TTL)));
+            return new MorningLink(link.getId(), raw);
+        });
+    }
+
+    /** D-067: a morning link whose message provably never went out: nobody holds its token, so it is ended. */
+    @Transactional
+    public void revokeUnsent(UUID linkId) {
+        links.revoke(linkId, clock.instant(), "NOT_SENT");
+    }
+
+    /** The sign-in address of a token (no {@code next}: he lands on his home screen). */
+    public String buttonUrl(String token) {
+        return url(token, null);
+    }
+
     /** Counts one use of a valid link and returns whose it is; the caller re-checks the sign-in policy. */
     @Transactional
     public Optional<SignInSubject> use(String rawToken) {
@@ -154,7 +192,7 @@ public class LoginLinkService {
     }
 
     private String url(String raw, String next) {
-        return webBaseUrl + "/auth/consume#token=" + raw
+        return webBaseUrl + CONSUME_PATH + raw
                 + DashboardPaths.sanitize(next).map(p -> "&next=" + URLEncoder.encode(p, StandardCharsets.UTF_8)).orElse("");
     }
 }

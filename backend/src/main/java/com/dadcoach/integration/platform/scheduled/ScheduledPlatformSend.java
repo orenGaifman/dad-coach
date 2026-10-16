@@ -1,5 +1,7 @@
 package com.dadcoach.integration.platform.scheduled;
 
+import com.dadcoach.auth.LoginLinkDelivery;
+import com.dadcoach.auth.LoginLinkService;
 import com.dadcoach.channel.delivery.DeliveryResult;
 import com.dadcoach.channel.dto.OutboundMessageDto;
 import com.dadcoach.channel.template.TemplateCall;
@@ -60,6 +62,16 @@ import org.springframework.stereotype.Service;
  * hold by the gateway; timeline {@code REPLACES_DRAFT} on {@code scheduled-transition:<triggerId>} with correlation
  * {@code callback:scheduled-transition:<triggerId>}.</p>
  *
+ * <p><b>The morning's dashboard button</b> (D-067): the session-day morning goes as {@code link_button} - its text exactly
+ * as without it, under it the father's dashboard button ({@link LoginLinkDelivery#fatherLabel}) behind a sign-in link
+ * valid {@link LoginLinkService#MORNING_LINK_TTL}, minted for this send ({@link LoginLinkService#issueMorning}); the
+ * {@code fallbackText} is the text with the link on its own line; {@code templateData.named.link} is the token, the URL
+ * suffix of {@code dad_coach_session_morning_dash_he} (mapped before {@code dad_coach_session_morning_he}). The request is
+ * {@code sensitive}. The stored bytes ({@code platform_request}) hold {@link #LINK_TOKEN_MARK} in place of the token,
+ * never the token: the first POST and its immediate re-POST send the minted one, a reconcile re-POST mints a new one
+ * ({@link #toPost}). A morning the platform refused ends its link. No link when he may not sign in, nor for a message
+ * with reply buttons or too long for an interactive body (the morning has neither).</p>
+ *
  * <p><b>The callback answer</b> ({@link ScheduledResponseDeliveryService.CallbackAnswer}): when the platform has (or may
  * have, or will be asked again) the message it records the timeline itself, so the answer is {@code {}} plus
  * {@code platformMessageId} when known. A refused request (400/422/409) or one Dad Coach could not build answers FAILED
@@ -83,6 +95,10 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
     /** A message is never given a deadline closer than this (a send now must never fail on it). */
     static final Duration MIN_NOT_AFTER = Duration.ofMinutes(15);
     static final Duration FOLLOW_UP_VALID = Duration.ofHours(12);
+    /** D-067: the morning link's token in the stored bytes - the token itself never is (class comment). */
+    static final String LINK_TOKEN_MARK = "{{dashboard-token}}";
+    /** D-067: the named value the URL-button template's mapping row puts on its button. */
+    static final String LINK_REF = "link";
 
     private final PlatformSendFlow flow;
     private final ScheduledResponseDeliveryRepository repository;
@@ -92,13 +108,15 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
     private final SessionButtonOffers offers;
     private final WeeklyGoalService goals;
     private final WorkflowPlatformProperties platform;
+    private final LoginLinkService links;
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
     public ScheduledPlatformSend(PlatformSendFlow flow, ScheduledResponseDeliveryRepository repository,
                                  ScheduledMessageTemplates templates, FatherRepository fathers,
                                  QualityTimeRepository sessions, SessionButtonOffers offers, WeeklyGoalService goals,
-                                 WorkflowPlatformProperties platform, JdbcTemplate jdbc, Clock clock) {
+                                 WorkflowPlatformProperties platform, LoginLinkService links, JdbcTemplate jdbc,
+                                 Clock clock) {
         this.flow = flow;
         this.repository = repository;
         this.templates = templates;
@@ -107,6 +125,7 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
         this.offers = offers;
         this.goals = goals;
         this.platform = platform;
+        this.links = links;
         this.jdbc = jdbc;
         this.clock = clock;
     }
@@ -132,14 +151,17 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
                                                             ScheduledResponseRequest request, String content,
                                                             List<OutboundMessageDto.ReplyButton> offered) {
         String body;
+        Optional<LoginLinkService.MorningLink> link = Optional.empty();
         try {
             RuntimeException fault = requestFault;
             if (fault != null) {
                 throw fault;
             }
+            link = dashboardButton(request.targetStateKey(), content, offered) ? morningLink(father) : Optional.empty();
             body = request(father, delivery.getIdempotencyKey(), request.triggerId(), request.targetStateKey(), content,
-                    offered, ownTemplate(father, request.targetStateKey()));
+                    offered, ownTemplate(father, request.targetStateKey()), link.isPresent());
         } catch (RuntimeException e) {
+            link.ifPresent(this::endLink);
             // a Dad Coach bug (D-053): nothing was posted - FAILED, never sent another way
             log.atError().setMessage("messaging.scheduled.request_failed").addKeyValue("deliveryId", delivery.getId())
                     .addKeyValue("error", e.getClass().getSimpleName()).setCause(e).log();
@@ -152,10 +174,12 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
                     ? failed.withOutcome(TimelineReports.FAILED, PlatformSendFlow.REQUEST_BUILD_FAILED, null) : failed;
             return new ScheduledResponseDeliveryService.CallbackAnswer(answer, answer, false);
         }
-        Settled s = flow.send(this, delivery.getId(), body, () -> { });
+        String posted = link.map(l -> withToken(body, l.token())).orElse(body);
+        Settled s = flow.send(this, delivery.getId(), body, posted, () -> { });
         ScheduledResponseDelivery row = repository.findById(delivery.getId()).orElse(delivery);
         ScheduledResponseResult internal = ScheduledResponseResult.of(row, false);
         if (s.verdict() == PlatformSendFlow.Verdict.REFUSED) {
+            link.ifPresent(this::endLink);   // nothing was created: nobody holds its token
             // nothing was created: the platform records nothing, so the answer says it failed, as a failed send does
             ScheduledResponseResult failed = platform.isDeliveryReports()
                     ? internal.withOutcome(TimelineReports.FAILED, s.reason(), null) : internal;
@@ -173,6 +197,41 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
         return new ScheduledResponseDeliveryService.CallbackAnswer(internal, answer, onItsWay);
     }
 
+    /**
+     * D-067: the session-day morning carries his dashboard button - unless it has reply buttons (WhatsApp cannot mix them
+     * with a URL button; the morning has none) or is too long for an interactive body.
+     */
+    static boolean dashboardButton(String targetStateKey, String content, List<OutboundMessageDto.ReplyButton> offered) {
+        return ScheduledMessageTemplates.MORNING_STATE.equals(targetStateKey) && offered.isEmpty()
+                && content.length() <= WhatsAppMessageFormatter.INTERACTIVE_BODY_LIMIT;
+    }
+
+    /** D-067: a new morning link for him, or none (he may not sign in, or it could not be issued: the morning still goes). */
+    private Optional<LoginLinkService.MorningLink> morningLink(Father father) {
+        try {
+            return father.getPhone() == null ? Optional.empty() : links.issueMorning(father.getPhone());
+        } catch (RuntimeException e) {
+            log.atWarn().setMessage("messaging.scheduled.morning_link_failed").addKeyValue("fatherId", father.getId())
+                    .addKeyValue("error", e.getClass().getSimpleName()).log();
+            return Optional.empty();
+        }
+    }
+
+    /** D-067: a morning link whose message never went out is ended; best effort (it is unused and expires in 7 days). */
+    private void endLink(LoginLinkService.MorningLink link) {
+        try {
+            links.revokeUnsent(link.id());
+        } catch (RuntimeException e) {
+            log.atWarn().setMessage("messaging.scheduled.morning_link_not_ended").addKeyValue("linkId", link.id())
+                    .addKeyValue("error", e.getClass().getSimpleName()).log();
+        }
+    }
+
+    /** The bytes to POST: the stored ones with the token in place of {@link #LINK_TOKEN_MARK}. */
+    static String withToken(String stored, String token) {
+        return stored.replace(LINK_TOKEN_MARK, token);
+    }
+
     private Optional<TemplateCall> ownTemplate(Father father, String targetStateKey) {
         try {
             return templates.forScheduledMessage(father, targetStateKey);
@@ -184,9 +243,9 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
 
     // ------------------------------------------------------------------------------------------------- the request
 
-    /** The {@code /send} body (class comment). */
+    /** The {@code /send} body (class comment); with {@code dashboardButton} its token is {@link #LINK_TOKEN_MARK}. */
     String request(Father father, String key, String triggerId, String targetStateKey, String content,
-                   List<OutboundMessageDto.ReplyButton> offered, Optional<TemplateCall> own) {
+                   List<OutboundMessageDto.ReplyButton> offered, Optional<TemplateCall> own, boolean dashboardButton) {
         Optional<Father> who = Optional.of(father);
         Map<String, Object> r = flow.newRequest(who, father.getPhone());
         r.put("idempotencyKey", PlatformSendFlow.platformKey(key));
@@ -194,7 +253,8 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
         r.put("messageClass", "UTILITY");
         Map<String, Object> body = new LinkedHashMap<>();
         boolean withButtons = !offered.isEmpty() && content.length() <= WhatsAppMessageFormatter.INTERACTIVE_BODY_LIMIT;
-        body.put("type", withButtons ? "buttons" : "text");
+        boolean withLink = !withButtons && dashboardButton;
+        body.put("type", withButtons ? "buttons" : withLink ? "link_button" : "text");
         body.put("text", content);
         if (withButtons) {
             List<Map<String, Object>> buttons = new ArrayList<>();
@@ -206,8 +266,18 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
             }
             body.put("buttons", buttons);
         }
+        String url = withLink ? links.buttonUrl(LINK_TOKEN_MARK) : null;
+        if (withLink) {
+            Map<String, Object> link = new LinkedHashMap<>();
+            link.put("url", url);
+            link.put("title", LoginLinkDelivery.fatherLabel());
+            body.put("link", link);   // no footer: the morning's text is exactly as without the button
+        }
         r.put("content", body);
-        r.put("templateData", templateData(content, own));
+        if (withLink) {
+            r.put("fallbackText", new OutboundMessageDto.LinkButton(LoginLinkDelivery.fatherLabel(), url, null).asText(content));
+        }
+        r.put("templateData", templateData(content, own, withLink ? LINK_TOKEN_MARK : null));
         r.put("windowPolicy", "AUTO");
         r.put("outsideWindowWithoutTemplate", "FAIL");
         flow.lastInbound(who).ifPresent(at -> r.put("windowHint", Map.of("lastInboundAt", at.toString())));
@@ -221,6 +291,9 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
         timelineRow.put("content", TimelineText.withoutIdentity(content));
         r.put("timeline", timelineRow);
         r.put("wait", "ACCEPTED");
+        if (withLink) {
+            r.put("sensitive", true);   // a sign-in link: the platform keeps only the link's host
+        }
         return flow.json(r);
     }
 
@@ -230,7 +303,19 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
      * always {@code named.text} for the general {@code dad_coach_update_he} ({{1}} = the message as one line).
      */
     static Map<String, Object> templateData(String content, Optional<TemplateCall> own) {
-        Map<String, String> named = Map.of("text", TemplateText.asTemplateParameter(content));
+        return templateData(content, own, null);
+    }
+
+    /**
+     * D-067: with {@code linkToken}, a message with its own template also carries {@code named.link} - the URL suffix of
+     * the button template mapped first ({@code dad_coach_session_morning_dash_he}); the rows after it read the same values.
+     */
+    static Map<String, Object> templateData(String content, Optional<TemplateCall> own, String linkToken) {
+        Map<String, String> named = new LinkedHashMap<>();
+        named.put("text", TemplateText.asTemplateParameter(content));
+        if (linkToken != null && own.isPresent()) {
+            named.put(LINK_REF, linkToken);
+        }
         if (own.isEmpty()) {
             return PlatformSendFlow.templateData("", null, named, null);
         }
@@ -407,6 +492,20 @@ public class ScheduledPlatformSend implements PlatformSendFlow.Ledger {
         }
         JsonNode request = flow.read(body);
         return request == null || !request.path("content").path("text").isTextual() ? "NO_REQUEST" : null;
+    }
+
+    /**
+     * D-067: a morning's stored bytes hold {@link #LINK_TOKEN_MARK}: each re-POST carries a newly minted link (the earlier
+     * token is not stored anywhere; if the earlier POST did create the message the platform answers with it - 409 adopted
+     * - and its link keeps working). Null when no link can be issued for him any more: never posted again.
+     */
+    @Override
+    public String toPost(UUID id, String stored) {
+        if (!stored.contains(LINK_TOKEN_MARK)) {
+            return stored;
+        }
+        Long fatherId = jdbc.queryForObject("SELECT father_id FROM scheduled_response_delivery WHERE id = ?", Long.class, id);
+        return fathers.findById(fatherId).flatMap(this::morningLink).map(l -> withToken(stored, l.token())).orElse(null);
     }
 
     /** Nothing created (yet): POSTed again only while it still says something true ({@code notAfter}). */

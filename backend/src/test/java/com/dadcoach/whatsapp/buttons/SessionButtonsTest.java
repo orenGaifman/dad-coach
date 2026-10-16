@@ -121,7 +121,10 @@ class SessionButtonsTest extends AbstractIntegrationTest {
         setUpFather("+19995550602", true);
         session(Duration.ofMinutes(60), 45);
         callback("m-1", "SESSION_MORNING_REMINDER", "בוקר טוב! היום ב-13:00 עם נועה");
-        assertThat(lastSend().path("content").path("type").asText()).isEqualTo("text");
+        // D-067: the morning has no reply buttons; it carries his dashboard button (a URL button) instead
+        assertThat(lastSend().path("content").path("type").asText()).isEqualTo("link_button");
+        assertThat(lastSend().path("content").has("buttons")).isFalse();
+        assertThat(lastSend().path("content").path("link").path("title").asText()).isEqualTo("כניסה לדף שלי");
         callback("f-2", "SESSION_FOLLOW_UP", "נו, איך היה?"); // nothing has ended
         assertThat(lastSend().path("content").path("type").asText()).isEqualTo("text");
 

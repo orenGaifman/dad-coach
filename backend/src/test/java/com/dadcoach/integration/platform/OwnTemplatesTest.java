@@ -125,6 +125,12 @@ class OwnTemplatesTest extends AbstractIntegrationTest {
         assertThat(data.path("variant").asText()).isEqualTo("session_morning_he");
         assertThat(texts(data.path("values"))).containsExactly("15:00 וב-17:00", "נועה ויובל");
         assertThat(data.has("payloads")).isFalse();
+        // D-067: the dashboard-button template (mapped first) takes the sign-in token as its URL suffix; the two after
+        // it read the values and named.text as before
+        String token = data.path("named").path("link").asText();
+        assertThat(token).isNotBlank();
+        assertThat(lastSend().path("content").path("link").path("url").asText()).endsWith("/auth/consume#token=" + token);
+        assertThat(data.path("named").path("text").asText()).isNotBlank();
         assertThat(com.dadcoach.channel.template.WhatsAppTemplateCatalog.require("dad_coach_session_morning_he")
                 .render(List.of("15:00 וב-17:00", "נועה ויובל")))
                 .isEqualTo("❤️ דאד קואץ׳:\n*היום ב-15:00 וב-17:00* זה הזמן שלך ושל נועה ויובל 🙂");

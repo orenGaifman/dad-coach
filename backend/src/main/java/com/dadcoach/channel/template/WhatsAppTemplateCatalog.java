@@ -17,6 +17,9 @@ import java.util.Optional;
  * <p>Every body opens with the identity line the free-form messages open with ("❤️ דאד קואץ׳:"). Quick-reply
  * buttons carry the same titles as the in-window buttons; their payloads ({@code dc:...}) are sent with each
  * message, so a tap is handled exactly like a tap inside the window.</p>
+ *
+ * <p>D-067: a template may end with one URL button ({@link UrlButton}) - the morning's {@code _dash} twin opens his
+ * dashboard; Meta's one dynamic suffix is the sign-in link's token, sent as {@code templateData.named.link}.</p>
  */
 public final class WhatsAppTemplateCatalog {
 
@@ -24,6 +27,8 @@ public final class WhatsAppTemplateCatalog {
 
     public static final String UPDATE_HE = "dad_coach_update_he";
     public static final String SESSION_MORNING_HE = "dad_coach_session_morning_he";
+    /** D-067: the morning with his dashboard button; mapped before {@link #SESSION_MORNING_HE}, the same body. */
+    public static final String SESSION_MORNING_DASH_HE = "dad_coach_session_morning_dash_he";
     public static final String SESSION_HOUR_BEFORE_HE = "dad_coach_session_hour_before_he";
     public static final String SESSION_FOLLOW_UP_HE = "dad_coach_session_follow_up_he";
 
@@ -31,13 +36,36 @@ public final class WhatsAppTemplateCatalog {
     public static final String UPDATE_HE_BODY =
             IDENTITY + "{{1}}\n\nעדכון על זמן האיכות שלך עם הילדים. אפשר לענות כאן בכל רגע.";
 
+    private static final String SESSION_MORNING_BODY = IDENTITY + "*היום ב-{{1}}* זה הזמן שלך ושל {{2}} 🙂";
+
+    /** D-067: the dashboard button's address under the web base URL; the token is Meta's dynamic suffix, in the fragment. */
+    public static final String DASHBOARD_BUTTON_PATH = com.dadcoach.auth.LoginLinkService.CONSUME_PATH + "{{1}}";
+
+    /**
+     * D-067: a template's URL button - {@code text} on the button (plain text, up to 25 characters), {@code path} under
+     * the web base URL ending with Meta's one dynamic suffix ({@code {{1}}}), filled from {@code templateData.named.link}.
+     */
+    public record UrlButton(String text, String path) {
+
+        /** The button's address as Meta stores it: the web base URL (no trailing slash) + the path. */
+        public String url(String webBaseUrl) {
+            return webBaseUrl.replaceAll("/+$", "") + path;
+        }
+    }
+
     /**
      * @param purpose what it is, in Hebrew (the admin screen)
      * @param examples one example per variable, in order: what Meta's reviewers see
      * @param quickReplies the quick-reply button titles, in order (plain text, up to 25 characters)
+     * @param urlButton a URL button (D-067), or null
      */
     public record Entry(String name, String category, String purpose, String body, List<String> examples,
-                        List<String> quickReplies) {
+                        List<String> quickReplies, UrlButton urlButton) {
+
+        public Entry(String name, String category, String purpose, String body, List<String> examples,
+                     List<String> quickReplies) {
+            this(name, category, purpose, body, examples, quickReplies, null);
+        }
 
         public String language() {
             return "he";
@@ -69,7 +97,7 @@ public final class WhatsAppTemplateCatalog {
                     List.of("עוד שעה הזמן שלך ושל מאיה 🙂 יש כבר רעיון מה תעשו?"), List.of()),
             new Entry(SESSION_MORNING_HE, "UTILITY",
                     "תזכורת בבוקר של יום המפגש",
-                    IDENTITY + "*היום ב-{{1}}* זה הזמן שלך ושל {{2}} 🙂",
+                    SESSION_MORNING_BODY,
                     List.of("17:00", "מאיה"), List.of()),
             new Entry(SESSION_HOUR_BEFORE_HE, "UTILITY",
                     "תזכורת כשעה לפני המפגש, עם כפתור לרעיונות",
@@ -78,7 +106,12 @@ public final class WhatsAppTemplateCatalog {
             new Entry(SESSION_FOLLOW_UP_HE, "UTILITY",
                     "אחרי המפגש: איך היה, עם כפתורי היה / לא יצא",
                     IDENTITY + "נו, איך היה לכם עם {{1}}? 🙂",
-                    List.of("מאיה"), List.of("היה מעולה", "לא יצא")));
+                    List.of("מאיה"), List.of("היה מעולה", "לא יצא")),
+            new Entry(SESSION_MORNING_DASH_HE, "UTILITY",
+                    "תזכורת בבוקר של יום המפגש, עם כפתור לדף שלו",
+                    SESSION_MORNING_BODY,
+                    List.of("17:00", "מאיה"), List.of(),
+                    new UrlButton(com.dadcoach.auth.LoginLinkDelivery.fatherLabel(), DASHBOARD_BUTTON_PATH)));
 
     public static Optional<Entry> named(String name) {
         return ALL.stream().filter(e -> e.name().equals(name)).findFirst();

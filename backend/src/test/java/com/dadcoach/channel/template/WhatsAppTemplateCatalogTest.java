@@ -54,7 +54,55 @@ class WhatsAppTemplateCatalogTest {
                 assertThat(button.length()).isLessThanOrEqualTo(25);
                 assertThat(button).as(e.name() + " button is plain text").matches("[\\p{L} ]+");
             }
+            if (e.urlButton() != null) {
+                assertThat(e.urlButton().text().length()).isLessThanOrEqualTo(25);
+                assertThat(e.urlButton().text()).as(e.name() + " URL button is plain text").matches("[\\p{L} ]+");
+                assertThat(e.urlButton().path()).as("one dynamic suffix, at the end").startsWith("/").endsWith("{{1}}")
+                        .containsOnlyOnce("{{");
+            }
         }
+    }
+
+    @Test
+    @DisplayName("D-067: the morning's dashboard twin - the morning's very body, no quick replies, the dashboard card's label "
+            + "on a URL button to the sign-in link (token in the fragment)")
+    void morningDashboardTwin() {
+        WhatsAppTemplateCatalog.Entry morning = WhatsAppTemplateCatalog.require(WhatsAppTemplateCatalog.SESSION_MORNING_HE);
+        WhatsAppTemplateCatalog.Entry dash = WhatsAppTemplateCatalog.require(WhatsAppTemplateCatalog.SESSION_MORNING_DASH_HE);
+        assertThat(dash.name()).isEqualTo("dad_coach_session_morning_dash_he");
+        assertThat(dash.body()).isEqualTo(morning.body()).isEqualTo(WhatsAppTemplateCatalog.IDENTITY
+                + "*היום ב-{{1}}* זה הזמן שלך ושל {{2}} 🙂");
+        assertThat(dash.category()).isEqualTo(morning.category()).isEqualTo("UTILITY");
+        assertThat(dash.language()).isEqualTo("he");
+        assertThat(dash.examples()).isEqualTo(morning.examples());
+        assertThat(dash.quickReplies()).isEmpty();
+        assertThat(morning.urlButton()).isNull();
+        assertThat(dash.urlButton().text()).isEqualTo(com.dadcoach.auth.LoginLinkDelivery.fatherLabel()).isEqualTo("כניסה לדף שלי");
+        assertThat(dash.urlButton().path()).isEqualTo("/auth/consume#token={{1}}");
+        assertThat(dash.urlButton().url("https://dad-coach.example/")).isEqualTo("https://dad-coach.example/auth/consume#token={{1}}");
+        assertThat(TemplateCall.of(WhatsAppTemplateCatalog.SESSION_MORNING_DASH_HE, "17:00", "מאיה").text())
+                .isEqualTo(TemplateCall.of(WhatsAppTemplateCatalog.SESSION_MORNING_HE, "17:00", "מאיה").text());
+    }
+
+    @Test
+    @DisplayName("D-067: Meta's definition of the new template - body with its examples, one URL button at the web base URL")
+    void metaDefinitionOfTheDashboardTwin() throws Exception {
+        java.util.Map<String, Object> def = com.dadcoach.web.admin.AdminTemplatesController.definition(
+                WhatsAppTemplateCatalog.require(WhatsAppTemplateCatalog.SESSION_MORNING_DASH_HE), "https://dad-coach.example");
+        String expected = """
+                {"name":"dad_coach_session_morning_dash_he","language":"he","category":"UTILITY","components":[\
+                {"type":"BODY","text":"❤️ דאד קואץ׳:\\n*היום ב-{{1}}* זה הזמן שלך ושל {{2}} 🙂",\
+                "example":{"body_text":[["17:00","מאיה"]]}},\
+                {"type":"BUTTONS","buttons":[{"type":"URL","text":"כניסה לדף שלי",\
+                "url":"https://dad-coach.example/auth/consume#token={{1}}",\
+                "example":["https://dad-coach.example/auth/consume#token=Xk3vQ9pLm2RtY7wB4nZc8dHs6fJa1gEu5iKo0qWxTyU"]}]}]}""";
+        com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
+        assertThat(json.readTree(json.writeValueAsString(def))).isEqualTo(json.readTree(expected));
+        // a template without a URL button keeps its quick replies only
+        java.util.Map<String, Object> hour = com.dadcoach.web.admin.AdminTemplatesController.definition(
+                WhatsAppTemplateCatalog.require(WhatsAppTemplateCatalog.SESSION_HOUR_BEFORE_HE), "https://dad-coach.example");
+        assertThat(json.writeValueAsString(hour)).contains("{\"type\":\"QUICK_REPLY\",\"text\":\"רוצה רעיונות\"}")
+                .doesNotContain("URL");
     }
 
     @Test

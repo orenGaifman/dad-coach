@@ -610,6 +610,28 @@
   "kind": "SCHEDULED",
   "variant": "session_morning_he",
   "position": 0,
+  "template": "dad_coach_session_morning_dash_he",
+  "bodyRefs": null,
+  "buttonRefs": [
+   {
+    "index": 0,
+    "subType": "url",
+    "ref": "link"
+   }
+  ],
+  "expect": {
+   "language": "he",
+   "bodyParamCount": 2,
+   "quickReplies": 0,
+   "urlButtons": 1
+  },
+  "source": "D-067: published in platform-catalog.json (kindTemplates), not V142; used once Meta approves it"
+ },
+ {
+  "product": "dad_coach",
+  "kind": "SCHEDULED",
+  "variant": "session_morning_he",
+  "position": 1,
   "template": "dad_coach_session_morning_he",
   "bodyRefs": null,
   "expect": {
@@ -622,7 +644,7 @@
   "product": "dad_coach",
   "kind": "SCHEDULED",
   "variant": "session_morning_he",
-  "position": 1,
+  "position": 2,
   "template": "dad_coach_update_he",
   "bodyRefs": [
    "text"
