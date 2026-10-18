@@ -22,7 +22,7 @@ Hard rules for all three:
 - Fictional names only (אורי, נועה). No real children's faces; the brand's artwork (the father in a
   gi, the torii, the night sky) and the real WhatsApp/dashboard screens carry the film.
 - Claims only what is built. "Google Calendar optional" only once D-007 is live.
-- CTA = "מתחילים בוואטסאפ" (Meta's Click-to-WhatsApp, straight to +972 55-296-1164 with the prefilled
+- CTA = "מתחילים בוואטסאפ" (Meta's Click-to-WhatsApp, straight to +972 55-315-6899 with the prefilled
   text). Unlike Tair, Dad Coach has its own number and onboards anyone who writes, so a WhatsApp CTA is
   the right destination.
 

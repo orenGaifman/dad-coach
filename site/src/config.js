@@ -5,7 +5,7 @@
 const env = import.meta.env || {};
 
 /** The Dad Coach WhatsApp number, digits only, international format. Onboarding happens there. */
-export const WHATSAPP_NUMBER = (env.VITE_WHATSAPP_NUMBER || '972552961164').replace(/\D/g, '');
+export const WHATSAPP_NUMBER = (env.VITE_WHATSAPP_NUMBER || '972553156899').replace(/\D/g, '');
 
 /** The text the father's WhatsApp opens with (he still presses send himself). */
 export const WHATSAPP_TEXT = 'היי, אני רוצה להתחיל';
