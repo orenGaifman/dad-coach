@@ -125,7 +125,7 @@ def main():
 
     def whatsapp(text):
         body = json.dumps({"object": "whatsapp_business_account", "entry": [{"id": "1", "changes": [{"field": "messages", "value": {
-            "messaging_product": "whatsapp", "metadata": {"display_phone_number": "972552961164", "phone_number_id": "smoke"},
+            "messaging_product": "whatsapp", "metadata": {"display_phone_number": "972553156899", "phone_number_id": "smoke"},
             "contacts": [{"profile": {"name": "בדיקה"}, "wa_id": phone.lstrip("+")}],
             "messages": [{"from": phone.lstrip("+"), "id": f"wamid.smoke-{uuid.uuid4()}", "timestamp": str(int(time.time())),
                           "type": "text", "text": {"body": text}}]}}]}]}).encode()

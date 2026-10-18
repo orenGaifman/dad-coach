@@ -24,6 +24,6 @@ services:
         value: public, max-age=31536000, immutable
     envVars:
       - { key: VITE_SIGNUP_ENDPOINT, sync: false }   # https://<dad-coach host>/api/public/site-signups (empty = form sends nothing)
-      - { key: VITE_WHATSAPP_NUMBER, value: "972552961164" }
+      - { key: VITE_WHATSAPP_NUMBER, value: "972553156899" }
       - { key: VITE_ANALYTICS_SRC, value: "" }       # optional, cookieless analytics; update the privacy page first
       - { key: VITE_ANALYTICS_DOMAIN, value: "" }

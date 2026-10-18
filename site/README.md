@@ -47,7 +47,7 @@ static host works without rewrites. `/data-deletion/` keeps the path Meta's app 
 | Env var | Default | Effect |
 |---|---|---|
 | `VITE_SIGNUP_ENDPOINT` | empty | Where the desktop signup form POSTs. **Empty → nothing is sent**; the visitor still sees "תודה, נחזור אליך בוואטסאפ בהקדם". Target: `https://<dad-coach host>/api/public/site-signups`, with `SITE_ORIGINS` on the backend set to this site's origin. |
-| `VITE_WHATSAPP_NUMBER` | `972552961164` | The Dad Coach number every "מתחילים בוואטסאפ" link opens (prefilled text "היי, אני רוצה להתחיל"; he still presses send). The HTML carries the default too, so links work without JS. The QR (`public/img/wa-qr.svg`) is rendered by `npm run images` — re-render it if the number changes. |
+| `VITE_WHATSAPP_NUMBER` | `972553156899` | The Dad Coach number every "מתחילים בוואטסאפ" link opens (prefilled text "היי, אני רוצה להתחיל"; he still presses send). The HTML carries the default too, so links work without JS. The QR (`public/img/wa-qr.svg`) is rendered by `npm run images` — re-render it if the number changes. |
 | `VITE_ANALYTICS_SRC` + `VITE_ANALYTICS_DOMAIN` | empty | Cookieless analytics hook (Plausible-style). Loaded only when both are set. The coach intro then reports `coach-intro` play/ended events. Update the privacy page before enabling. |
 
 **Signup POST contract** (JSON): `{ name, phone /* E.164 +9725… */, source: "site", page, website /* honeypot, empty */ }`.

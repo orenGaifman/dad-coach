@@ -10,7 +10,7 @@ same thing, not by clicks:
 
 | Stage | Definition | Where it is measured |
 |---|---|---|
-| 1. Conversation started | A father sends the first WhatsApp message to +972 55-296-1164 from an ad | Meta Ads Manager ("messaging conversations started"), Click-to-WhatsApp |
+| 1. Conversation started | A father sends the first WhatsApp message to +972 55-315-6899 from an ad | Meta Ads Manager ("messaging conversations started"), Click-to-WhatsApp |
 | 2. Onboarded | His profile has a display name and one child (ONBOARDING → ACTIVE_COACHING) | Product DB (father + child rows, created_at) |
 | 3. Goal set | A weekly goal exists for his first week | Product DB (weekly goal) |
 | 4. **First session completed** | His first quality-time session is confirmed "it happened" | Product DB (quality_time COMPLETED) |
